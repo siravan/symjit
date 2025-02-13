@@ -1,7 +1,7 @@
 use super::code::*;
 use super::model::Program;
-use super::utils::*;
 use super::register::Word;
+use super::utils::*;
 
 pub enum Fast {
     Unary {
@@ -38,7 +38,7 @@ impl Compiler<ByteCode> for Interpreter {
         let mut code: Vec<Fast> = Vec::new();
         let mut mem = prog.frame.mem();
         let m = mem.len();
-        let h = |x: &Word|->u32 { (if x.is_temp() { m + x.0 } else { x.0 }) as u32 };
+        let h = |x: &Word| -> u32 { (if x.is_temp() { m + x.0 } else { x.0 }) as u32 };
 
         for c in prog.code.iter() {
             match c {
@@ -52,9 +52,9 @@ impl Compiler<ByteCode> for Interpreter {
                 Instruction::Binary { p, x, y, dst, .. } => {
                     code.push(Fast::Binary {
                         f: vt[p.0],
-                        x: h(x), 
+                        x: h(x),
                         y: h(y),
-                        dst: h(dst), 
+                        dst: h(dst),
                     });
                 }
                 Instruction::IfElse { x1, x2, cond, dst } => {
@@ -68,7 +68,7 @@ impl Compiler<ByteCode> for Interpreter {
                 _ => {}
             }
         }
-        
+
         for _ in 0..prog.frame.stack_size() {
             mem.push(0.0);
         }

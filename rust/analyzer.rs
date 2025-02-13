@@ -66,13 +66,13 @@ impl Analyzer {
                     };
 
                     if let Some(r) = r {
-                        candidates.push(r);                        
+                        candidates.push(r);
                     };
                 }
                 Event::Caller(_) => {}
             }
         }
-        
+
         saveable
     }
 

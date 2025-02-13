@@ -11,6 +11,7 @@ rand = "0.8"
 anyhow = "1"
 wasmtime = { version = "28.0", optional = true }
 cffi = "*"
+libc = "0.2"
 
 [features]
 wasm = ["dep:wasmtime"]

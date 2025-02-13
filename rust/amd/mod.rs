@@ -57,7 +57,7 @@ impl AmdCompiler {
                 self.emit(amd! {mov rax, qword ptr [rbx+8*p.0]});
                 self.emit(amd! {call rax});
             }
-            _ => {                
+            _ => {
                 self.emit(amd! {mov rax, qword ptr [rbx+8*p.0]});
                 self.emit(amd! {call rax});
             }

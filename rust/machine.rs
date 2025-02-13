@@ -3,14 +3,16 @@ use rand::distributions::{Alphanumeric, DistString};
 use std::fs;
 use std::io::Write;
 
+use super::allocator::*;
 use super::code::BinaryFunc;
 use super::utils::*;
 
 pub struct MachineCode {
     p: *const u8,
-    mmap: Mmap, // we need to store mmap and fs here, so that they are not dropped
-    name: String,
-    fs: fs::File,
+    //mmap: Mmap, // we need to store mmap and fs here, so that they are not dropped
+    mmap: Allocation,
+    //name: String,
+    //fs: fs::File,
     vt: Vec<BinaryFunc>,
     _mem: Vec<f64>,
 }
@@ -22,11 +24,20 @@ impl MachineCode {
         vt: Vec<BinaryFunc>,
         _mem: Vec<f64>,
     ) -> MachineCode {
+        /*
         let name = Alphanumeric.sample_string(&mut rand::thread_rng(), 16) + ".bin";
         MachineCode::write_buf(machine_code, &name);
         let fs = fs::File::open(&name).unwrap();
         let mmap = unsafe { MmapOptions::new().map_exec(&fs).unwrap() };
         let p = mmap.as_ptr() as *const u8;
+        */
+
+        let size = machine_code.len();
+        let mut mmap = Allocation::alloc(size);
+        mmap.as_mem_mut().copy_from_slice(&machine_code[..]);
+        let p = mmap.as_ptr();
+
+        println!("{:?}", &mmap);
 
         #[cfg(target_arch = "x86_64")]
         if arch != "x86_64" {
@@ -41,8 +52,8 @@ impl MachineCode {
         MachineCode {
             p,
             mmap,
-            name,
-            fs,
+            //name,
+            //fs,
             vt,
             _mem,
         }
@@ -73,6 +84,6 @@ impl Compiled for MachineCode {
 
 impl Drop for MachineCode {
     fn drop(&mut self) {
-        let _ = fs::remove_file(&self.name);
+        //    let _ = fs::remove_file(&self.name);
     }
 }

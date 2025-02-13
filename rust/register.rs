@@ -126,7 +126,7 @@ impl Frame {
     }
 
     pub fn is_temp(&self, r: &Word) -> bool {
-        r.is_temp()        
+        r.is_temp()
     }
 
     pub fn is_obs(&self, r: &Word) -> bool {
@@ -139,7 +139,7 @@ impl Frame {
             false
         }
     }
-    
+
     pub fn should_save(&self, r: &Word) -> bool {
         if self.has_diff {
             self.is_diff(r)
@@ -162,7 +162,7 @@ impl Frame {
             .iter()
             .filter(|x| matches!(x, WordType::State(_, _)))
             .count()
-    }    
+    }
 
     pub fn count_params(&self) -> usize {
         self.words
@@ -177,13 +177,13 @@ impl Frame {
             .filter(|x| matches!(x, WordType::Obs(_)))
             .count()
     }
-    
+
     pub fn count_diffs(&self) -> usize {
         self.words
             .iter()
             .filter(|x| matches!(x, WordType::Diff(_)))
             .count()
-    }    
+    }
 
     pub fn first_state(&self) -> Option<usize> {
         self.words
@@ -196,7 +196,7 @@ impl Frame {
             .iter()
             .position(|x| matches!(x, WordType::Param(_, _)))
     }
-    
+
     pub fn first_obs(&self) -> Option<usize> {
         self.words
             .iter()

@@ -20,13 +20,13 @@ pub struct Program {
 impl Program {
     pub fn new(ml: &CellModel) -> Program {
         let mut frame = Frame::new();
-        
-        /* 
+
+        /*
             this section lays the memory format
-            the order of different sections is important!            
-            
+            the order of different sections is important!
+
             the layout is:
-            
+
             +------------------------+
             | predefined constants   |
             +------------------------+
@@ -43,32 +43,32 @@ impl Program {
             | constants and temps    |
             +------------------------+
         */
-        
+
         frame.alloc(WordType::Var(ml.iv.name.clone()));
 
         for v in &ml.states {
             frame.alloc(WordType::State(v.name.clone(), v.val));
         }
-        
+
         for v in &ml.params {
             frame.alloc(WordType::Param(v.name.clone(), v.val));
         }
-        
+
         for eq in &ml.obs {
-            if let Some(name) = eq.lhs.var() {                
+            if let Some(name) = eq.lhs.var() {
                 frame.alloc(WordType::Obs(name));
             } else {
                 panic!("lhs var not found");
             }
         }
-        
+
         for eq in &ml.odes {
             if let Some(name) = eq.lhs.diff_var() {
                 frame.alloc(WordType::Diff(name));
             } else {
                 panic!("lhs diff var not found");
             }
-        }        
+        }
 
         let mut prog = Program {
             code: Vec::new(),

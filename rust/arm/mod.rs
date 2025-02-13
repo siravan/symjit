@@ -111,13 +111,13 @@ impl ArmCompiler {
 
         x
     }
-    
+
     fn fuse_load(&mut self, r0: Word, x: u8, r: Word, rename: bool) -> u8 {
         if r == r0 {
             0
         } else {
             self.load(x, r, rename)
-        }        
+        }
     }
 
     fn save(&mut self, x: u8, r: Word) {

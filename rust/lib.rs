@@ -1,5 +1,6 @@
 use std::ffi::{c_char, CStr, CString};
 
+mod allocator;
 mod analyzer;
 mod code;
 mod machine;
@@ -11,8 +12,6 @@ mod utils;
 mod amd;
 mod arm;
 mod interpreter;
-#[cfg(feature = "rusty")]
-mod rusty;
 #[cfg(feature = "wasm")]
 mod wasm;
 
@@ -82,8 +81,6 @@ pub extern "C" fn compile(p: *const c_char, ty: *const c_char) -> *const Compile
         "native" => Some(Runnable::new(prog, CompilerType::Native)),
         #[cfg(feature = "wasm")]
         "wasm" => Some(Runnable::new(prog, CompilerType::Wasm)),
-        #[cfg(feature = "rusty")]
-        "rusty" => Some(Runnable::new(prog, CompilerType::Rusty)),
         _ => None,
     };
 
@@ -147,7 +144,6 @@ pub extern "C" fn count_diffs(q: *const CompilerResult) -> usize {
         0
     }
 }
-
 
 #[no_mangle]
 pub extern "C" fn fill_u0(q: *const CompilerResult, u0: *mut f64, ns: usize) -> bool {
@@ -234,10 +230,7 @@ pub extern "C" fn run_py(
 }
 
 #[no_mangle]
-pub extern "C" fn execute(
-    q: *mut CompilerResult,
-    t: f64,
-) -> bool {
+pub extern "C" fn execute(q: *mut CompilerResult, t: f64) -> bool {
     let q: &mut CompilerResult = unsafe { &mut *q };
 
     if let Some(func) = &mut q.func {
@@ -247,7 +240,6 @@ pub extern "C" fn execute(
         false
     }
 }
-
 
 #[no_mangle]
 pub extern "C" fn ptr_states(q: *mut CompilerResult) -> *mut f64 {
@@ -303,13 +295,7 @@ pub extern "C" fn info() -> *const c_char {
 }
 
 #[no_mangle]
-pub extern "C" fn elem_at(
-    v: *const f64,
-    nv: usize,
-    index: usize,
-) -> f64 {
+pub extern "C" fn elem_at(v: *const f64, nv: usize, index: usize) -> f64 {
     let v: &[f64] = unsafe { std::slice::from_raw_parts(v, nv) };
-    v[index]     
+    v[index]
 }
-
-
