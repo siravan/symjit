@@ -1,0 +1,200 @@
+{
+    "obs": [],
+    "iv": {
+        "name": "t",
+        "val": 0.0
+    },
+    "algs": [],
+    "params": [
+        {
+            "name": "main₊beta",
+            "val": 2.66667
+        },
+        {
+            "name": "main₊sigma",
+            "val": 10.0
+        },
+        {
+            "name": "main₊rho",
+            "val": 28.0
+        }
+    ],
+    "states": [
+        {
+            "name": "main₊x",
+            "val": 1.0
+        },
+        {
+            "name": "main₊y",
+            "val": 1.0
+        },
+        {
+            "name": "main₊z",
+            "val": 1.0
+        }
+    ],
+    "odes": [
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "name": "main₊sigma",
+                        "type": "Var"
+                    },
+                    {
+                        "args": [
+                            {
+                                "args": [
+                                    {
+                                        "val": -1.0,
+                                        "type": "Const"
+                                    },
+                                    {
+                                        "name": "main₊x",
+                                        "type": "Var"
+                                    }
+                                ],
+                                "op": "times",
+                                "type": "Tree"
+                            },
+                            {
+                                "name": "main₊y",
+                                "type": "Var"
+                            }
+                        ],
+                        "op": "plus",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "times",
+                "type": "Tree"
+            },
+            "lhs": {
+                "args": [
+                    {
+                        "name": "main₊x",
+                        "type": "Var"
+                    }
+                ],
+                "op": "Differential",
+                "type": "Tree"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "args": [
+                            {
+                                "val": -1.0,
+                                "type": "Const"
+                            },
+                            {
+                                "name": "main₊y",
+                                "type": "Var"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    },
+                    {
+                        "args": [
+                            {
+                                "args": [
+                                    {
+                                        "name": "main₊rho",
+                                        "type": "Var"
+                                    },
+                                    {
+                                        "args": [
+                                            {
+                                                "val": -1.0,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "name": "main₊z",
+                                                "type": "Var"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "plus",
+                                "type": "Tree"
+                            },
+                            {
+                                "name": "main₊x",
+                                "type": "Var"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "plus",
+                "type": "Tree"
+            },
+            "lhs": {
+                "args": [
+                    {
+                        "name": "main₊y",
+                        "type": "Var"
+                    }
+                ],
+                "op": "Differential",
+                "type": "Tree"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "args": [
+                            {
+                                "val": -1.0,
+                                "type": "Const"
+                            },
+                            {
+                                "name": "main₊beta",
+                                "type": "Var"
+                            },
+                            {
+                                "name": "main₊z",
+                                "type": "Var"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    },
+                    {
+                        "args": [
+                            {
+                                "name": "main₊x",
+                                "type": "Var"
+                            },
+                            {
+                                "name": "main₊y",
+                                "type": "Var"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "plus",
+                "type": "Tree"
+            },
+            "lhs": {
+                "args": [
+                    {
+                        "name": "main₊z",
+                        "type": "Var"
+                    }
+                ],
+                "op": "Differential",
+                "type": "Tree"
+            }
+        }
+    ]
+}

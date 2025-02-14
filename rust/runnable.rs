@@ -38,14 +38,16 @@ impl Runnable {
     pub fn new(prog: Program, ty: CompilerType) -> Runnable {
         let compiled: Box<dyn Compiled> = match ty {
             CompilerType::ByteCode => Box::new(Interpreter::new().compile(&prog)),
-            #[cfg(feature = "wasm")]
+            #[cfg(any(feature = "wasm", target_os = "windows"))]
             CompilerType::Wasm => Box::new(WasmCompiler::new().compile(&prog)),
             CompilerType::Amd => Box::new(AmdCompiler::new().compile(&prog)),
             CompilerType::Arm => Box::new(ArmCompiler::new().compile(&prog)),
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(all(target_arch = "x86_64", target_os = "linux"))]
             CompilerType::Native => Box::new(AmdCompiler::new().compile(&prog)),
             #[cfg(target_arch = "aarch64")]
             CompilerType::Native => Box::new(ArmCompiler::new().compile(&prog)),
+            #[cfg(target_os = "windows")]
+            CompilerType::Native => Box::new(WasmCompiler::new().compile(&prog)),
         };
 
         let first_state = prog.frame.first_state().unwrap();

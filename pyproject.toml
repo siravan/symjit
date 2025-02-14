@@ -17,5 +17,7 @@ target = "symjit._lib"   # The last part of the name (e.g. "_lib") has to match 
                              # but you can add a prefix to nest it inside of a Python package.
 path = "Cargo.toml"   
 binding = "NoBinding" 
+features = ["wasm"]
+debug = false
 
 

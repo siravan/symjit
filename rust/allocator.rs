@@ -100,7 +100,7 @@ impl Allocation {
     pub fn free(&mut self) {
         use windows_sys::Win32::System::Memory::{VirtualFree, MEM_RELEASE};
 
-        let result = unsafe { VirtualFree(self.ptr, 0, MEM_RELEASE) };
+        let result = unsafe { VirtualFree(self.ptr as *mut libc::c_void, 0, MEM_RELEASE) };
 
         if result == 0 {
             panic!("VirtualFree failed");

@@ -1,0 +1,2671 @@
+{
+    "obs": [
+        {
+            "rhs": {
+                "name": "membrane₊V",
+                "type": "Var"
+            },
+            "lhs": {
+                "name": "sodium_current₊V",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "name": "sodium_current_j_gate₊j",
+                "type": "Var"
+            },
+            "lhs": {
+                "name": "sodium_current₊j",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "name": "sodium_current_h_gate₊h",
+                "type": "Var"
+            },
+            "lhs": {
+                "name": "sodium_current₊h",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "name": "sodium_current_m_gate₊m",
+                "type": "Var"
+            },
+            "lhs": {
+                "name": "sodium_current₊m",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "name": "membrane₊V",
+                "type": "Var"
+            },
+            "lhs": {
+                "name": "slow_inward_current₊V",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "val": -82.3,
+                        "type": "Const"
+                    },
+                    {
+                        "args": [
+                            {
+                                "val": -13.0287,
+                                "type": "Const"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "val": 0.001,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "name": "slow_inward_current₊Cai",
+                                                "type": "Var"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "ln",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "plus",
+                "type": "Tree"
+            },
+            "lhs": {
+                "name": "slow_inward_current₊E_s",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "name": "slow_inward_current_f_gate₊f",
+                "type": "Var"
+            },
+            "lhs": {
+                "name": "slow_inward_current₊f",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "name": "slow_inward_current_d_gate₊d",
+                "type": "Var"
+            },
+            "lhs": {
+                "name": "slow_inward_current₊d",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "name": "membrane₊V",
+                "type": "Var"
+            },
+            "lhs": {
+                "name": "time_dependent_outward_current₊V",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "name": "time_dependent_outward_current_x1_gate₊x1",
+                "type": "Var"
+            },
+            "lhs": {
+                "name": "time_dependent_outward_current₊x1",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "name": "membrane₊V",
+                "type": "Var"
+            },
+            "lhs": {
+                "name": "time_independent_outward_current₊V",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "name": "membrane₊V",
+                "type": "Var"
+            },
+            "lhs": {
+                "name": "sodium_current_m_gate₊V",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "name": "membrane₊V",
+                "type": "Var"
+            },
+            "lhs": {
+                "name": "sodium_current_h_gate₊V",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "name": "membrane₊V",
+                "type": "Var"
+            },
+            "lhs": {
+                "name": "sodium_current_j_gate₊V",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "name": "membrane₊V",
+                "type": "Var"
+            },
+            "lhs": {
+                "name": "time_dependent_outward_current_x1_gate₊V",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "name": "membrane₊V",
+                "type": "Var"
+            },
+            "lhs": {
+                "name": "slow_inward_current_d_gate₊V",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "name": "membrane₊V",
+                "type": "Var"
+            },
+            "lhs": {
+                "name": "slow_inward_current_f_gate₊V",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "args": [
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "args": [
+                                                    {
+                                                        "args": [
+                                                            {
+                                                                "name": "stimulus_protocol₊IstimEnd",
+                                                                "type": "Var"
+                                                            },
+                                                            {
+                                                                "args": [
+                                                                    {
+                                                                        "val": -1.0,
+                                                                        "type": "Const"
+                                                                    },
+                                                                    {
+                                                                        "name": "time",
+                                                                        "type": "Var"
+                                                                    }
+                                                                ],
+                                                                "op": "times",
+                                                                "type": "Tree"
+                                                            }
+                                                        ],
+                                                        "op": "plus",
+                                                        "type": "Tree"
+                                                    },
+                                                    {
+                                                        "val": 0.0,
+                                                        "type": "Const"
+                                                    }
+                                                ],
+                                                "op": "geq",
+                                                "type": "Tree"
+                                            },
+                                            {
+                                                "val": 1.0,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "val": 0.0,
+                                                "type": "Const"
+                                            }
+                                        ],
+                                        "op": "ifelse",
+                                        "type": "Tree"
+                                    },
+                                    {
+                                        "args": [
+                                            {
+                                                "args": [
+                                                    {
+                                                        "args": [
+                                                            {
+                                                                "args": [
+                                                                    {
+                                                                        "val": -1.0,
+                                                                        "type": "Const"
+                                                                    },
+                                                                    {
+                                                                        "name": "stimulus_protocol₊IstimStart",
+                                                                        "type": "Var"
+                                                                    }
+                                                                ],
+                                                                "op": "times",
+                                                                "type": "Tree"
+                                                            },
+                                                            {
+                                                                "name": "time",
+                                                                "type": "Var"
+                                                            }
+                                                        ],
+                                                        "op": "plus",
+                                                        "type": "Tree"
+                                                    },
+                                                    {
+                                                        "val": 0.0,
+                                                        "type": "Const"
+                                                    }
+                                                ],
+                                                "op": "geq",
+                                                "type": "Tree"
+                                            },
+                                            {
+                                                "val": 1.0,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "val": 0.0,
+                                                "type": "Const"
+                                            }
+                                        ],
+                                        "op": "ifelse",
+                                        "type": "Tree"
+                                    },
+                                    {
+                                        "args": [
+                                            {
+                                                "args": [
+                                                    {
+                                                        "args": [
+                                                            {
+                                                                "name": "stimulus_protocol₊IstimStart",
+                                                                "type": "Var"
+                                                            },
+                                                            {
+                                                                "args": [
+                                                                    {
+                                                                        "name": "stimulus_protocol₊IstimPeriod",
+                                                                        "type": "Var"
+                                                                    },
+                                                                    {
+                                                                        "args": [
+                                                                            {
+                                                                                "val": -0.5,
+                                                                                "type": "Const"
+                                                                            },
+                                                                            {
+                                                                                "args": [
+                                                                                    {
+                                                                                        "args": [
+                                                                                            {
+                                                                                                "args": [
+                                                                                                    {
+                                                                                                        "val": -1.0,
+                                                                                                        "type": "Const"
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "name": "stimulus_protocol₊IstimStart",
+                                                                                                        "type": "Var"
+                                                                                                    }
+                                                                                                ],
+                                                                                                "op": "times",
+                                                                                                "type": "Tree"
+                                                                                            },
+                                                                                            {
+                                                                                                "name": "time",
+                                                                                                "type": "Var"
+                                                                                            }
+                                                                                        ],
+                                                                                        "op": "plus",
+                                                                                        "type": "Tree"
+                                                                                    },
+                                                                                    {
+                                                                                        "name": "stimulus_protocol₊IstimPeriod",
+                                                                                        "type": "Var"
+                                                                                    }
+                                                                                ],
+                                                                                "op": "divide",
+                                                                                "type": "Tree"
+                                                                            },
+                                                                            {
+                                                                                "args": [
+                                                                                    {
+                                                                                        "val": 0.3183098861837907,
+                                                                                        "type": "Const"
+                                                                                    },
+                                                                                    {
+                                                                                        "args": [
+                                                                                            {
+                                                                                                "args": [
+                                                                                                    {
+                                                                                                        "args": [
+                                                                                                            {
+                                                                                                                "args": [
+                                                                                                                    {
+                                                                                                                        "val": 3.141592653589793,
+                                                                                                                        "type": "Const"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "args": [
+                                                                                                                            {
+                                                                                                                                "args": [
+                                                                                                                                    {
+                                                                                                                                        "val": -1.0,
+                                                                                                                                        "type": "Const"
+                                                                                                                                    },
+                                                                                                                                    {
+                                                                                                                                        "name": "stimulus_protocol₊IstimStart",
+                                                                                                                                        "type": "Var"
+                                                                                                                                    }
+                                                                                                                                ],
+                                                                                                                                "op": "times",
+                                                                                                                                "type": "Tree"
+                                                                                                                            },
+                                                                                                                            {
+                                                                                                                                "name": "time",
+                                                                                                                                "type": "Var"
+                                                                                                                            }
+                                                                                                                        ],
+                                                                                                                        "op": "plus",
+                                                                                                                        "type": "Tree"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                                "op": "times",
+                                                                                                                "type": "Tree"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "name": "stimulus_protocol₊IstimPeriod",
+                                                                                                                "type": "Var"
+                                                                                                            }
+                                                                                                        ],
+                                                                                                        "op": "divide",
+                                                                                                        "type": "Tree"
+                                                                                                    }
+                                                                                                ],
+                                                                                                "op": "cot",
+                                                                                                "type": "Tree"
+                                                                                            }
+                                                                                        ],
+                                                                                        "op": "arctan",
+                                                                                        "type": "Tree"
+                                                                                    }
+                                                                                ],
+                                                                                "op": "times",
+                                                                                "type": "Tree"
+                                                                            }
+                                                                        ],
+                                                                        "op": "plus",
+                                                                        "type": "Tree"
+                                                                    }
+                                                                ],
+                                                                "op": "times",
+                                                                "type": "Tree"
+                                                            },
+                                                            {
+                                                                "name": "stimulus_protocol₊IstimPulseDuration",
+                                                                "type": "Var"
+                                                            },
+                                                            {
+                                                                "args": [
+                                                                    {
+                                                                        "val": -1.0,
+                                                                        "type": "Const"
+                                                                    },
+                                                                    {
+                                                                        "name": "time",
+                                                                        "type": "Var"
+                                                                    }
+                                                                ],
+                                                                "op": "times",
+                                                                "type": "Tree"
+                                                            }
+                                                        ],
+                                                        "op": "plus",
+                                                        "type": "Tree"
+                                                    },
+                                                    {
+                                                        "val": 0.0,
+                                                        "type": "Const"
+                                                    }
+                                                ],
+                                                "op": "geq",
+                                                "type": "Tree"
+                                            },
+                                            {
+                                                "val": 1.0,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "val": 0.0,
+                                                "type": "Const"
+                                            }
+                                        ],
+                                        "op": "ifelse",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "times",
+                                "type": "Tree"
+                            },
+                            {
+                                "val": 0.5,
+                                "type": "Const"
+                            }
+                        ],
+                        "op": "gt",
+                        "type": "Tree"
+                    },
+                    {
+                        "name": "stimulus_protocol₊IstimAmplitude",
+                        "type": "Var"
+                    },
+                    {
+                        "val": 0.0,
+                        "type": "Const"
+                    }
+                ],
+                "op": "ifelse",
+                "type": "Tree"
+            },
+            "lhs": {
+                "name": "stimulus_protocol₊Istim",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "args": [
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "name": "sodium_current₊m",
+                                                "type": "Var"
+                                            },
+                                            {
+                                                "val": 3.0,
+                                                "type": "Const"
+                                            }
+                                        ],
+                                        "op": "power",
+                                        "type": "Tree"
+                                    },
+                                    {
+                                        "name": "sodium_current₊h",
+                                        "type": "Var"
+                                    },
+                                    {
+                                        "name": "sodium_current₊j",
+                                        "type": "Var"
+                                    },
+                                    {
+                                        "name": "sodium_current₊g_Na",
+                                        "type": "Var"
+                                    }
+                                ],
+                                "op": "times",
+                                "type": "Tree"
+                            },
+                            {
+                                "name": "sodium_current₊g_Nac",
+                                "type": "Var"
+                            }
+                        ],
+                        "op": "plus",
+                        "type": "Tree"
+                    },
+                    {
+                        "args": [
+                            {
+                                "name": "sodium_current₊V",
+                                "type": "Var"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "val": -1.0,
+                                        "type": "Const"
+                                    },
+                                    {
+                                        "name": "sodium_current₊E_Na",
+                                        "type": "Var"
+                                    }
+                                ],
+                                "op": "times",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "plus",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "times",
+                "type": "Tree"
+            },
+            "lhs": {
+                "name": "sodium_current₊i_Na",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "name": "slow_inward_current₊d",
+                        "type": "Var"
+                    },
+                    {
+                        "name": "slow_inward_current₊g_s",
+                        "type": "Var"
+                    },
+                    {
+                        "name": "slow_inward_current₊f",
+                        "type": "Var"
+                    },
+                    {
+                        "args": [
+                            {
+                                "name": "slow_inward_current₊V",
+                                "type": "Var"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "val": -1.0,
+                                        "type": "Const"
+                                    },
+                                    {
+                                        "name": "slow_inward_current₊E_s",
+                                        "type": "Var"
+                                    }
+                                ],
+                                "op": "times",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "plus",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "times",
+                "type": "Tree"
+            },
+            "lhs": {
+                "name": "slow_inward_current₊i_s",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "args": [
+                            {
+                                "val": 0.008,
+                                "type": "Const"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "val": -1.0,
+                                        "type": "Const"
+                                    },
+                                    {
+                                        "args": [
+                                            {
+                                                "args": [
+                                                    {
+                                                        "val": 0.04,
+                                                        "type": "Const"
+                                                    },
+                                                    {
+                                                        "args": [
+                                                            {
+                                                                "val": 77.0,
+                                                                "type": "Const"
+                                                            },
+                                                            {
+                                                                "name": "time_dependent_outward_current₊V",
+                                                                "type": "Var"
+                                                            }
+                                                        ],
+                                                        "op": "plus",
+                                                        "type": "Tree"
+                                                    }
+                                                ],
+                                                "op": "times",
+                                                "type": "Tree"
+                                            }
+                                        ],
+                                        "op": "exp",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "plus",
+                                "type": "Tree"
+                            },
+                            {
+                                "name": "time_dependent_outward_current₊x1",
+                                "type": "Var"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    },
+                    {
+                        "args": [
+                            {
+                                "args": [
+                                    {
+                                        "val": 0.04,
+                                        "type": "Const"
+                                    },
+                                    {
+                                        "args": [
+                                            {
+                                                "val": 35.0,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "name": "time_dependent_outward_current₊V",
+                                                "type": "Var"
+                                            }
+                                        ],
+                                        "op": "plus",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "times",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "exp",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "divide",
+                "type": "Tree"
+            },
+            "lhs": {
+                "name": "time_dependent_outward_current₊i_x1",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "val": 0.0035,
+                        "type": "Const"
+                    },
+                    {
+                        "args": [
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "val": 0.2,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "args": [
+                                                    {
+                                                        "val": 23.0,
+                                                        "type": "Const"
+                                                    },
+                                                    {
+                                                        "name": "time_independent_outward_current₊V",
+                                                        "type": "Var"
+                                                    }
+                                                ],
+                                                "op": "plus",
+                                                "type": "Tree"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    },
+                                    {
+                                        "args": [
+                                            {
+                                                "val": 1.0,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "args": [
+                                                    {
+                                                        "val": -1.0,
+                                                        "type": "Const"
+                                                    },
+                                                    {
+                                                        "args": [
+                                                            {
+                                                                "args": [
+                                                                    {
+                                                                        "val": -0.04,
+                                                                        "type": "Const"
+                                                                    },
+                                                                    {
+                                                                        "args": [
+                                                                            {
+                                                                                "val": 23.0,
+                                                                                "type": "Const"
+                                                                            },
+                                                                            {
+                                                                                "name": "time_independent_outward_current₊V",
+                                                                                "type": "Var"
+                                                                            }
+                                                                        ],
+                                                                        "op": "plus",
+                                                                        "type": "Tree"
+                                                                    }
+                                                                ],
+                                                                "op": "times",
+                                                                "type": "Tree"
+                                                            }
+                                                        ],
+                                                        "op": "exp",
+                                                        "type": "Tree"
+                                                    }
+                                                ],
+                                                "op": "times",
+                                                "type": "Tree"
+                                            }
+                                        ],
+                                        "op": "plus",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "divide",
+                                "type": "Tree"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "val": 4.0,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "args": [
+                                                    {
+                                                        "val": -1.0,
+                                                        "type": "Const"
+                                                    },
+                                                    {
+                                                        "args": [
+                                                            {
+                                                                "args": [
+                                                                    {
+                                                                        "val": 0.04,
+                                                                        "type": "Const"
+                                                                    },
+                                                                    {
+                                                                        "args": [
+                                                                            {
+                                                                                "val": 85.0,
+                                                                                "type": "Const"
+                                                                            },
+                                                                            {
+                                                                                "name": "time_independent_outward_current₊V",
+                                                                                "type": "Var"
+                                                                            }
+                                                                        ],
+                                                                        "op": "plus",
+                                                                        "type": "Tree"
+                                                                    }
+                                                                ],
+                                                                "op": "times",
+                                                                "type": "Tree"
+                                                            }
+                                                        ],
+                                                        "op": "exp",
+                                                        "type": "Tree"
+                                                    }
+                                                ],
+                                                "op": "plus",
+                                                "type": "Tree"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    },
+                                    {
+                                        "args": [
+                                            {
+                                                "args": [
+                                                    {
+                                                        "args": [
+                                                            {
+                                                                "val": 0.04,
+                                                                "type": "Const"
+                                                            },
+                                                            {
+                                                                "args": [
+                                                                    {
+                                                                        "val": 53.0,
+                                                                        "type": "Const"
+                                                                    },
+                                                                    {
+                                                                        "name": "time_independent_outward_current₊V",
+                                                                        "type": "Var"
+                                                                    }
+                                                                ],
+                                                                "op": "plus",
+                                                                "type": "Tree"
+                                                            }
+                                                        ],
+                                                        "op": "times",
+                                                        "type": "Tree"
+                                                    }
+                                                ],
+                                                "op": "exp",
+                                                "type": "Tree"
+                                            },
+                                            {
+                                                "args": [
+                                                    {
+                                                        "args": [
+                                                            {
+                                                                "val": 0.08,
+                                                                "type": "Const"
+                                                            },
+                                                            {
+                                                                "args": [
+                                                                    {
+                                                                        "val": 53.0,
+                                                                        "type": "Const"
+                                                                    },
+                                                                    {
+                                                                        "name": "time_independent_outward_current₊V",
+                                                                        "type": "Var"
+                                                                    }
+                                                                ],
+                                                                "op": "plus",
+                                                                "type": "Tree"
+                                                            }
+                                                        ],
+                                                        "op": "times",
+                                                        "type": "Tree"
+                                                    }
+                                                ],
+                                                "op": "exp",
+                                                "type": "Tree"
+                                            }
+                                        ],
+                                        "op": "plus",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "divide",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "plus",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "times",
+                "type": "Tree"
+            },
+            "lhs": {
+                "name": "time_independent_outward_current₊i_K1",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "args": [
+                            {
+                                "val": -47.0,
+                                "type": "Const"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "val": -1.0,
+                                        "type": "Const"
+                                    },
+                                    {
+                                        "name": "sodium_current_m_gate₊V",
+                                        "type": "Var"
+                                    }
+                                ],
+                                "op": "times",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "plus",
+                        "type": "Tree"
+                    },
+                    {
+                        "args": [
+                            {
+                                "val": -1.0,
+                                "type": "Const"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "val": -0.1,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "args": [
+                                                    {
+                                                        "val": 47.0,
+                                                        "type": "Const"
+                                                    },
+                                                    {
+                                                        "name": "sodium_current_m_gate₊V",
+                                                        "type": "Var"
+                                                    }
+                                                ],
+                                                "op": "plus",
+                                                "type": "Tree"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "exp",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "plus",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "divide",
+                "type": "Tree"
+            },
+            "lhs": {
+                "name": "sodium_current_m_gate₊alpha_m",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "val": 40.0,
+                        "type": "Const"
+                    },
+                    {
+                        "args": [
+                            {
+                                "args": [
+                                    {
+                                        "val": -0.056,
+                                        "type": "Const"
+                                    },
+                                    {
+                                        "args": [
+                                            {
+                                                "val": 72.0,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "name": "sodium_current_m_gate₊V",
+                                                "type": "Var"
+                                            }
+                                        ],
+                                        "op": "plus",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "times",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "exp",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "times",
+                "type": "Tree"
+            },
+            "lhs": {
+                "name": "sodium_current_m_gate₊beta_m",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "val": 0.126,
+                        "type": "Const"
+                    },
+                    {
+                        "args": [
+                            {
+                                "args": [
+                                    {
+                                        "val": -0.25,
+                                        "type": "Const"
+                                    },
+                                    {
+                                        "args": [
+                                            {
+                                                "val": 77.0,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "name": "sodium_current_h_gate₊V",
+                                                "type": "Var"
+                                            }
+                                        ],
+                                        "op": "plus",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "times",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "exp",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "times",
+                "type": "Tree"
+            },
+            "lhs": {
+                "name": "sodium_current_h_gate₊alpha_h",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "val": 1.7,
+                        "type": "Const"
+                    },
+                    {
+                        "args": [
+                            {
+                                "val": 1.0,
+                                "type": "Const"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "val": -0.082,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "args": [
+                                                    {
+                                                        "val": 22.5,
+                                                        "type": "Const"
+                                                    },
+                                                    {
+                                                        "name": "sodium_current_h_gate₊V",
+                                                        "type": "Var"
+                                                    }
+                                                ],
+                                                "op": "plus",
+                                                "type": "Tree"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "exp",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "plus",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "divide",
+                "type": "Tree"
+            },
+            "lhs": {
+                "name": "sodium_current_h_gate₊beta_h",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "args": [
+                            {
+                                "val": 0.055,
+                                "type": "Const"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "val": -0.25,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "args": [
+                                                    {
+                                                        "val": 78.0,
+                                                        "type": "Const"
+                                                    },
+                                                    {
+                                                        "name": "sodium_current_j_gate₊V",
+                                                        "type": "Var"
+                                                    }
+                                                ],
+                                                "op": "plus",
+                                                "type": "Tree"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "exp",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    },
+                    {
+                        "args": [
+                            {
+                                "val": 1.0,
+                                "type": "Const"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "val": -0.2,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "args": [
+                                                    {
+                                                        "val": 78.0,
+                                                        "type": "Const"
+                                                    },
+                                                    {
+                                                        "name": "sodium_current_j_gate₊V",
+                                                        "type": "Var"
+                                                    }
+                                                ],
+                                                "op": "plus",
+                                                "type": "Tree"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "exp",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "plus",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "divide",
+                "type": "Tree"
+            },
+            "lhs": {
+                "name": "sodium_current_j_gate₊alpha_j",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "val": 0.3,
+                        "type": "Const"
+                    },
+                    {
+                        "args": [
+                            {
+                                "val": 1.0,
+                                "type": "Const"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "val": -0.1,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "args": [
+                                                    {
+                                                        "val": 32.0,
+                                                        "type": "Const"
+                                                    },
+                                                    {
+                                                        "name": "sodium_current_j_gate₊V",
+                                                        "type": "Var"
+                                                    }
+                                                ],
+                                                "op": "plus",
+                                                "type": "Tree"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "exp",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "plus",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "divide",
+                "type": "Tree"
+            },
+            "lhs": {
+                "name": "sodium_current_j_gate₊beta_j",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "args": [
+                            {
+                                "val": 0.0005,
+                                "type": "Const"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "val": 0.08264462809917356,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "args": [
+                                                    {
+                                                        "val": 50.0,
+                                                        "type": "Const"
+                                                    },
+                                                    {
+                                                        "name": "time_dependent_outward_current_x1_gate₊V",
+                                                        "type": "Var"
+                                                    }
+                                                ],
+                                                "op": "plus",
+                                                "type": "Tree"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "exp",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    },
+                    {
+                        "args": [
+                            {
+                                "val": 1.0,
+                                "type": "Const"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "val": 0.05714285714285714,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "args": [
+                                                    {
+                                                        "val": 50.0,
+                                                        "type": "Const"
+                                                    },
+                                                    {
+                                                        "name": "time_dependent_outward_current_x1_gate₊V",
+                                                        "type": "Var"
+                                                    }
+                                                ],
+                                                "op": "plus",
+                                                "type": "Tree"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "exp",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "plus",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "divide",
+                "type": "Tree"
+            },
+            "lhs": {
+                "name": "time_dependent_outward_current_x1_gate₊alpha_x1",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "args": [
+                            {
+                                "val": 0.0013,
+                                "type": "Const"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "val": 0.05998800239952009,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "args": [
+                                                    {
+                                                        "val": -20.0,
+                                                        "type": "Const"
+                                                    },
+                                                    {
+                                                        "args": [
+                                                            {
+                                                                "val": -1.0,
+                                                                "type": "Const"
+                                                            },
+                                                            {
+                                                                "name": "time_dependent_outward_current_x1_gate₊V",
+                                                                "type": "Var"
+                                                            }
+                                                        ],
+                                                        "op": "times",
+                                                        "type": "Tree"
+                                                    }
+                                                ],
+                                                "op": "plus",
+                                                "type": "Tree"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "exp",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    },
+                    {
+                        "args": [
+                            {
+                                "val": 1.0,
+                                "type": "Const"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "val": 0.04,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "args": [
+                                                    {
+                                                        "val": -20.0,
+                                                        "type": "Const"
+                                                    },
+                                                    {
+                                                        "args": [
+                                                            {
+                                                                "val": -1.0,
+                                                                "type": "Const"
+                                                            },
+                                                            {
+                                                                "name": "time_dependent_outward_current_x1_gate₊V",
+                                                                "type": "Var"
+                                                            }
+                                                        ],
+                                                        "op": "times",
+                                                        "type": "Tree"
+                                                    }
+                                                ],
+                                                "op": "plus",
+                                                "type": "Tree"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "exp",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "plus",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "divide",
+                "type": "Tree"
+            },
+            "lhs": {
+                "name": "time_dependent_outward_current_x1_gate₊beta_x1",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "args": [
+                            {
+                                "val": 0.095,
+                                "type": "Const"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "val": 0.01,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "args": [
+                                                    {
+                                                        "val": 5.0,
+                                                        "type": "Const"
+                                                    },
+                                                    {
+                                                        "args": [
+                                                            {
+                                                                "val": -1.0,
+                                                                "type": "Const"
+                                                            },
+                                                            {
+                                                                "name": "slow_inward_current_d_gate₊V",
+                                                                "type": "Var"
+                                                            }
+                                                        ],
+                                                        "op": "times",
+                                                        "type": "Tree"
+                                                    }
+                                                ],
+                                                "op": "plus",
+                                                "type": "Tree"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "exp",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    },
+                    {
+                        "args": [
+                            {
+                                "val": 1.0,
+                                "type": "Const"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "val": 0.07199424046076314,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "args": [
+                                                    {
+                                                        "val": 5.0,
+                                                        "type": "Const"
+                                                    },
+                                                    {
+                                                        "args": [
+                                                            {
+                                                                "val": -1.0,
+                                                                "type": "Const"
+                                                            },
+                                                            {
+                                                                "name": "slow_inward_current_d_gate₊V",
+                                                                "type": "Var"
+                                                            }
+                                                        ],
+                                                        "op": "times",
+                                                        "type": "Tree"
+                                                    }
+                                                ],
+                                                "op": "plus",
+                                                "type": "Tree"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "exp",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "plus",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "divide",
+                "type": "Tree"
+            },
+            "lhs": {
+                "name": "slow_inward_current_d_gate₊alpha_d",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "args": [
+                            {
+                                "val": 0.07,
+                                "type": "Const"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "val": 0.01694915254237288,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "args": [
+                                                    {
+                                                        "val": -44.0,
+                                                        "type": "Const"
+                                                    },
+                                                    {
+                                                        "args": [
+                                                            {
+                                                                "val": -1.0,
+                                                                "type": "Const"
+                                                            },
+                                                            {
+                                                                "name": "slow_inward_current_d_gate₊V",
+                                                                "type": "Var"
+                                                            }
+                                                        ],
+                                                        "op": "times",
+                                                        "type": "Tree"
+                                                    }
+                                                ],
+                                                "op": "plus",
+                                                "type": "Tree"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "exp",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    },
+                    {
+                        "args": [
+                            {
+                                "val": 1.0,
+                                "type": "Const"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "val": 0.05,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "args": [
+                                                    {
+                                                        "val": 44.0,
+                                                        "type": "Const"
+                                                    },
+                                                    {
+                                                        "name": "slow_inward_current_d_gate₊V",
+                                                        "type": "Var"
+                                                    }
+                                                ],
+                                                "op": "plus",
+                                                "type": "Tree"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "exp",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "plus",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "divide",
+                "type": "Tree"
+            },
+            "lhs": {
+                "name": "slow_inward_current_d_gate₊beta_d",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "args": [
+                            {
+                                "val": 0.012,
+                                "type": "Const"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "val": 0.008,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "args": [
+                                                    {
+                                                        "val": -28.0,
+                                                        "type": "Const"
+                                                    },
+                                                    {
+                                                        "args": [
+                                                            {
+                                                                "val": -1.0,
+                                                                "type": "Const"
+                                                            },
+                                                            {
+                                                                "name": "slow_inward_current_f_gate₊V",
+                                                                "type": "Var"
+                                                            }
+                                                        ],
+                                                        "op": "times",
+                                                        "type": "Tree"
+                                                    }
+                                                ],
+                                                "op": "plus",
+                                                "type": "Tree"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "exp",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    },
+                    {
+                        "args": [
+                            {
+                                "val": 1.0,
+                                "type": "Const"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "val": 0.14992503748125938,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "args": [
+                                                    {
+                                                        "val": 28.0,
+                                                        "type": "Const"
+                                                    },
+                                                    {
+                                                        "name": "slow_inward_current_f_gate₊V",
+                                                        "type": "Var"
+                                                    }
+                                                ],
+                                                "op": "plus",
+                                                "type": "Tree"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "exp",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "plus",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "divide",
+                "type": "Tree"
+            },
+            "lhs": {
+                "name": "slow_inward_current_f_gate₊alpha_f",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "args": [
+                            {
+                                "val": 0.0065,
+                                "type": "Const"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "val": 0.02,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "args": [
+                                                    {
+                                                        "val": -30.0,
+                                                        "type": "Const"
+                                                    },
+                                                    {
+                                                        "args": [
+                                                            {
+                                                                "val": -1.0,
+                                                                "type": "Const"
+                                                            },
+                                                            {
+                                                                "name": "slow_inward_current_f_gate₊V",
+                                                                "type": "Var"
+                                                            }
+                                                        ],
+                                                        "op": "times",
+                                                        "type": "Tree"
+                                                    }
+                                                ],
+                                                "op": "plus",
+                                                "type": "Tree"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "exp",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    },
+                    {
+                        "args": [
+                            {
+                                "val": 1.0,
+                                "type": "Const"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "val": 0.2,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "args": [
+                                                    {
+                                                        "val": -30.0,
+                                                        "type": "Const"
+                                                    },
+                                                    {
+                                                        "args": [
+                                                            {
+                                                                "val": -1.0,
+                                                                "type": "Const"
+                                                            },
+                                                            {
+                                                                "name": "slow_inward_current_f_gate₊V",
+                                                                "type": "Var"
+                                                            }
+                                                        ],
+                                                        "op": "times",
+                                                        "type": "Tree"
+                                                    }
+                                                ],
+                                                "op": "plus",
+                                                "type": "Tree"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "exp",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "plus",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "divide",
+                "type": "Tree"
+            },
+            "lhs": {
+                "name": "slow_inward_current_f_gate₊beta_f",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "name": "stimulus_protocol₊Istim",
+                "type": "Var"
+            },
+            "lhs": {
+                "name": "membrane₊Istim",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "name": "sodium_current₊i_Na",
+                "type": "Var"
+            },
+            "lhs": {
+                "name": "membrane₊i_Na",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "name": "slow_inward_current₊i_s",
+                "type": "Var"
+            },
+            "lhs": {
+                "name": "membrane₊i_s",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "name": "time_dependent_outward_current₊i_x1",
+                "type": "Var"
+            },
+            "lhs": {
+                "name": "membrane₊i_x1",
+                "type": "Var"
+            }
+        },
+        {
+            "rhs": {
+                "name": "time_independent_outward_current₊i_K1",
+                "type": "Var"
+            },
+            "lhs": {
+                "name": "membrane₊i_K1",
+                "type": "Var"
+            }
+        }
+    ],
+    "iv": {
+        "name": "time",
+        "val": 0.0
+    },
+    "algs": [],
+    "params": [
+        {
+            "name": "stimulus_protocol₊IstimEnd",
+            "val": 50000.0
+        },
+        {
+            "name": "stimulus_protocol₊IstimStart",
+            "val": 10.0
+        },
+        {
+            "name": "stimulus_protocol₊IstimPeriod",
+            "val": 1000.0
+        },
+        {
+            "name": "membrane₊C",
+            "val": 0.01
+        },
+        {
+            "name": "stimulus_protocol₊IstimPulseDuration",
+            "val": 1.0
+        },
+        {
+            "name": "slow_inward_current₊g_s",
+            "val": 0.0009
+        },
+        {
+            "name": "sodium_current₊g_Nac",
+            "val": 3.0e-5
+        },
+        {
+            "name": "stimulus_protocol₊IstimAmplitude",
+            "val": 0.5
+        },
+        {
+            "name": "sodium_current₊E_Na",
+            "val": 50.0
+        },
+        {
+            "name": "sodium_current₊g_Na",
+            "val": 0.04
+        }
+    ],
+    "states": [
+        {
+            "name": "slow_inward_current_d_gate₊d",
+            "val": 0.003
+        },
+        {
+            "name": "slow_inward_current_f_gate₊f",
+            "val": 0.994
+        },
+        {
+            "name": "slow_inward_current₊Cai",
+            "val": 0.0001
+        },
+        {
+            "name": "time_dependent_outward_current_x1_gate₊x1",
+            "val": 0.0001
+        },
+        {
+            "name": "sodium_current_m_gate₊m",
+            "val": 0.011
+        },
+        {
+            "name": "sodium_current_h_gate₊h",
+            "val": 0.988
+        },
+        {
+            "name": "membrane₊V",
+            "val": -84.624
+        },
+        {
+            "name": "sodium_current_j_gate₊j",
+            "val": 0.975
+        }
+    ],
+    "odes": [
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "args": [
+                            {
+                                "args": [
+                                    {
+                                        "val": 1.0,
+                                        "type": "Const"
+                                    },
+                                    {
+                                        "args": [
+                                            {
+                                                "val": -1.0,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "name": "slow_inward_current_d_gate₊d",
+                                                "type": "Var"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "plus",
+                                "type": "Tree"
+                            },
+                            {
+                                "name": "slow_inward_current_d_gate₊alpha_d",
+                                "type": "Var"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    },
+                    {
+                        "args": [
+                            {
+                                "val": -1.0,
+                                "type": "Const"
+                            },
+                            {
+                                "name": "slow_inward_current_d_gate₊beta_d",
+                                "type": "Var"
+                            },
+                            {
+                                "name": "slow_inward_current_d_gate₊d",
+                                "type": "Var"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "plus",
+                "type": "Tree"
+            },
+            "lhs": {
+                "args": [
+                    {
+                        "name": "slow_inward_current_d_gate₊d",
+                        "type": "Var"
+                    }
+                ],
+                "op": "Differential",
+                "type": "Tree"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "args": [
+                            {
+                                "val": -1.0,
+                                "type": "Const"
+                            },
+                            {
+                                "name": "slow_inward_current_f_gate₊beta_f",
+                                "type": "Var"
+                            },
+                            {
+                                "name": "slow_inward_current_f_gate₊f",
+                                "type": "Var"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    },
+                    {
+                        "args": [
+                            {
+                                "name": "slow_inward_current_f_gate₊alpha_f",
+                                "type": "Var"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "val": 1.0,
+                                        "type": "Const"
+                                    },
+                                    {
+                                        "args": [
+                                            {
+                                                "val": -1.0,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "name": "slow_inward_current_f_gate₊f",
+                                                "type": "Var"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "plus",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "plus",
+                "type": "Tree"
+            },
+            "lhs": {
+                "args": [
+                    {
+                        "name": "slow_inward_current_f_gate₊f",
+                        "type": "Var"
+                    }
+                ],
+                "op": "Differential",
+                "type": "Tree"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "args": [
+                            {
+                                "val": 0.07,
+                                "type": "Const"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "val": 0.0001,
+                                        "type": "Const"
+                                    },
+                                    {
+                                        "args": [
+                                            {
+                                                "val": -1.0,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "name": "slow_inward_current₊Cai",
+                                                "type": "Var"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "plus",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    },
+                    {
+                        "args": [
+                            {
+                                "val": -0.01,
+                                "type": "Const"
+                            },
+                            {
+                                "name": "slow_inward_current₊i_s",
+                                "type": "Var"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "plus",
+                "type": "Tree"
+            },
+            "lhs": {
+                "args": [
+                    {
+                        "name": "slow_inward_current₊Cai",
+                        "type": "Var"
+                    }
+                ],
+                "op": "Differential",
+                "type": "Tree"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "args": [
+                            {
+                                "args": [
+                                    {
+                                        "val": 1.0,
+                                        "type": "Const"
+                                    },
+                                    {
+                                        "args": [
+                                            {
+                                                "val": -1.0,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "name": "time_dependent_outward_current_x1_gate₊x1",
+                                                "type": "Var"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "plus",
+                                "type": "Tree"
+                            },
+                            {
+                                "name": "time_dependent_outward_current_x1_gate₊alpha_x1",
+                                "type": "Var"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    },
+                    {
+                        "args": [
+                            {
+                                "val": -1.0,
+                                "type": "Const"
+                            },
+                            {
+                                "name": "time_dependent_outward_current_x1_gate₊x1",
+                                "type": "Var"
+                            },
+                            {
+                                "name": "time_dependent_outward_current_x1_gate₊beta_x1",
+                                "type": "Var"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "plus",
+                "type": "Tree"
+            },
+            "lhs": {
+                "args": [
+                    {
+                        "name": "time_dependent_outward_current_x1_gate₊x1",
+                        "type": "Var"
+                    }
+                ],
+                "op": "Differential",
+                "type": "Tree"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "args": [
+                            {
+                                "val": -1.0,
+                                "type": "Const"
+                            },
+                            {
+                                "name": "sodium_current_m_gate₊beta_m",
+                                "type": "Var"
+                            },
+                            {
+                                "name": "sodium_current_m_gate₊m",
+                                "type": "Var"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    },
+                    {
+                        "args": [
+                            {
+                                "args": [
+                                    {
+                                        "val": 1.0,
+                                        "type": "Const"
+                                    },
+                                    {
+                                        "args": [
+                                            {
+                                                "val": -1.0,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "name": "sodium_current_m_gate₊m",
+                                                "type": "Var"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "plus",
+                                "type": "Tree"
+                            },
+                            {
+                                "name": "sodium_current_m_gate₊alpha_m",
+                                "type": "Var"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "plus",
+                "type": "Tree"
+            },
+            "lhs": {
+                "args": [
+                    {
+                        "name": "sodium_current_m_gate₊m",
+                        "type": "Var"
+                    }
+                ],
+                "op": "Differential",
+                "type": "Tree"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "args": [
+                            {
+                                "val": -1.0,
+                                "type": "Const"
+                            },
+                            {
+                                "name": "sodium_current_h_gate₊h",
+                                "type": "Var"
+                            },
+                            {
+                                "name": "sodium_current_h_gate₊beta_h",
+                                "type": "Var"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    },
+                    {
+                        "args": [
+                            {
+                                "args": [
+                                    {
+                                        "val": 1.0,
+                                        "type": "Const"
+                                    },
+                                    {
+                                        "args": [
+                                            {
+                                                "val": -1.0,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "name": "sodium_current_h_gate₊h",
+                                                "type": "Var"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "plus",
+                                "type": "Tree"
+                            },
+                            {
+                                "name": "sodium_current_h_gate₊alpha_h",
+                                "type": "Var"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "plus",
+                "type": "Tree"
+            },
+            "lhs": {
+                "args": [
+                    {
+                        "name": "sodium_current_h_gate₊h",
+                        "type": "Var"
+                    }
+                ],
+                "op": "Differential",
+                "type": "Tree"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "args": [
+                            {
+                                "args": [
+                                    {
+                                        "val": -1.0,
+                                        "type": "Const"
+                                    },
+                                    {
+                                        "name": "membrane₊i_x1",
+                                        "type": "Var"
+                                    }
+                                ],
+                                "op": "times",
+                                "type": "Tree"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "val": -1.0,
+                                        "type": "Const"
+                                    },
+                                    {
+                                        "name": "membrane₊i_s",
+                                        "type": "Var"
+                                    }
+                                ],
+                                "op": "times",
+                                "type": "Tree"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "val": -1.0,
+                                        "type": "Const"
+                                    },
+                                    {
+                                        "name": "membrane₊i_K1",
+                                        "type": "Var"
+                                    }
+                                ],
+                                "op": "times",
+                                "type": "Tree"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "val": -1.0,
+                                        "type": "Const"
+                                    },
+                                    {
+                                        "name": "membrane₊i_Na",
+                                        "type": "Var"
+                                    }
+                                ],
+                                "op": "times",
+                                "type": "Tree"
+                            },
+                            {
+                                "name": "membrane₊Istim",
+                                "type": "Var"
+                            }
+                        ],
+                        "op": "plus",
+                        "type": "Tree"
+                    },
+                    {
+                        "name": "membrane₊C",
+                        "type": "Var"
+                    }
+                ],
+                "op": "divide",
+                "type": "Tree"
+            },
+            "lhs": {
+                "args": [
+                    {
+                        "name": "membrane₊V",
+                        "type": "Var"
+                    }
+                ],
+                "op": "Differential",
+                "type": "Tree"
+            }
+        },
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "args": [
+                            {
+                                "val": -1.0,
+                                "type": "Const"
+                            },
+                            {
+                                "name": "sodium_current_j_gate₊beta_j",
+                                "type": "Var"
+                            },
+                            {
+                                "name": "sodium_current_j_gate₊j",
+                                "type": "Var"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    },
+                    {
+                        "args": [
+                            {
+                                "name": "sodium_current_j_gate₊alpha_j",
+                                "type": "Var"
+                            },
+                            {
+                                "args": [
+                                    {
+                                        "val": 1.0,
+                                        "type": "Const"
+                                    },
+                                    {
+                                        "args": [
+                                            {
+                                                "val": -1.0,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "name": "sodium_current_j_gate₊j",
+                                                "type": "Var"
+                                            }
+                                        ],
+                                        "op": "times",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "plus",
+                                "type": "Tree"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    }
+                ],
+                "op": "plus",
+                "type": "Tree"
+            },
+            "lhs": {
+                "args": [
+                    {
+                        "name": "sodium_current_j_gate₊j",
+                        "type": "Var"
+                    }
+                ],
+                "op": "Differential",
+                "type": "Tree"
+            }
+        }
+    ]
+}

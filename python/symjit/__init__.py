@@ -115,14 +115,24 @@ def from_raw_parts(ptr, count):
     
 class BaseFunc:
     def __init__(self, model):
-        self.p = lib._compile(json.dumps(model).encode('utf-8'), b'native')        
+        self.p = lib._compile(model.encode('utf-8'), b'native')        
         status = lib._check_status(self.p)    
         if status != b'Success':
             raise ValueError(status)                    
         self.populate()
         
     def __del__(self):
-        lib._finalize(self.p)        
+        lib._finalize(self.p)     
+        
+    def get_u0(self):
+        u0 = np.zeros(self.count_states, dtype='double')
+        lib._fill_u0(self.p, np.ctypeslib.as_ctypes(u0), self.count_states)
+        return u0
+        
+    def get_p(self):
+        p = np.zeros(self.count_params, dtype='double')
+        lib._fill_p(self.p, np.ctypeslib.as_ctypes(p), self.count_params)
+        return p
         
     def populate(self):    
         self.count_states = lib._count_states(self.p)
@@ -137,8 +147,7 @@ class BaseFunc:
 
 
 class Func(BaseFunc):
-    def __init__(self, states, eqs):
-        model = structure.model(states, eqs)
+    def __init__(self, model):
         super().__init__(model)
         
     def __call__(self, *args):
@@ -153,8 +162,7 @@ class Func(BaseFunc):
         
 
 class OdeFunc(BaseFunc):
-    def __init__(self, iv, states, odes, params=None):
-        model = structure.model_ode(iv, states, odes, params)
+    def __init__(self, model):
         super().__init__(model)
         
     def __call__(self, t, y, *args):
@@ -170,19 +178,18 @@ class OdeFunc(BaseFunc):
         if not status:
             raise ValueError('cannot execute the model')
             
-        return self._diffs.copy()
+        return self._diffs.copy()    
 
     
-    
-def compile_str(json):
-    p = lib._compile(json.encode('utf-8'), b'native')
-    status = lib._check_status(p)    
-    if status != b'Success':
-        raise ValueError(status)        
-    return Compiled(p)
-    
-def load_json(name):
-    with open(name) as fd:
-        return fd.read()
+def compile_func(states, eqs):
+    model = structure.model(states, eqs)
+    return Func(json.dumps(model))
+
+def compile_ode(iv, states, odes, params=None):
+    model = structure.model_ode(iv, states, odes, params)
+    return OdeFunc(json.dumps(model))
         
+def compile_json(model):
+    return OdeFunc(model)
+
 

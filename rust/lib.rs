@@ -12,7 +12,7 @@ mod utils;
 mod amd;
 mod arm;
 mod interpreter;
-#[cfg(feature = "wasm")]
+#[cfg(any(feature = "wasm", target_os = "windows"))]
 mod wasm;
 
 use model::{CellModel, Program};
@@ -79,7 +79,7 @@ pub extern "C" fn compile(p: *const c_char, ty: *const c_char) -> *const Compile
         "arm" => Some(Runnable::new(prog, CompilerType::Arm)),
         "amd" => Some(Runnable::new(prog, CompilerType::Amd)),
         "native" => Some(Runnable::new(prog, CompilerType::Native)),
-        #[cfg(feature = "wasm")]
+        #[cfg(any(feature = "wasm", target_os = "windows"))]
         "wasm" => Some(Runnable::new(prog, CompilerType::Wasm)),
         _ => None,
     };
