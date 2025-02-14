@@ -1,9 +1,10 @@
 use std::ffi::{c_char, CStr, CString};
 
-mod allocator;
+// mod allocator;
 mod analyzer;
 mod code;
 mod machine;
+mod memory;
 mod model;
 mod register;
 mod runnable;
@@ -12,7 +13,7 @@ mod utils;
 mod amd;
 mod arm;
 mod interpreter;
-#[cfg(any(feature = "wasm", target_os = "windows"))]
+#[cfg(feature = "wasm")]
 mod wasm;
 
 use model::{CellModel, Program};
@@ -79,7 +80,7 @@ pub extern "C" fn compile(p: *const c_char, ty: *const c_char) -> *const Compile
         "arm" => Some(Runnable::new(prog, CompilerType::Arm)),
         "amd" => Some(Runnable::new(prog, CompilerType::Amd)),
         "native" => Some(Runnable::new(prog, CompilerType::Native)),
-        #[cfg(any(feature = "wasm", target_os = "windows"))]
+        #[cfg(feature = "wasm")]
         "wasm" => Some(Runnable::new(prog, CompilerType::Wasm)),
         _ => None,
     };

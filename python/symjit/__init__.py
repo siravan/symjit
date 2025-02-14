@@ -1,11 +1,35 @@
 import os
+import sys
+import platform
 import ctypes
 import json
 import numpy as np
 
 from . import structure
 
-dll_path = os.path.join(os.path.dirname(__file__), '_lib.cpython-310-x86_64-linux-gnu.so')
+def find_dll(substr):
+    files = os.listdir(os.path.dirname(__file__))
+    matches = list(filter(lambda s: s.find(substr) >= 0, files))
+    if len(matches) == 0:
+        return None
+    else:
+        return matches[0]
+
+dll_name = None
+
+if sys.platform == 'linux' and platform.machine() == 'x86_64':
+    dll_name = find_dll('x86_64-linux')
+if sys.platform == 'linux' and platform.machine() == 'aarch64':
+    dll_name = find_dll('aarch64-linux')
+elif sys.platform == 'win32':
+    dll_name = find_dll('win_amd64')
+
+if dll_name is None:
+    raise ValueError('unsupported platform')
+    
+print(dll_name)
+
+dll_path = os.path.join(os.path.dirname(__file__), dll_name)
 dll = ctypes.CDLL(dll_path)    
     
 class Library:

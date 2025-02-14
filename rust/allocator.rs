@@ -1,12 +1,12 @@
 /*
     The JIT memory allocator is based on
-     
+
     https://github.com/dinfuehr/dora/blob/main/dora-runtime/src/os/allocator.rs
-    
-    which is the memory allocator for a JIT-compiler for the programming language 
-    Dora implemented in Rust. 
-    
-    The code is abbreviated and modified. Specially, we don't need to reserve and 
+
+    which is the memory allocator for a JIT-compiler for the programming language
+    Dora implemented in Rust.
+
+    The code is abbreviated and modified. Specially, we don't need to reserve and
     commit memory separately. Instead, we do both at the same time.
 */
 

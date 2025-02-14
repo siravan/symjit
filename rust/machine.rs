@@ -1,16 +1,18 @@
-use memmap2::{Mmap, MmapOptions};
-use rand::distributions::{Alphanumeric, DistString};
+//use memmap2::{Mmap, MmapOptions};
+//use rand::distributions::{Alphanumeric, DistString};
 use std::fs;
 use std::io::Write;
 
-use super::allocator::*;
+// use super::allocator::*;
 use super::code::BinaryFunc;
+use super::memory::*;
 use super::utils::*;
 
 pub struct MachineCode {
     p: *const u8,
     //mmap: Mmap, // we need to store mmap and fs here, so that they are not dropped
-    mmap: Allocation,
+    //mmap: Allocation,
+    mmap: Memory,
     //name: String,
     //fs: fs::File,
     vt: Vec<BinaryFunc>,
@@ -33,11 +35,20 @@ impl MachineCode {
         */
 
         let size = machine_code.len();
-        let mut mmap = Allocation::alloc(size);
-        mmap.as_mem_mut().copy_from_slice(&machine_code[..]);
-        let p = mmap.as_ptr();
 
-        println!("{:?}", &mmap);
+        // let mut mmap = Allocation::alloc(size);
+        // mmap.as_mem_mut().copy_from_slice(&machine_code[..]);
+        // let p = mmap.as_ptr();
+
+        let mut mmap = Memory::new(BranchProtection::None);
+        let p: *mut u8 = mmap.allocate(size, 64).unwrap();
+        unsafe {
+            std::slice::from_raw_parts_mut(p, size).copy_from_slice(&machine_code[..]);
+        };
+        mmap.set_readable_and_executable();
+
+        // println!("{:?}", &mmap);
+        println!("{:?}", p);
 
         #[cfg(target_arch = "x86_64")]
         if arch != "x86_64" {
