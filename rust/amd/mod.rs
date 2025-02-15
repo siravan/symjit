@@ -121,24 +121,28 @@ impl AmdCompiler {
         self.emit(amd! {push rbx});
 
         // linux and windows have different ABI
-        
+
         #[cfg(target_os = "linux")]
         {
             self.emit(amd! {mov rbp, rdi});
             self.emit(amd! {mov rbx, rdx});
         }
-        
+
         #[cfg(target_os = "windows")]
         {
             self.emit(amd! {mov rbp, rcx});
-            self.emit(amd! {mov rbx, r8});            
-        } 
+            self.emit(amd! {mov rbx, r8});
+        }
 
-        if n > 0 { self.emit(amd! {sub rsp, n}); }
+        if n > 0 {
+            self.emit(amd! {sub rsp, n});
+        }
     }
 
     fn epilogue(&mut self, n: usize) {
-        if n > 0 { self.emit(amd! {add rsp, n}); }
+        if n > 0 {
+            self.emit(amd! {add rsp, n});
+        }
         self.emit(amd! {pop rbx});
         self.emit(amd! {pop rbp});
         self.emit(amd! {ret});

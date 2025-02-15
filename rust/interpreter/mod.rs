@@ -119,7 +119,6 @@ impl Compiled for ByteCode {
     fn mem_mut(&mut self) -> &mut [f64] {
         &mut self._mem[..]
     }
-    
-    fn dump(&self, name: &str) {
-    }    
+
+    fn dump(&self, name: &str) {}
 }

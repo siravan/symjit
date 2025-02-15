@@ -138,7 +138,7 @@ impl ArmCompiler {
         }
     }
 
-    fn prologue(&mut self, n: usize) {         
+    fn prologue(&mut self, n: usize) {
         self.emit(arm! {sub sp, sp, #n+32});
         self.emit(arm! {str lr, [sp, #n]});
         self.emit(arm! {stp x(19), x(20), [sp, #n+16]});

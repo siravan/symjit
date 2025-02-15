@@ -256,10 +256,10 @@ pub extern "C" fn ptr_diffs(q: *mut CompilerResult) -> *const f64 {
 
 #[no_mangle]
 pub extern "C" fn dump(q: *mut CompilerResult, name: *const c_char) {
-    let q: &CompilerResult = unsafe { &*q };    
+    let q: &CompilerResult = unsafe { &*q };
     if let Some(func) = &q.func {
         let name = unsafe { CStr::from_ptr(name).to_str().unwrap() };
-        func.dump(name);        
+        func.dump(name);
     }
 }
 

@@ -39,7 +39,7 @@ impl Runnable {
             CompilerType::Arm => Box::new(ArmCompiler::new().compile(&prog)),
 
             #[cfg(feature = "wasm")]
-            CompilerType::Wasm => Box::new(WasmCompiler::new().compile(&prog)),            
+            CompilerType::Wasm => Box::new(WasmCompiler::new().compile(&prog)),
             #[cfg(target_arch = "x86_64")]
             CompilerType::Native => Box::new(AmdCompiler::new().compile(&prog)),
             #[cfg(target_arch = "aarch64")]
@@ -62,7 +62,7 @@ impl Runnable {
         let u0 = mem[first_state..first_state + count_states].to_vec();
         let p = mem[first_param..first_param + count_params].to_vec();
 
-        Runnable {            
+        Runnable {
             compiled,
             first_state,
             first_param,
@@ -113,7 +113,7 @@ impl Callable for Runnable {
         }
         self.compiled.exec();
     }
-    
+
     fn dump(&self, name: &str) {
         self.compiled.dump(name);
     }
