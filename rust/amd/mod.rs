@@ -119,8 +119,20 @@ impl AmdCompiler {
     fn prologue(&mut self, n: usize) {
         self.emit(amd! {push rbp});
         self.emit(amd! {push rbx});
-        self.emit(amd! {mov rbp, rdi});
-        self.emit(amd! {mov rbx, rdx});
+
+        #[cfg(target_os = "linux")]
+        {
+            self.emit(amd! {mov rbp, rdi});
+            self.emit(amd! {mov rbx, rdx});
+        }
+        
+        #[cfg(target_os = "windows")]
+        {
+            self.emit(amd! {mov rbp, rcx});
+            self.emit(amd! {mov rbx, r8});
+            //self.emit(vec![0x4c, 0x89, 0xc3]);
+        } 
+
         self.emit(amd! {sub rsp, n});
     }
 

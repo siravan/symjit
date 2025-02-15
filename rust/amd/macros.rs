@@ -50,24 +50,31 @@ macro_rules! reg {
 }
 
 macro_rules! modrm_reg {
-    ($x:expr, $y:expr) => {{
-        let x = $x;
-        let y = $y;
-        assert!(x < 8 && y < 8);
-        0xC0 + (y << 3) + x
+    ($rm:expr, $reg:expr) => {{
+        let rm = $rm;
+        let reg = $reg;        
+        0xC0 + ((reg & 7) << 3) + (rm & 7)
+    }};
+}
+
+macro_rules! rex {
+    ($rm:expr, $reg:expr) => {{
+        let rm = $rm;
+        let reg = $reg;
+        0x48 + ((rm & 8) >> 3) + ((reg & 8) >> 1)
     }};
 }
 
 macro_rules! modrm_mem {
-    ($dst:expr, $base:ident, $offset:expr) => {{
-        let dst = $dst;
+    ($reg:expr, $base:ident, $offset:expr) => {{
+        let reg = $reg;
         let base = $base;
         let offset = $offset;
 
         let mut v = if offset < 128 {
-            vec![0x40 + (dst << 3) + base]
+            vec![0x40 + (reg << 3) + base]
         } else {
-            vec![0x80 + (dst << 3) + base]
+            vec![0x80 + (reg << 3) + base]
         };
 
         if base == 4 {
@@ -126,33 +133,33 @@ macro_rules! amd {
         {
             let dst = $dst;
             let src = reg!($src);
-            make_modrm![0x66, 0x48 | (src >> 3), 0x0f, 0x6e; src & 7, dst]
+            make_modrm![0x66, rex!(src, dst), 0x0f, 0x6e; src, dst]
         }
     };
     (movq $dst:ident, xmm($src:expr)) => {
         {
             let dst = reg!($dst);
             let src = $src;
-            make_modrm![0x66, 0x48 | (dst >> 3), 0x0f, 0x7e; dst & 7, src]
+            make_modrm![0x66, rex!(dst, src), 0x0f, 0x7e; dst, src]
         }
     };
     (mov $dst:ident, $src:ident) => {
         {
             let dst = reg!($dst);
             let src = reg!($src);
-            make_modrm![0x48, 0x89; dst, src]
+            make_modrm![rex!(dst, src), 0x89; dst, src]
         }
     };
     (mov $dst:ident, qword ptr [$base:ident + $offset:expr]) => {
         {
             let dst = reg!($dst);
-            make_modrm![0x48, 0x8b; dst, $base, $offset]
+            make_modrm![rex!(0, dst), 0x8b; dst, $base, $offset]
         }
     };
     (mov qword ptr [$base:ident + $offset:expr], $src:ident) => {
         {
             let src = reg!($src);
-            make_modrm![0x48, 0x89; src, $base, $offset]
+            make_modrm![rex!(0, src), 0x89; src, $base, $offset]
         }
     };
     (addsd xmm($dst:expr), xmm($src:expr)) => {

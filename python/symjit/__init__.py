@@ -146,7 +146,8 @@ class BaseFunc:
         self.populate()
         
     def __del__(self):
-        lib._finalize(self.p)     
+        # lib._finalize(self.p)   
+        pass  
         
     def get_u0(self):
         u0 = np.zeros(self.count_states, dtype='double')

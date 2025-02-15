@@ -42,14 +42,12 @@ impl MachineCode {
 
         let mut mmap = Memory::new(BranchProtection::None);
         let p: *mut u8 = mmap.allocate(size, 64).unwrap();
-        unsafe {
-            std::slice::from_raw_parts_mut(p, size).copy_from_slice(&machine_code[..]);
-        };
-        mmap.set_readable_and_executable();
+        let v = unsafe { std::slice::from_raw_parts_mut(p, size) };
+        v.copy_from_slice(&machine_code[..]);
+        mmap.set_readable_and_executable().unwrap();
 
         // println!("{:?}", &mmap);
-        println!("{:?}", p);
-
+        
         #[cfg(target_arch = "x86_64")]
         if arch != "x86_64" {
             panic!("cannot run {:?} code", arch);
@@ -79,7 +77,7 @@ impl MachineCode {
 impl Compiled for MachineCode {
     fn run(&mut self) {
         let f: fn(&[f64], &[BinaryFunc]) = unsafe { std::mem::transmute(self.p) };
-        f(&mut self._mem, &self.vt);
+        f(&mut self._mem, &self.vt);        
     }
 
     #[inline]
