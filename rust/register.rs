@@ -1,9 +1,6 @@
 use serde::Serialize;
 use std::collections::HashMap;
-use std::error::Error;
 
-// Unit-like structure abstracting a single register
-// it covers the index of the register in mem
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 pub struct Word(pub usize, pub usize); // index, version
 
@@ -218,9 +215,5 @@ impl Frame {
 
     pub fn stack_size(&self) -> usize {
         self.stack.len()
-    }
-
-    pub fn as_json(&self) -> Result<String, Box<dyn Error>> {
-        Ok(serde_json::to_string(&self.words)?)
     }
 }

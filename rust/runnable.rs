@@ -18,7 +18,6 @@ pub enum CompilerType {
 }
 
 pub struct Runnable {
-    pub prog: Program,
     pub compiled: Box<dyn Compiled>,
     pub first_state: usize,
     pub first_param: usize,
@@ -36,16 +35,17 @@ impl Runnable {
     pub fn new(prog: Program, ty: CompilerType) -> Runnable {
         let compiled: Box<dyn Compiled> = match ty {
             CompilerType::ByteCode => Box::new(Interpreter::new().compile(&prog)),
-            #[cfg(feature = "wasm")]
-            CompilerType::Wasm => Box::new(WasmCompiler::new().compile(&prog)),
             CompilerType::Amd => Box::new(AmdCompiler::new().compile(&prog)),
             CompilerType::Arm => Box::new(ArmCompiler::new().compile(&prog)),
+
+            #[cfg(feature = "wasm")]
+            CompilerType::Wasm => Box::new(WasmCompiler::new().compile(&prog)),            
             #[cfg(target_arch = "x86_64")]
             CompilerType::Native => Box::new(AmdCompiler::new().compile(&prog)),
             #[cfg(target_arch = "aarch64")]
             CompilerType::Native => Box::new(ArmCompiler::new().compile(&prog)),
-            //#[cfg(target_os = "windows")]
-            //CompilerType::Native => Box::new(WasmCompiler::new().compile(&prog)),
+            #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+            CompilerType::ByteCode => Box::new(Interpreter::new().compile(&prog)),
         };
 
         let first_state = prog.frame.first_state().unwrap();
@@ -62,8 +62,7 @@ impl Runnable {
         let u0 = mem[first_state..first_state + count_states].to_vec();
         let p = mem[first_param..first_param + count_params].to_vec();
 
-        Runnable {
-            prog,
+        Runnable {            
             compiled,
             first_state,
             first_param,
@@ -99,29 +98,11 @@ impl Callable for Runnable {
                 &mut mem[self.first_param..self.first_param + self.count_params].copy_from_slice(p);
         }
 
-        self.compiled.run();
+        self.compiled.exec();
 
         {
             let mem = self.compiled.mem();
             let _ = du.copy_from_slice(&mem[self.first_diff..self.first_diff + self.count_diffs]);
-        }
-    }
-
-    // call interface to Python scipy ode solver
-    fn call_py(&mut self, du: &mut [f64], u: &[f64], t: f64) {
-        {
-            let mem = self.compiled.mem_mut();
-            mem[self.first_state - 1] = t;
-            let _ = &mut mem
-                [self.first_state..self.first_state + self.count_states + self.count_params]
-                .copy_from_slice(u);
-        }
-
-        self.compiled.run();
-
-        {
-            let mem = self.compiled.mem();
-            let _ = du.copy_from_slice(&mem[self.first_obs..self.first_obs + self.count_obs]);
         }
     }
 
@@ -130,6 +111,10 @@ impl Callable for Runnable {
             let mem = self.compiled.mem_mut();
             mem[self.first_state - 1] = t;
         }
-        self.compiled.run();
+        self.compiled.exec();
+    }
+    
+    fn dump(&self, name: &str) {
+        self.compiled.dump(name);
     }
 }

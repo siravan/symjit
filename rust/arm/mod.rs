@@ -138,7 +138,7 @@ impl ArmCompiler {
         }
     }
 
-    fn prologue(&mut self, n: usize) {
+    fn prologue(&mut self, n: usize) {         
         self.emit(arm! {sub sp, sp, #n+32});
         self.emit(arm! {str lr, [sp, #n]});
         self.emit(arm! {stp x(19), x(20), [sp, #n+16]});
@@ -207,7 +207,7 @@ impl Compiler<MachineCode> for ArmCompiler {
 
         MachineCode::new(
             "aarch64",
-            &self.machine_code.clone(),
+            self.machine_code.clone(),
             prog.virtual_table(),
             prog.frame.mem(),
         )

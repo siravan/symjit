@@ -120,6 +120,8 @@ impl AmdCompiler {
         self.emit(amd! {push rbp});
         self.emit(amd! {push rbx});
 
+        // linux and windows have different ABI
+        
         #[cfg(target_os = "linux")]
         {
             self.emit(amd! {mov rbp, rdi});
@@ -129,15 +131,14 @@ impl AmdCompiler {
         #[cfg(target_os = "windows")]
         {
             self.emit(amd! {mov rbp, rcx});
-            self.emit(amd! {mov rbx, r8});
-            //self.emit(vec![0x4c, 0x89, 0xc3]);
+            self.emit(amd! {mov rbx, r8});            
         } 
 
-        self.emit(amd! {sub rsp, n});
+        if n > 0 { self.emit(amd! {sub rsp, n}); }
     }
 
     fn epilogue(&mut self, n: usize) {
-        self.emit(amd! {add rsp, n});
+        if n > 0 { self.emit(amd! {add rsp, n}); }
         self.emit(amd! {pop rbx});
         self.emit(amd! {pop rbp});
         self.emit(amd! {ret});
@@ -226,7 +227,7 @@ impl Compiler<MachineCode> for AmdCompiler {
 
         MachineCode::new(
             "x86_64",
-            &self.machine_code.clone(),
+            self.machine_code.clone(),
             prog.virtual_table(),
             prog.frame.mem(),
         )

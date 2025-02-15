@@ -14,5 +14,3 @@ plt.plot(t_eval, sol.y.T)
 plt.show()
 
 
-
-

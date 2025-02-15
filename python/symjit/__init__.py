@@ -68,18 +68,7 @@ class Library:
             ctypes.c_size_t,                    # np
             ctypes.c_double                     # t
         ]
-        self._run.restype = ctypes.c_bool
-        
-        self._run_py = dll.run_py
-        self._run_py.argtypes = [
-            ctypes.c_void_p,                    # handle
-            ctypes.POINTER(ctypes.c_double),    # du
-            ctypes.c_size_t,                    # nd 
-            ctypes.POINTER(ctypes.c_double),    # u
-            ctypes.c_size_t,                    # ns 
-            ctypes.c_double                     # t
-        ]
-        self._run_py.restype = ctypes.c_bool
+        self._run.restype = ctypes.c_bool        
         
         self._execute = dll.execute
         self._execute.argtypes = [
@@ -107,6 +96,10 @@ class Library:
         self._compile = dll.compile
         self._compile.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
         self._compile.restype = ctypes.c_void_p
+        
+        self._dump = dll.dump
+        self._dump.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        self._dump.restype = None
         
         self._finalize = dll.finalize
         self._finalize.argtypes = [ctypes.c_void_p]
@@ -146,8 +139,10 @@ class BaseFunc:
         self.populate()
         
     def __del__(self):
-        # lib._finalize(self.p)   
-        pass  
+        lib._finalize(self.p)     
+        
+    def dump(self, name):
+        lib._dump(self.p, name.encode('utf-8'))
         
     def get_u0(self):
         u0 = np.zeros(self.count_states, dtype='double')

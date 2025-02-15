@@ -241,4 +241,7 @@ impl Compiled for WasmCode {
         let p: &mut [f64] = unsafe { std::mem::transmute(self.memory.data_mut(&mut self.store)) };
         p
     }
+    
+    fn dump(&self, name: &str) {
+    }    
 }

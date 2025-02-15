@@ -1,3 +1,14 @@
+/*******************************************
+This file is essentially
+
+https://github.com/bytecodealliance/wasmtime/blob/main/cranelift/jit/src/memory.rs
+
+which is the jit memory manager of wasmtime cranelift jit compiler. 
+The only change is redifintion of ModuleError and ModuleResults. 
+This file does more than what we strictly need, but it is better
+to stay uptodate with the original file.
+*******************************************/
+
 // use cranelift_module::{ModuleError, ModuleResult};
 
 #[derive(Debug)]
