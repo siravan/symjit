@@ -1,20 +1,15 @@
-//use memmap2::{Mmap, MmapOptions};
-//use rand::distributions::{Alphanumeric, DistString};
 use std::fs;
 use std::io::Write;
 
-// use super::allocator::*;
 use super::code::BinaryFunc;
 use super::memory::*;
 use super::utils::*;
 
 pub struct MachineCode {
-    p: *const u8,
-    //mmap: Mmap, // we need to store mmap and fs here, so that they are not dropped
-    //mmap: Allocation,
-    mmap: Memory,
-    //name: String,
-    //fs: fs::File,
+    machine_code: Vec<u8>,
+    #[allow(dead_code)]
+    code: Memory, // code needs to be here for f to stay valid
+    f: fn(&[f64], &[BinaryFunc]),
     vt: Vec<BinaryFunc>,
     _mem: Vec<f64>,
 }
@@ -22,32 +17,10 @@ pub struct MachineCode {
 impl MachineCode {
     pub fn new(
         arch: &str,
-        machine_code: &Vec<u8>,
+        machine_code: Vec<u8>,
         vt: Vec<BinaryFunc>,
         _mem: Vec<f64>,
     ) -> MachineCode {
-        /*
-        let name = Alphanumeric.sample_string(&mut rand::thread_rng(), 16) + ".bin";
-        MachineCode::write_buf(machine_code, &name);
-        let fs = fs::File::open(&name).unwrap();
-        let mmap = unsafe { MmapOptions::new().map_exec(&fs).unwrap() };
-        let p = mmap.as_ptr() as *const u8;
-        */
-
-        let size = machine_code.len();
-
-        // let mut mmap = Allocation::alloc(size);
-        // mmap.as_mem_mut().copy_from_slice(&machine_code[..]);
-        // let p = mmap.as_ptr();
-
-        let mut mmap = Memory::new(BranchProtection::None);
-        let p: *mut u8 = mmap.allocate(size, 64).unwrap();
-        let v = unsafe { std::slice::from_raw_parts_mut(p, size) };
-        v.copy_from_slice(&machine_code[..]);
-        mmap.set_readable_and_executable().unwrap();
-
-        // println!("{:?}", &mmap);
-        
         #[cfg(target_arch = "x86_64")]
         if arch != "x86_64" {
             panic!("cannot run {:?} code", arch);
@@ -58,26 +31,32 @@ impl MachineCode {
             panic!("cannot run {:?} code", arch);
         }
 
+        let size = machine_code.len();
+
+        let mut code = Memory::new(BranchProtection::None);
+        let p: *mut u8 = code.allocate(size, 64).unwrap();
+
+        let v = unsafe { std::slice::from_raw_parts_mut(p, size) };
+        v.copy_from_slice(&machine_code[..]);
+
+        code.set_readable_and_executable().unwrap();
+
+        let f: fn(&[f64], &[BinaryFunc]) = unsafe { std::mem::transmute(p) };
+
         MachineCode {
-            p,
-            mmap,
-            //name,
-            //fs,
+            machine_code,
+            code,
+            f,
             vt,
             _mem,
         }
     }
-
-    fn write_buf(machine_code: &Vec<u8>, name: &str) {
-        let mut fs = fs::File::create(name).unwrap();
-        fs.write(machine_code).unwrap();
-    }
 }
 
 impl Compiled for MachineCode {
-    fn run(&mut self) {
-        let f: fn(&[f64], &[BinaryFunc]) = unsafe { std::mem::transmute(self.p) };
-        f(&mut self._mem, &self.vt);        
+    #[inline]
+    fn exec(&mut self) {
+        (self.f)(&mut self._mem, &self.vt);
     }
 
     #[inline]
@@ -89,10 +68,9 @@ impl Compiled for MachineCode {
     fn mem_mut(&mut self) -> &mut [f64] {
         &mut self._mem[..]
     }
-}
 
-impl Drop for MachineCode {
-    fn drop(&mut self) {
-        //    let _ = fs::remove_file(&self.name);
+    fn dump(&self, name: &str) {
+        let mut fs = fs::File::create(name).unwrap();
+        fs.write(&self.machine_code[..]).unwrap();
     }
 }

@@ -1,6 +1,5 @@
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{c_char, CStr};
 
-// mod allocator;
 mod analyzer;
 mod code;
 mod machine;
@@ -31,7 +30,6 @@ pub enum CompilerStatus {
 
 pub struct CompilerResult {
     func: Option<Runnable>,
-    regs: CString,
     status: CompilerStatus,
 }
 
@@ -39,7 +37,6 @@ pub struct CompilerResult {
 pub extern "C" fn compile(p: *const c_char, ty: *const c_char) -> *const CompilerResult {
     let mut res = CompilerResult {
         func: None,
-        regs: CString::new("").unwrap(),
         status: CompilerStatus::Incomplete,
     };
 
@@ -206,31 +203,6 @@ pub extern "C" fn run(
 }
 
 #[no_mangle]
-pub extern "C" fn run_py(
-    q: *mut CompilerResult,
-    du: *mut f64,
-    nd: usize,
-    u: *const f64,
-    ns: usize,
-    t: f64,
-) -> bool {
-    let q: &mut CompilerResult = unsafe { &mut *q };
-
-    if let Some(func) = &mut q.func {
-        if func.count_states + func.count_params != ns || func.count_obs != nd {
-            return false;
-        }
-
-        let du: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(du, nd) };
-        let u: &[f64] = unsafe { std::slice::from_raw_parts(u, ns) };
-        func.call_py(du, u, t);
-        true
-    } else {
-        false
-    }
-}
-
-#[no_mangle]
 pub extern "C" fn execute(q: *mut CompilerResult, t: f64) -> bool {
     let q: &mut CompilerResult = unsafe { &mut *q };
 
@@ -283,6 +255,15 @@ pub extern "C" fn ptr_diffs(q: *mut CompilerResult) -> *const f64 {
 }
 
 #[no_mangle]
+pub extern "C" fn dump(q: *mut CompilerResult, name: *const c_char) {
+    let q: &CompilerResult = unsafe { &*q };
+    if let Some(func) = &q.func {
+        let name = unsafe { CStr::from_ptr(name).to_str().unwrap() };
+        func.dump(name);
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn finalize(p: *mut CompilerResult) {
     if !p.is_null() {
         let _ = unsafe { Box::from_raw(p) };
@@ -291,7 +272,7 @@ pub extern "C" fn finalize(p: *mut CompilerResult) {
 
 #[no_mangle]
 pub extern "C" fn info() -> *const c_char {
-    let msg = c"lib 0.1";
+    let msg = c"symjit 1.0";
     msg.as_ptr() as *const _
 }
 

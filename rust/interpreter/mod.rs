@@ -3,6 +3,7 @@ use super::model::Program;
 use super::register::Word;
 use super::utils::*;
 
+#[derive(Debug)]
 pub enum Fast {
     Unary {
         x: u32,
@@ -89,7 +90,7 @@ impl ByteCode {
 }
 
 impl Compiled for ByteCode {
-    fn run(&mut self) {
+    fn exec(&mut self) {
         for c in self.code.iter() {
             match c {
                 Fast::Unary { f, x, dst, .. } => {
@@ -118,4 +119,6 @@ impl Compiled for ByteCode {
     fn mem_mut(&mut self) -> &mut [f64] {
         &mut self._mem[..]
     }
+
+    fn dump(&self, name: &str) {}
 }

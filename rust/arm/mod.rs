@@ -207,7 +207,7 @@ impl Compiler<MachineCode> for ArmCompiler {
 
         MachineCode::new(
             "aarch64",
-            &self.machine_code.clone(),
+            self.machine_code.clone(),
             prog.virtual_table(),
             prog.frame.mem(),
         )

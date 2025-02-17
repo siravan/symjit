@@ -52,7 +52,7 @@ macro_rules! reg {
 macro_rules! modrm_reg {
     ($rm:expr, $reg:expr) => {{
         let rm = $rm;
-        let reg = $reg;        
+        let reg = $reg;
         0xC0 + ((reg & 7) << 3) + (rm & 7)
     }};
 }
