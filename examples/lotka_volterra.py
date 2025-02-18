@@ -7,14 +7,15 @@ from symjit import compile_ode, compile_jac
 
 t, x, y = symbols("t x y")
 alpha, beta, gamma, delta = symbols("alpha beta gamma delta")
+params = (alpha, beta, gamma, delta)
 
 ode = (
     alpha*x - beta*x*y,
     -gamma*y + delta*x*y
     )
 
-f = compile_ode(t, (x, y), ode, params=(alpha, beta, gamma, delta))
-jac = compile_jac(t, (x, y), ode, params=(alpha, beta, gamma, delta))
+f = compile_ode(t, (x, y), ode, params=params)
+jac = compile_jac(t, (x, y), ode, params=params)
 
 u0 = (1.0, 1.0)
 p = (2.0, 1.2, 3.0, 1.0)
