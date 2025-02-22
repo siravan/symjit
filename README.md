@@ -4,18 +4,58 @@
 
 The Symjit core is a Rust library with minimum external dependency. It does not use a separate compiler, such as LLVM or GCC. Currently, it can generate AMD64 (aka x86-64) and ARM64 (aka aarch64) machine codes on Linux and Windows platforms. Further architectures and operating systems (RISC V, aarch64 on Mac OS) are planned.
 
-# Installation
+# Installing symjit
 
-You can install *symjit* as 
+Installing `symjit` from the `conda-forge` channel can be achieved by adding `conda-forge` to your channels with:
 
 ```
-conda install -c conda-forge symjit
+conda config --add channels conda-forge
+conda config --set channel_priority strict
 ```
-or from the source by cloning https://github.com/siravan/symjit into `symjit` folder and then running
+
+Once the `conda-forge` channel has been enabled, `symjit` can be installed with `conda`:
+
+```
+conda install symjit
+```
+
+or with `mamba`:
+
+```
+mamba install symjit
+```
+
+It is possible to list all of the versions of `symjit` available on your platform with `conda`:
+
+```
+conda search symjit --channel conda-forge
+```
+
+or with `mamba`:
+
+```
+mamba search symjit --channel conda-forge
+```
+
+Alternatively, `mamba repoquery` may provide more information:
+
+```
+# Search all versions available on your platform:
+mamba repoquery search symjit --channel conda-forge
+
+# List packages depending on `symjit`:
+mamba repoquery whoneeds symjit --channel conda-forge
+
+# List dependencies of `symjit`:
+mamba repoquery depends symjit --channel conda-forge
+```
+
+In addition, you can install *symjit* from the source by cloning https://github.com/siravan/symjit into `symjit` folder and then running
 
 ```
 pip install .
 ```
+
 For the last option, you need a working Rust compiler and toolchains. 
 
 # Tutorial
