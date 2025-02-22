@@ -1,5 +1,5 @@
 {% set name = "symjit" %}
-{% set version = "1.2" %}
+{% set version = "1.2.1" %}
 
 package:
   name: {{ name|lower }}
@@ -7,34 +7,53 @@ package:
 
 source:
   url: https://pypi.org/packages/source/{{ name[0] }}/{{ name }}/symjit-{{ version }}.tar.gz
-  sha256: 8b5d497d0cad18930c37fa0610b38d211ad4be56f10b533484be7b64f6d09cef
+  sha256: 8398ceb11d557c5b5bdce4e7d358b741d2d5278d1e374588f5bd6bbb5a581ebd
 
 build:
-  noarch: python
-  script: {{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation
+  script:
+    - cargo-bundle-licenses --format yaml --output THIRDPARTY.yml
+    - {{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation
   number: 0
+  # symjit does not seem to support OSX (returns ValueError on import)
+  skip: true  # [osx]
 
 requirements:
+  build:
+    - {{ compiler("rust") }}
+    - {{ compiler("c") }}
+    - {{ stdlib("c") }}
+    - cargo-bundle-licenses
   host:
-    - python >=3.7
+    - pip
+    - python
     - setuptools
     - setuptools-rust
-    - pip
   run:
-    - python >=3.7
+    - numpy
+    - python
+    - sympy
 
 test:
+  files:
+    - test.py
   imports:
     - symjit
   commands:
     - pip check
+    - python test.py
   requires:
     - pip
 
 about:
+  home: https://github.com/siravan/symjit
   license: MIT
-  license_file: LICENSE
+  license_file:
+    - LICENSE
+    - THIRDPARTY.yml
+  summary: |
+    Symjit is a lightweight just-in-time (JIT) compiler that directly
+    translates sympy expressions into machine code.
 
 extra:
   recipe-maintainers:
-    - shahriariravanian
+    - moorepants

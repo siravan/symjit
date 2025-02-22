@@ -6,10 +6,10 @@ The Symjit core is a Rust library with minimum external dependency. It does not 
 
 # Installation
 
-You can install *symjit* using pip command as 
+You can install *symjit* as 
 
 ```
-pip install symjit
+conda install -c conda-forge symjit
 ```
 or from the source by cloning https://github.com/siravan/symjit into `symjit` folder and then running
 
@@ -60,6 +60,8 @@ sol = nquad(f, [[1, np.inf], [0, np.inf]])
 
 np.testing.assert_approx_equal(sol[0], 1/N)
 ```
+
+The output of the returned callable (`f` in the examples) is a numpy array with `dtype='double'`.
 
 ## `compile_ode`: to solve ODEs
 
