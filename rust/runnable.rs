@@ -1,3 +1,5 @@
+use std::arch::asm;
+
 use crate::model::Program;
 use crate::utils::*;
 
@@ -106,6 +108,29 @@ impl Callable for Runnable {
         }
     }
 
+    #[cfg(target_arch = "x86_64")]
+    fn exec(&mut self, t: f64) {
+        let mut mxcsr_old: u32 = 0;
+
+        unsafe {
+            asm!("stmxcsr [{0}];", in(reg) &mxcsr_old);
+            let mxcsr_new = mxcsr_old | 0x1f00; // mxcsr register exception mask
+            asm!("ldmxcsr [{0}];", in(reg) &mxcsr_new);
+        };
+
+        {
+            let mem = self.compiled.mem_mut();
+            mem[self.first_state - 1] = t;
+        }
+
+        self.compiled.exec();
+
+        unsafe {
+            asm!("ldmxcsr [{0}];", in(reg) &mxcsr_old);
+        };
+    }
+
+    #[cfg(not(target_arch = "x86_64"))]
     fn exec(&mut self, t: f64) {
         {
             let mem = self.compiled.mem_mut();
