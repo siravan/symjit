@@ -120,15 +120,16 @@ impl AmdCompiler {
         self.emit(amd! {push rbp});
         self.emit(amd! {push rbx});
 
-        // linux and windows have different ABI
+        // *nix and windows have different ABI
+        // MacOs follows the same ABI rules as linux...
 
-        #[cfg(target_os = "linux")]
+        #[cfg(target_family = "unix")]
         {
             self.emit(amd! {mov rbp, rdi});
             self.emit(amd! {mov rbx, rdx});
         }
 
-        #[cfg(target_os = "windows")]
+        #[cfg(target_family = "windows")]
         {
             self.emit(amd! {mov rbp, rcx});
             self.emit(amd! {mov rbx, r8});
