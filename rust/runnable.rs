@@ -113,7 +113,7 @@ impl Callable for Runnable {
         let mut mxcsr_old: u32 = 0;
 
         unsafe {
-            asm!("stmxcsr [{0}];", in(reg) &mxcsr_old);
+            asm!("stmxcsr [{0}];", in(reg) &mut mxcsr_old);
             let mxcsr_new = mxcsr_old | 0x1f00; // mxcsr register exception mask
             asm!("ldmxcsr [{0}];", in(reg) &mxcsr_new);
         };
