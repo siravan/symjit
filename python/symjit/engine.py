@@ -18,7 +18,7 @@ if sys.platform == "linux" and platform.machine() == "x86_64":
     dll_name = find_dll("x86_64-linux")
 if sys.platform == "linux" and platform.machine() == "aarch64":
     dll_name = find_dll("aarch64-linux")
-if sys.platform == "darwin" and platform.machine() == "x86_64":
+if sys.platform == "darwin":
     dll_name = find_dll("darwin")
 elif sys.platform == "win32":
     dll_name = find_dll("win_amd64")
