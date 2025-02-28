@@ -73,15 +73,15 @@ from sympy import symbols
 
 x, y = symbols('x y')
 f = compile_func([x, y], [x+y, x*y])
-assert(np.all(f([3, 5]) == [8., 15.]))
+assert(np.all(f(3, 5) == [8., 15.]))
 ```
 
-`compile_func` takes two mandatory arguments as `compile_func(states, eqs)`. The first one, `states`, is a list or tuple of symbols. The second argument, `eqs`, is a list or tuple of expressions. If either `states` or `eqs` has only one element, that element can be passed directly. In addition, `compile_func` accepts a named argument `params`, which is a list of symbolic parameters. For example,
+`compile_func` takes two mandatory arguments as `compile_func(states, eqs)`. The first one, `states`, is a list or tuple of symbols. The second argument, `eqs`, is a list or tuple of expressions. If either `states` or `eqs` has only one element, that element can be passed directly. In addition, `compile_func` accepts a named argument `params`, which is a list of symbolic parameters. The output of `compile_func`, say `f`, is a callable object. The signature of `f` is `f(x_1,...,x_n,p_1,...,p_m)`, where `x`s are the state variables and `p`s are the parameters. Therefore, `n = len(states)` and `m = len(params)`. For example,
 
 ```python
 x, y, a = symbols('x y a')
-f = compile_func([x, y], [(x+y)**a], args=[a])
-assert(np.all(f([3, 5], args=[2]) == [64.]))
+f = compile_func([x, y], [(x+y)**a], params=[a])
+assert(np.all(f(3., 5., 2.) == [64.]))  # 2. is the value of parameter a
 ```
 
 `compile_func` helps generate functions to pass to numerical integration (quadrature) routines. The following example is adapted from scipy documentation:
@@ -101,7 +101,23 @@ sol = nquad(f, [[1, np.inf], [0, np.inf]])
 np.testing.assert_approx_equal(sol[0], 1/N)
 ```
 
-The output of the returned callable (`f` in the examples) is a numpy array with `dtype='double'`.
+The output of the returned callable is a numpy array with `dtype='double'`. Note that you can call `f` by passing a list of numbers (say, `f(1.0, 2.0)`) or a list of numpy arrays (for example, `f([1., 2.], [3., 4.])`. However, broadcasting is not supported. Moreover, all the parameters should be passed as scaler even if the state variables are arrays. For example,
+
+```python
+from sympy import *
+import numpy as np
+import matplotlib.pyplot as plt
+
+from symjit import compile_func
+
+x, sigma = symbols('x sigma')
+f = compile_func([x], [exp(-(x-100)**2/(2*sigma**2))], params=[sigma])
+
+t = np.arange(0, 200)
+y = f(t, 25.)[0]
+
+plt.plot(t, y)
+```
 
 ## `compile_ode`: to solve ODEs
 

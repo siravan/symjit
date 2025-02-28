@@ -24,9 +24,9 @@ elif sys.platform == "win32":
     dll_name = find_dll("win_amd64")
 
 if dll_name is None:
-    raise ValueError("unsupported platform")
+    raise ValueError("unsupported platform (consider installing symfit from conda-forge as `conda install -c conda-forge symjit`)")
 
-print(dll_name)
+# print(dll_name)
 
 dll_path = os.path.join(os.path.dirname(__file__), dll_name)
 dll = ctypes.CDLL(dll_path)
@@ -76,6 +76,14 @@ class Engine:
             ctypes.c_double,  # t
         ]
         self._execute.restype = ctypes.c_bool
+        
+        self._execute_vectorized = dll.execute_vectorized
+        self._execute_vectorized.argtypes = [
+            ctypes.c_void_p,  # handle
+            ctypes.POINTER(ctypes.c_double),    # buf
+            ctypes.c_size_t                     # n
+        ]
+        self._execute_vectorized.restype = ctypes.c_bool
 
         self._fill_u0 = dll.fill_u0
         self._fill_u0.argtypes = [

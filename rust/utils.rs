@@ -9,6 +9,7 @@ use crate::model::Program;
 pub trait Callable {
     fn call(&mut self, du: &mut [f64], u: &[f64], p: &[f64], t: f64);
     fn exec(&mut self, t: f64);
+    fn exec_vectorized(&mut self, buf: &mut [f64], n: usize);
     fn dump(&self, name: &str);
 }
 

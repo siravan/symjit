@@ -1,5 +1,7 @@
 import json
 import numpy as np
+import numbers
+import ctypes
 
 from . import engine
 from . import structure
@@ -54,14 +56,45 @@ class Func(BaseFunc):
         super().__init__(model, ty=ty)
 
     def __call__(self, *args):
-        u = np.array(args, dtype="double")
-        self._states[:] = u
-        status = lib._execute(self.p, 0.0)
+        if len(args) > self.count_states:
+            p = np.array(args[self.count_states:], dtype="double")
+            self._params[:] = p
+    
+        if isinstance(args[0], numbers.Number):
+            u = np.array(args[:self.count_states], dtype="double")
+            self._states[:] = u
+            status = lib._execute(self.p, 0.0)
 
+            if not status:
+                raise ValueError("cannot execute the model")
+
+            return self._obs.copy()
+        else:
+            return self.call_vectorized(*args)
+            
+    def call_vectorized(self, *args):
+        assert(len(args) >= self.count_states)
+        shape = args[0].shape
+        n = args[0].size
+        h = max(self.count_states, self.count_obs)
+        buf = np.zeros((h, n), dtype="double")
+
+        for i in range(self.count_states):
+            assert(args[i].shape == shape)
+            buf[i,:] = args[i].ravel()            
+        
+        ptr = buf.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+        status = lib._execute_vectorized(self.p, ptr, n)
+        
         if not status:
             raise ValueError("cannot execute the model")
-
-        return self._obs.copy()
+        
+        res = []
+        for i in range(self.count_obs):            
+            y = buf[i,:].reshape(shape)
+            res.append(y)
+            
+        return res
 
 
 class OdeFunc(BaseFunc):
@@ -118,7 +151,8 @@ def compile_func(states, eqs, params=None):
     eqs: a single symbolic expression or a list/tuple of symbolic expressions
     params (optional): a list/tuple of additional symbols as parameters to the model
     
-    ==> returns a Func object
+    ==> returns a Func object, is a callable object `f` with signature `f(x_1,...,x_n,p_1,...,p_m)`, 
+        where `x`s are the state variables and `p`s are the parameters.
     
     >>> import numpy as np
     >>> from symjit import compile_func
@@ -126,7 +160,7 @@ def compile_func(states, eqs, params=None):
     
     >>> x, y = symbols('x y')
     >>> f = compile_func([x, y], [x+y, x*y])
-    >>> assert(np.all(f([3, 5]) == [8., 15.]))
+    >>> assert(np.all(f(3, 5) == [8., 15.]))
     """
     model = structure.model(states, eqs, params)
     return Func(json.dumps(model))
@@ -147,7 +181,9 @@ def compile_ode(iv, states, odes, params=None):
     
     invariant => len(states) == len(odes)
     
-    ==> returns an OdeFunc object
+    ==> returns an OdeFunc object, is a callable object `f` with signature `f(t,y,p0,p1,...)`, 
+        where `t` is the value of the independent variable, `y` is the state (an array of 
+        state variables), and `p`s are the parameters. 
     
     >>> import scipy.integrate
     >>> import numpy as np

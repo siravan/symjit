@@ -151,8 +151,9 @@ pub extern "C" fn fill_u0(q: *const CompilerResult, u0: *mut f64, ns: usize) -> 
             return false;
         }
 
-        let u0: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(u0, ns) };
-        u0.copy_from_slice(&func.u0);
+        let src_u0 = &func.compiled.mem()[func.first_state..func.first_state + func.count_states];
+        let dst_u0: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(u0, ns) };
+        dst_u0.copy_from_slice(&src_u0);
         true
     } else {
         false
@@ -167,8 +168,9 @@ pub extern "C" fn fill_p(q: *const CompilerResult, p: *mut f64, np: usize) -> bo
             return false;
         }
 
-        let p: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(p, np) };
-        p.copy_from_slice(&func.p);
+        let src_p = &func.compiled.mem()[func.first_param..func.first_param + func.count_params];
+        let dst_p: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(p, np) };
+        dst_p.copy_from_slice(&src_p);
         true
     } else {
         false
@@ -208,6 +210,20 @@ pub extern "C" fn execute(q: *mut CompilerResult, t: f64) -> bool {
 
     if let Some(func) = &mut q.func {
         func.exec(t);
+        true
+    } else {
+        false
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn execute_vectorized(q: *mut CompilerResult, buf: *mut f64, n: usize) -> bool {
+    let q: &mut CompilerResult = unsafe { &mut *q };
+
+    if let Some(func) = &mut q.func {
+        let h = usize::max(func.count_states, func.count_obs);
+        let buf: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(buf, h * n) };
+        func.exec_vectorized(buf, n);
         true
     } else {
         false

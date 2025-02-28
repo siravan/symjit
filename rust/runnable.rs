@@ -20,6 +20,7 @@ pub enum CompilerType {
 }
 
 pub struct Runnable {
+    pub prog: Program,
     pub compiled: Box<dyn Compiled>,
     pub first_state: usize,
     pub first_param: usize,
@@ -29,8 +30,6 @@ pub struct Runnable {
     pub count_params: usize,
     pub count_obs: usize,
     pub count_diffs: usize,
-    pub u0: Vec<f64>,
-    pub p: Vec<f64>,
 }
 
 impl Runnable {
@@ -60,11 +59,8 @@ impl Runnable {
         let count_obs = prog.frame.count_obs();
         let count_diffs = prog.frame.count_diffs();
 
-        let mem = compiled.mem();
-        let u0 = mem[first_state..first_state + count_states].to_vec();
-        let p = mem[first_param..first_param + count_params].to_vec();
-
         Runnable {
+            prog,
             compiled,
             first_state,
             first_param,
@@ -74,17 +70,40 @@ impl Runnable {
             count_params,
             count_obs,
             count_diffs,
-            u0,
-            p,
         }
     }
 
-    pub fn initial_states(&self) -> Vec<f64> {
-        self.u0.clone()
+    #[inline]
+    fn exec_single(&mut self, t: f64) {
+        {
+            let mem = self.compiled.mem_mut();
+            mem[self.first_state - 1] = t;
+        }
+        self.compiled.exec();
     }
 
-    pub fn params(&self) -> Vec<f64> {
-        self.p.clone()
+    fn exec_parallel(&mut self, buf: &mut [f64], n: usize) {
+        let h = usize::max(self.count_states, self.count_obs);
+        assert!(buf.len() == n * h);
+
+        for t in 0..n {
+            {
+                let mem = self.compiled.mem_mut();
+                mem[self.first_state - 1] = t as f64;
+                for i in 0..self.count_states {
+                    mem[self.first_state + i] = buf[i * n + t];
+                }
+            }
+
+            self.compiled.exec();
+
+            {
+                let mem = self.compiled.mem_mut();
+                for i in 0..self.count_obs {
+                    buf[i * n + t] = mem[self.first_obs + i];
+                }
+            }
+        }
     }
 }
 
@@ -118,12 +137,7 @@ impl Callable for Runnable {
             asm!("ldmxcsr [{0}];", in(reg) &mxcsr_new);
         };
 
-        {
-            let mem = self.compiled.mem_mut();
-            mem[self.first_state - 1] = t;
-        }
-
-        self.compiled.exec();
+        self.exec_single(t);
 
         unsafe {
             asm!("ldmxcsr [{0}];", in(reg) &mxcsr_old);
@@ -132,11 +146,29 @@ impl Callable for Runnable {
 
     #[cfg(not(target_arch = "x86_64"))]
     fn exec(&mut self, t: f64) {
-        {
-            let mem = self.compiled.mem_mut();
-            mem[self.first_state - 1] = t;
-        }
-        self.compiled.exec();
+        self.exec_single(t);
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    fn exec_vectorized(&mut self, buf: &mut [f64], n: usize) {
+        let mut mxcsr_old: u32 = 0;
+
+        unsafe {
+            asm!("stmxcsr [{0}];", in(reg) &mut mxcsr_old);
+            let mxcsr_new = mxcsr_old | 0x1f00; // mxcsr register exception mask
+            asm!("ldmxcsr [{0}];", in(reg) &mxcsr_new);
+        };
+
+        self.exec_parallel(buf, n);
+
+        unsafe {
+            asm!("ldmxcsr [{0}];", in(reg) &mxcsr_old);
+        };
+    }
+
+    #[cfg(not(target_arch = "x86_64"))]
+    fn exec_vectorized(&mut self, buf: &mut [f64], n: usize) {
+        self.exec_parallel(buf, n);
     }
 
     fn dump(&self, name: &str) {
