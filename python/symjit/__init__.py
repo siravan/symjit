@@ -138,7 +138,7 @@ class JacFunc(BaseFunc):
         return jac.reshape((self.count_states, self.count_states))
 
 
-def compile_func(states, eqs, params=None):
+def compile_func(states, eqs, params=None, obs=None):
     """Compile a list of symbolic expression into an executable form.
     compile_func tries to mimic sympy lambdify, but instead of generating
     a standard python funciton, it returns a callable (Func object) that
@@ -147,9 +147,11 @@ def compile_func(states, eqs, params=None):
     Parameters
     ==========
     
-    states: a single symbol or a list/tuple of symbols
-    eqs: a single symbolic expression or a list/tuple of symbolic expressions
-    params (optional): a list/tuple of additional symbols as parameters to the model
+    states: a single symbol or a list/tuple of symbols.
+    eqs: a single symbolic expression or a list/tuple of symbolic expressions.
+    params (optional): a list/tuple of additional symbols as parameters to the model.
+    obs (optional): a list of symbols to name equations. If obs is not None, its length should 
+        be the same as eqs.
     
     ==> returns a Func object, is a callable object `f` with signature `f(x_1,...,x_n,p_1,...,p_m)`, 
         where `x`s are the state variables and `p`s are the parameters.
@@ -162,7 +164,7 @@ def compile_func(states, eqs, params=None):
     >>> f = compile_func([x, y], [x+y, x*y])
     >>> assert(np.all(f(3, 5) == [8., 15.]))
     """
-    model = structure.model(states, eqs, params)
+    model = structure.model(states, eqs, params=params, obs=obs)
     return Func(json.dumps(model))
 
 

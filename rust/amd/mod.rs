@@ -90,7 +90,10 @@ impl AmdCompiler {
             self.emit(amd! {xorpd xmm(x), xmm(x)});
         } else if r.is_temp() {
             let k = self.stack.pop(&r);
+            #[cfg(target_family = "unix")]
             self.emit(amd! {movsd xmm(x), qword ptr [rsp+8*k]});
+            #[cfg(target_family = "windows")]
+            self.emit(amd! {movsd xmm(x), qword ptr [rsp+8*(k+4)]});
         } else {
             self.emit(amd! {movsd xmm(x), qword ptr [rbp+8*r.0]});
         };
@@ -110,42 +113,54 @@ impl AmdCompiler {
 
         if r.is_temp() {
             let k = self.stack.push(&r);
+            #[cfg(target_family = "unix")]
             self.emit(amd! {movsd qword ptr [rsp+8*k], xmm(x)});
+            #[cfg(target_family = "windows")]
+            self.emit(amd! {movsd qword ptr [rsp+8*(k+4)], xmm(x)});
         } else {
             self.emit(amd! {movsd qword ptr [rbp+8*r.0], xmm(x)});
         }
     }
-
-    fn prologue(&mut self, n: usize) {
+    
+    // *nix and windows have different ABI
+    // MacOs follows the same ABI rules as linux...
+    
+    #[cfg(target_family = "unix")]
+    fn prologue(&mut self, n: usize) {                
         self.emit(amd! {push rbp});
         self.emit(amd! {push rbx});
-
-        // *nix and windows have different ABI
-        // MacOs follows the same ABI rules as linux...
-
-        #[cfg(target_family = "unix")]
-        {
-            self.emit(amd! {mov rbp, rdi});
-            self.emit(amd! {mov rbx, rdx});
-        }
-
-        #[cfg(target_family = "windows")]
-        {
-            self.emit(amd! {mov rbp, rcx});
-            self.emit(amd! {mov rbx, r8});
-        }
-
+        self.emit(amd! {mov rbp, rdi});
+        self.emit(amd! {mov rbx, rdx});
+        
         if n > 0 {
             self.emit(amd! {sub rsp, n});
         }
     }
+    
+    #[cfg(target_family = "windows")]
+    fn prologue(&mut self, n: usize) {
+        self.emit(amd! {mov qword ptr [rsp+0x08], rbp});
+        self.emit(amd! {mov qword ptr [rsp+0x10], rbx});
+        self.emit(amd! {mov rbp, rcx});
+        self.emit(amd! {mov rbx, r8});
+        self.emit(amd! {sub rsp, n+32});            
+    }
 
+    #[cfg(target_family = "unix")]
     fn epilogue(&mut self, n: usize) {
         if n > 0 {
             self.emit(amd! {add rsp, n});
         }
         self.emit(amd! {pop rbx});
         self.emit(amd! {pop rbp});
+        self.emit(amd! {ret});        
+    }
+
+    #[cfg(target_family = "windows")]
+    fn epilogue(&mut self, n: usize) {
+        self.emit(amd! {add rsp, n+32});        
+        self.emit(amd! {mov rbx, qword ptr [rsp+0x10]});
+        self.emit(amd! {mov rbp, qword ptr [rsp+0x08]});
         self.emit(amd! {ret});
     }
 

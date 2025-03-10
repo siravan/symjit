@@ -149,7 +149,7 @@ def ode(y):
     }
 
 
-def model(states, eqs, params=None):
+def model(states, eqs, params=None, obs=None):
     if not isinstance(states, list):
         states = [states]
 
@@ -158,6 +158,9 @@ def model(states, eqs, params=None):
 
     if params is None:
         params = []
+        
+    if obs is None:
+        obs = [Symbol(f"${i}") for i in range(len(eqs))]
 
     d = {
         "iv": var(Symbol("$_")),
@@ -166,7 +169,7 @@ def model(states, eqs, params=None):
         "algs": [],
         "odes": [],
         "obs": [
-            equation(expr(Symbol(f"${i}")), expr(rhs)) for (i, rhs) in enumerate(eqs)
+            equation(expr(lhs), expr(rhs)) for (lhs, rhs) in zip(obs, eqs)
         ],
     }
 
