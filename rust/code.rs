@@ -64,7 +64,7 @@ impl std::fmt::Debug for Instruction {
     }
 }
 
-pub type BinaryFunc = fn(f64, f64) -> f64;
+pub type BinaryFunc = extern "C" fn(f64, f64) -> f64;
 
 pub struct Code {}
 
@@ -105,6 +105,9 @@ impl Code {
             "log" => Code::log,
             "root" => Code::root,
             "ifelse" => Code::nop,
+            "square" => Code::square,
+            "cube" => Code::cube,
+            "inverse" => Code::inverse,
             _ => {
                 let msg = format!("op_code {} not found", op);
                 panic!("{}", msg)
@@ -112,43 +115,43 @@ impl Code {
         }
     }
 
-    pub fn nop(_x: f64, _y: f64) -> f64 {
+    pub extern "C" fn nop(_x: f64, _y: f64) -> f64 {
         0.0
     }
 
-    pub fn mov(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn mov(x: f64, _y: f64) -> f64 {
         x
     }
 
-    pub fn plus(x: f64, y: f64) -> f64 {
+    pub extern "C" fn plus(x: f64, y: f64) -> f64 {
         x + y
     }
 
-    pub fn minus(x: f64, y: f64) -> f64 {
+    pub extern "C" fn minus(x: f64, y: f64) -> f64 {
         x - y
     }
 
-    pub fn neg(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn neg(x: f64, _y: f64) -> f64 {
         -x
     }
 
-    pub fn times(x: f64, y: f64) -> f64 {
+    pub extern "C" fn times(x: f64, y: f64) -> f64 {
         x * y
     }
 
-    pub fn divide(x: f64, y: f64) -> f64 {
+    pub extern "C" fn divide(x: f64, y: f64) -> f64 {
         x / y
     }
 
-    pub fn rem(x: f64, y: f64) -> f64 {
+    pub extern "C" fn rem(x: f64, y: f64) -> f64 {
         x % y
     }
 
-    pub fn power(x: f64, y: f64) -> f64 {
-        x.powf(y)
+    pub extern "C" fn power(x: f64, y: f64) -> f64 {
+        x.powf(y)        
     }
 
-    pub fn gt(x: f64, y: f64) -> f64 {
+    pub extern "C" fn gt(x: f64, y: f64) -> f64 {
         if x > y {
             1.0
         } else {
@@ -156,7 +159,7 @@ impl Code {
         }
     }
 
-    pub fn geq(x: f64, y: f64) -> f64 {
+    pub extern "C" fn geq(x: f64, y: f64) -> f64 {
         if x >= y {
             1.0
         } else {
@@ -164,7 +167,7 @@ impl Code {
         }
     }
 
-    pub fn lt(x: f64, y: f64) -> f64 {
+    pub extern "C" fn lt(x: f64, y: f64) -> f64 {
         if x < y {
             1.0
         } else {
@@ -172,7 +175,7 @@ impl Code {
         }
     }
 
-    pub fn leq(x: f64, y: f64) -> f64 {
+    pub extern "C" fn leq(x: f64, y: f64) -> f64 {
         if x <= y {
             1.0
         } else {
@@ -180,7 +183,7 @@ impl Code {
         }
     }
 
-    pub fn eq(x: f64, y: f64) -> f64 {
+    pub extern "C" fn eq(x: f64, y: f64) -> f64 {
         if x == y {
             1.0
         } else {
@@ -188,7 +191,7 @@ impl Code {
         }
     }
 
-    pub fn neq(x: f64, y: f64) -> f64 {
+    pub extern "C" fn neq(x: f64, y: f64) -> f64 {
         if x != y {
             1.0
         } else {
@@ -196,7 +199,7 @@ impl Code {
         }
     }
 
-    pub fn and(x: f64, y: f64) -> f64 {
+    pub extern "C" fn and(x: f64, y: f64) -> f64 {
         if x > 0.0 && y > 0.0 {
             1.0
         } else {
@@ -204,7 +207,7 @@ impl Code {
         }
     }
 
-    pub fn or(x: f64, y: f64) -> f64 {
+    pub extern "C" fn or(x: f64, y: f64) -> f64 {
         if x > 0.0 || y > 0.0 {
             1.0
         } else {
@@ -212,7 +215,7 @@ impl Code {
         }
     }
 
-    pub fn xor(x: f64, y: f64) -> f64 {
+    pub extern "C" fn xor(x: f64, y: f64) -> f64 {
         if x * y < 0.0 {
             1.0
         } else {
@@ -220,7 +223,7 @@ impl Code {
         }
     }
 
-    pub fn if_pos(x: f64, y: f64) -> f64 {
+    pub extern "C" fn if_pos(x: f64, y: f64) -> f64 {
         if x > 0.0 {
             y
         } else {
@@ -228,7 +231,7 @@ impl Code {
         }
     }
 
-    pub fn if_neg(x: f64, y: f64) -> f64 {
+    pub extern "C" fn if_neg(x: f64, y: f64) -> f64 {
         if x < 0.0 {
             y
         } else {
@@ -236,55 +239,68 @@ impl Code {
         }
     }
 
-    pub fn sin(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn sin(x: f64, _y: f64) -> f64 {
         x.sin()
     }
 
-    pub fn cos(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn cos(x: f64, _y: f64) -> f64 {
         x.cos()
     }
 
-    pub fn tan(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn tan(x: f64, _y: f64) -> f64 {
         x.tan()
     }
 
-    pub fn csc(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn csc(x: f64, _y: f64) -> f64 {
         1.0 / x.sin()
     }
 
-    pub fn sec(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn sec(x: f64, _y: f64) -> f64 {
         1.0 / x.cos()
     }
 
-    pub fn cot(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn cot(x: f64, _y: f64) -> f64 {
         1.0 / x.tan()
     }
 
-    pub fn asin(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn asin(x: f64, _y: f64) -> f64 {
         x.asin()
     }
 
-    pub fn acos(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn acos(x: f64, _y: f64) -> f64 {
         x.acos()
     }
 
-    pub fn atan(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn atan(x: f64, _y: f64) -> f64 {
         x.atan()
     }
 
-    pub fn exp(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn exp(x: f64, _y: f64) -> f64 {
         x.exp()
     }
 
-    pub fn ln(x: f64, _y: f64) -> f64 {
-        x.ln()
+    pub extern "C" fn ln(x: f64, _y: f64) -> f64 {
+        x.ln()        
     }
-
-    pub fn log(x: f64, _y: f64) -> f64 {
+    
+    pub extern "C" fn log(x: f64, _y: f64) -> f64 {
         x.log(10.0)
     }
 
-    pub fn root(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn root(x: f64, _y: f64) -> f64 {
         x.sqrt()
     }
+
+    pub extern "C" fn square(x: f64, _y: f64) -> f64 {
+        x * x
+    }
+
+    pub extern "C" fn cube(x: f64, _y: f64) -> f64 {
+        x * x * x
+    }
+
+    pub extern "C" fn inverse(x: f64, _y: f64) -> f64 {
+        1.0 / x
+    }
 }
+

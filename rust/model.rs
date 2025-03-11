@@ -181,8 +181,8 @@ impl Program {
         self.frame.find_diff(name).expect("cannot find reg by name")
     }
 
-    pub fn virtual_table(&self) -> Vec<fn(f64, f64) -> f64> {
-        let vt: Vec<fn(f64, f64) -> f64> = self.ft.iter().map(|s| Code::from_str(s)).collect();
+    pub fn virtual_table(&self) -> Vec<BinaryFunc> {
+        let vt: Vec<BinaryFunc> = self.ft.iter().map(|s| Code::from_str(s)).collect();
         vt
     }
 }

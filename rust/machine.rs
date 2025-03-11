@@ -56,6 +56,7 @@ impl MachineCode {
 impl Compiled for MachineCode {
     #[inline]
     fn exec(&mut self) {
+        // println!("exec {:?}", &self.vt);
         (self.f)(&mut self._mem, &self.vt);
     }
 

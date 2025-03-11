@@ -50,6 +50,19 @@ impl AmdCompiler {
                 self.emit(amd! {movsd xmm(1), qword ptr [rbp+8*Frame::MINUS_ZERO.0]});
                 self.emit(amd! {xorpd xmm(0), xmm(1)});
             }
+            "square" => {
+                self.emit(amd! {mulsd xmm(0), xmm(0)});
+            }
+            "cube" => {
+                self.emit(amd! {movsd xmm(1), xmm(0)});
+                self.emit(amd! {mulsd xmm(0), xmm(0)});
+                self.emit(amd! {mulsd xmm(0), xmm(1)});
+            }
+            "inverse" => {
+                self.emit(amd! {movsd xmm(1), xmm(0)});
+                self.emit(amd! {movsd xmm(0), qword ptr [rbp+8*Frame::ONE.0]});
+                self.emit(amd! {divsd xmm(0), xmm(1)});
+            }
             "power" | "rem" => {
                 if ry != 1 {
                     self.emit(amd! {movsd xmm(1), xmm(ry)});
@@ -138,7 +151,7 @@ impl AmdCompiler {
     }
     
     #[cfg(target_family = "windows")]
-    fn prologue(&mut self, n: usize) {
+    fn prologue(&mut self, n: usize) {    
         self.emit(amd! {mov qword ptr [rsp+0x08], rbp});
         self.emit(amd! {mov qword ptr [rsp+0x10], rbx});
         self.emit(amd! {mov rbp, rcx});
@@ -157,7 +170,7 @@ impl AmdCompiler {
     }
 
     #[cfg(target_family = "windows")]
-    fn epilogue(&mut self, n: usize) {
+    fn epilogue(&mut self, n: usize) {      
         self.emit(amd! {add rsp, n+32});        
         self.emit(amd! {mov rbx, qword ptr [rsp+0x10]});
         self.emit(amd! {mov rbp, qword ptr [rsp+0x08]});
@@ -240,7 +253,12 @@ impl Compiler<MachineCode> for AmdCompiler {
 
         self.codegen(prog, &saveable);
         self.machine_code.clear();
-        let n = 8 * self.stack.capacity();
+        
+        let cap = self.stack.capacity();
+        let pad = (cap + 1) & 1;     // padding to make sure that rsp is 
+                                            // aligned at 16 (required by Windows)
+        let n = 8 * (cap + pad);
+        
         self.prologue(n);
         self.codegen(prog, &saveable);
         self.epilogue(n);

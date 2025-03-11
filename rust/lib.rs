@@ -70,7 +70,7 @@ pub extern "C" fn compile(p: *const c_char, ty: *const c_char) -> *const Compile
 
     let prog = Program::new(&ml);
 
-    // println!("{:#?}", &prog);
+    // println!("{:#?}", &prog.ft);
 
     res.func = match ty {
         "bytecode" => Some(Runnable::new(prog, CompilerType::ByteCode)),

@@ -126,7 +126,7 @@ impl Callable for Runnable {
             let _ = du.copy_from_slice(&mem[self.first_diff..self.first_diff + self.count_diffs]);
         }
     }
-
+/*
     #[cfg(target_arch = "x86_64")]
     fn exec(&mut self, t: f64) {
         let mut mxcsr_old: u32 = 0;
@@ -143,8 +143,8 @@ impl Callable for Runnable {
             asm!("ldmxcsr [{0}];", in(reg) &mxcsr_old);
         };
     }
-
-    #[cfg(not(target_arch = "x86_64"))]
+*/
+//   #[cfg(not(target_arch = "x86_64"))]
     fn exec(&mut self, t: f64) {
         self.exec_single(t);
     }

@@ -49,21 +49,37 @@ def operation(func):
     return op
 
 
-def tree(y):
-    op = ""
+def process_mul(y):
+    assert(y.is_Mul)
+    if len(y.args) == 2 and y.args[1].is_Pow and y.args[1].args[1] == -1:
+        return tree_node("divide", [y.args[0], y.args[1].args[0]])
+    else:
+        return tree_node("times", y.args)
 
+
+def process_pow(y):
+    assert(y.is_Pow)
+    if y.args[1] == 2:
+        return tree_node("square", y.args[:1])
+    elif y.args[1] ==3:
+        return tree_node("cube", y.args[:1])
+    elif y.args[1] == -1:
+        return tree_node("inverse", y.args[:1])
+    else:
+        return tree_node("power", y.args)
+
+
+def tree(y):
     if y.is_Add:
-        op = "plus"
-    elif y.is_Mul:
-        op = "times"
+        return tree_node("plus", y.args)
+    elif y.is_Mul:        
+        return process_mul(y)
     elif y.is_Pow:
-        op = "power"
+        return process_pow(y)
     elif y.is_Function:
-        op = operation(y.func)
+        return tree_node(operation(y.func), y.args)        
     else:
         raise ValueError("unreognized tree type")
-
-    return tree_node(op, y.args)
 
 
 def relational(y):
