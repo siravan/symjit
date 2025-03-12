@@ -121,7 +121,7 @@ plt.plot(t, y)
 The following example uses the vectorization feature to calculate the [Mandelbrot set](https://en.wikipedia.org/wiki/Mandelbrot_set). 
 
 ```python
-# examples/manderbrot.py
+# examples/mandelbrot.py
 import numpy as np
 import matplotlib.pyplot as plt
 from sympy import symbols
@@ -145,7 +145,7 @@ plt.imshow(Z < 2)
 
 The output is:
 
-![Manderbrot](./figures/menderbrot.png)
+![Mandelbrot](./figures/mandelbrot.png)
 
 ## `compile_ode`: to solve ODEs
 
