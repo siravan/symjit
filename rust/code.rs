@@ -148,7 +148,7 @@ impl Code {
     }
 
     pub extern "C" fn power(x: f64, y: f64) -> f64 {
-        x.powf(y)        
+        x.powf(y)
     }
 
     pub extern "C" fn gt(x: f64, y: f64) -> f64 {
@@ -280,9 +280,9 @@ impl Code {
     }
 
     pub extern "C" fn ln(x: f64, _y: f64) -> f64 {
-        x.ln()        
+        x.ln()
     }
-    
+
     pub extern "C" fn log(x: f64, _y: f64) -> f64 {
         x.log(10.0)
     }
@@ -303,4 +303,3 @@ impl Code {
         1.0 / x
     }
 }
-

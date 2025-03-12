@@ -126,25 +126,25 @@ impl Callable for Runnable {
             let _ = du.copy_from_slice(&mem[self.first_diff..self.first_diff + self.count_diffs]);
         }
     }
-/*
-    #[cfg(target_arch = "x86_64")]
-    fn exec(&mut self, t: f64) {
-        let mut mxcsr_old: u32 = 0;
+    /*
+        #[cfg(target_arch = "x86_64")]
+        fn exec(&mut self, t: f64) {
+            let mut mxcsr_old: u32 = 0;
 
-        unsafe {
-            asm!("stmxcsr [{0}];", in(reg) &mut mxcsr_old);
-            let mxcsr_new = mxcsr_old | 0x1f00; // mxcsr register exception mask
-            asm!("ldmxcsr [{0}];", in(reg) &mxcsr_new);
-        };
+            unsafe {
+                asm!("stmxcsr [{0}];", in(reg) &mut mxcsr_old);
+                let mxcsr_new = mxcsr_old | 0x1f00; // mxcsr register exception mask
+                asm!("ldmxcsr [{0}];", in(reg) &mxcsr_new);
+            };
 
-        self.exec_single(t);
+            self.exec_single(t);
 
-        unsafe {
-            asm!("ldmxcsr [{0}];", in(reg) &mxcsr_old);
-        };
-    }
-*/
-//   #[cfg(not(target_arch = "x86_64"))]
+            unsafe {
+                asm!("ldmxcsr [{0}];", in(reg) &mxcsr_old);
+            };
+        }
+    */
+    //   #[cfg(not(target_arch = "x86_64"))]
     fn exec(&mut self, t: f64) {
         self.exec_single(t);
     }

@@ -54,13 +54,30 @@ impl ArmCompiler {
                 self.emit(arm! {fcmeq d(0), d(rx), d(ry)});
                 self.emit(arm! {not v(0).8b, v(0).8b});
             }
+            "square" => {
+                self.emit(arm! {fmul d(0), d(rx), d(rx)});
+            }
+            "cube" => {
+                self.emit(arm! {fmul d(1), d(rx), d(rx)});
+                self.emit(arm! {fmul d(0), d(1), d(rx)});
+            }
+            "inverse" => {
+                self.emit(arm! {fmov d(1), #1.0});
+                self.emit(arm! {fdiv d(0), d(1), d(rx)});
+            }
             "power" | "rem" => {
+                // currently, rx is either 0 or 1, and ry is 0 or 2
+                // therefore, the following logic works!
+                // however; if we implement more complex register allocation,
+                // may need to change the logic.
+                if ry != 2 {
+                    self.emit(arm! {fmov d(2), d(ry)});
+                }
                 if rx != 0 {
                     self.emit(arm! {fmov d(0), d(rx)});
                 }
-                if ry != 1 {
-                    self.emit(arm! {fmov d(1), d(ry)});
-                }
+                self.emit(arm! {fmov d(1), d(2)});
+
                 self.emit(arm! {ldr x(0), [x(20), #8*p.0]});
                 self.emit(arm! {blr x(0)});
             }

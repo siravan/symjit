@@ -134,29 +134,29 @@ impl AmdCompiler {
             self.emit(amd! {movsd qword ptr [rbp+8*r.0], xmm(x)});
         }
     }
-    
+
     // *nix and windows have different ABI
     // MacOs follows the same ABI rules as linux...
-    
+
     #[cfg(target_family = "unix")]
-    fn prologue(&mut self, n: usize) {                
+    fn prologue(&mut self, n: usize) {
         self.emit(amd! {push rbp});
         self.emit(amd! {push rbx});
         self.emit(amd! {mov rbp, rdi});
         self.emit(amd! {mov rbx, rdx});
-        
+
         if n > 0 {
             self.emit(amd! {sub rsp, n});
         }
     }
-    
+
     #[cfg(target_family = "windows")]
-    fn prologue(&mut self, n: usize) {    
+    fn prologue(&mut self, n: usize) {
         self.emit(amd! {mov qword ptr [rsp+0x08], rbp});
         self.emit(amd! {mov qword ptr [rsp+0x10], rbx});
         self.emit(amd! {mov rbp, rcx});
         self.emit(amd! {mov rbx, r8});
-        self.emit(amd! {sub rsp, n+32});            
+        self.emit(amd! {sub rsp, n+32});
     }
 
     #[cfg(target_family = "unix")]
@@ -166,12 +166,12 @@ impl AmdCompiler {
         }
         self.emit(amd! {pop rbx});
         self.emit(amd! {pop rbp});
-        self.emit(amd! {ret});        
+        self.emit(amd! {ret});
     }
 
     #[cfg(target_family = "windows")]
-    fn epilogue(&mut self, n: usize) {      
-        self.emit(amd! {add rsp, n+32});        
+    fn epilogue(&mut self, n: usize) {
+        self.emit(amd! {add rsp, n+32});
         self.emit(amd! {mov rbx, qword ptr [rsp+0x10]});
         self.emit(amd! {mov rbp, qword ptr [rsp+0x08]});
         self.emit(amd! {ret});
@@ -253,12 +253,12 @@ impl Compiler<MachineCode> for AmdCompiler {
 
         self.codegen(prog, &saveable);
         self.machine_code.clear();
-        
+
         let cap = self.stack.capacity();
-        let pad = (cap + 1) & 1;     // padding to make sure that rsp is 
-                                            // aligned at 16 (required by Windows)
+        let pad = (cap + 1) & 1; // padding to make sure that rsp is
+                                 // aligned at 16 (required by Windows)
         let n = 8 * (cap + pad);
-        
+
         self.prologue(n);
         self.codegen(prog, &saveable);
         self.epilogue(n);
