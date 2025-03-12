@@ -50,7 +50,7 @@ mamba repoquery whoneeds symjit --channel conda-forge
 mamba repoquery depends symjit --channel conda-forge
 ```
 
-In addition, you can install *symjit* from the source by cloning https://github.com/siravan/symjit into `symjit` folder and then running
+In addition, you can install *symjit* from the source by cloning [symjit](https://github.com/siravan/symjit) into `symjit` folder and then running
 
 ```
 pip install .
@@ -104,10 +104,9 @@ np.testing.assert_approx_equal(sol[0], 1/N)
 The output of the returned callable is a numpy array with `dtype='double'`. Note that you can call `f` by passing a list of numbers (say, `f(1.0, 2.0)`) or a list of numpy arrays (for example, `f([1., 2.], [3., 4.])`. However, broadcasting is not supported. Moreover, all the parameters should be passed as scaler even if the state variables are arrays. For example,
 
 ```python
-from sympy import *
 import numpy as np
 import matplotlib.pyplot as plt
-
+from sympy import symbols
 from symjit import compile_func
 
 x, sigma = symbols('x sigma')
@@ -118,6 +117,35 @@ y = f(t, 25.)[0]
 
 plt.plot(t, y)
 ```
+
+The following example uses the vectorization feature to calculate the [Mandelbrot set](https://en.wikipedia.org/wiki/Mandelbrot_set). 
+
+```python
+# examples/manderbrot.py
+import numpy as np
+import matplotlib.pyplot as plt
+from sympy import symbols
+from symjit import compile_func
+
+x, y, a, b = symbols("x y a b")
+
+A, B = np.meshgrid(np.arange(-2, 1, 0.002), np.arange(-1.5, 1.5, 0.002))
+X = np.zeros_like(A)
+Y = np.zeros_like(A)
+
+f = compile_func([a, b, x, y], [x**2 - y**2 + a, 2*x*y + b])
+
+for i in range(20):
+    X, Y = f(A, B, X, Y)
+    
+Z = np.hypot(X, Y)    
+
+plt.imshow(Z < 2)
+```
+
+The output is:
+
+![Manderbrot](./figures/menderbrot.png)
 
 ## `compile_ode`: to solve ODEs
 
