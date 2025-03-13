@@ -138,7 +138,7 @@ class JacFunc(BaseFunc):
         return jac.reshape((self.count_states, self.count_states))
 
 
-def compile_func(states, eqs, params=None, obs=None):
+def compile_func(states, eqs, params=None, obs=None, ty="native"):
     """Compile a list of symbolic expression into an executable form.
     compile_func tries to mimic sympy lambdify, but instead of generating
     a standard python funciton, it returns a callable (Func object) that
@@ -165,10 +165,10 @@ def compile_func(states, eqs, params=None, obs=None):
     >>> assert(np.all(f(3, 5) == [8., 15.]))
     """
     model = structure.model(states, eqs, params=params, obs=obs)
-    return Func(json.dumps(model))
+    return Func(json.dumps(model), ty=ty)
 
 
-def compile_ode(iv, states, odes, params=None):
+def compile_ode(iv, states, odes, params=None, ty="native"):
     """Compile a symbolic ODE model into an executable form suitable for 
     passung to scipy.integrate.solve_ivp.    
     
@@ -200,11 +200,11 @@ def compile_ode(iv, states, odes, params=None):
     >>> np.testing.assert_allclose(sol.y[0,:], np.sin(t_eval), atol=0.005)
     """
     model = structure.model_ode(iv, states, odes, params)
-    return OdeFunc(json.dumps(model))
+    return OdeFunc(json.dumps(model), ty=ty)
     
-def compile_jac(iv, states, odes, params=None):
+def compile_jac(iv, states, odes, params=None, ty="native"):
     model = structure.model_jac(iv, states, odes, params)
-    return JacFunc(json.dumps(model))
+    return JacFunc(json.dumps(model), ty=ty)
 
-def compile_json(model):
-    return OdeFunc(model)
+def compile_json(model, ty="native"):
+    return OdeFunc(model, ty=ty)

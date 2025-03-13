@@ -1,5 +1,3 @@
-use std::arch::asm;
-
 use crate::model::Program;
 use crate::utils::*;
 
@@ -20,7 +18,7 @@ pub enum CompilerType {
 }
 
 pub struct Runnable {
-    pub prog: Program,
+    // pub prog: Program,
     pub compiled: Box<dyn Compiled>,
     pub first_state: usize,
     pub first_param: usize,
@@ -60,7 +58,7 @@ impl Runnable {
         let count_diffs = prog.frame.count_diffs();
 
         Runnable {
-            prog,
+            // prog,
             compiled,
             first_state,
             first_param,
@@ -123,50 +121,14 @@ impl Callable for Runnable {
 
         {
             let mem = self.compiled.mem();
-            let _ = du.copy_from_slice(&mem[self.first_diff..self.first_diff + self.count_diffs]);
+            du.copy_from_slice(&mem[self.first_diff..self.first_diff + self.count_diffs]);
         }
     }
-    /*
-        #[cfg(target_arch = "x86_64")]
-        fn exec(&mut self, t: f64) {
-            let mut mxcsr_old: u32 = 0;
 
-            unsafe {
-                asm!("stmxcsr [{0}];", in(reg) &mut mxcsr_old);
-                let mxcsr_new = mxcsr_old | 0x1f00; // mxcsr register exception mask
-                asm!("ldmxcsr [{0}];", in(reg) &mxcsr_new);
-            };
-
-            self.exec_single(t);
-
-            unsafe {
-                asm!("ldmxcsr [{0}];", in(reg) &mxcsr_old);
-            };
-        }
-    */
-    //   #[cfg(not(target_arch = "x86_64"))]
     fn exec(&mut self, t: f64) {
         self.exec_single(t);
     }
 
-    #[cfg(target_arch = "x86_64")]
-    fn exec_vectorized(&mut self, buf: &mut [f64], n: usize) {
-        let mut mxcsr_old: u32 = 0;
-
-        unsafe {
-            asm!("stmxcsr [{0}];", in(reg) &mut mxcsr_old);
-            let mxcsr_new = mxcsr_old | 0x1f00; // mxcsr register exception mask
-            asm!("ldmxcsr [{0}];", in(reg) &mxcsr_new);
-        };
-
-        self.exec_parallel(buf, n);
-
-        unsafe {
-            asm!("ldmxcsr [{0}];", in(reg) &mxcsr_old);
-        };
-    }
-
-    #[cfg(not(target_arch = "x86_64"))]
     fn exec_vectorized(&mut self, buf: &mut [f64], n: usize) {
         self.exec_parallel(buf, n);
     }

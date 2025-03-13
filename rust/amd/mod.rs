@@ -186,7 +186,7 @@ impl AmdCompiler {
                     if r != *x {
                         self.load(0, *x, false);
                     };
-                    self.op_code(&op, *p, 0);
+                    self.op_code(op, *p, 0);
                     r = *dst;
                 }
                 Instruction::Binary { p, x, y, dst, op } => {
@@ -208,7 +208,7 @@ impl AmdCompiler {
                         self.load(0, *x, false);
                     }
 
-                    self.op_code(&op, *p, ry);
+                    self.op_code(op, *p, ry);
                     r = *dst;
                 }
                 Instruction::IfElse { x1, x2, cond, dst } => {

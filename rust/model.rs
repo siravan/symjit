@@ -1,15 +1,17 @@
+use anyhow::{anyhow, Result};
+
 use serde::Deserialize;
 use std::error::Error;
 
 use crate::code::*;
 use crate::register::*;
 
-// lowers Expr and its constituents into a three-address_code format
+/// Lowers Expr and its constituents into an intermediate representation
 pub trait Lower {
-    fn lower(&self, prog: &mut Program) -> Word;
+    fn lower(&self, prog: &mut Program) -> Result<Word>;
 }
 
-// collects instructions and registers
+/// Collects instructions and registers
 #[derive(Debug)]
 pub struct Program {
     pub code: Vec<Instruction>, // the list of instructions
@@ -18,7 +20,7 @@ pub struct Program {
 }
 
 impl Program {
-    pub fn new(ml: &CellModel) -> Program {
+    pub fn new(ml: &CellModel) -> Result<Program> {
         let mut frame = Frame::new();
 
         /*
@@ -58,7 +60,7 @@ impl Program {
             if let Some(name) = eq.lhs.var() {
                 frame.alloc(WordType::Obs(name));
             } else {
-                panic!("lhs var not found");
+                return Err(anyhow!("lhs var not found"));
             }
         }
 
@@ -66,7 +68,7 @@ impl Program {
             if let Some(name) = eq.lhs.diff_var() {
                 frame.alloc(WordType::Diff(name));
             } else {
-                panic!("lhs diff var not found");
+                return Err(anyhow!("lhs diff var not found"));
             }
         }
 
@@ -76,14 +78,12 @@ impl Program {
             ft: Vec::new(),
         };
 
-        ml.lower(&mut prog);
+        ml.lower(&mut prog)?;
         prog.code.push(Instruction::Nop);
 
-        prog
+        Ok(prog)
     }
 
-    // pushes a non-op into code
-    // useful for debugging
     pub fn push(&mut self, s: Instruction) {
         self.code.push(s)
     }
@@ -107,7 +107,7 @@ impl Program {
         self.code.push(Instruction::Eq { dst })
     }
 
-    // pushes an Op into code and adjusts the virtual table accordingly
+    /// Pushes an Op into code
     pub fn push_unary(&mut self, op: &str, x: Word, dst: Word) {
         let p = self.proc(op);
 
@@ -154,31 +154,39 @@ impl Program {
         self.code.push(Instruction::IfElse { x1, x2, cond, dst })
     }
 
-    // allocates a constant register
+    /// Allocates a constant register
     pub fn alloc_const(&mut self, val: f64) -> Word {
         self.frame.alloc(WordType::Const(val))
     }
 
-    // allocates a temporary register
+    /// Allocates a temporary register
     pub fn alloc_temp(&mut self) -> Word {
         self.frame.alloc(WordType::Temp)
     }
 
-    // allocates an obeservable register
+    /// Allocates an obeservable register
     pub fn alloc_obs(&mut self, name: &str) -> Word {
         self.frame.alloc(WordType::Obs(name.to_string()))
     }
 
+    /// Frees a word (register) and returns it to a pool
+    /// Only temp works actually are freed. Other words are ignored.
     pub fn free(&mut self, r: Word) {
         self.frame.free(r);
     }
 
-    pub fn reg(&self, name: &str) -> Word {
-        self.frame.find(name).expect("cannot find reg by name")
+    pub fn reg(&self, name: &str) -> Result<Word> {
+        match self.frame.find(name) {
+            Some(w) => Ok(w),
+            None => return Err(anyhow!("cannot find reg {} by name", name)),
+        }
     }
 
-    pub fn reg_diff(&self, name: &str) -> Word {
-        self.frame.find_diff(name).expect("cannot find reg by name")
+    pub fn reg_diff(&self, name: &str) -> Result<Word> {
+        match self.frame.find_diff(name) {
+            Some(w) => Ok(w),
+            None => return Err(anyhow!("cannot find diff {} by name", name)),
+        }
     }
 
     pub fn virtual_table(&self) -> Vec<BinaryFunc> {
@@ -187,7 +195,7 @@ impl Program {
     }
 }
 
-// A defined (state or param) variable
+/// A defined (state or param) variable
 #[derive(Debug, Clone, Deserialize)]
 pub struct Variable {
     pub name: String,
@@ -195,12 +203,12 @@ pub struct Variable {
 }
 
 impl Lower for Variable {
-    fn lower(&self, prog: &mut Program) -> Word {
+    fn lower(&self, prog: &mut Program) -> Result<Word> {
         prog.reg(&self.name)
     }
 }
 
-// Expr tree
+/// Expr tree
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type")]
 pub enum Expr {
@@ -210,7 +218,7 @@ pub enum Expr {
 }
 
 impl Expr {
-    // extracts the differentiated variable from the lhs of a diff eq
+    /// Extracts the differentiated variable from the lhs of a diff eq
     pub fn diff_var(&self) -> Option<String> {
         if let Expr::Tree { args, op } = self {
             if op != "Differential" {
@@ -223,7 +231,7 @@ impl Expr {
         None
     }
 
-    // extracts the regular variable from the lhs of an observable eq
+    /// Extracts the regular variable from the lhs of an observable eq
     pub fn var(&self) -> Option<String> {
         if let Expr::Var { name } = self {
             return Some(name.clone());
@@ -231,41 +239,41 @@ impl Expr {
         None
     }
 
-    fn lower_unary(&self, prog: &mut Program, op: &str, args: &Vec<Expr>) -> Word {
-        let x = args[0].lower(prog);
+    fn lower_unary(&self, prog: &mut Program, op: &str, args: &[Expr]) -> Result<Word> {
+        let x = args[0].lower(prog)?;
         let dst = prog.alloc_temp();
         prog.push_unary(op, x, dst);
         prog.free(x);
-        dst
+        Ok(dst)
     }
 
-    fn lower_binary(&self, prog: &mut Program, op: &str, args: &Vec<Expr>) -> Word {
+    fn lower_binary(&self, prog: &mut Program, op: &str, args: &[Expr]) -> Result<Word> {
         if op == "times" {
             return self.lower_times(prog, args);
         }
 
-        let x = args[0].lower(prog);
-        let y = args[1].lower(prog);
+        let x = args[0].lower(prog)?;
+        let y = args[1].lower(prog)?;
         let dst = prog.alloc_temp();
 
         prog.push_binary(op, x, y, dst);
         prog.free(y);
         prog.free(x);
 
-        dst
+        Ok(dst)
     }
 
-    fn lower_times(&self, prog: &mut Program, args: &Vec<Expr>) -> Word {
-        let x = args[0].lower(prog);
+    fn lower_times(&self, prog: &mut Program, args: &[Expr]) -> Result<Word> {
+        let x = args[0].lower(prog)?;
         let dst = prog.alloc_temp();
 
         if x == Frame::MINUS_ONE {
             prog.pop();
-            let y = args[1].lower(prog);
+            let y = args[1].lower(prog)?;
             prog.push_unary("neg", y, dst);
             prog.free(y);
         } else {
-            let y = args[1].lower(prog);
+            let y = args[1].lower(prog)?;
             if y == Frame::MINUS_ONE {
                 prog.pop();
                 prog.push_unary("neg", x, dst);
@@ -277,17 +285,19 @@ impl Expr {
 
         prog.free(x);
 
-        dst
+        Ok(dst)
     }
 
-    fn lower_ternary(&self, prog: &mut Program, op: &str, args: &Vec<Expr>) -> Word {
+    fn lower_ternary(&self, prog: &mut Program, op: &str, args: &[Expr]) -> Result<Word> {
         if op != "ifelse" {
             return self.lower_poly(prog, op, args);
         }
 
-        let x1 = args[1].lower(prog);
-        let x2 = args[2].lower(prog);
-        let cond = args[0].lower(prog);
+        // The order of the next three lower calls is important!
+        // The order should mirror the order of the arguments in push_ifelse
+        let x1 = args[1].lower(prog)?;
+        let x2 = args[2].lower(prog)?;
+        let cond = args[0].lower(prog)?;
         let dst = prog.alloc_temp();
 
         prog.push_ifelse(x1, x2, cond, dst);
@@ -296,29 +306,30 @@ impl Expr {
         prog.free(x2);
         prog.free(x1);
 
-        dst
+        Ok(dst)
     }
 
-    fn lower_poly(&self, prog: &mut Program, op: &str, args: &Vec<Expr>) -> Word {
+    fn lower_poly(&self, prog: &mut Program, op: &str, args: &[Expr]) -> Result<Word> {
         if !(op == "plus" || op == "times") {
-            panic!("missing op: {}", op);
+            return Err(anyhow!("missing poly op: {}", op));
         }
 
-        let mut x = args[0].lower(prog);
-        for i in 1..args.len() {
-            let y = args[i].lower(prog);
+        let mut x = args[0].lower(prog)?;
+
+        for arg in args.iter().skip(1) {
+            let y = arg.lower(prog)?;
             let dst = prog.alloc_temp();
             prog.push_binary(op, x, y, dst);
             prog.free(x);
             x = dst;
         }
 
-        x
+        Ok(x)
     }
 }
 
 impl Lower for Expr {
-    fn lower(&self, prog: &mut Program) -> Word {
+    fn lower(&self, prog: &mut Program) -> Result<Word> {
         match self {
             Expr::Const { val } => {
                 let dst = if *val == 0.0 {
@@ -331,29 +342,29 @@ impl Lower for Expr {
                     prog.alloc_const(*val)
                 };
                 prog.push(Instruction::Num { val: *val, dst });
-                dst
+                Ok(dst)
             }
             Expr::Var { name } => {
                 // Technically, this is not necessary but having Instruction::Var in the code
                 // is helpful for debugging
-                let dst = prog.reg(name);
+                let dst = prog.reg(name)?;
                 prog.push(Instruction::Var {
                     name: name.clone(),
                     reg: dst,
                 });
-                dst
+                Ok(dst)
             }
             Expr::Tree { op, args } => match args.len() {
-                1 => self.lower_unary(prog, &op, &args),
-                2 => self.lower_binary(prog, &op, &args),
-                3 => self.lower_ternary(prog, &op, &args),
-                _ => self.lower_poly(prog, &op, &args),
+                1 => self.lower_unary(prog, op, args),
+                2 => self.lower_binary(prog, op, args),
+                3 => self.lower_ternary(prog, op, args),
+                _ => self.lower_poly(prog, op, args),
             },
         }
     }
 }
 
-// abstracts equation lhs ~ rhs
+/// Represents lhs ~ rhs
 #[derive(Debug, Clone, Deserialize)]
 pub struct Equation {
     pub lhs: Expr,
@@ -361,25 +372,26 @@ pub struct Equation {
 }
 
 impl Lower for Equation {
-    fn lower(&self, prog: &mut Program) -> Word {
+    fn lower(&self, prog: &mut Program) -> Result<Word> {
         let dst = if let Some(var) = self.lhs.diff_var() {
-            prog.reg_diff(&var)
+            prog.reg_diff(&var)?
         } else if let Some(var) = self.lhs.var() {
-            prog.reg(&var)
+            prog.reg(&var)?
         } else {
-            panic!("undefined diff variable");
+            return Err(anyhow!("undefined diff variable"));
         };
 
         prog.push_eq(dst);
 
-        let src = self.rhs.lower(prog);
+        let src = self.rhs.lower(prog)?;
 
         prog.push_unary("mov", src, dst);
-        Frame::ZERO
+        Ok(Frame::ZERO)
     }
 }
 
-// loads from a JSON CellModel file
+/// Loads a model from a JSON file 
+/// Historically from a CellML source; hence the name.
 #[derive(Debug, Clone, Deserialize)]
 pub struct CellModel {
     pub iv: Variable,
@@ -392,21 +404,21 @@ pub struct CellModel {
 }
 
 impl CellModel {
-    pub fn load(text: &str) -> Result<CellModel, Box<dyn Error>> {
+    pub fn load(text: &str) -> Result<CellModel> {
         Ok(serde_json::from_str(text)?)
     }
 }
 
 impl Lower for CellModel {
-    fn lower(&self, prog: &mut Program) -> Word {
+    fn lower(&self, prog: &mut Program) -> Result<Word> {
         for eq in &self.obs {
-            eq.lower(prog);
+            eq.lower(prog)?;
         }
 
         for eq in &self.odes {
-            eq.lower(prog);
+            eq.lower(prog)?;
         }
 
-        Frame::ZERO
+        Ok(Frame::ZERO)
     }
 }

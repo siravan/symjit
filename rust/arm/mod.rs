@@ -179,13 +179,13 @@ impl ArmCompiler {
                     if *x != r {
                         self.load(0, *x, false);
                     };
-                    self.op_code(&op, *p, 0, 0);
+                    self.op_code(op, *p, 0, 0);
                     r = *dst;
                 }
                 Instruction::Binary { p, x, y, dst, op } => {
                     let rx = self.fuse_load(r, 1, *x, true);
                     let ry = self.fuse_load(r, 2, *y, true);
-                    self.op_code(&op, *p, rx, ry);
+                    self.op_code(op, *p, rx, ry);
                     r = *dst;
                 }
                 Instruction::IfElse { x1, x2, cond, dst } => {

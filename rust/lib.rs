@@ -1,4 +1,5 @@
-use std::ffi::{c_char, CStr};
+use anyhow::Result;
+use std::ffi::{c_char, CStr, CString};
 
 mod analyzer;
 mod code;
@@ -26,6 +27,7 @@ pub enum CompilerStatus {
     InvalidUtf8,
     ParseError,
     InvalidCompiler,
+    CompilationError,
 }
 
 pub struct CompilerResult {
@@ -33,16 +35,23 @@ pub struct CompilerResult {
     status: CompilerStatus,
 }
 
+/// Compiles a model (a json string encoding the func model)
+/// ty is the requested arch (amd, arm, wasm, or native)
+///
+/// # Safety
+///     both model and ty are pointers to null-terminated strings
+///     the output is a raw pointer to a CompilerResults
+///
 #[no_mangle]
-pub extern "C" fn compile(p: *const c_char, ty: *const c_char) -> *const CompilerResult {
+pub unsafe extern "C" fn compile(model: *const c_char, ty: *const c_char) -> *const CompilerResult {
     let mut res = CompilerResult {
         func: None,
         status: CompilerStatus::Incomplete,
     };
 
-    let p = unsafe {
-        match CStr::from_ptr(p).to_str() {
-            Ok(p) => p,
+    let model = unsafe {
+        match CStr::from_ptr(model).to_str() {
+            Ok(model) => model,
             Err(_) => {
                 res.status = CompilerStatus::InvalidUtf8;
                 return Box::into_raw(Box::new(res)) as *const _;
@@ -60,7 +69,7 @@ pub extern "C" fn compile(p: *const c_char, ty: *const c_char) -> *const Compile
         }
     };
 
-    let ml = match CellModel::load(&p) {
+    let ml = match CellModel::load(model) {
         Ok(ml) => ml,
         Err(_) => {
             res.status = CompilerStatus::ParseError;
@@ -68,7 +77,13 @@ pub extern "C" fn compile(p: *const c_char, ty: *const c_char) -> *const Compile
         }
     };
 
-    let prog = Program::new(&ml);
+    let prog = match Program::new(&ml) {
+        Ok(prog) => prog,
+        Err(_) => {
+            res.status = CompilerStatus::CompilationError;
+            return Box::into_raw(Box::new(res)) as *const _;
+        }
+    };
 
     // println!("{:#?}", &prog.ft);
 
@@ -87,14 +102,23 @@ pub extern "C" fn compile(p: *const c_char, ty: *const c_char) -> *const Compile
     } else {
         CompilerStatus::Ok
     };
-    return Box::into_raw(Box::new(res)) as *const _;
+
+    Box::into_raw(Box::new(res)) as *const _
 }
 
+/// Checks the status of a CompilerResult
+/// returns a null-terminated string representing the status message
+///
+/// # Safety
+///     it is the responsibility of the calling function to ensure
+///     that q points to a valid CompilerResult
+///     
 #[no_mangle]
-pub extern "C" fn check_status(q: *const CompilerResult) -> *const c_char {
+pub unsafe extern "C" fn check_status(q: *const CompilerResult) -> *const c_char {
     let q: &CompilerResult = unsafe { &*q };
     let msg = match q.status {
         CompilerStatus::Ok => c"Success",
+        CompilerStatus::CompilationError => c"Compilation error",
         CompilerStatus::Incomplete => c"Incomplete (internal error)",
         CompilerStatus::InvalidUtf8 => c"The input string is not valid UTF8",
         CompilerStatus::ParseError => c"Parse error",
@@ -103,8 +127,14 @@ pub extern "C" fn check_status(q: *const CompilerResult) -> *const c_char {
     msg.as_ptr() as *const _
 }
 
+/// Returns the number of states (dependent variables)
+///
+/// # Safety
+///     it is the responsibility of the calling function to ensure
+///     that q points to a valid CompilerResult
+///     
 #[no_mangle]
-pub extern "C" fn count_states(q: *const CompilerResult) -> usize {
+pub unsafe extern "C" fn count_states(q: *const CompilerResult) -> usize {
     let q: &CompilerResult = unsafe { &*q };
     if let Some(func) = &q.func {
         func.count_states
@@ -113,8 +143,14 @@ pub extern "C" fn count_states(q: *const CompilerResult) -> usize {
     }
 }
 
+/// Returns the number of parameters
+///
+/// # Safety
+///     it is the responsibility of the calling function to ensure
+///     that q points to a valid CompilerResult
+///     
 #[no_mangle]
-pub extern "C" fn count_params(q: *const CompilerResult) -> usize {
+pub unsafe extern "C" fn count_params(q: *const CompilerResult) -> usize {
     let q: &CompilerResult = unsafe { &*q };
     if let Some(func) = &q.func {
         func.count_params
@@ -123,8 +159,14 @@ pub extern "C" fn count_params(q: *const CompilerResult) -> usize {
     }
 }
 
+/// Returns the number of observables (output)
+///
+/// # Safety
+///     it is the responsibility of the calling function to ensure
+///     that q points to a valid CompilerResult
+///     
 #[no_mangle]
-pub extern "C" fn count_obs(q: *const CompilerResult) -> usize {
+pub unsafe extern "C" fn count_obs(q: *const CompilerResult) -> usize {
     let q: &CompilerResult = unsafe { &*q };
     if let Some(func) = &q.func {
         func.count_obs
@@ -133,8 +175,15 @@ pub extern "C" fn count_obs(q: *const CompilerResult) -> usize {
     }
 }
 
+/// Returns the number of differential equations
+/// Generally, it should be the same as the number of states
+///
+/// # Safety
+///     it is the responsibility of the calling function to ensure
+///     that q points to a valid CompilerResult
+///     
 #[no_mangle]
-pub extern "C" fn count_diffs(q: *const CompilerResult) -> usize {
+pub unsafe extern "C" fn count_diffs(q: *const CompilerResult) -> usize {
     let q: &CompilerResult = unsafe { &*q };
     if let Some(func) = &q.func {
         func.count_diffs
@@ -143,8 +192,18 @@ pub extern "C" fn count_diffs(q: *const CompilerResult) -> usize {
     }
 }
 
+/// Fills an array of doubles (u0) with the initial state
+/// u0 should have enough space for ns (== count_states) doubles
+///
+/// note that this function is mainly useful for json models
+/// genenerated by CellMLToolkit.jl; otherwise, it fills with 0.0
+///
+/// # Safety
+///     it is the responsibility of the calling function to ensure
+///     that q points to a valid CompilerResult
+///     
 #[no_mangle]
-pub extern "C" fn fill_u0(q: *const CompilerResult, u0: *mut f64, ns: usize) -> bool {
+pub unsafe extern "C" fn fill_u0(q: *const CompilerResult, u0: *mut f64, ns: usize) -> bool {
     let q: &CompilerResult = unsafe { &*q };
     if let Some(func) = &q.func {
         if func.count_states != ns {
@@ -153,15 +212,25 @@ pub extern "C" fn fill_u0(q: *const CompilerResult, u0: *mut f64, ns: usize) -> 
 
         let src_u0 = &func.compiled.mem()[func.first_state..func.first_state + func.count_states];
         let dst_u0: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(u0, ns) };
-        dst_u0.copy_from_slice(&src_u0);
+        dst_u0.copy_from_slice(src_u0);
         true
     } else {
         false
     }
 }
 
+/// Fills an array of doubles (p) with the parameters
+/// p should have enough space for np (== count_params) doubles
+///
+/// note that this function is mainly useful for json models
+/// genenerated by CellMLToolkit.jl; otherwise, it fills with 0.0
+///
+/// # Safety
+///     it is the responsibility of the calling function to ensure
+///     that q points to a valid CompilerResult
+///     
 #[no_mangle]
-pub extern "C" fn fill_p(q: *const CompilerResult, p: *mut f64, np: usize) -> bool {
+pub unsafe extern "C" fn fill_p(q: *const CompilerResult, p: *mut f64, np: usize) -> bool {
     let q: &CompilerResult = unsafe { &*q };
     if let Some(func) = &q.func {
         if func.count_params != np {
@@ -170,15 +239,22 @@ pub extern "C" fn fill_p(q: *const CompilerResult, p: *mut f64, np: usize) -> bo
 
         let src_p = &func.compiled.mem()[func.first_param..func.first_param + func.count_params];
         let dst_p: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(p, np) };
-        dst_p.copy_from_slice(&src_p);
+        dst_p.copy_from_slice(src_p);
         true
     } else {
         false
     }
 }
 
+/// Fills du with the results of differentials after executing one step of the model
+/// This function is mainly for DifferentialEquation.jl compatibility and not for python/sympy
+///
+/// # Safety
+///     it is the responsibility of the calling function to ensure
+///     that q points to a valid CompilerResult
+///     
 #[no_mangle]
-pub extern "C" fn run(
+pub unsafe extern "C" fn run(
     q: *mut CompilerResult,
     du: *mut f64,
     u: *const f64,
@@ -204,8 +280,17 @@ pub extern "C" fn run(
     }
 }
 
+/// Executes the compiled function
+/// The calling routine should fill the states and parameters before
+/// calling execute
+/// The result populates obs or diffs (as defined in model passed to compile)
+///
+/// # Safety
+///     it is the responsibility of the calling function to ensure
+///     that q points to a valid CompilerResult
+///     
 #[no_mangle]
-pub extern "C" fn execute(q: *mut CompilerResult, t: f64) -> bool {
+pub unsafe extern "C" fn execute(q: *mut CompilerResult, t: f64) -> bool {
     let q: &mut CompilerResult = unsafe { &mut *q };
 
     if let Some(func) = &mut q.func {
@@ -216,8 +301,23 @@ pub extern "C" fn execute(q: *mut CompilerResult, t: f64) -> bool {
     }
 }
 
+/// Executes the compiled function n times (vectorized)
+/// The calling function provides buf, which is a k x n matrix of doubles
+/// k is equal to maximum(count_states, count_obs)
+/// The calling funciton fills the first count_states rows of buf
+/// The result is returned in the first count_obs rows of buf
+///
+/// # Safety
+///     it is the responsibility of the calling function to ensure
+///     that q points to a valid CompilerResult
+///     In addition, buf should points to a valid matrix of correct size
+///
 #[no_mangle]
-pub extern "C" fn execute_vectorized(q: *mut CompilerResult, buf: *mut f64, n: usize) -> bool {
+pub unsafe extern "C" fn execute_vectorized(
+    q: *mut CompilerResult,
+    buf: *mut f64,
+    n: usize,
+) -> bool {
     let q: &mut CompilerResult = unsafe { &mut *q };
 
     if let Some(func) = &mut q.func {
@@ -230,8 +330,15 @@ pub extern "C" fn execute_vectorized(q: *mut CompilerResult, buf: *mut f64, n: u
     }
 }
 
+/// Returns a pointer to the state variables (count_states doubles)
+/// The function calling execute should write the state variables in this area
+///
+/// # Safety
+///     it is the responsibility of the calling function to ensure
+///     that q points to a valid CompilerResult
+///     
 #[no_mangle]
-pub extern "C" fn ptr_states(q: *mut CompilerResult) -> *mut f64 {
+pub unsafe extern "C" fn ptr_states(q: *mut CompilerResult) -> *mut f64 {
     let q: &mut CompilerResult = unsafe { &mut *q };
     if let Some(func) = &mut q.func {
         &mut func.compiled.mem_mut()[func.first_state] as *mut f64
@@ -240,8 +347,15 @@ pub extern "C" fn ptr_states(q: *mut CompilerResult) -> *mut f64 {
     }
 }
 
+/// Returns a pointer to the parameters (count_params doubles)
+/// The function calling execute should write the parameters in this area
+///
+/// # Safety
+///     it is the responsibility of the calling function to ensure
+///     that q points to a valid CompilerResult
+///     
 #[no_mangle]
-pub extern "C" fn ptr_params(q: *mut CompilerResult) -> *mut f64 {
+pub unsafe extern "C" fn ptr_params(q: *mut CompilerResult) -> *mut f64 {
     let q: &mut CompilerResult = unsafe { &mut *q };
     if let Some(func) = &mut q.func {
         &mut func.compiled.mem_mut()[func.first_param] as *mut f64
@@ -250,8 +364,15 @@ pub extern "C" fn ptr_params(q: *mut CompilerResult) -> *mut f64 {
     }
 }
 
+/// Returns a pointer to the observables (count_obs doubles)
+/// The function calling execute reads the observables from this area
+///
+/// # Safety
+///     it is the responsibility of the calling function to ensure
+///     that q points to a valid CompilerResult
+///     
 #[no_mangle]
-pub extern "C" fn ptr_obs(q: *mut CompilerResult) -> *const f64 {
+pub unsafe extern "C" fn ptr_obs(q: *mut CompilerResult) -> *const f64 {
     let q: &CompilerResult = unsafe { &*q };
     if let Some(func) = &q.func {
         &func.compiled.mem()[func.first_obs] as *const f64
@@ -260,8 +381,17 @@ pub extern "C" fn ptr_obs(q: *mut CompilerResult) -> *const f64 {
     }
 }
 
+/// Returns a pointer to the differentials (count_diffs doubles)
+/// The function calling execute reads the differentials from this area
+/// note: whether the output is returned as observables or differentials is
+/// defined in the model
+///
+/// # Safety
+///     it is the responsibility of the calling function to ensure
+///     that q points to a valid CompilerResult
+///     
 #[no_mangle]
-pub extern "C" fn ptr_diffs(q: *mut CompilerResult) -> *const f64 {
+pub unsafe extern "C" fn ptr_diffs(q: *mut CompilerResult) -> *const f64 {
     let q: &CompilerResult = unsafe { &*q };
     if let Some(func) = &q.func {
         &func.compiled.mem()[func.first_diff] as *const f64
@@ -270,8 +400,15 @@ pub extern "C" fn ptr_diffs(q: *mut CompilerResult) -> *const f64 {
     }
 }
 
+/// Dumps the compiled binary code to a file (name)
+/// This function is useful for debugging but is not necessary for normal operations
+///
+/// # Safety
+///     it is the responsibility of the calling function to ensure
+///     that q points to a valid CompilerResult
+///     
 #[no_mangle]
-pub extern "C" fn dump(q: *mut CompilerResult, name: *const c_char) {
+pub unsafe extern "C" fn dump(q: *mut CompilerResult, name: *const c_char) {
     let q: &CompilerResult = unsafe { &*q };
     if let Some(func) = &q.func {
         let name = unsafe { CStr::from_ptr(name).to_str().unwrap() };
@@ -279,21 +416,31 @@ pub extern "C" fn dump(q: *mut CompilerResult, name: *const c_char) {
     }
 }
 
+/// Deallocates the CompilerResult pointed by q
+///
+/// # Safety
+///     it is the responsibility of the calling function to ensure
+///     that q points to a valid CompilerResult and that after
+///     calling this function, q is invalid and should not
+///     be used anymore
+///     
 #[no_mangle]
-pub extern "C" fn finalize(p: *mut CompilerResult) {
-    if !p.is_null() {
-        let _ = unsafe { Box::from_raw(p) };
+pub unsafe extern "C" fn finalize(q: *mut CompilerResult) {
+    if !q.is_null() {
+        let _ = unsafe { Box::from_raw(q) };
     }
 }
 
+/// Returns a null-terminated string representing the version
+/// Used for debugging
+///
+/// # Safety
+///     the return value is a null-terminated string that should not
+///     be freed
+///     
 #[no_mangle]
-pub extern "C" fn info() -> *const c_char {
-    let msg = c"symjit 1.0";
-    msg.as_ptr() as *const _
-}
-
-#[no_mangle]
-pub extern "C" fn elem_at(v: *const f64, nv: usize, index: usize) -> f64 {
-    let v: &[f64] = unsafe { std::slice::from_raw_parts(v, nv) };
-    v[index]
+pub unsafe extern "C" fn info() -> *const c_char {
+    // let msg = c"symjit 1.3.3";
+    let msg = CString::new(env!("CARGO_PKG_VERSION")).unwrap();
+    msg.into_raw() as *const _
 }

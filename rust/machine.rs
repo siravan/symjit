@@ -72,6 +72,6 @@ impl Compiled for MachineCode {
 
     fn dump(&self, name: &str) {
         let mut fs = fs::File::create(name).unwrap();
-        fs.write(&self.machine_code[..]).unwrap();
+        let _ = fs.write(&self.machine_code[..]);
     }
 }

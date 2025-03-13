@@ -70,9 +70,7 @@ impl Compiler<ByteCode> for Interpreter {
             }
         }
 
-        for _ in 0..prog.frame.stack_size() {
-            mem.push(0.0);
-        }
+        mem.extend_from_slice(&vec![0.0; prog.frame.stack_size()]);
 
         ByteCode::new(code, mem)
     }
@@ -120,5 +118,5 @@ impl Compiled for ByteCode {
         &mut self._mem[..]
     }
 
-    fn dump(&self, name: &str) {}
+    fn dump(&self, _name: &str) {}
 }

@@ -87,15 +87,15 @@ impl Frame {
             }
             WordType::Const(_) => {}
             WordType::Var(s) | WordType::State(s, _) | WordType::Param(s, _) | WordType::Obs(s) => {
-                self.named
-                    .insert(s.clone(), idx)
-                    .map(|_x| panic!("key already exists"));
+                if let Some(_x) = self.named.insert(s.clone(), idx) {
+                    panic!("key already exists")
+                }
             }
             WordType::Diff(s) => {
                 self.has_diff = true;
-                self.named
-                    .insert(format!("δ{}", s), idx)
-                    .map(|_x| panic!("diff key already exists"));
+                if let Some(_x) = self.named.insert(format!("δ{}", s), idx) {
+                    panic!("diff key already exists")
+                }
             }
         };
 
@@ -112,14 +112,7 @@ impl Frame {
     }
 
     pub fn is_diff(&self, r: &Word) -> bool {
-        if r.is_temp() {
-            return false;
-        }
-        if let WordType::Diff(_) = self.words[r.0] {
-            true
-        } else {
-            false
-        }
+        !r.is_temp() && matches!(self.words[r.0], WordType::Diff(_))
     }
 
     pub fn is_temp(&self, r: &Word) -> bool {
@@ -127,14 +120,7 @@ impl Frame {
     }
 
     pub fn is_obs(&self, r: &Word) -> bool {
-        if r.is_temp() {
-            return false;
-        }
-        if let WordType::Obs(_) = self.words[r.0] {
-            true
-        } else {
-            false
-        }
+        !r.is_temp() && matches!(self.words[r.0], WordType::Obs(_))
     }
 
     pub fn should_save(&self, r: &Word) -> bool {

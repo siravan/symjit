@@ -13,7 +13,7 @@ f = compile_func([a, b, x, y], [x**2 - y**2 + a, 2*x*y + b])
 
 for i in range(20):
     X, Y = f(A, B, X, Y)
-    
+ 
 Z = np.hypot(X, Y)    
 
 plt.imshow(Z < 2)
