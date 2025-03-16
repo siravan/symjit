@@ -41,7 +41,6 @@ pub struct Frame {
     pub stack: Vec<WordType>,
     pub named: HashMap<String, usize>,
     pub freed: Vec<Word>,
-    pub has_diff: bool,
 }
 
 impl Frame {
@@ -56,7 +55,6 @@ impl Frame {
             stack: Vec::new(),
             named: HashMap::new(),
             freed: Vec::new(),
-            has_diff: false,
         };
 
         f.alloc(WordType::Const(0.0));
@@ -92,7 +90,6 @@ impl Frame {
                 }
             }
             WordType::Diff(s) => {
-                self.has_diff = true;
                 if let Some(_x) = self.named.insert(format!("δ{}", s), idx) {
                     panic!("diff key already exists")
                 }
@@ -111,12 +108,16 @@ impl Frame {
         };
     }
 
-    pub fn is_diff(&self, r: &Word) -> bool {
-        !r.is_temp() && matches!(self.words[r.0], WordType::Diff(_))
+    pub fn is_state(&self, r: &Word) -> bool {
+        !r.is_temp() && matches!(self.words[r.0], WordType::State(_, _))
     }
 
-    pub fn is_temp(&self, r: &Word) -> bool {
-        r.is_temp()
+    pub fn is_param(&self, r: &Word) -> bool {
+        !r.is_temp() && matches!(self.words[r.0], WordType::Param(_, _))
+    }
+
+    pub fn is_diff(&self, r: &Word) -> bool {
+        !r.is_temp() && matches!(self.words[r.0], WordType::Diff(_))
     }
 
     pub fn is_obs(&self, r: &Word) -> bool {
@@ -124,11 +125,7 @@ impl Frame {
     }
 
     pub fn should_save(&self, r: &Word) -> bool {
-        if self.has_diff {
-            self.is_diff(r)
-        } else {
-            self.is_obs(r)
-        }
+        self.is_diff(r) || self.is_obs(r)
     }
 
     pub fn find(&self, s: &str) -> Option<Word> {
@@ -141,55 +138,43 @@ impl Frame {
     }
 
     pub fn count_states(&self) -> usize {
-        self.words
-            .iter()
-            .filter(|x| matches!(x, WordType::State(_, _)))
+        (0..self.words.len())
+            .filter(|i| self.is_state(&Word(*i, 0)))
             .count()
     }
 
     pub fn count_params(&self) -> usize {
-        self.words
-            .iter()
-            .filter(|x| matches!(x, WordType::Param(_, _)))
+        (0..self.words.len())
+            .filter(|i| self.is_param(&Word(*i, 0)))
             .count()
     }
 
     pub fn count_obs(&self) -> usize {
-        self.words
-            .iter()
-            .filter(|x| matches!(x, WordType::Obs(_)))
+        (0..self.words.len())
+            .filter(|i| self.is_obs(&Word(*i, 0)))
             .count()
     }
 
     pub fn count_diffs(&self) -> usize {
-        self.words
-            .iter()
-            .filter(|x| matches!(x, WordType::Diff(_)))
+        (0..self.words.len())
+            .filter(|i| self.is_diff(&Word(*i, 0)))
             .count()
     }
 
     pub fn first_state(&self) -> Option<usize> {
-        self.words
-            .iter()
-            .position(|x| matches!(x, WordType::State(_, _)))
+        (0..self.words.len()).position(|i| self.is_state(&Word(i, 0)))
     }
 
     pub fn first_param(&self) -> Option<usize> {
-        self.words
-            .iter()
-            .position(|x| matches!(x, WordType::Param(_, _)))
+        (0..self.words.len()).position(|i| self.is_param(&Word(i, 0)))
     }
 
     pub fn first_obs(&self) -> Option<usize> {
-        self.words
-            .iter()
-            .position(|x| matches!(x, WordType::Obs(_)))
+        (0..self.words.len()).position(|i| self.is_obs(&Word(i, 0)))
     }
 
     pub fn first_diff(&self) -> Option<usize> {
-        self.words
-            .iter()
-            .position(|x| matches!(x, WordType::Diff(_)))
+        (0..self.words.len()).position(|i| self.is_diff(&Word(i, 0)))
     }
 
     pub fn mem(&self) -> Vec<f64> {

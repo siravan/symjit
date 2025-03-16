@@ -50,34 +50,30 @@ macro_rules! reg {
 }
 
 macro_rules! modrm_reg {
-    ($rm:expr, $reg:expr) => {{
-        let rm = $rm;
-        let reg = $reg;
-        0xC0 + ((reg & 7) << 3) + (rm & 7)
+    ($reg:expr, $rm:expr) => {{
+        0xC0 + (($reg & 7) << 3) + ($rm & 7)
     }};
 }
 
 macro_rules! rex {
-    ($rm:expr, $reg:expr) => {{
-        let rm = $rm;
-        let reg = $reg;
-        0x48 + ((rm & 8) >> 3) + ((reg & 8) >> 1)
+    ($reg:expr, $rm:expr) => {{
+        0x48 + (($rm & 8) >> 3) + (($reg & 8) >> 1)
     }};
 }
 
 macro_rules! modrm_mem {
-    ($reg:expr, $base:ident, $offset:expr) => {{
+    ($reg:expr, $rm:expr, $offset:expr) => {{
         let reg = $reg;
-        let base = $base;
+        let rm = $rm;
         let offset = $offset;
 
         let mut v = if offset < 128 {
-            vec![0x40 + (reg << 3) + base]
+            vec![0x40 + ((reg & 7) << 3) + (rm & 7)]
         } else {
-            vec![0x80 + (reg << 3) + base]
+            vec![0x80 + ((reg & 7) << 3) + (rm & 7)]
         };
 
-        if base == 4 {
+        if rm == 4 {
             // rsp
             v.push(0x24); // SIB byte
         }
@@ -95,174 +91,177 @@ macro_rules! modrm_mem {
     }};
 }
 
-macro_rules! make_modrm {
-    ($($v:expr),+ ; $x:expr, $y:expr) => {
+macro_rules! assemble {
+    ($($x:expr),+ ;) => {
         {
-            vec![$($v),*, modrm_reg!($x, $y)]
+            vec![$($x),*]
         }
     };
-    ($($v:expr),+ ; $x:expr, $y:expr; $z:expr) => {
+    ($($x:expr),+ ; $y:expr) => {
         {
-            vec![$($v),*, modrm_reg!($x, $y), $z]
-        }
-    };
-    ($($v:expr),+ ; $dst:expr, $base:ident, $offset:expr) => {
-        {
-            let mut v = vec![$($v),*];
-            let base = reg!($base);
-            v.extend_from_slice(&modrm_mem!($dst, base, $offset)[..]);
+            let mut v = vec![$($x),*];
+            for b in $y { v.push(b); }
             v
+        }
+    };
+    (; $y:expr; $($z:expr),+ ;) => {
+        {            
+            $(
+                y.push($z);
+            )*
+            y
+        }
+    };
+    (; $y:expr; $($z:expr),+ ; $w:expr) => {
+        {
+            $(
+                y.push($z);
+            )*
+            for b in $w { y.push(b); }
+            y
         }
     };
 }
 
 macro_rules! amd {
-    (movsd xmm($dst:expr), xmm($src:expr)) => {
-        make_modrm![0xf2, 0x0f, 0x10; $src, $dst]
+    (movsd xmm($reg:expr), xmm($rm:expr)) => {
+        assemble![0xf2, 0x0f, 0x10, modrm_reg!($reg, $rm);]
     };
-    (movapd xmm($dst:expr), xmm($src:expr)) => {
-        make_modrm![0x66, 0x0f, 0x28; $src, $dst]
+    (movapd xmm($reg:expr), xmm($rm:expr)) => {
+        assemble![0x66, 0x0f, 0x28, modrm_reg!($reg, $rm);]
     };
-    (movsd xmm($dst:expr), qword ptr [$base:ident + $offset:expr]) => {
-        make_modrm![0xf2, 0x0f, 0x10; $dst, $base, $offset]
+    (movsd xmm($reg:expr), qword ptr [$rm:ident + $offset:expr]) => {
+        assemble![0xf2, 0x0f, 0x10; modrm_mem!($reg, reg!($rm), $offset)]
     };
-    (movsd qword ptr [$base:ident + $offset:expr], xmm($src:expr)) => {
-        make_modrm![0xf2, 0x0f, 0x11; $src, $base, $offset]
+    (movsd qword ptr [$rm:ident + $offset:expr], xmm($reg:expr)) => {
+        assemble![0xf2, 0x0f, 0x11; modrm_mem!($reg, reg!($rm), $offset)]
     };
-    (movq xmm($dst:expr), $src:ident) => {
+    (movq xmm($reg:expr), $rm:ident) => {
         {
-            let dst = $dst;
-            let src = reg!($src);
-            make_modrm![0x66, rex!(src, dst), 0x0f, 0x6e; src, dst]
+            let reg = $reg;
+            let rm = reg!($rm);
+            assemble![0x66, rex!(reg, rm), 0x0f, 0x6e, modrm_reg!(reg, rm);]
         }
     };
-    (movq $dst:ident, xmm($src:expr)) => {
+    (movq $rm:ident, xmm($reg:expr)) => {
         {
-            let dst = reg!($dst);
-            let src = $src;
-            make_modrm![0x66, rex!(dst, src), 0x0f, 0x7e; dst, src]
+            let rm = reg!($rm);
+            let reg = $reg;
+            assemble![0x66, rex!(reg, rm), 0x0f, 0x7e, modrm_reg!(reg, rm);]
         }
     };
-    (mov $dst:ident, $src:ident) => {
+    (mov $reg:ident, $rm:ident) => {
         {
-            let dst = reg!($dst);
-            let src = reg!($src);
-            make_modrm![rex!(dst, src), 0x89; dst, src]
+            let reg = reg!($reg);
+            let rm = reg!($rm);
+            assemble![rex!(reg, rm), 0x8b, modrm_reg!(reg, rm);]
         }
     };
-    (mov $dst:ident, qword ptr [$base:ident + $offset:expr]) => {
+    (mov $reg:ident, qword ptr [$rm:ident + $offset:expr]) => {
         {
-            let dst = reg!($dst);
-            make_modrm![rex!(0, dst), 0x8b; dst, $base, $offset]
+            let reg = reg!($reg);
+            let rm = reg!($rm);
+            assemble![rex!(reg, rm), 0x8b; modrm_mem!(reg, rm, $offset)]
         }
     };
-    (mov qword ptr [$base:ident + $offset:expr], $src:ident) => {
+    (mov qword ptr [$rm:ident + $offset:expr], $reg:ident) => {
         {
-            let src = reg!($src);
-            make_modrm![rex!(0, src), 0x89; src, $base, $offset]
+            let reg = reg!($reg);
+            let rm = reg!($rm);
+            assemble![rex!(reg, rm), 0x89; modrm_mem!(reg, rm, $offset)]
         }
     };
-    (addsd xmm($dst:expr), xmm($src:expr)) => {
-        make_modrm![0xf2, 0x0f, 0x58; $src, $dst]
+    (addsd xmm($reg:expr), xmm($rm:expr)) => {
+        assemble![0xf2, 0x0f, 0x58, modrm_reg!($reg, $rm);]
     };
-    (subsd xmm($dst:expr), xmm($src:expr)) => {
-        make_modrm![0xf2, 0x0f, 0x5c; $src, $dst]
+    (subsd xmm($reg:expr), xmm($rm:expr)) => {
+        assemble![0xf2, 0x0f, 0x5c, modrm_reg!($reg, $rm);]
     };
-    (mulsd xmm($dst:expr), xmm($src:expr)) => {
-        make_modrm![0xf2, 0x0f, 0x59; $src, $dst]
+    (mulsd xmm($reg:expr), xmm($rm:expr)) => {
+        assemble![0xf2, 0x0f, 0x59, modrm_reg!($reg, $rm);]
     };
-    (divsd xmm($dst:expr), xmm($src:expr)) => {
-        make_modrm![0xf2, 0x0f, 0x5e; $src, $dst]
+    (divsd xmm($reg:expr), xmm($rm:expr)) => {
+        assemble![0xf2, 0x0f, 0x5e, modrm_reg!($reg, $rm);]
     };
-    (sqrtsd xmm($dst:expr), xmm($src:expr)) => {
-        make_modrm![0xf2, 0x0f, 0x51; $src, $dst]
+    (sqrtsd xmm($reg:expr), xmm($rm:expr)) => {
+        assemble![0xf2, 0x0f, 0x51, modrm_reg!($reg, $rm);]
     };
-    (rsqrtsd xmm($dst:expr), xmm($src:expr)) => {
-        make_modrm![0xf2, 0x0f, 0x52; $src, $dst]
+    (rsqrtsd xmm($reg:expr), xmm($rm:expr)) => {
+        assemble![0xf2, 0x0f, 0x52, modrm_reg!($reg, $rm);]
     };
-    (andpd xmm($dst:expr), xmm($src:expr)) => {
-        make_modrm![0x66, 0x0f, 0x54; $src, $dst]
+    (andpd xmm($reg:expr), xmm($rm:expr)) => {
+        assemble![0x66, 0x0f, 0x54, modrm_reg!($reg, $rm);]
     };
-    (andnpd xmm($dst:expr), xmm($src:expr)) => {
-        make_modrm![0x66, 0x0f, 0x55; $src, $dst]
+    (andnpd xmm($reg:expr), xmm($rm:expr)) => {
+        assemble![0x66, 0x0f, 0x55, modrm_reg!($reg, $rm);]
     };
-    (orpd xmm($dst:expr), xmm($src:expr)) => {
-        make_modrm![0x66, 0x0f, 0x56; $src, $dst]
+    (orpd xmm($reg:expr), xmm($rm:expr)) => {
+        assemble![0x66, 0x0f, 0x56, modrm_reg!($reg, $rm);]
     };
-    (xorpd xmm($dst:expr), xmm($src:expr)) => {
-        make_modrm![0x66, 0x0f, 0x57; $src, $dst]
+    (xorpd xmm($reg:expr), xmm($rm:expr)) => {
+        assemble![0x66, 0x0f, 0x57, modrm_reg!($reg, $rm);]
     };
-    (cmpeqsd xmm($dst:expr), xmm($src:expr)) => {
-        make_modrm![0xf2, 0x0f, 0xc2; $src, $dst; 0]
+    (cmpeqsd xmm($reg:expr), xmm($rm:expr)) => {
+        assemble![0xf2, 0x0f, 0xc2, modrm_reg!($reg, $rm), 0;]
     };
-    (cmpltsd xmm($dst:expr), xmm($src:expr)) => {
-        make_modrm![0xf2, 0x0f, 0xc2; $src, $dst; 1]
+    (cmpltsd xmm($reg:expr), xmm($rm:expr)) => {
+        assemble![0xf2, 0x0f, 0xc2, modrm_reg!($reg, $rm), 1;]
     };
-    (cmplesd xmm($dst:expr), xmm($src:expr)) => {
-        make_modrm![0xf2, 0x0f, 0xc2; $src, $dst; 2]
+    (cmplesd xmm($reg:expr), xmm($rm:expr)) => {
+        assemble![0xf2, 0x0f, 0xc2, modrm_reg!($reg, $rm), 2;]
     };
-    (cmpunordsd xmm($dst:expr), xmm($src:expr)) => {
-        make_modrm![0xf2, 0x0f, 0xc2; $src, $dst; 3]
+    (cmpunordsd xmm($reg:expr), xmm($rm:expr)) => {
+        assemble![0xf2, 0x0f, 0xc2, modrm_reg!($reg, $rm), 3;]
     };
-    (cmpneqsd xmm($dst:expr), xmm($src:expr)) => {
-        make_modrm![0xf2, 0x0f, 0xc2; $src, $dst; 4]
+    (cmpneqsd xmm($reg:expr), xmm($rm:expr)) => {
+        assemble![0xf2, 0x0f, 0xc2, modrm_reg!($reg, $rm), 4;]
     };
-    (cmpnltsd xmm($dst:expr), xmm($src:expr)) => {
-        make_modrm![0xf2, 0x0f, 0xc2; $src, $dst; 5]
+    (cmpnltsd xmm($reg:expr), xmm($rm:expr)) => {
+        assemble![0xf2, 0x0f, 0xc2, modrm_reg!($reg, $rm), 5;]
     };
-    (cmpnlesd xmm($dst:expr), xmm($src:expr)) => {
-        make_modrm![0xf2, 0x0f, 0xc2; $src, $dst; 6]
+    (cmpnlesd xmm($reg:expr), xmm($rm:expr)) => {
+        assemble![0xf2, 0x0f, 0xc2, modrm_reg!($reg, $rm), 6;]
     };
-    (cmpordsd xmm($dst:expr), xmm($src:expr)) => {
-        make_modrm![0xf2, 0x0f, 0xc2; $src, $dst; 7]
+    (cmpordsd xmm($reg:expr), xmm($rm:expr)) => {
+        assemble![0xf2, 0x0f, 0xc2, modrm_reg!($reg, $rm), 7;]
     };
-    (call $src:ident) => {
+    (call $reg:ident) => {
         {
-            let src = reg!($src);
-            vec![0xff, 0xd0 | src]
+            let reg = reg!($reg);
+            assemble![0xff, 0xd0 | reg;]
         }
     };
-    (push $src:ident) => {
+    (push $reg:ident) => {
         {
-            let src = reg!($src);
-            if src < 8 {
-                vec![0x50 | src]
+            let reg = reg!($reg);
+            if reg < 8 {
+                assemble![0x50 | reg;]
             } else {
-                vec![0x41, 0x48 | src]
+                assemble![0x41, 0x48 | reg;]
             }
         }
     };
-    (pop $dst:ident) => {
+    (pop $reg:ident) => {
         {
-            let dst = reg!($dst);
-            if dst < 8 {
-                vec![0x58 | dst]
+            let reg = reg!($reg);
+            if reg < 8 {
+                assemble![0x58 | reg;]
             } else {
-                vec![0x41, 0x50 | dst]
+                assemble![0x41, 0x50 | reg;]
             }
         }
     };
-    (ret) => { vec![0xc3] };
+    (ret) => { assemble![0xc3;] };
     (add rsp, $imm:expr) => {
         {
             let imm = $imm as u32;
-            let mut v = vec![0x48, 0x81, 0xc4];
-            v.push(imm as u8);
-            v.push((imm >> 8) as u8);
-            v.push((imm >> 16) as u8);
-            v.push((imm >> 24) as u8);
-            v
+            assemble![0x48, 0x81, 0xc4; imm.to_le_bytes()]
         }
     };
     (sub rsp, $imm:expr) => {
         {
             let imm = $imm as u32;
-            let mut v = vec![0x48, 0x81, 0xec];
-            v.push(imm as u8);
-            v.push((imm >> 8) as u8);
-            v.push((imm >> 16) as u8);
-            v.push((imm >> 24) as u8);
-            v
+            assemble![0x48, 0x81, 0xec; imm.to_le_bytes()]
         }
     };
 }
@@ -271,7 +270,7 @@ macro_rules! amd {
 fn test_amd() {
     assert_eq!(vec![0x55], amd! {push rbp});
     assert_eq!(vec![0x53], amd! {push rbx});
-    assert_eq!(vec![0x48, 0x89, 0xfd], amd! {mov rbp,rdi});
+    assert_eq!(vec![0x48, 0x8b, 0xef], amd! {mov rbp,rdi});
     assert_eq!(
         vec![0xf2, 0x0f, 0x10, 0x45, 0x58],
         amd! {movsd xmm(0),qword ptr [rbp+0x58]}

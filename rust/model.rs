@@ -16,7 +16,8 @@ pub trait Lower {
 pub struct Program {
     pub code: Vec<Instruction>, // the list of instructions
     pub frame: Frame,           // memory (states, registers, constants, ...)
-    pub ft: Vec<String>,        // function table (used to generate a virtual table)
+    pub ft: Vec<String>,        // function table (the name of functions)
+    pub vt: Vec<BinaryFunc>,    // virtual table (pointer to the functions)
 }
 
 impl Program {
@@ -76,10 +77,15 @@ impl Program {
             code: Vec::new(),
             frame,
             ft: Vec::new(),
+            vt: Vec::new(),
         };
 
         ml.lower(&mut prog)?;
         prog.code.push(Instruction::Nop);
+
+        for f in prog.ft.iter() {
+            prog.vt.push(Code::from_str(f)?);
+        }
 
         Ok(prog)
     }
@@ -178,20 +184,19 @@ impl Program {
     pub fn reg(&self, name: &str) -> Result<Word> {
         match self.frame.find(name) {
             Some(w) => Ok(w),
-            None => return Err(anyhow!("cannot find reg {} by name", name)),
+            None => Err(anyhow!("cannot find reg {} by name", name)),
         }
     }
 
     pub fn reg_diff(&self, name: &str) -> Result<Word> {
         match self.frame.find_diff(name) {
             Some(w) => Ok(w),
-            None => return Err(anyhow!("cannot find diff {} by name", name)),
+            None => Err(anyhow!("cannot find diff {} by name", name)),
         }
     }
 
     pub fn virtual_table(&self) -> Vec<BinaryFunc> {
-        let vt: Vec<BinaryFunc> = self.ft.iter().map(|s| Code::from_str(s)).collect();
-        vt
+        self.vt.clone()
     }
 }
 
@@ -390,7 +395,7 @@ impl Lower for Equation {
     }
 }
 
-/// Loads a model from a JSON file 
+/// Loads a model from a JSON file
 /// Historically from a CellML source; hence the name.
 #[derive(Debug, Clone, Deserialize)]
 pub struct CellModel {

@@ -1,4 +1,5 @@
 use crate::register::Word;
+use anyhow::{anyhow, Result};
 
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 pub struct Proc(pub usize);
@@ -69,8 +70,8 @@ pub type BinaryFunc = extern "C" fn(f64, f64) -> f64;
 pub struct Code {}
 
 impl Code {
-    pub fn from_str(op: &str) -> BinaryFunc {
-        match op {
+    pub fn from_str(op: &str) -> Result<BinaryFunc> {
+        let f = match op {
             "nop" => Code::nop,
             "mov" => Code::mov,
             "plus" => Code::plus,
@@ -109,10 +110,11 @@ impl Code {
             "cube" => Code::cube,
             "inverse" => Code::inverse,
             _ => {
-                let msg = format!("op_code {} not found", op);
-                panic!("{}", msg)
+                return Err(anyhow!("op_code {} not found", op));
             }
-        }
+        };
+
+        Ok(f)
     }
 
     pub extern "C" fn nop(_x: f64, _y: f64) -> f64 {
