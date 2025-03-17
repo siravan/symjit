@@ -72,7 +72,7 @@ impl Runnable {
     }
 
     #[inline]
-    fn exec_single(&mut self, t: f64) {
+    pub fn exec(&mut self, t: f64) {
         {
             let mem = self.compiled.mem_mut();
             mem[self.first_state - 1] = t;
@@ -80,7 +80,7 @@ impl Runnable {
         self.compiled.exec();
     }
 
-    fn exec_parallel(&mut self, buf: &mut [f64], n: usize) {
+    pub fn exec_vectorized(&mut self, buf: &mut [f64], n: usize) {
         let h = usize::max(self.count_states, self.count_obs);
         assert!(buf.len() == n * h);
 
@@ -103,11 +103,9 @@ impl Runnable {
             }
         }
     }
-}
-
-impl Callable for Runnable {
+    
     // call interface to Julia ODESolver
-    fn call(&mut self, du: &mut [f64], u: &[f64], p: &[f64], t: f64) {
+    pub fn call(&mut self, du: &mut [f64], u: &[f64], p: &[f64], t: f64) {
         {
             let mem = self.compiled.mem_mut();
             mem[self.first_state - 1] = t;
@@ -125,15 +123,8 @@ impl Callable for Runnable {
         }
     }
 
-    fn exec(&mut self, t: f64) {
-        self.exec_single(t);
-    }
-
-    fn exec_vectorized(&mut self, buf: &mut [f64], n: usize) {
-        self.exec_parallel(buf, n);
-    }
-
-    fn dump(&self, name: &str) {
+    pub fn dump(&self, name: &str) {
         self.compiled.dump(name);
     }
 }
+
