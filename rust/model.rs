@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Result};
 
 use serde::Deserialize;
-use std::error::Error;
 
 use crate::code::*;
 use crate::register::*;
@@ -17,7 +16,7 @@ pub struct Program {
     pub code: Vec<Instruction>, // the list of instructions
     pub frame: Frame,           // memory (states, registers, constants, ...)
     pub ft: Vec<String>,        // function table (the name of functions)
-    pub vt: Vec<BinaryFunc>,    // virtual table (pointer to the functions)
+    //pub vt: Vec<BinaryFunc<f64>>,    // virtual table (pointer to the functions)
 }
 
 impl Program {
@@ -76,16 +75,13 @@ impl Program {
         let mut prog = Program {
             code: Vec::new(),
             frame,
-            ft: Vec::new(),
-            vt: Vec::new(),
+            ft: Vec::new(),            
         };
 
         ml.lower(&mut prog)?;
         prog.code.push(Instruction::Nop);
-
-        for f in prog.ft.iter() {
-            prog.vt.push(Code::from_str(f)?);
-        }
+        
+        let _ = VirtualTable::<f64>::confirm(&prog.ft);
 
         Ok(prog)
     }
@@ -194,10 +190,11 @@ impl Program {
             None => Err(anyhow!("cannot find diff {} by name", name)),
         }
     }
-
-    pub fn virtual_table(&self) -> Vec<BinaryFunc> {
+/*
+    pub fn virtual_table(&self) -> Vec<BinaryFunc<f64>> {
         self.vt.clone()
     }
+*/
 }
 
 /// A defined (state or param) variable

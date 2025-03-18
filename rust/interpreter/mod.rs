@@ -4,17 +4,17 @@ use super::register::Word;
 use super::utils::*;
 
 #[derive(Debug)]
-pub enum Fast {
+pub enum Fast<T> {
     Unary {
         x: u32,
         dst: u32,
-        f: BinaryFunc,
+        f: BinaryFunc<T>,
     },
     Binary {
         x: u32,
         y: u32,
         dst: u32,
-        f: BinaryFunc,
+        f: BinaryFunc<T>,
     },
     IfElse {
         x1: u32,
@@ -33,10 +33,11 @@ impl Interpreter {
     }
 }
 
-impl Compiler<ByteCode> for Interpreter {
-    fn compile(&mut self, prog: &Program) -> ByteCode {
-        let vt = prog.virtual_table();
-        let mut code: Vec<Fast> = Vec::new();
+impl Compiler<ByteCode<f64>> for Interpreter {
+    fn compile(&mut self, prog: &Program) -> ByteCode<f64> {
+
+        let vt = VirtualTable::<f64>::from_names(&prog.ft);
+        let mut code: Vec<Fast<f64>> = Vec::new();
         let mut mem = prog.frame.mem();
         let m = mem.len();
         let h = |x: &Word| -> u32 { (if x.is_temp() { m + x.0 } else { x.0 }) as u32 };
@@ -76,18 +77,18 @@ impl Compiler<ByteCode> for Interpreter {
     }
 }
 
-pub struct ByteCode {
-    code: Vec<Fast>,
-    _mem: Vec<f64>,
+pub struct ByteCode<T> {
+    code: Vec<Fast<T>>,
+    _mem: Vec<T>,
 }
 
-impl ByteCode {
-    fn new(code: Vec<Fast>, _mem: Vec<f64>) -> ByteCode {
+impl<T> ByteCode<T> {
+    fn new(code: Vec<Fast<T>>, _mem: Vec<T>) -> ByteCode<T> {
         ByteCode { code, _mem }
     }
 }
 
-impl Compiled for ByteCode {
+impl Compiled<f64> for ByteCode<f64> {
     fn exec(&mut self) {
         for c in self.code.iter() {
             match c {

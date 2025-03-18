@@ -1,4 +1,5 @@
-use anyhow::Result;
+#![feature(portable_simd)]
+
 use std::ffi::{c_char, CStr, CString};
 
 mod analyzer;
@@ -18,7 +19,6 @@ mod wasm;
 
 use model::{CellModel, Program};
 use runnable::{CompilerType, Runnable};
-use utils::*;
 
 #[derive(Debug, Clone, Copy)]
 pub enum CompilerStatus {

@@ -1,5 +1,6 @@
 use crate::model::Program;
 use crate::utils::*;
+use std::simd::f64x4;
 
 use crate::amd::AmdCompiler;
 use crate::arm::ArmCompiler;
@@ -19,7 +20,8 @@ pub enum CompilerType {
 
 pub struct Runnable {
     // pub prog: Program,
-    pub compiled: Box<dyn Compiled>,
+    pub compiled: Box<dyn Compiled<f64>>,
+    pub compiled_simd: Option<Box<dyn Compiled<f64x4>>>,
     pub first_state: usize,
     pub first_param: usize,
     pub first_obs: usize,
@@ -32,7 +34,7 @@ pub struct Runnable {
 
 impl Runnable {
     pub fn new(prog: Program, ty: CompilerType) -> Runnable {
-        let compiled: Box<dyn Compiled> = match ty {
+        let compiled: Box<dyn Compiled<f64>> = match ty {
             CompilerType::ByteCode => Box::new(Interpreter::new().compile(&prog)),
             CompilerType::Amd => Box::new(AmdCompiler::new().compile(&prog)),
             CompilerType::Arm => Box::new(ArmCompiler::new().compile(&prog)),
@@ -60,6 +62,7 @@ impl Runnable {
         Runnable {
             // prog,
             compiled,
+            compiled_simd: None,
             first_state,
             first_param,
             first_obs,

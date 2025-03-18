@@ -15,6 +15,7 @@ libc = "0.2"
 windows-sys = { version = "0.59", features = ["Win32_System_Memory"] }
 region = "3.0.2"
 wasmtime-jit-icache-coherence = "*"
+num-traits = "0.2"
 
 [features]
 wasm = ["dep:wasmtime"]

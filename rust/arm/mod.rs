@@ -208,8 +208,8 @@ impl ArmCompiler {
     }
 }
 
-impl Compiler<MachineCode> for ArmCompiler {
-    fn compile(&mut self, prog: &Program) -> MachineCode {
+impl Compiler<MachineCode<f64>> for ArmCompiler {
+    fn compile(&mut self, prog: &Program) -> MachineCode<f64> {
         let analyzer = Analyzer::new(prog);
         let saveable = analyzer.find_saveable();
 
@@ -225,7 +225,7 @@ impl Compiler<MachineCode> for ArmCompiler {
         MachineCode::new(
             "aarch64",
             self.machine_code.clone(),
-            prog.virtual_table(),
+            VirtualTable::<f64>::from_names(&prog.ft),
             prog.frame.mem(),
         )
     }

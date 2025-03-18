@@ -244,8 +244,8 @@ impl AmdCompiler {
     }
 }
 
-impl Compiler<MachineCode> for AmdCompiler {
-    fn compile(&mut self, prog: &Program) -> MachineCode {
+impl Compiler<MachineCode<f64>> for AmdCompiler {
+    fn compile(&mut self, prog: &Program) -> MachineCode<f64> {
         let analyzer = Analyzer::new(prog);
         let saveable = analyzer.find_saveable();
 
@@ -266,7 +266,7 @@ impl Compiler<MachineCode> for AmdCompiler {
         MachineCode::new(
             "x86_64",
             self.machine_code.clone(),
-            prog.virtual_table(),
+            VirtualTable::<f64>::from_names(&prog.ft),
             prog.frame.mem(),
         )
     }

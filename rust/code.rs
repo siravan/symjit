@@ -1,3 +1,4 @@
+use num_traits::Float;
 use crate::register::Word;
 use anyhow::{anyhow, Result};
 
@@ -65,50 +66,72 @@ impl std::fmt::Debug for Instruction {
     }
 }
 
-pub type BinaryFunc = extern "C" fn(f64, f64) -> f64;
+pub type BinaryFunc<T> = extern "C" fn(T, T) -> T;
 
-pub struct Code {}
+pub struct VirtualTable<T>(T);
 
-impl Code {
-    pub fn from_str(op: &str) -> Result<BinaryFunc> {
+impl<T: Float> VirtualTable<T> {
+    /// Creates a VirtualTable (a Vec of references to functions)
+    /// from a function table (a Vec of function names)
+    pub fn from_names(ft: &[String]) -> Vec<BinaryFunc<T>> {
+        let mut vt: Vec<BinaryFunc<T>> = Vec::new();
+        
+        for f in ft.iter() {
+            vt.push(Self::from_str(f).unwrap());
+        }
+        
+        vt
+    }    
+
+    /// Confirms that all the names in ft are valid,
+    /// i.e., corresponds to actual functions    
+    pub fn confirm(ft: &[String]) -> Result<()> {
+        for f in ft.iter() {
+            let _ = Self::from_str(f)?;
+        }       
+        Ok(())        
+    }    
+
+    // Finds the function reference for op
+    fn from_str(op: &str) -> Result<BinaryFunc<T>> {
         let f = match op {
-            "nop" => Code::nop,
-            "mov" => Code::mov,
-            "plus" => Code::plus,
-            "minus" => Code::minus,
-            "neg" => Code::neg,
-            "times" => Code::times,
-            "divide" => Code::divide,
-            "rem" => Code::rem,
-            "power" => Code::power,
-            "gt" => Code::gt,
-            "geq" => Code::geq,
-            "lt" => Code::lt,
-            "leq" => Code::leq,
-            "eq" => Code::eq,
-            "neq" => Code::neq,
-            "and" => Code::and,
-            "or" => Code::or,
-            "xor" => Code::xor,
-            "if_pos" => Code::if_pos,
-            "if_neg" => Code::if_neg,
-            "sin" => Code::sin,
-            "cos" => Code::cos,
-            "tan" => Code::tan,
-            "csc" => Code::csc,
-            "sec" => Code::sec,
-            "cot" => Code::cot,
-            "arcsin" => Code::asin,
-            "arccos" => Code::acos,
-            "arctan" => Code::atan,
-            "exp" => Code::exp,
-            "ln" => Code::ln,
-            "log" => Code::log,
-            "root" => Code::root,
-            "ifelse" => Code::nop,
-            "square" => Code::square,
-            "cube" => Code::cube,
-            "inverse" => Code::inverse,
+            "nop" => Self::nop,
+            "mov" => Self::mov,
+            "plus" => Self::plus,
+            "minus" => Self::minus,
+            "neg" => Self::neg,
+            "times" => Self::times,
+            "divide" => Self::divide,
+            "rem" => Self::rem,
+            "power" => Self::power,
+            "gt" => Self::gt,
+            "geq" => Self::geq,
+            "lt" => Self::lt,
+            "leq" => Self::leq,
+            "eq" => Self::eq,
+            "neq" => Self::neq,
+            "and" => Self::and,
+            "or" => Self::or,
+            "xor" => Self::xor,
+            "if_pos" => Self::if_pos,
+            "if_neg" => Self::if_neg,
+            "sin" => Self::sin,
+            "cos" => Self::cos,
+            "tan" => Self::tan,
+            "csc" => Self::csc,
+            "sec" => Self::sec,
+            "cot" => Self::cot,
+            "arcsin" => Self::asin,
+            "arccos" => Self::acos,
+            "arctan" => Self::atan,
+            "exp" => Self::exp,
+            "ln" => Self::ln,
+            "log" => Self::log,
+            "root" => Self::root,
+            "ifelse" => Self::nop,
+            "square" => Self::square,
+            "cube" => Self::cube,
+            "inverse" => Self::inverse,
             _ => {
                 return Err(anyhow!("op_code {} not found", op));
             }
@@ -117,191 +140,191 @@ impl Code {
         Ok(f)
     }
 
-    pub extern "C" fn nop(_x: f64, _y: f64) -> f64 {
-        0.0
+    pub extern "C" fn nop(_x: T, _y: T) -> T {
+        T::zero()
     }
 
-    pub extern "C" fn mov(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn mov(x: T, _y: T) -> T {
         x
     }
 
-    pub extern "C" fn plus(x: f64, y: f64) -> f64 {
+    pub extern "C" fn plus(x: T, y: T) -> T {
         x + y
     }
 
-    pub extern "C" fn minus(x: f64, y: f64) -> f64 {
+    pub extern "C" fn minus(x: T, y: T) -> T {
         x - y
     }
 
-    pub extern "C" fn neg(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn neg(x: T, _y: T) -> T {
         -x
     }
 
-    pub extern "C" fn times(x: f64, y: f64) -> f64 {
+    pub extern "C" fn times(x: T, y: T) -> T {
         x * y
     }
 
-    pub extern "C" fn divide(x: f64, y: f64) -> f64 {
+    pub extern "C" fn divide(x: T, y: T) -> T {
         x / y
     }
 
-    pub extern "C" fn rem(x: f64, y: f64) -> f64 {
+    pub extern "C" fn rem(x: T, y: T) -> T {
         x % y
     }
 
-    pub extern "C" fn power(x: f64, y: f64) -> f64 {
+    pub extern "C" fn power(x: T, y: T) -> T {
         x.powf(y)
     }
 
-    pub extern "C" fn gt(x: f64, y: f64) -> f64 {
+    pub extern "C" fn gt(x: T, y: T) -> T {
         if x > y {
-            1.0
+            T::one()
         } else {
-            -1.0
+            -T::one()
         }
     }
 
-    pub extern "C" fn geq(x: f64, y: f64) -> f64 {
+    pub extern "C" fn geq(x: T, y: T) -> T {
         if x >= y {
-            1.0
+            T::one()
         } else {
-            -1.0
+            -T::one()
         }
     }
 
-    pub extern "C" fn lt(x: f64, y: f64) -> f64 {
+    pub extern "C" fn lt(x: T, y: T) -> T {
         if x < y {
-            1.0
+            T::one()
         } else {
-            -1.0
+            -T::one()
         }
     }
 
-    pub extern "C" fn leq(x: f64, y: f64) -> f64 {
+    pub extern "C" fn leq(x: T, y: T) -> T {
         if x <= y {
-            1.0
+            T::one()
         } else {
-            -1.0
+            -T::one()
         }
     }
 
-    pub extern "C" fn eq(x: f64, y: f64) -> f64 {
+    pub extern "C" fn eq(x: T, y: T) -> T {
         if x == y {
-            1.0
+            T::one()
         } else {
-            -1.0
+            -T::one()
         }
     }
 
-    pub extern "C" fn neq(x: f64, y: f64) -> f64 {
+    pub extern "C" fn neq(x: T, y: T) -> T {
         if x != y {
-            1.0
+            T::one()
         } else {
-            -1.0
+            -T::one()
         }
     }
 
-    pub extern "C" fn and(x: f64, y: f64) -> f64 {
-        if x > 0.0 && y > 0.0 {
-            1.0
+    pub extern "C" fn and(x: T, y: T) -> T {
+        if x > T::zero() && y > T::zero() {
+            T::one()
         } else {
-            -1.0
+            -T::one()
         }
     }
 
-    pub extern "C" fn or(x: f64, y: f64) -> f64 {
-        if x > 0.0 || y > 0.0 {
-            1.0
+    pub extern "C" fn or(x: T, y: T) -> T {
+        if x > T::zero() || y > T::zero() {
+            T::one()
         } else {
-            -1.0
+            -T::one()
         }
     }
 
-    pub extern "C" fn xor(x: f64, y: f64) -> f64 {
-        if x * y < 0.0 {
-            1.0
+    pub extern "C" fn xor(x: T, y: T) -> T {
+        if x * y < T::zero() {
+            T::one()
         } else {
-            -1.0
+            -T::one()
         }
     }
 
-    pub extern "C" fn if_pos(x: f64, y: f64) -> f64 {
-        if x > 0.0 {
+    pub extern "C" fn if_pos(x: T, y: T) -> T {
+        if x > T::zero() {
             y
         } else {
-            0.0
+            T::zero()
         }
     }
 
-    pub extern "C" fn if_neg(x: f64, y: f64) -> f64 {
-        if x < 0.0 {
+    pub extern "C" fn if_neg(x: T, y: T) -> T {
+        if x < T::zero() {
             y
         } else {
-            0.0
+            T::zero()
         }
     }
 
-    pub extern "C" fn sin(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn sin(x: T, _y: T) -> T {
         x.sin()
     }
 
-    pub extern "C" fn cos(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn cos(x: T, _y: T) -> T {
         x.cos()
     }
 
-    pub extern "C" fn tan(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn tan(x: T, _y: T) -> T {
         x.tan()
     }
 
-    pub extern "C" fn csc(x: f64, _y: f64) -> f64 {
-        1.0 / x.sin()
+    pub extern "C" fn csc(x: T, _y: T) -> T {
+        T::one() / x.sin()
     }
 
-    pub extern "C" fn sec(x: f64, _y: f64) -> f64 {
-        1.0 / x.cos()
+    pub extern "C" fn sec(x: T, _y: T) -> T {
+        T::one() / x.cos()
     }
 
-    pub extern "C" fn cot(x: f64, _y: f64) -> f64 {
-        1.0 / x.tan()
+    pub extern "C" fn cot(x: T, _y: T) -> T {
+        T::one() / x.tan()
     }
 
-    pub extern "C" fn asin(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn asin(x: T, _y: T) -> T {
         x.asin()
     }
 
-    pub extern "C" fn acos(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn acos(x: T, _y: T) -> T {
         x.acos()
     }
 
-    pub extern "C" fn atan(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn atan(x: T, _y: T) -> T {
         x.atan()
     }
 
-    pub extern "C" fn exp(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn exp(x: T, _y: T) -> T {
         x.exp()
     }
 
-    pub extern "C" fn ln(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn ln(x: T, _y: T) -> T {
         x.ln()
     }
 
-    pub extern "C" fn log(x: f64, _y: f64) -> f64 {
-        x.log(10.0)
+    pub extern "C" fn log(x: T, _y: T) -> T {
+        x.log10()
     }
 
-    pub extern "C" fn root(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn root(x: T, _y: T) -> T {
         x.sqrt()
     }
 
-    pub extern "C" fn square(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn square(x: T, _y: T) -> T {
         x * x
     }
 
-    pub extern "C" fn cube(x: f64, _y: f64) -> f64 {
+    pub extern "C" fn cube(x: T, _y: T) -> T {
         x * x * x
     }
 
-    pub extern "C" fn inverse(x: f64, _y: f64) -> f64 {
-        1.0 / x
+    pub extern "C" fn inverse(x: T, _y: T) -> T {
+        T::one() / x
     }
 }
