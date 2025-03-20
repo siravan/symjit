@@ -91,24 +91,24 @@ macro_rules! modrm_mem {
     }};
 }
 
-/// This is the two-byte VEX prefix (VEX2) for packed-double (pd) 
+/// This is the two-byte VEX prefix (VEX2) for packed-double (pd)
 /// and 256-bit ymm registers
 macro_rules! vex2pd {
-    ($reg, $vreg) => {{
-        let R = ($reg & 8) << 4;
+    ($reg:expr, $vreg:expr) => {{
+        let r = ($reg & 8) << 4;
         let vvvv = $vreg << 3;
-        vec![0xc5, (R | vvvv | 6) ^ 0xf8]
+        vec![0xc5, (r | vvvv | 5) ^ 0xf8]
     }};
 }
 
-/// This is the three-byte VEX prefix (VEX3) for packed-double (pd) 
+/// This is the three-byte VEX prefix (VEX3) for packed-double (pd)
 /// and 256-bit ymm registers
 macro_rules! vex3pd {
-    ($reg, $vreg, $rm, $encoding) => {{
-        let R = ($reg & 8) << 4;
-        let B = ($rm & 8) << 2;
+    ($reg:expr, $vreg:expr, $rm:expr, $encoding:expr) => {{
+        let r = ($reg & 8) << 4;
+        let b = ($rm & 8) << 2;
         let vvvv = $vreg << 3;
-        vec![0xc4, (R | B | $encoding) ^ 0xe0, (vvvv | 6) ^ 0x78]
+        vec![0xc4, (r | b | $encoding) ^ 0xe0, (vvvv | 5) ^ 0x78]
     }};
 }
 
@@ -126,7 +126,8 @@ macro_rules! assemble {
         }
     };
     (; $y:expr; $($z:expr),+ ;) => {
-        {            
+        {
+            let mut y = $y;
             $(
                 y.push($z);
             )*
@@ -135,6 +136,7 @@ macro_rules! assemble {
     };
     (; $y:expr; $($z:expr),+ ; $w:expr) => {
         {
+            let mut y = $y;
             $(
                 y.push($z);
             )*
@@ -146,91 +148,102 @@ macro_rules! assemble {
 
 macro_rules! amd {
     // avx
-    (vmovapd ymm($reg:expr), ymm($rm:expr)) => {
+    (vmovapd ymm($reg:expr), ymm($rm:expr)) => {{
+            let reg = $reg;
+            assemble![; vex2pd!(reg, 0); 0x28, modrm_reg!(reg, $rm);]
+    }};
+    (vmovapd ymm($reg:expr), [$rm:ident + $offset:expr]) => {{
         let reg = $reg;
-        assemble![; vex2pd(reg, 0); 0x28, modrm_reg!(reg, $rm);]
-    };
-    (vmovapd ymm($reg:expr), [$rm:ident + $offset:expr]) => {
+        assemble![; vex2pd!(reg, 0); 0x28; modrm_mem!(reg, reg!($rm), $offset)]
+    }};
+    (vmovapd [$rm:ident + $offset:expr], ymm($reg:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd(reg, 0); 0x28; modrm_mem!(reg, reg!($rm), $offset)]
-    };
-    (vmovapd [$rm:ident + $offset:expr], ymm($reg:expr)) => {
+        assemble![; vex2pd!(reg, 0); 0x29; modrm_mem!(reg, reg!($rm), $offset)]
+    }};
+    (vmovupd ymm($reg:expr), [$rm:ident + $offset:expr]) => {{
         let reg = $reg;
-        assemble![; vex2pd(reg, 0); 0x29; modrm_mem!(reg, reg!($rm), $offset)]
-    };
-    (vbroadcastsd ymm($reg:expr), qword ptr [$rm:ident + $offset:expr]) => {
+        assemble![; vex2pd!(reg, 0); 0x10; modrm_mem!(reg, reg!($rm), $offset)]
+    }};
+    (vmovupd [$rm:ident + $offset:expr], ymm($reg:expr)) => {{
+        let reg = $reg;
+        assemble![; vex2pd!(reg, 0); 0x11; modrm_mem!(reg, reg!($rm), $offset)]
+    }};
+    (vbroadcastsd ymm($reg:expr), qword ptr [$rm:ident + $offset:expr]) => {{
         let reg = $reg;
         let rm = reg!($rm);
-        assemble![; vex3pd(reg, 0, rm, 2); 0x19; modrm_mem!(reg, rm, $offset)]
-    };
-    (vaddpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {
+        assemble![; vex3pd!(reg, 0, rm, 2); 0x19; modrm_mem!(reg, rm, $offset)]
+    }};
+    (vaddpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd(reg, $vreg); 0x58, modrm_reg!($reg, $rm);]
-    };
-    (vsubpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {
+        assemble![; vex2pd!(reg, $vreg); 0x58, modrm_reg!($reg, $rm);]
+    }};
+    (vsubpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd(reg, $vreg); 0x5c, modrm_reg!($reg, $rm);]
-    };
-    (vmulpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {
+        assemble![; vex2pd!(reg, $vreg); 0x5c, modrm_reg!($reg, $rm);]
+    }};
+    (vmulpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd(reg, $vreg); 0x59, modrm_reg!($reg, $rm);]
-    };
-    (vdivpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {
+        assemble![; vex2pd!(reg, $vreg); 0x59, modrm_reg!($reg, $rm);]
+    }};
+    (vdivpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd(reg, $vreg); 0x5e, modrm_reg!($reg, $rm);]
-    };
-    (vsqrtpd ymm($reg:expr), ymm($rm:expr)) => {
+        assemble![; vex2pd!(reg, $vreg); 0x5e, modrm_reg!($reg, $rm);]
+    }};
+    (vsqrtpd ymm($reg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd(reg, 0); 0x51, modrm_reg!($reg, $rm);]
-    };
-    (vandpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {
+        assemble![; vex2pd!(reg, 0); 0x51, modrm_reg!($reg, $rm);]
+    }};
+    (vandpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd(reg, $vreg); 0x54, modrm_reg!($reg, $rm);]
-    };
-    (vandnpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {
+        assemble![; vex2pd!(reg, $vreg); 0x54, modrm_reg!($reg, $rm);]
+    }};
+    (vandnpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd(reg, $vreg); 0x55, modrm_reg!($reg, $rm);]
-    };
-    (vorpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {
+        assemble![; vex2pd!(reg, $vreg); 0x55, modrm_reg!($reg, $rm);]
+    }};
+    (vorpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd(reg, $vreg); 0x56, modrm_reg!($reg, $rm);]
-    };
-    (vxorpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {
+        assemble![; vex2pd!(reg, $vreg); 0x56, modrm_reg!($reg, $rm);]
+    }};
+    (vxorpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd(reg, $vreg); 0x57, modrm_reg!($reg, $rm);]
-    };
-    (vcmpeqpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {
+        assemble![; vex2pd!(reg, $vreg); 0x57, modrm_reg!($reg, $rm);]
+    }};
+    (vcmpeqpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 0;]
-    };
-    (vcmpltpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {
+        assemble![; vex2pd!(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 0;]
+    }};
+    (vcmpltpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 1;]
-    };
-    (vcmplepd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {
+        assemble![; vex2pd!(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 1;]
+    }};
+    (vcmplepd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 2;]
-    };
-    (vcmpunordpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {
+        assemble![; vex2pd!(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 2;]
+    }};
+    (vcmpunordpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 3;]
-    };
-    (vcmpneqpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {
+        assemble![; vex2pd!(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 3;]
+    }};
+    (vcmpneqpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 4;]
-    };
-    (vcmpnltpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {
+        assemble![; vex2pd!(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 4;]
+    }};
+    (vcmpnltpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 5;]
-    };
-    (vcmpnlepd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {
+        assemble![; vex2pd!(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 5;]
+    }};
+    (vcmpnlepd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 6;]
-    };
-    (vcmpordpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {
+        assemble![; vex2pd!(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 6;]
+    }};
+    (vcmpordpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 7;]
-    };
+        assemble![; vex2pd!(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 7;]
+    }};
+    (vzeroupper) => {{
+        assemble![0xc5, 0xf8, 0x77;]
+    }};
     // general registers
     (mov $reg:ident, $rm:ident) => {
         {
@@ -300,49 +313,75 @@ fn test_avx() {
     assert_eq!(vec![0x55], amd! {push rbp});
     assert_eq!(vec![0x53], amd! {push rbx});
     assert_eq!(vec![0x48, 0x8b, 0xef], amd! {mov rbp,rdi});
+    assert_eq!(vec![0xc5, 0xfd, 0x28, 0xcd], amd! {vmovapd ymm(1), ymm(5)});
     assert_eq!(
-        vec![0xf2, 0x0f, 0x10, 0x45, 0x58],
-        amd! {movsd ymm(0),qword ptr [rbp+0x58]}
+        vec![0xc5, 0xfd, 0x28, 0x8d, 0x34, 0x12, 0x00, 0x00],
+        amd! {vmovapd ymm(1), [rbp+0x1234]}
     );
     assert_eq!(
-        vec![0xf2, 0x0f, 0x11, 0x85, 0xf8, 0x00, 0x00, 0x00],
-        amd! {movsd qword ptr [rbp+0xf8],ymm(0)}
+        vec![0xc5, 0xfd, 0x11, 0x85, 0x34, 0x12, 0x00, 0x00],
+        amd! {vmovupd [rbp+0x1234], ymm(0)}
     );
-    assert_eq!(vec![0xf2, 0x0f, 0x59, 0xc1], amd! {mulsd ymm(0),ymm(1)});
-    assert_eq!(vec![0xf2, 0x0f, 0x5e, 0xc1], amd! {divsd ymm(0),ymm(1)});
+
+    assert_eq!(
+        vec![0xc5, 0xfd, 0x59, 0xd1],
+        amd! {vmulpd ymm(2), ymm(0),ymm(1)}
+    );
+    assert_eq!(
+        vec![0xc5, 0x7d, 0x5e, 0xe1],
+        amd! {vdivpd ymm(12), ymm(0), ymm(1)}
+    );
+
     assert_eq!(
         vec![0x48, 0x8b, 0x43, 0x10],
-        amd! {mov rax,qword ptr [rbx+0x10]}
+        amd! {mov rax, qword ptr [rbx+0x10]}
     );
     assert_eq!(
         vec![0x48, 0x8b, 0x9b, 0x34, 0x12, 0x00, 0x00],
-        amd! {mov rbx,qword ptr [rbx+0x1234]}
+        amd! {mov rbx, qword ptr [rbx+0x1234]}
     );
     assert_eq!(vec![0xff, 0xd0], amd! {call rax});
-    assert_eq!(vec![0x66, 0x0f, 0x57, 0xc1], amd! {xorpd ymm(0),ymm(1)});
+
     assert_eq!(
-        vec![0xf2, 0x0f, 0xc2, 0xc1, 0x05],
-        amd! {cmpnltsd ymm(0),ymm(1)}
+        vec![0xc5, 0xfd, 0x57, 0xe1],
+        amd! {vxorpd ymm(4),ymm(0),ymm(1)}
     );
-    assert_eq!(vec![0x66, 0x0f, 0x55, 0xd9], amd! {andnpd ymm(3),ymm(1)});
-    assert_eq!(vec![0x66, 0x0f, 0x54, 0xe2], amd! {andpd ymm(4),ymm(2)});
     assert_eq!(
-        vec![0xf2, 0x0f, 0x10, 0x4d, 0x18],
-        amd! {movsd  ymm(1),qword ptr [rbp+0x18]}
+        vec![0xc5, 0x7d, 0xc2, 0xf9, 0x05],
+        amd! {vcmpnltpd ymm(15),ymm(0),ymm(1)}
     );
-    assert_eq!(vec![0x66, 0x0f, 0x56, 0xe5], amd! {orpd  ymm(4),ymm(5)});
-    assert_eq!(vec![0x66, 0x0f, 0x57, 0xc1], amd! {xorpd ymm(0),ymm(1)});
-    assert_eq!(vec![0xf2, 0x0f, 0x10, 0xcc], amd! {movsd ymm(1),ymm(4)});
-    assert_eq!(vec![0xf2, 0x0f, 0x58, 0xc1], amd! {addsd ymm(0),ymm(1)});
-    assert_eq!(vec![0xf2, 0x0f, 0x10, 0xcd], amd! {movsd ymm(1),ymm(5)});
-    assert_eq!(vec![0x66, 0x48, 0x0f, 0x7e, 0xde], amd! {movq rsi,ymm(3)});
-    assert_eq!(vec![0x66, 0x48, 0x0f, 0x6e, 0xe9], amd! {movq ymm(5),rcx});
+    assert_eq!(
+        vec![0xc5, 0x95, 0x55, 0xc9],
+        amd! {vandnpd ymm(1),ymm(13),ymm(1)}
+    );
+    assert_eq!(
+        vec![0xc5, 0x5d, 0x54, 0xca],
+        amd! {vandpd ymm(9),ymm(4),ymm(2)}
+    );
+
+    assert_eq!(
+        vec![0xc5, 0xdd, 0x56, 0xfd],
+        amd! {vorpd  ymm(7),ymm(4),ymm(5)}
+    );
+    assert_eq!(
+        vec![0xc5, 0xfd, 0x57, 0xf9],
+        amd! {vxorpd ymm(7),ymm(0),ymm(1)}
+    );
+    assert_eq!(vec![0xc5, 0xfd, 0x28, 0xf9], amd! {vmovapd ymm(7),ymm(1)});
+    assert_eq!(
+        vec![0xc5, 0xfd, 0x58, 0xfd],
+        amd! {vaddpd ymm(7),ymm(0),ymm(5)}
+    );
+    assert_eq!(vec![0xc5, 0x7d, 0x51, 0xf9], amd! {vsqrtpd ymm(15),ymm(1)});
+    assert_eq!(vec![0xc5, 0xf8, 0x77], amd! {vzeroupper});
+
     assert_eq!(vec![0x5d], amd! {pop rbp});
     assert_eq!(vec![0xc3], amd! {ret});
     assert_eq!(
         vec![0x48, 0x81, 0xc4, 0x34, 0x12, 0x00, 0x00],
         amd! {add rsp,0x1234}
     );
+
     assert_eq!(
         vec![0x48, 0x81, 0xec, 0x21, 0x43, 0x00, 0x00],
         amd! {sub rsp,0x4321}

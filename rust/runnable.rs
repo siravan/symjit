@@ -1,6 +1,6 @@
 use crate::model::Program;
 use crate::utils::*;
-use std::simd::f64x4;
+//use std::simd::f64x4;
 
 use crate::amd::AmdCompiler;
 use crate::arm::ArmCompiler;
@@ -46,7 +46,7 @@ impl Runnable {
             #[cfg(target_arch = "aarch64")]
             CompilerType::Native => Box::new(ArmCompiler::new().compile(&prog)),
             #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
-            CompilerType::ByteCode => Box::new(Interpreter::new().compile(&prog)),
+            CompilerType::Native => Box::new(Interpreter::new().compile(&prog)),
         };
 
         let first_state = prog.frame.first_state().unwrap();
@@ -84,6 +84,12 @@ impl Runnable {
     }
 
     pub fn exec_vectorized(&mut self, buf: &mut [f64], n: usize) {
+        if self.compiled_simd.is_none() {
+            self.exec_vectorized_scalar(buf, n);
+        }
+    }
+
+    pub fn exec_vectorized_scalar(&mut self, buf: &mut [f64], n: usize) {
         let h = usize::max(self.count_states, self.count_obs);
         assert!(buf.len() == n * h);
 
@@ -106,7 +112,7 @@ impl Runnable {
             }
         }
     }
-    
+
     // call interface to Julia ODESolver
     pub fn call(&mut self, du: &mut [f64], u: &[f64], p: &[f64], t: f64) {
         {
@@ -130,4 +136,3 @@ impl Runnable {
         self.compiled.dump(name);
     }
 }
-

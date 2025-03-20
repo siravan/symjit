@@ -1,6 +1,8 @@
 use serde::Serialize;
 use std::collections::HashMap;
 
+use crate::utils::f64x4;
+
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 pub struct Word(pub usize, pub usize); // index, version
 
@@ -182,6 +184,13 @@ impl Frame {
             .iter()
             .map(|x| x.value().unwrap_or(0.0))
             .collect::<Vec<f64>>()
+    }
+
+    pub fn mem_simd(&self) -> Vec<f64x4> {
+        self.mem()
+            .iter()
+            .map(|x| f64x4::splat(*x))
+            .collect::<Vec<f64x4>>()
     }
 
     pub fn stack_size(&self) -> usize {

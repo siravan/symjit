@@ -105,7 +105,7 @@ macro_rules! assemble {
         }
     };
     (; $y:expr; $($z:expr),+ ;) => {
-        {            
+        {
             $(
                 y.push($z);
             )*

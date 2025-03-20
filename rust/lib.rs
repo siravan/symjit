@@ -1,5 +1,3 @@
-#![feature(portable_simd)]
-
 use std::ffi::{c_char, CStr, CString};
 
 mod analyzer;
@@ -13,6 +11,7 @@ mod utils;
 
 mod amd;
 mod arm;
+mod avx;
 mod interpreter;
 #[cfg(feature = "wasm")]
 mod wasm;

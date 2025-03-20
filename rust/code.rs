@@ -1,6 +1,6 @@
-use num_traits::Float;
 use crate::register::Word;
 use anyhow::{anyhow, Result};
+use num_traits::Float;
 
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 pub struct Proc(pub usize);
@@ -75,22 +75,22 @@ impl<T: Float> VirtualTable<T> {
     /// from a function table (a Vec of function names)
     pub fn from_names(ft: &[String]) -> Vec<BinaryFunc<T>> {
         let mut vt: Vec<BinaryFunc<T>> = Vec::new();
-        
+
         for f in ft.iter() {
             vt.push(Self::from_str(f).unwrap());
         }
-        
+
         vt
-    }    
+    }
 
     /// Confirms that all the names in ft are valid,
     /// i.e., corresponds to actual functions    
     pub fn confirm(ft: &[String]) -> Result<()> {
         for f in ft.iter() {
             let _ = Self::from_str(f)?;
-        }       
-        Ok(())        
-    }    
+        }
+        Ok(())
+    }
 
     // Finds the function reference for op
     fn from_str(op: &str) -> Result<BinaryFunc<T>> {

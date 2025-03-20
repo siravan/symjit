@@ -5,22 +5,22 @@ use super::code::BinaryFunc;
 use super::memory::*;
 use super::utils::*;
 
-pub struct MachineCode<T> {
+pub struct MachineCode<T, F> {
     machine_code: Vec<u8>,
     #[allow(dead_code)]
     code: Memory, // code needs to be here for f to stay valid
-    f: fn(&[T], &[BinaryFunc<T>]),
-    vt: Vec<BinaryFunc<T>>,
+    f: fn(&[T], &[BinaryFunc<F>]),
+    vt: Vec<BinaryFunc<F>>,
     _mem: Vec<T>,
 }
 
-impl<T> MachineCode<T> {
+impl<T, F> MachineCode<T, F> {
     pub fn new(
         arch: &str,
         machine_code: Vec<u8>,
-        vt: Vec<BinaryFunc<T>>,
+        vt: Vec<BinaryFunc<F>>,
         _mem: Vec<T>,
-    ) -> MachineCode<T> {
+    ) -> MachineCode<T, F> {
         #[cfg(target_arch = "x86_64")]
         if arch != "x86_64" {
             panic!("cannot run {:?} code", arch);
@@ -41,7 +41,7 @@ impl<T> MachineCode<T> {
 
         code.set_readable_and_executable().unwrap();
 
-        let f: fn(&[T], &[BinaryFunc<T>]) = unsafe { std::mem::transmute(p) };
+        let f: fn(&[T], &[BinaryFunc<F>]) = unsafe { std::mem::transmute(p) };
 
         MachineCode {
             machine_code,
@@ -53,7 +53,7 @@ impl<T> MachineCode<T> {
     }
 }
 
-impl Compiled<f64> for MachineCode<f64> {
+impl Compiled<f64> for MachineCode<f64, f64> {
     #[inline]
     fn exec(&mut self) {
         (self.f)(&mut self._mem, &self.vt);

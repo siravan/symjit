@@ -147,6 +147,10 @@ impl Stack {
         self.stack.len()
     }
 
+    pub fn top(&self) -> usize {
+        self.stack.len()
+    }
+
     pub fn capacity(&self) -> usize {
         self.cap
     }

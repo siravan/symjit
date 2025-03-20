@@ -35,7 +35,6 @@ impl Interpreter {
 
 impl Compiler<ByteCode<f64>> for Interpreter {
     fn compile(&mut self, prog: &Program) -> ByteCode<f64> {
-
         let vt = VirtualTable::<f64>::from_names(&prog.ft);
         let mut code: Vec<Fast<f64>> = Vec::new();
         let mut mem = prog.frame.mem();
