@@ -42,7 +42,7 @@ pub struct CompilerResult {
 ///     the output is a raw pointer to a CompilerResults
 ///
 #[no_mangle]
-pub unsafe extern "C" fn compile(model: *const c_char, ty: *const c_char) -> *const CompilerResult {
+pub unsafe extern "C" fn compile(model: *const c_char, ty: *const c_char, use_simd: bool) -> *const CompilerResult {
     let mut res = CompilerResult {
         func: None,
         status: CompilerStatus::Incomplete,
@@ -87,12 +87,12 @@ pub unsafe extern "C" fn compile(model: *const c_char, ty: *const c_char) -> *co
     // println!("{:#?}", &prog.ft);
 
     res.func = match ty {
-        "bytecode" => Some(Runnable::new(prog, CompilerType::ByteCode)),
-        "arm" => Some(Runnable::new(prog, CompilerType::Arm)),
-        "amd" => Some(Runnable::new(prog, CompilerType::Amd)),
-        "native" => Some(Runnable::new(prog, CompilerType::Native)),
+        "bytecode" => Some(Runnable::new(prog, CompilerType::ByteCode, use_simd)),
+        "arm" => Some(Runnable::new(prog, CompilerType::Arm, use_simd)),
+        "amd" => Some(Runnable::new(prog, CompilerType::Amd, use_simd)),
+        "native" => Some(Runnable::new(prog, CompilerType::Native, use_simd)),
         #[cfg(feature = "wasm")]
-        "wasm" => Some(Runnable::new(prog, CompilerType::Wasm)),
+        "wasm" => Some(Runnable::new(prog, CompilerType::Wasm, use_simd)),
         _ => None,
     };
 

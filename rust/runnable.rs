@@ -4,6 +4,7 @@ use crate::utils::*;
 
 use crate::amd::AmdCompiler;
 use crate::arm::ArmCompiler;
+use crate::avx::AmdCompilerSimd;
 use crate::interpreter::Interpreter;
 #[cfg(feature = "wasm")]
 use crate::wasm::WasmCompiler;
@@ -33,7 +34,7 @@ pub struct Runnable {
 }
 
 impl Runnable {
-    pub fn new(prog: Program, ty: CompilerType) -> Runnable {
+    pub fn new(prog: Program, ty: CompilerType, use_simd: bool) -> Runnable {
         let compiled: Box<dyn Compiled<f64>> = match ty {
             CompilerType::ByteCode => Box::new(Interpreter::new().compile(&prog)),
             CompilerType::Amd => Box::new(AmdCompiler::new().compile(&prog)),
@@ -49,6 +50,15 @@ impl Runnable {
             CompilerType::Native => Box::new(Interpreter::new().compile(&prog)),
         };
 
+        #[cfg(target_arch = "x86_64")]
+        let compiled_simd: Option<Box<dyn Compiled<f64x4>>> = if use_simd {
+            Some(Box::new(AmdCompilerSimd::new().compile(&prog)))
+        } else {
+            None
+        };
+        #[cfg(not(target_arch = "x86_64"))]
+        let compiled_simd = None; // Box::new(Compiled::<f64x4>::dummy());;
+
         let first_state = prog.frame.first_state().unwrap();
         let first_param = prog.frame.first_param().unwrap_or(first_state);
         let first_obs = prog.frame.first_obs().unwrap_or(first_param);
@@ -62,7 +72,7 @@ impl Runnable {
         Runnable {
             // prog,
             compiled,
-            compiled_simd: None,
+            compiled_simd,
             first_state,
             first_param,
             first_obs,
@@ -86,6 +96,8 @@ impl Runnable {
     pub fn exec_vectorized(&mut self, buf: &mut [f64], n: usize) {
         if self.compiled_simd.is_none() {
             self.exec_vectorized_scalar(buf, n);
+        } else {
+            self.exec_vectorized_simd(buf, n);
         }
     }
 
@@ -113,6 +125,55 @@ impl Runnable {
         }
     }
 
+    pub fn exec_vectorized_simd(&mut self, buf: &mut [f64], n: usize) {
+        let h = usize::max(self.count_states, self.count_obs);
+        assert!(buf.len() == n * h);  
+        
+        if let Some(f) = &mut self.compiled_simd {
+            let m = n / 4;
+            
+            for t in 0..m {
+                {
+                    let mem = f.mem_mut();
+                    mem[self.first_state - 1] = f64x4::splat(t as f64);
+                    for i in 0..self.count_states {
+                        let x = f64x4::from_slice(&buf[i * n + 4 * t..i * n + 4 * (t + 1)]);
+                        mem[self.first_state + i] = x;
+                    }
+                }
+
+                f.exec();
+
+                {
+                    let mem = f.mem_mut();
+                    for i in 0..self.count_obs {
+                        mem[self.first_obs + i]
+                            .copy_to_slice(&mut buf[i * n + 4 * t..i * n + 4 * (t + 1)]);
+                    }
+                }
+            }
+
+            for t in 4 * m..n {
+                {
+                    let mem = self.compiled.mem_mut();
+                    mem[self.first_state - 1] = t as f64;
+                    for i in 0..self.count_states {
+                        mem[self.first_state + i] = buf[i * n + t];
+                    }
+                }
+
+                self.compiled.exec();
+
+                {
+                    let mem = self.compiled.mem_mut();
+                    for i in 0..self.count_obs {
+                        buf[i * n + t] = mem[self.first_obs + i];
+                    }
+                }
+            }
+        }
+    }
+
     // call interface to Julia ODESolver
     pub fn call(&mut self, du: &mut [f64], u: &[f64], p: &[f64], t: f64) {
         {
@@ -134,5 +195,9 @@ impl Runnable {
 
     pub fn dump(&self, name: &str) {
         self.compiled.dump(name);
+        
+        if let Some(f) = &self.compiled_simd {
+            f.dump("simd.bin");
+        }
     }
 }

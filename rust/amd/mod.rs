@@ -244,8 +244,8 @@ impl AmdCompiler {
     }
 }
 
-impl Compiler<MachineCode<f64, f64>> for AmdCompiler {
-    fn compile(&mut self, prog: &Program) -> MachineCode<f64, f64> {
+impl Compiler<MachineCode<f64>> for AmdCompiler {
+    fn compile(&mut self, prog: &Program) -> MachineCode<f64> {
         let analyzer = Analyzer::new(prog);
         let saveable = analyzer.find_saveable();
 

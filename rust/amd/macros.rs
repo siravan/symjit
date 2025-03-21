@@ -226,9 +226,13 @@ macro_rules! amd {
         assemble![0xf2, 0x0f, 0xc2, modrm_reg!($reg, $rm), 7;]
     };
     (call $reg:ident) => {
-        {
+        {            
             let reg = reg!($reg);
-            assemble![0xff, 0xd0 | reg;]
+            if reg < 8 {
+                assemble![0xff, 0xd0 | reg;]
+            } else {
+                assemble![0x41, 0xff, 0xd0 | (reg & 7);]
+            }
         }
     };
     (push $reg:ident) => {
@@ -237,7 +241,7 @@ macro_rules! amd {
             if reg < 8 {
                 assemble![0x50 | reg;]
             } else {
-                assemble![0x41, 0x48 | reg;]
+                assemble![0x41, 0x50 | (reg & 7);]
             }
         }
     };
@@ -247,7 +251,7 @@ macro_rules! amd {
             if reg < 8 {
                 assemble![0x58 | reg;]
             } else {
-                assemble![0x41, 0x50 | reg;]
+                assemble![0x41, 0x58 | (reg & 7);]
             }
         }
     };

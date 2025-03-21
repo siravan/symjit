@@ -14,8 +14,8 @@ def from_raw_parts(ptr, count):
 
 
 class BaseFunc:
-    def __init__(self, model, ty="native"):
-        self.p = lib._compile(model.encode("utf-8"), ty.encode("utf8"))
+    def __init__(self, model, ty="native", use_simd=True):
+        self.p = lib._compile(model.encode("utf-8"), ty.encode("utf8"), use_simd)
         status = lib._check_status(self.p)
         if status != b"Success":
             raise ValueError(status)
@@ -52,8 +52,8 @@ class BaseFunc:
         
 
 class Func(BaseFunc):
-    def __init__(self, model, ty="native"):
-        super().__init__(model, ty=ty)
+    def __init__(self, model, ty="native", use_simd=True):
+        super().__init__(model, ty=ty, use_simd=use_simd)
 
     def __call__(self, *args):
         if len(args) > self.count_states:
@@ -98,8 +98,8 @@ class Func(BaseFunc):
 
 
 class OdeFunc(BaseFunc):
-    def __init__(self, model, ty="native"):
-        super().__init__(model, ty=ty)
+    def __init__(self, model, ty="native", use_simd=True):
+        super().__init__(model, ty=ty, use_simd=use_simd)
 
     def __call__(self, t, y, *args):
         y = np.array(y, dtype="double")
@@ -118,8 +118,8 @@ class OdeFunc(BaseFunc):
 
 
 class JacFunc(BaseFunc):
-    def __init__(self, model, ty="native"):
-        super().__init__(model, ty=ty)
+    def __init__(self, model, ty="native", use_simd=True):
+        super().__init__(model, ty=ty, use_simd=use_simd)
 
     def __call__(self, t, y, *args):
         y = np.array(y, dtype="double")
@@ -138,7 +138,7 @@ class JacFunc(BaseFunc):
         return jac.reshape((self.count_states, self.count_states))
 
 
-def compile_func(states, eqs, params=None, obs=None, ty="native"):
+def compile_func(states, eqs, params=None, obs=None, ty="native", use_simd=True):
     """Compile a list of symbolic expression into an executable form.
     compile_func tries to mimic sympy lambdify, but instead of generating
     a standard python funciton, it returns a callable (Func object) that
@@ -165,10 +165,10 @@ def compile_func(states, eqs, params=None, obs=None, ty="native"):
     >>> assert(np.all(f(3, 5) == [8., 15.]))
     """
     model = structure.model(states, eqs, params=params, obs=obs)
-    return Func(json.dumps(model), ty=ty)
+    return Func(json.dumps(model), ty=ty, use_simd=use_simd)
 
 
-def compile_ode(iv, states, odes, params=None, ty="native"):
+def compile_ode(iv, states, odes, params=None, ty="native", use_simd=False):
     """Compile a symbolic ODE model into an executable form suitable for 
     passung to scipy.integrate.solve_ivp.    
     
@@ -200,11 +200,11 @@ def compile_ode(iv, states, odes, params=None, ty="native"):
     >>> np.testing.assert_allclose(sol.y[0,:], np.sin(t_eval), atol=0.005)
     """
     model = structure.model_ode(iv, states, odes, params)
-    return OdeFunc(json.dumps(model), ty=ty)
+    return OdeFunc(json.dumps(model), ty=ty, use_simd=use_simd)
     
-def compile_jac(iv, states, odes, params=None, ty="native"):
+def compile_jac(iv, states, odes, params=None, ty="native", use_simd=False):
     model = structure.model_jac(iv, states, odes, params)
-    return JacFunc(json.dumps(model), ty=ty)
+    return JacFunc(json.dumps(model), ty=ty, use_simd=use_simd)
 
-def compile_json(model, ty="native"):
-    return OdeFunc(model, ty=ty)
+def compile_json(model, ty="native", use_simd=True):
+    return OdeFunc(model, ty=ty, use_simd=use_simd)
