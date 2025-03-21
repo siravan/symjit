@@ -226,7 +226,7 @@ macro_rules! amd {
         assemble![0xf2, 0x0f, 0xc2, modrm_reg!($reg, $rm), 7;]
     };
     (call $reg:ident) => {
-        {            
+        {
             let reg = reg!($reg);
             if reg < 8 {
                 assemble![0xff, 0xd0 | reg;]

@@ -42,7 +42,11 @@ pub struct CompilerResult {
 ///     the output is a raw pointer to a CompilerResults
 ///
 #[no_mangle]
-pub unsafe extern "C" fn compile(model: *const c_char, ty: *const c_char, use_simd: bool) -> *const CompilerResult {
+pub unsafe extern "C" fn compile(
+    model: *const c_char,
+    ty: *const c_char,
+    use_simd: bool,
+) -> *const CompilerResult {
     let mut res = CompilerResult {
         func: None,
         status: CompilerStatus::Incomplete,

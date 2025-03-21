@@ -51,11 +51,12 @@ impl Runnable {
         };
 
         #[cfg(target_arch = "x86_64")]
-        let compiled_simd: Option<Box<dyn Compiled<f64x4>>> = if use_simd {
-            Some(Box::new(AmdCompilerSimd::new().compile(&prog)))
-        } else {
-            None
-        };
+        let compiled_simd: Option<Box<dyn Compiled<f64x4>>> =
+            if use_simd && is_x86_feature_detected!("avx") {
+                Some(Box::new(AmdCompilerSimd::new().compile(&prog)))
+            } else {
+                None
+            };
         #[cfg(not(target_arch = "x86_64"))]
         let compiled_simd = None; // Box::new(Compiled::<f64x4>::dummy());;
 
@@ -127,17 +128,19 @@ impl Runnable {
 
     pub fn exec_vectorized_simd(&mut self, buf: &mut [f64], n: usize) {
         let h = usize::max(self.count_states, self.count_obs);
-        assert!(buf.len() == n * h);  
-        
+        assert!(buf.len() == n * h);
+
+        self.set_simd_params();
+
         if let Some(f) = &mut self.compiled_simd {
-            let m = n / 4;
-            
-            for t in 0..m {
+            let n0 = 4 * (n / 4);
+
+            for t in (0..n0).step_by(4) {
                 {
                     let mem = f.mem_mut();
                     mem[self.first_state - 1] = f64x4::splat(t as f64);
                     for i in 0..self.count_states {
-                        let x = f64x4::from_slice(&buf[i * n + 4 * t..i * n + 4 * (t + 1)]);
+                        let x = f64x4::from_slice(&buf[i * n + t..i * n + t + 4]);
                         mem[self.first_state + i] = x;
                     }
                 }
@@ -147,13 +150,12 @@ impl Runnable {
                 {
                     let mem = f.mem_mut();
                     for i in 0..self.count_obs {
-                        mem[self.first_obs + i]
-                            .copy_to_slice(&mut buf[i * n + 4 * t..i * n + 4 * (t + 1)]);
+                        mem[self.first_obs + i].copy_to_slice(&mut buf[i * n + t..i * n + t + 4]);
                     }
                 }
             }
 
-            for t in 4 * m..n {
+            for t in n0..n {
                 {
                     let mem = self.compiled.mem_mut();
                     mem[self.first_state - 1] = t as f64;
@@ -170,6 +172,17 @@ impl Runnable {
                         buf[i * n + t] = mem[self.first_obs + i];
                     }
                 }
+            }
+        }
+    }
+
+    fn set_simd_params(&mut self) {
+        if let Some(f) = &mut self.compiled_simd {
+            let mem = self.compiled.mem();
+            let mut simd_mem = f.mem_mut();
+
+            for i in 0..self.count_params {
+                simd_mem[self.first_param + i] = f64x4::splat(mem[self.first_param + i]);
             }
         }
     }
@@ -195,7 +208,7 @@ impl Runnable {
 
     pub fn dump(&self, name: &str) {
         self.compiled.dump(name);
-        
+
         if let Some(f) = &self.compiled_simd {
             f.dump("simd.bin");
         }

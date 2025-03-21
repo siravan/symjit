@@ -101,6 +101,16 @@ macro_rules! vex2pd {
     }};
 }
 
+/// This is the two-byte VEX prefix (VEX2) for packed-double (pd)
+/// and 256-bit ymm registers
+macro_rules! vex2sd {
+    ($reg:expr, $vreg:expr) => {{
+        let r = ($reg & 8) << 4;
+        let vvvv = $vreg << 3;
+        vec![0xc5, (r | vvvv | 3) ^ 0xf8]
+    }};
+}
+
 /// This is the three-byte VEX prefix (VEX3) for packed-double (pd)
 /// and 256-bit ymm registers
 macro_rules! vex3pd {
@@ -148,6 +158,14 @@ macro_rules! assemble {
 
 macro_rules! amd {
     // avx
+    (vmovsd xmm($reg:expr), [$rm:ident + $offset:expr]) => {{
+        let reg = $reg;
+        assemble![; vex2sd!(reg, 0); 0x10; modrm_mem!(reg, reg!($rm), $offset)]
+    }};
+    (vmovsd [$rm:ident + $offset:expr], xmm($reg:expr)) => {{
+        let reg = $reg;
+        assemble![; vex2sd!(reg, 0); 0x11; modrm_mem!(reg, reg!($rm), $offset)]
+    }};
     (vmovapd ymm($reg:expr), ymm($rm:expr)) => {{
             let reg = $reg;
             assemble![; vex2pd!(reg, 0); 0x28, modrm_reg!(reg, $rm);]
@@ -275,7 +293,7 @@ macro_rules! amd {
     };
 
     (call $reg:ident) => {
-        {            
+        {
             let reg = reg!($reg);
             if reg < 8 {
                 assemble![0xff, 0xd0 | reg;]
@@ -325,6 +343,10 @@ fn test_avx() {
     assert_eq!(vec![0x53], amd! {push rbx});
     assert_eq!(vec![0x48, 0x8b, 0xef], amd! {mov rbp,rdi});
     assert_eq!(vec![0xc5, 0xfd, 0x28, 0xcd], amd! {vmovapd ymm(1), ymm(5)});
+    assert_eq!(
+        vec![0xc5, 0xfb, 0x10, 0x95, 0x34, 0x12, 0x00, 0x00],
+        amd! {vmovsd xmm(2), [rbp+0x1234]}
+    );
     assert_eq!(
         vec![0xc5, 0xfd, 0x28, 0x8d, 0x34, 0x12, 0x00, 0x00],
         amd! {vmovapd ymm(1), [rbp+0x1234]}

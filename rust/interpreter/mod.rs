@@ -118,5 +118,5 @@ impl Compiled<f64> for ByteCode<f64> {
         &mut self._mem[..]
     }
 
-    fn dump(&self, _name: &str) {}   
+    fn dump(&self, _name: &str) {}
 }

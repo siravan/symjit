@@ -72,5 +72,5 @@ impl<T> Compiled<T> for MachineCode<T> {
     fn dump(&self, name: &str) {
         let mut fs = fs::File::create(name).unwrap();
         let _ = fs.write(&self.machine_code[..]);
-    }    
+    }
 }

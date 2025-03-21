@@ -4,7 +4,7 @@ pub trait Compiled<T> {
     fn exec(&mut self);
     fn mem(&self) -> &[T];
     fn mem_mut(&mut self) -> &mut [T];
-    fn dump(&self, name: &str); 
+    fn dump(&self, name: &str);
 }
 
 pub trait Compiler<C> {
