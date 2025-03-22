@@ -147,6 +147,8 @@ The output is:
 
 ![Mandelbrot](./figures/mandelbrot.png)
 
+As of version 1.4, the vectorized version uses SIMD instructions if possible (currently supporting AVX instructions in X86-64 processors). SIMD code should improve the performance up to 4x (using 256-bit registers that encode and operate on four doubles simultaneously). 
+
 ## `compile_ode`: to solve ODEs
 
 `compile_ode` returns a callable object (`OdeFunc`) suitable for passing to `scipy.integrate.solve_ivp` (the main numpy/scipy ODE solver). It takes three mandatory arguments as `compile_ode(iv, states, odes)`. The first one (`iv`) is a single symbol that specifies the independent variable. The second argument, `states`, is a list of symbols defining the ODE state. The right-hand side of ODE equations is passed as the third argument, `odes.` It is a list of expressions that define the ODE by providing the derivative of each state variable w.r.t the independent variable. In addition, similar to `compile_func`, `compile_ode` can accept an optional `args`. For example,

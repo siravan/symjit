@@ -11,14 +11,14 @@ use super::register::{Frame, Word};
 use super::utils::*;
 
 #[derive(Debug)]
-pub struct AmdCompiler {
+pub struct AmdCompilerSimd {
     machine_code: Vec<u8>,
     stack: Stack,
     allocs: HashMap<Word, u8>,
 }
 
-impl AmdCompiler {
-    pub fn new() -> AmdCompiler {
+impl AmdCompilerSimd {
+    pub fn new() -> AmdCompilerSimd {
         Self {
             machine_code: Vec::new(),
             stack: Stack::new(),
@@ -33,64 +33,98 @@ impl AmdCompiler {
     fn op_code(&mut self, op: &str, p: Proc, ry: u8) {
         match op {
             "mov" => {}
-            "plus" => self.emit(amd! {addsd xmm(0), xmm(ry)}),
-            "minus" => self.emit(amd! {subsd xmm(0), xmm(ry)}),
-            "times" => self.emit(amd! {mulsd xmm(0), xmm(ry)}),
-            "divide" => self.emit(amd! {divsd xmm(0), xmm(ry)}),
-            "gt" => self.emit(amd! {cmpnlesd xmm(0), xmm(ry)}),
-            "geq" => self.emit(amd! {cmpnltsd xmm(0), xmm(ry)}),
-            "lt" => self.emit(amd! {cmpltsd xmm(0), xmm(ry)}),
-            "leq" => self.emit(amd! {cmplesd xmm(0), xmm(ry)}),
-            "eq" => self.emit(amd! {cmpeqsd xmm(0), xmm(ry)}),
-            "neq" => self.emit(amd! {cmpneqsd xmm(0), xmm(ry)}),
-            "and" => self.emit(amd! {andpd xmm(0), xmm(ry)}),
-            "or" => self.emit(amd! {orpd xmm(0), xmm(ry)}),
-            "xor" => self.emit(amd! {xorpd xmm(0), xmm(ry)}),
+            "plus" => self.emit(amd! {vaddpd ymm(0), ymm(0), ymm(ry)}),
+            "minus" => self.emit(amd! {vsubpd ymm(0), ymm(0), ymm(ry)}),
+            "times" => self.emit(amd! {vmulpd ymm(0), ymm(0), ymm(ry)}),
+            "divide" => self.emit(amd! {vdivpd ymm(0), ymm(0), ymm(ry)}),
+            "gt" => self.emit(amd! {vcmpnlepd ymm(0), ymm(0), ymm(ry)}),
+            "geq" => self.emit(amd! {vcmpnltpd ymm(0), ymm(0), ymm(ry)}),
+            "lt" => self.emit(amd! {vcmpltpd ymm(0), ymm(0), ymm(ry)}),
+            "leq" => self.emit(amd! {vcmplepd ymm(0), ymm(0), ymm(ry)}),
+            "eq" => self.emit(amd! {vcmpeqpd ymm(0), ymm(0), ymm(ry)}),
+            "neq" => self.emit(amd! {vcmpneqpd ymm(0), ymm(0), ymm(ry)}),
+            "and" => self.emit(amd! {vandpd ymm(0), ymm(0), ymm(ry)}),
+            "or" => self.emit(amd! {vorpd ymm(0), ymm(0), ymm(ry)}),
+            "xor" => self.emit(amd! {vxorpd ymm(0), ymm(0), ymm(ry)}),
             "neg" => {
-                self.emit(amd! {movsd xmm(1), qword ptr [rbp+8*Frame::MINUS_ZERO.0]});
-                self.emit(amd! {xorpd xmm(0), xmm(1)});
-            }            
+                self.emit(amd! {vbroadcastsd ymm(1), qword ptr [rbp+32*Frame::MINUS_ZERO.0]});
+                self.emit(amd! {vxorpd ymm(0), ymm(0), ymm(1)});
+            }
             "abs" => {
-                self.emit(amd! {movsd xmm(1), xmm(0)});
-                self.emit(amd! {movsd xmm(0), qword ptr [rbp+8*Frame::MINUS_ZERO.0]});
-                self.emit(amd! {andnpd xmm(0), xmm(1)});
-            }                        
+                self.emit(amd! {vbroadcastsd ymm(1), qword ptr [rbp+32*Frame::MINUS_ZERO.0]});
+                self.emit(amd! {vandnpd ymm(0), ymm(1), ymm(0)});
+            }
             "root" => {
-                self.emit(amd! {sqrtsd xmm(0), xmm(0)});
+                self.emit(amd! {vsqrtpd ymm(0), ymm(0)});
             }
             "square" => {
-                self.emit(amd! {mulsd xmm(0), xmm(0)});
+                self.emit(amd! {vmulpd ymm(0), ymm(0), ymm(0)});
             }
             "cube" => {
-                self.emit(amd! {movsd xmm(1), xmm(0)});
-                self.emit(amd! {mulsd xmm(0), xmm(0)});
-                self.emit(amd! {mulsd xmm(0), xmm(1)});
+                self.emit(amd! {vmulpd ymm(1), ymm(0), ymm(0)});
+                self.emit(amd! {vmulpd ymm(0), ymm(0), ymm(1)});
             }
             "recip" => {
-                self.emit(amd! {movsd xmm(1), xmm(0)});
-                self.emit(amd! {movsd xmm(0), qword ptr [rbp+8*Frame::ONE.0]});
-                self.emit(amd! {divsd xmm(0), xmm(1)});
+                self.emit(amd! {vbroadcastsd ymm(1), qword ptr [rbp+32*Frame::ONE.0]});
+                self.emit(amd! {vdivpd ymm(0), ymm(1), ymm(0)});
             }
             "power" | "rem" => {
-                if ry != 1 {
-                    self.emit(amd! {movsd xmm(1), xmm(ry)});
-                }
-                self.emit(amd! {mov rax, qword ptr [rbx+8*p.0]});
-                self.emit(amd! {call rax});
+                self.call_binary(p.0, ry);
             }
             _ => {
-                self.emit(amd! {mov rax, qword ptr [rbx+8*p.0]});
-                self.emit(amd! {call rax});
+                self.call_unary(p.0);
             }
         }
     }
 
-    // xmm(2) == true ? xmm(0) : xmm(1)
+    fn call_unary(&mut self, fp: usize) {
+        self.emit(amd! {mov r12, qword ptr [rbx+8*fp]});
+        
+        // reserves 64 bytes in the stack
+        // 32 bytes for shadow store (mandatory in Windows)
+        // 32 bytes to save ymm0
+        self.emit(amd! {sub rsp, 2*32});
+        self.emit(amd! {vmovupd [rsp+32], ymm(0)});
+        self.emit(amd! {vzeroupper}); // vzeroupper is here because the routine called by r12
+                                      // may have legacy SSE instructions
+        for i in 0..4 {
+            self.emit(amd! {vmovsd xmm(0), [rsp+32+8*i]});
+            self.emit(amd! {call r12});
+            self.emit(amd! {vmovsd [rsp+32+8*i], xmm(0)});
+        }
+
+        self.emit(amd! {vmovupd ymm(0), [rsp+32]});
+        self.emit(amd! {add rsp, 2*32});
+    }
+    
+    fn call_binary(&mut self, fp: usize, ry: u8) {
+        self.emit(amd! {mov r12, qword ptr [rbx+8*fp]});
+
+        // reserves 96 bytes in the stack
+        // 32 bytes for shadow store (mandatory in Windows)
+        // 32 bytes to save ymm0
+        // 32 bytes to save ymm1
+        self.emit(amd! {sub rsp, 3*32});
+        self.emit(amd! {vmovupd [rsp+32], ymm(0)});
+        self.emit(amd! {vmovupd [rsp+64], ymm(ry)});
+        self.emit(amd! {vzeroupper}); // vzeroupper is here because the routine called by r12
+                                      // may have legacy SSE instructions
+        for i in 0..4 {
+            self.emit(amd! {vmovsd xmm(0), [rsp+32+8*i]});
+            self.emit(amd! {vmovsd xmm(1), [rsp+64+8*i]});
+            self.emit(amd! {call r12});
+            self.emit(amd! {vmovsd [rsp+32+8*i], xmm(0)});
+        }
+
+        self.emit(amd! {vmovupd ymm(0), [rsp+32]});
+        self.emit(amd! {add rsp, 3*32});
+    }
+
+    // ymm(2) == true ? ymm(0) : ymm(1)
     fn ifelse(&mut self) {
-        self.emit(amd! {movapd xmm(3), xmm(2)});
-        self.emit(amd! {andpd xmm(0), xmm(2)});
-        self.emit(amd! {andnpd xmm(3), xmm(1)});
-        self.emit(amd! {orpd xmm(0), xmm(3)});
+        self.emit(amd! {vandpd ymm(0), ymm(2), ymm(0)});
+        self.emit(amd! {vandnpd ymm(1), ymm(2), ymm(1)});
+        self.emit(amd! {vorpd ymm(0), ymm(0), ymm(1)});
     }
 
     fn load(&mut self, x: u8, r: Word, rename: bool) -> u8 {
@@ -101,22 +135,19 @@ impl AmdCompiler {
                 if rename {
                     return s + 4;
                 } else {
-                    self.emit(amd! {movapd xmm(x), xmm(s+4)});
+                    self.emit(amd! {vmovapd ymm(x), ymm(s+4)});
                     return x;
                 }
             }
         }
 
         if r == Frame::ZERO {
-            self.emit(amd! {xorpd xmm(x), xmm(x)});
+            self.emit(amd! {vxorpd ymm(x), ymm(x), ymm(x)});
         } else if r.is_temp() {
             let k = self.stack.pop(&r);
-            #[cfg(target_family = "unix")]
-            self.emit(amd! {movsd xmm(x), qword ptr [rsp+8*k]});
-            #[cfg(target_family = "windows")]
-            self.emit(amd! {movsd xmm(x), qword ptr [rsp+8*(k+4)]});
+            self.emit(amd! {vmovupd ymm(x), [rsp+32*k]});
         } else {
-            self.emit(amd! {movsd xmm(x), qword ptr [rbp+8*r.0]});
+            self.emit(amd! {vmovupd ymm(x), [rbp+32*r.0]});
         };
 
         x
@@ -127,19 +158,16 @@ impl AmdCompiler {
             let s = *s;
 
             if s < 4 {
-                self.emit(amd! {movapd xmm(s+4), xmm(x)});
+                self.emit(amd! {vmovapd ymm(s+4), ymm(x)});
                 return;
             }
         }
 
         if r.is_temp() {
             let k = self.stack.push(&r);
-            #[cfg(target_family = "unix")]
-            self.emit(amd! {movsd qword ptr [rsp+8*k], xmm(x)});
-            #[cfg(target_family = "windows")]
-            self.emit(amd! {movsd qword ptr [rsp+8*(k+4)], xmm(x)});
+            self.emit(amd! {vmovupd [rsp+32*k], ymm(x)});
         } else {
-            self.emit(amd! {movsd qword ptr [rbp+8*r.0], xmm(x)});
+            self.emit(amd! {vmovupd [rbp+32*r.0], ymm(x)});
         }
     }
 
@@ -150,9 +178,9 @@ impl AmdCompiler {
     fn prologue(&mut self, n: usize) {
         self.emit(amd! {push rbp});
         self.emit(amd! {push rbx});
+        self.emit(amd! {push r12});
         self.emit(amd! {mov rbp, rdi});
         self.emit(amd! {mov rbx, rdx});
-
         if n > 0 {
             self.emit(amd! {sub rsp, n});
         }
@@ -162,9 +190,12 @@ impl AmdCompiler {
     fn prologue(&mut self, n: usize) {
         self.emit(amd! {mov qword ptr [rsp+0x08], rbp});
         self.emit(amd! {mov qword ptr [rsp+0x10], rbx});
+        self.emit(amd! {mov qword ptr [rsp+0x18], r12});
         self.emit(amd! {mov rbp, rcx});
         self.emit(amd! {mov rbx, r8});
-        self.emit(amd! {sub rsp, n+32});
+        if n > 0 {
+            self.emit(amd! {sub rsp, n});
+        }
     }
 
     #[cfg(target_family = "unix")]
@@ -172,16 +203,22 @@ impl AmdCompiler {
         if n > 0 {
             self.emit(amd! {add rsp, n});
         }
+        self.emit(amd! {pop r12});
         self.emit(amd! {pop rbx});
         self.emit(amd! {pop rbp});
+        self.emit(amd! {vzeroupper});
         self.emit(amd! {ret});
     }
 
     #[cfg(target_family = "windows")]
     fn epilogue(&mut self, n: usize) {
-        self.emit(amd! {add rsp, n+32});
+        if n > 0 {
+            self.emit(amd! {add rsp, n});
+        }
+        self.emit(amd! {mov r12, qword ptr [rsp+0x18]});
         self.emit(amd! {mov rbx, qword ptr [rsp+0x10]});
         self.emit(amd! {mov rbp, qword ptr [rsp+0x08]});
+        self.emit(amd! {vzeroupper});
         self.emit(amd! {ret});
     }
 
@@ -206,7 +243,7 @@ impl AmdCompiler {
                     };
 
                     let ry = if *y == r {
-                        self.emit(amd! {movapd xmm(1), xmm(0)});
+                        self.emit(amd! {vmovapd ymm(1), ymm(0)});
                         1
                     } else {
                         self.load(1, *y, true)
@@ -221,13 +258,13 @@ impl AmdCompiler {
                 }
                 Instruction::IfElse { x1, x2, cond, dst } => {
                     if *cond == r {
-                        self.emit(amd! {movapd xmm(2), xmm(0)});
+                        self.emit(amd! {vmovapd ymm(2), ymm(0)});
                     } else {
                         self.load(2, *cond, false);
                     }
 
                     if *x2 == r {
-                        self.emit(amd! {movapd xmm(1), xmm(0)});
+                        self.emit(amd! {vmovapd ymm(1), ymm(0)});
                     } else {
                         self.load(1, *x2, false);
                     }
@@ -252,8 +289,8 @@ impl AmdCompiler {
     }
 }
 
-impl Compiler<MachineCode<f64>> for AmdCompiler {
-    fn compile(&mut self, prog: &Program) -> MachineCode<f64> {
+impl Compiler<MachineCode<f64x4>> for AmdCompilerSimd {
+    fn compile(&mut self, prog: &Program) -> MachineCode<f64x4> {
         let analyzer = Analyzer::new(prog);
         let saveable = analyzer.find_saveable();
 
@@ -263,9 +300,7 @@ impl Compiler<MachineCode<f64>> for AmdCompiler {
         self.machine_code.clear();
 
         let cap = self.stack.capacity();
-        let pad = (cap + 1) & 1; // padding to make sure that rsp is
-                                 // aligned at 16 (required by Windows)
-        let n = 8 * (cap + pad);
+        let n = 32 * cap;
 
         self.prologue(n);
         self.codegen(prog, &saveable);
@@ -275,7 +310,7 @@ impl Compiler<MachineCode<f64>> for AmdCompiler {
             "x86_64",
             self.machine_code.clone(),
             VirtualTable::<f64>::from_names(&prog.ft),
-            prog.frame.mem(),
+            prog.frame.mem_simd(),
         )
     }
 }

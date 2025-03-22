@@ -27,8 +27,7 @@ mod simd {
 
     impl f64x4 {
         pub fn splat(x: f64) -> f64x4 {
-            let x = unsafe { f64x4(_mm256_set1_pd(x)) };
-            x
+            unsafe { f64x4(_mm256_set1_pd(x)) }
         }
 
         pub fn from_slice(slice: &[f64]) -> f64x4 {

@@ -18,7 +18,7 @@ class BaseFunc:
         self.p = lib._compile(model.encode("utf-8"), ty.encode("utf8"), use_simd)
         status = lib._check_status(self.p)
         if status != b"Success":
-            raise ValueError(status)
+            raise ValueError(status.decode())
         self.populate()
         self.model = model  # for debugging
 
@@ -47,8 +47,9 @@ class BaseFunc:
         self._obs = from_raw_parts(lib._ptr_obs(self.p), self.count_obs)
         self._diffs = from_raw_parts(lib._ptr_diffs(self.p), self.count_diffs)
         
-    def dump(self, name):
-        lib._dump(self.p, name.encode("utf-8"))
+    def dump(self, name, what="scalar"):
+        if not lib._dump(self.p, name.encode("utf-8"), what.encode("utf-8")):
+            print("cannot dump the requested code")
         
 
 class Func(BaseFunc):
@@ -98,7 +99,7 @@ class Func(BaseFunc):
 
 
 class OdeFunc(BaseFunc):
-    def __init__(self, model, ty="native", use_simd=True):
+    def __init__(self, model, ty="native", use_simd=False):
         super().__init__(model, ty=ty, use_simd=use_simd)
 
     def __call__(self, t, y, *args):
@@ -118,7 +119,7 @@ class OdeFunc(BaseFunc):
 
 
 class JacFunc(BaseFunc):
-    def __init__(self, model, ty="native", use_simd=True):
+    def __init__(self, model, ty="native", use_simd=False):
         super().__init__(model, ty=ty, use_simd=use_simd)
 
     def __call__(self, t, y, *args):
@@ -150,8 +151,11 @@ def compile_func(states, eqs, params=None, obs=None, ty="native", use_simd=True)
     states: a single symbol or a list/tuple of symbols.
     eqs: a single symbolic expression or a list/tuple of symbolic expressions.
     params (optional): a list/tuple of additional symbols as parameters to the model.
+    ty: target architecture ("amd", "arm", "bytecode", or "native").
     obs (optional): a list of symbols to name equations. If obs is not None, its length should 
         be the same as eqs.
+    use_simd (default True): generates SIMD code for vectorized operations. 
+        Currently only AVX on X64 systems is supported.
     
     ==> returns a Func object, is a callable object `f` with signature `f(x_1,...,x_n,p_1,...,p_m)`, 
         where `x`s are the state variables and `p`s are the parameters.
@@ -176,10 +180,13 @@ def compile_ode(iv, states, odes, params=None, ty="native", use_simd=False):
     ==========
     
     iv: a single symbol, the independent variable.
-    states: a single symbol or a list/tuple of symbols
+    states: a single symbol or a list/tuple of symbols.
     odes: a single symbolic expression or a list/tuple of symbolic expressions,
-        representing the derivative of the state with respect to iv
+        representing the derivative of the state with respect to iv.
     params (optional): a list/tuple of additional symbols as parameters to the model
+    ty: target architecture ("amd", "arm", "bytecode", or "native").
+    use_simd (default False): generates SIMD code for vectorized operations. 
+        Currently only AVX on X64 systems is supported.
     
     invariant => len(states) == len(odes)
     
@@ -203,6 +210,14 @@ def compile_ode(iv, states, odes, params=None, ty="native", use_simd=False):
     return OdeFunc(json.dumps(model), ty=ty, use_simd=use_simd)
     
 def compile_jac(iv, states, odes, params=None, ty="native", use_simd=False):
+    """Genenrates and compiles Jacobian for an ODE system.
+        It accepts the same arguments as `compile_ode`.
+        
+    ===> returns an OdeFunc object that has the same signature as 
+        the results of `compile_ode`, i.e., `f(t,y,p0,p1,...)`. 
+        However, it returns a n-by-n Jacobian matrix, where n is
+        the number of state variables. 
+    """
     model = structure.model_jac(iv, states, odes, params)
     return JacFunc(json.dumps(model), ty=ty, use_simd=use_simd)
 

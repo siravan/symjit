@@ -106,8 +106,8 @@ class Engine:
         self._compile.restype = ctypes.c_void_p
 
         self._dump = dll.dump
-        self._dump.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-        self._dump.restype = None
+        self._dump.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
+        self._dump.restype = ctypes.c_bool
 
         self._finalize = dll.finalize
         self._finalize.argtypes = [ctypes.c_void_p]

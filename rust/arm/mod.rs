@@ -61,7 +61,7 @@ impl ArmCompiler {
                 self.emit(arm! {fmul d(1), d(rx), d(rx)});
                 self.emit(arm! {fmul d(0), d(1), d(rx)});
             }
-            "inverse" => {
+            "recip" => {
                 self.emit(arm! {fmov d(1), #1.0});
                 self.emit(arm! {fdiv d(0), d(1), d(rx)});
             }

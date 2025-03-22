@@ -179,7 +179,7 @@ impl Runnable {
     fn set_simd_params(&mut self) {
         if let Some(f) = &mut self.compiled_simd {
             let mem = self.compiled.mem();
-            let mut simd_mem = f.mem_mut();
+            let simd_mem = f.mem_mut();
 
             for i in 0..self.count_params {
                 simd_mem[self.first_param + i] = f64x4::splat(mem[self.first_param + i]);
@@ -206,11 +206,21 @@ impl Runnable {
         }
     }
 
-    pub fn dump(&self, name: &str) {
-        self.compiled.dump(name);
-
-        if let Some(f) = &self.compiled_simd {
-            f.dump("simd.bin");
+    pub fn dump(&self, name: &str, what: &str) -> bool {
+        match what {
+            "scalar" => {
+                self.compiled.dump(name);
+                true
+            }
+            "simd" => if let Some(f) = &self.compiled_simd {
+                f.dump(name);
+                true
+            } else {
+                false
+            }
+            _ => {
+                false
+            }
         }
     }
 }

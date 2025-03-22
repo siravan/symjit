@@ -110,6 +110,7 @@ impl<T: Float> VirtualTable<T> {
             "leq" => Self::leq,
             "eq" => Self::eq,
             "neq" => Self::neq,
+            "abs" => Self::abs,
             "and" => Self::and,
             "or" => Self::or,
             "xor" => Self::xor,
@@ -121,9 +122,18 @@ impl<T: Float> VirtualTable<T> {
             "csc" => Self::csc,
             "sec" => Self::sec,
             "cot" => Self::cot,
+            "sinh" => Self::sinh,
+            "cosh" => Self::cosh,
+            "tanh" => Self::tanh,
+            "csch" => Self::csch,
+            "sech" => Self::sech,
+            "coth" => Self::coth,
             "arcsin" => Self::asin,
             "arccos" => Self::acos,
             "arctan" => Self::atan,
+            "arcsinh" => Self::asinh,
+            "arccosh" => Self::acosh,
+            "arctanh" => Self::atanh,
             "exp" => Self::exp,
             "ln" => Self::ln,
             "log" => Self::log,
@@ -131,7 +141,7 @@ impl<T: Float> VirtualTable<T> {
             "ifelse" => Self::nop,
             "square" => Self::square,
             "cube" => Self::cube,
-            "inverse" => Self::inverse,
+            "recip" => Self::recip,
             _ => {
                 return Err(anyhow!("op_code {} not found", op));
             }
@@ -158,6 +168,10 @@ impl<T: Float> VirtualTable<T> {
 
     pub extern "C" fn neg(x: T, _y: T) -> T {
         -x
+    }
+    
+    pub extern "C" fn abs(x: T, _y: T) -> T {
+        x.abs()
     }
 
     pub extern "C" fn times(x: T, y: T) -> T {
@@ -287,6 +301,30 @@ impl<T: Float> VirtualTable<T> {
     pub extern "C" fn cot(x: T, _y: T) -> T {
         T::one() / x.tan()
     }
+    
+    pub extern "C" fn sinh(x: T, _y: T) -> T {
+        x.sinh()
+    }
+
+    pub extern "C" fn cosh(x: T, _y: T) -> T {
+        x.cosh()
+    }
+
+    pub extern "C" fn tanh(x: T, _y: T) -> T {
+        x.tanh()
+    }
+
+    pub extern "C" fn csch(x: T, _y: T) -> T {
+        T::one() / x.sinh()
+    }
+
+    pub extern "C" fn sech(x: T, _y: T) -> T {
+        T::one() / x.cosh()
+    }
+
+    pub extern "C" fn coth(x: T, _y: T) -> T {
+        T::one() / x.tanh()
+    }
 
     pub extern "C" fn asin(x: T, _y: T) -> T {
         x.asin()
@@ -298,6 +336,18 @@ impl<T: Float> VirtualTable<T> {
 
     pub extern "C" fn atan(x: T, _y: T) -> T {
         x.atan()
+    }
+    
+    pub extern "C" fn asinh(x: T, _y: T) -> T {
+        x.asinh()
+    }
+
+    pub extern "C" fn acosh(x: T, _y: T) -> T {
+        x.acosh()
+    }
+
+    pub extern "C" fn atanh(x: T, _y: T) -> T {
+        x.atanh()
     }
 
     pub extern "C" fn exp(x: T, _y: T) -> T {
@@ -324,7 +374,7 @@ impl<T: Float> VirtualTable<T> {
         x * x * x
     }
 
-    pub extern "C" fn inverse(x: T, _y: T) -> T {
+    pub extern "C" fn recip(x: T, _y: T) -> T {
         T::one() / x
     }
 }

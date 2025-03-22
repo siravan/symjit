@@ -1,6 +1,6 @@
-from sympy import asin, acos, atan, acsc, asec, acot, log
+from sympy import asin, acos, atan, acsc, asec, acot, log, sqrt
 from sympy import asinh, acosh, atanh, acsch, asech, acoth
-from sympy import Xor, And, Or, Rational
+from sympy import Xor, And, Or, Rational, Abs
 from sympy import (
     Equality,
     Unequality,
@@ -21,33 +21,25 @@ def tree_node(op, args):
 
 def operation(func):
     op = str(func)
-    if func == log: 
+    if func == sqrt:
+        op = "root"
+    elif func == log: 
         op = "ln"   # this is confusing but sympy uses `log` for natural logarithm
+    elif func == Abs:
+        op = "abs"
     elif func == asin:
         op = "arcsin"
     elif func == acos:
         op = "arccos"
     elif func == atan:
         op = "arctan"
-    elif func == acsc:
-        op = "arccsc"
-    elif func == asec:
-        op = "arcsec"
-    elif func == acot:
-        op = "arccot"
     elif func == asinh:
         op = "arcsinh"
     elif func == acosh:
         op = "arccosh"
     elif func == atanh:
         op = "arctanh"
-    elif func == acsch:
-        op = "arccsch"
-    elif func == asech:
-        op = "arcsech"
-    elif func == acoth:
-        op = "arccoth"
-
+        
     return op
 
 
@@ -69,15 +61,15 @@ def process_pow(y):
     elif power == 3:
         return tree_node("cube", [arg])
     elif power == -1:
-        return tree_node("inverse", [arg])
+        return tree_node("recip", [arg])
     elif power == -2:
-        return tree_node("inverse", [arg**2])
+        return tree_node("recip", [arg**2])
     elif power == -3:
-        return tree_node("inverse", [arg**3])
+        return tree_node("recip", [arg**3])
     elif power == Rational(1, 2):
-        return tree_node("sqrt", [arg])
+        return tree_node("root", [arg])
     elif power == Rational(3, 2):
-        return tree_node("sqrt", [arg**3])
+        return tree_node("root", [arg**3])
     else:
         return tree_node("power", y.args)
 
