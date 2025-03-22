@@ -188,9 +188,15 @@ impl AmdCompilerSimd {
 
     #[cfg(target_family = "windows")]
     fn prologue(&mut self, n: usize) {
-        self.emit(amd! {mov qword ptr [rsp+0x08], rbp});
-        self.emit(amd! {mov qword ptr [rsp+0x10], rbx});
-        self.emit(amd! {mov qword ptr [rsp+0x18], r12});
+        // Windows expects rsp to be a multiple of 16
+        // the return address decreases rsp by 8
+        // therefore, if we have only an even number of pushes,
+        // we would need to decrease rsp by an extra 8
+        // here, three pushes aligns the stack correctly
+        self.emit(amd! {push rbp});
+        self.emit(amd! {push rbx});
+        self.emit(amd! {push r12});
+        // note that Windows ABI is different than *nix
         self.emit(amd! {mov rbp, rcx});
         self.emit(amd! {mov rbx, r8});
         if n > 0 {
@@ -200,25 +206,25 @@ impl AmdCompilerSimd {
 
     #[cfg(target_family = "unix")]
     fn epilogue(&mut self, n: usize) {
+        self.emit(amd! {vzeroupper});
         if n > 0 {
             self.emit(amd! {add rsp, n});
         }
         self.emit(amd! {pop r12});
         self.emit(amd! {pop rbx});
-        self.emit(amd! {pop rbp});
-        self.emit(amd! {vzeroupper});
+        self.emit(amd! {pop rbp});        
         self.emit(amd! {ret});
     }
 
     #[cfg(target_family = "windows")]
     fn epilogue(&mut self, n: usize) {
+        self.emit(amd! {vzeroupper});
         if n > 0 {
             self.emit(amd! {add rsp, n});
         }
-        self.emit(amd! {mov r12, qword ptr [rsp+0x18]});
-        self.emit(amd! {mov rbx, qword ptr [rsp+0x10]});
-        self.emit(amd! {mov rbp, qword ptr [rsp+0x08]});
-        self.emit(amd! {vzeroupper});
+        self.emit(amd! {pop r12});
+        self.emit(amd! {pop rbx});
+        self.emit(amd! {pop rbp});        
         self.emit(amd! {ret});
     }
 
