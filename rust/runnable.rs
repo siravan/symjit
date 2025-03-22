@@ -212,15 +212,15 @@ impl Runnable {
                 self.compiled.dump(name);
                 true
             }
-            "simd" => if let Some(f) = &self.compiled_simd {
-                f.dump(name);
-                true
-            } else {
-                false
+            "simd" => {
+                if let Some(f) = &self.compiled_simd {
+                    f.dump(name);
+                    true
+                } else {
+                    false
+                }
             }
-            _ => {
-                false
-            }
+            _ => false,
         }
     }
 }

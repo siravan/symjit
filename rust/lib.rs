@@ -411,7 +411,11 @@ pub unsafe extern "C" fn ptr_diffs(q: *mut CompilerResult) -> *const f64 {
 ///     that q points to a valid CompilerResult
 ///     
 #[no_mangle]
-pub unsafe extern "C" fn dump(q: *mut CompilerResult, name: *const c_char, what: *const c_char) -> bool {
+pub unsafe extern "C" fn dump(
+    q: *mut CompilerResult,
+    name: *const c_char,
+    what: *const c_char,
+) -> bool {
     let q: &CompilerResult = unsafe { &*q };
     if let Some(func) = &q.func {
         let name = unsafe { CStr::from_ptr(name).to_str().unwrap() };

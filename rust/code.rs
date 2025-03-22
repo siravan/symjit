@@ -169,7 +169,7 @@ impl<T: Float> VirtualTable<T> {
     pub extern "C" fn neg(x: T, _y: T) -> T {
         -x
     }
-    
+
     pub extern "C" fn abs(x: T, _y: T) -> T {
         x.abs()
     }
@@ -301,7 +301,7 @@ impl<T: Float> VirtualTable<T> {
     pub extern "C" fn cot(x: T, _y: T) -> T {
         T::one() / x.tan()
     }
-    
+
     pub extern "C" fn sinh(x: T, _y: T) -> T {
         x.sinh()
     }
@@ -337,7 +337,7 @@ impl<T: Float> VirtualTable<T> {
     pub extern "C" fn atan(x: T, _y: T) -> T {
         x.atan()
     }
-    
+
     pub extern "C" fn asinh(x: T, _y: T) -> T {
         x.asinh()
     }

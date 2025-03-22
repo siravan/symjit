@@ -49,12 +49,12 @@ impl AmdCompiler {
             "neg" => {
                 self.emit(amd! {movsd xmm(1), qword ptr [rbp+8*Frame::MINUS_ZERO.0]});
                 self.emit(amd! {xorpd xmm(0), xmm(1)});
-            }            
+            }
             "abs" => {
                 self.emit(amd! {movsd xmm(1), xmm(0)});
                 self.emit(amd! {movsd xmm(0), qword ptr [rbp+8*Frame::MINUS_ZERO.0]});
                 self.emit(amd! {andnpd xmm(0), xmm(1)});
-            }                        
+            }
             "root" => {
                 self.emit(amd! {sqrtsd xmm(0), xmm(0)});
             }

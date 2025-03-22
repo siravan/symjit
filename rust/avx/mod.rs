@@ -79,7 +79,7 @@ impl AmdCompilerSimd {
 
     fn call_unary(&mut self, fp: usize) {
         self.emit(amd! {mov r12, qword ptr [rbx+8*fp]});
-        
+
         // reserves 64 bytes in the stack
         // 32 bytes for shadow store (mandatory in Windows)
         // 32 bytes to save ymm0
@@ -96,7 +96,7 @@ impl AmdCompilerSimd {
         self.emit(amd! {vmovupd ymm(0), [rsp+32]});
         self.emit(amd! {add rsp, 2*32});
     }
-    
+
     fn call_binary(&mut self, fp: usize, ry: u8) {
         self.emit(amd! {mov r12, qword ptr [rbx+8*fp]});
 
