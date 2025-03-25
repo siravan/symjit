@@ -78,8 +78,9 @@ impl Analyzer {
 
     pub fn alloc_regs(&self) -> HashMap<Word, u8> {
         let caller = [
-            "rem", "power", "sin", "cos", "tan", "csc", "sec", "cot", "arcsin", "arccos", "arctan",
-            "exp", "ln", "log", "root",
+            "rem", "power", "exp", "ln", "log", "sin", "cos", "tan", "csc", "sec", "cot", "sinh",
+            "cosh", "tanh", "csch", "sech", "coth", "arcsin", "arccos", "arctan", "arcsinh",
+            "arccosh", "arctanh",
         ];
 
         let mut allocs: HashMap<Word, u8> = HashMap::new();
@@ -146,11 +147,7 @@ impl Stack {
         assert!(*w == p);
         self.stack.len()
     }
-
-    pub fn top(&self) -> usize {
-        self.stack.len()
-    }
-
+    
     pub fn capacity(&self) -> usize {
         self.cap
     }

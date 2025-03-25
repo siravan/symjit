@@ -87,21 +87,22 @@ impl AmdCompiler {
 
     // xmm(2) == true ? xmm(0) : xmm(1)
     fn ifelse(&mut self) {
-        self.emit(amd! {movapd xmm(3), xmm(2)});
         self.emit(amd! {andpd xmm(0), xmm(2)});
-        self.emit(amd! {andnpd xmm(3), xmm(1)});
-        self.emit(amd! {orpd xmm(0), xmm(3)});
+        self.emit(amd! {andnpd xmm(2), xmm(1)});
+        self.emit(amd! {orpd xmm(0), xmm(2)});
     }
 
     fn load(&mut self, x: u8, r: Word, rename: bool) -> u8 {
         if let Some(s) = self.allocs.get(&r) {
             let s = *s;
 
-            if s < 4 {
+            // the shadow stack uses XMM3, XMM4, and XMM5
+            // this is because only XMM0-Xmm5 are volatime in Windows ABI
+            if s < 3 {
                 if rename {
-                    return s + 4;
+                    return s + 3;
                 } else {
-                    self.emit(amd! {movapd xmm(x), xmm(s+4)});
+                    self.emit(amd! {movapd xmm(x), xmm(s+3)});
                     return x;
                 }
             }
@@ -126,8 +127,10 @@ impl AmdCompiler {
         if let Some(s) = self.allocs.get(&r) {
             let s = *s;
 
-            if s < 4 {
-                self.emit(amd! {movapd xmm(s+4), xmm(x)});
+            // the shadow stack uses XMM3, XMM4, and XMM5
+            // this is because only XMM0-Xmm5 are volatime in Windows ABI
+            if s < 3 {
+                self.emit(amd! {movapd xmm(s+3), xmm(x)});
                 return;
             }
         }

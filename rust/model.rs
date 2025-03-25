@@ -84,7 +84,7 @@ impl Program {
         // we call confirm here to ensure all functions are
         // resolved. If not, it returns an Err. This is to
         // prevent a panic later when virtual table is formed.
-        let _ = VirtualTable::<f64>::confirm(&prog.ft)?;
+        VirtualTable::<f64>::confirm(&prog.ft)?;
 
         Ok(prog)
     }

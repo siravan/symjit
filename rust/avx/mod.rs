@@ -192,7 +192,7 @@ impl AmdCompilerSimd {
         // the return address decreases rsp by 8
         // therefore, if we have only an even number of pushes,
         // we would need to decrease rsp by an extra 8
-        // here, three pushes aligns the stack correctly
+        // here, three pushes align the stack correctly
         self.emit(amd! {push rbp});
         self.emit(amd! {push rbx});
         self.emit(amd! {push r12});
@@ -212,7 +212,7 @@ impl AmdCompilerSimd {
         }
         self.emit(amd! {pop r12});
         self.emit(amd! {pop rbx});
-        self.emit(amd! {pop rbp});        
+        self.emit(amd! {pop rbp});
         self.emit(amd! {ret});
     }
 
@@ -224,7 +224,7 @@ impl AmdCompilerSimd {
         }
         self.emit(amd! {pop r12});
         self.emit(amd! {pop rbx});
-        self.emit(amd! {pop rbp});        
+        self.emit(amd! {pop rbp});
         self.emit(amd! {ret});
     }
 
