@@ -262,13 +262,7 @@ macro_rules! amd {
     (vzeroupper) => {{
         assemble![0xc5, 0xf8, 0x77;]
     }};
-    // xmm
-    (movsd xmm($reg:expr), qword ptr [$rm:ident + $offset:expr]) => {
-        assemble![0xf2, 0x0f, 0x10; modrm_mem!($reg, reg!($rm), $offset)]
-    };
-    (movsd qword ptr [$rm:ident + $offset:expr], xmm($reg:expr)) => {
-        assemble![0xf2, 0x0f, 0x11; modrm_mem!($reg, reg!($rm), $offset)]
-    };
+    
     // general registers
     (mov $reg:ident, $rm:ident) => {
         {

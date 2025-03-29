@@ -2,6 +2,7 @@ import os
 import sys
 import ctypes
 import platform
+import numpy as np
 
 def find_dll(substr):
     files = os.listdir(os.path.dirname(__file__))
@@ -30,7 +31,6 @@ if dll_name is None:
 
 dll_path = os.path.join(os.path.dirname(__file__), dll_name)
 dll = ctypes.CDLL(dll_path)
-
 
 class Engine:
     def __init__(self):
@@ -132,3 +132,57 @@ class Engine:
     def info(self):
         return self._info()
 
+#################################################################
+
+lib = Engine()   # interface to the rust codegen engine
+
+def from_raw_parts(ptr, count):
+    return np.ctypeslib.as_array(ptr, shape=(count,))
+
+class RustyCompiler:        
+    def __init__(self, model, ty="native", use_simd=True):
+        self.p = lib._compile(model.encode("utf-8"), ty.encode("utf8"), use_simd)
+        status = lib._check_status(self.p)
+        if status != b"Success":
+            raise ValueError(status.decode())
+        self.populate()
+
+    def __del__(self):
+        lib._finalize(self.p)
+        
+    def get_u0(self):
+        u0 = np.zeros(self.count_states, dtype="double")
+        lib._fill_u0(self.p, np.ctypeslib.as_ctypes(u0), self.count_states)
+        return u0
+
+    def get_p(self):
+        p = np.zeros(self.count_params, dtype="double")
+        lib._fill_p(self.p, np.ctypeslib.as_ctypes(p), self.count_params)
+        return p
+
+    def populate(self):
+        self.count_states = lib._count_states(self.p)
+        self.count_params = lib._count_params(self.p)
+        self.count_obs = lib._count_obs(self.p)
+        self.count_diffs = lib._count_diffs(self.p)
+
+        self.states = from_raw_parts(lib._ptr_states(self.p), self.count_states)
+        self.params = from_raw_parts(lib._ptr_params(self.p), self.count_params)
+        self.obs = from_raw_parts(lib._ptr_obs(self.p), self.count_obs)
+        self.diffs = from_raw_parts(lib._ptr_diffs(self.p), self.count_diffs)
+        
+    def dump(self, name, what="scalar"):
+        if not lib._dump(self.p, name.encode("utf-8"), what.encode("utf-8")):
+            print("cannot dump the requested code")
+            
+    def execute(self, t = 0.0):
+        if not lib._execute(self.p, t):
+            raise ValueError("cannot execute the model")            
+        
+    def execute_vectorized(self, buf):
+        ptr = buf.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+        n = buf.shape[1]
+        if not lib._execute_vectorized(self.p, ptr, n):
+            raise ValueError("cannot execute the model")
+
+            

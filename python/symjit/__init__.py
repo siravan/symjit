@@ -1,75 +1,28 @@
 import json
 import numpy as np
 import numbers
-import ctypes
 
 from . import engine
 from . import structure
+      
 
-lib = engine.Engine()   # interface to the rust codegen engine
-
-
-def from_raw_parts(ptr, count):
-    return np.ctypeslib.as_array(ptr, shape=(count,))
-
-
-class BaseFunc:
-    def __init__(self, model, ty="native", use_simd=True):
-        self.p = lib._compile(model.encode("utf-8"), ty.encode("utf8"), use_simd)
-        status = lib._check_status(self.p)
-        if status != b"Success":
-            raise ValueError(status.decode())
-        self.populate()
-        self.model = model  # for debugging
-
-    def __del__(self):
-        # lib._finalize(self.p)   
-        pass  
-        
-    def get_u0(self):
-        u0 = np.zeros(self.count_states, dtype="double")
-        lib._fill_u0(self.p, np.ctypeslib.as_ctypes(u0), self.count_states)
-        return u0
-
-    def get_p(self):
-        p = np.zeros(self.count_params, dtype="double")
-        lib._fill_p(self.p, np.ctypeslib.as_ctypes(p), self.count_params)
-        return p
-
-    def populate(self):
-        self.count_states = lib._count_states(self.p)
-        self.count_params = lib._count_params(self.p)
-        self.count_obs = lib._count_obs(self.p)
-        self.count_diffs = lib._count_diffs(self.p)
-
-        self._states = from_raw_parts(lib._ptr_states(self.p), self.count_states)
-        self._params = from_raw_parts(lib._ptr_params(self.p), self.count_params)
-        self._obs = from_raw_parts(lib._ptr_obs(self.p), self.count_obs)
-        self._diffs = from_raw_parts(lib._ptr_diffs(self.p), self.count_diffs)
-        
-    def dump(self, name, what="scalar"):
-        if not lib._dump(self.p, name.encode("utf-8"), what.encode("utf-8")):
-            print("cannot dump the requested code")
-        
-
-class Func(BaseFunc):
-    def __init__(self, model, ty="native", use_simd=True):
-        super().__init__(model, ty=ty, use_simd=use_simd)
+class Func:
+    def __init__(self, Compiler, model, ty="native", use_simd=True):
+        self.compiler = Compiler(model, ty=ty, use_simd=use_simd)
+        self.count_states = self.compiler.count_states
+        self.count_params = self.compiler.count_params
+        self.count_obs = self.compiler.count_obs        
 
     def __call__(self, *args):
         if len(args) > self.count_states:
             p = np.array(args[self.count_states:], dtype="double")
-            self._params[:] = p
+            self.compiler.params[:] = p
     
         if isinstance(args[0], numbers.Number):
             u = np.array(args[:self.count_states], dtype="double")
-            self._states[:] = u
-            status = lib._execute(self.p, 0.0)
-
-            if not status:
-                raise ValueError("cannot execute the model")
-
-            return self._obs.copy()
+            self.compiler.states[:] = u
+            self.compiler.execute()
+            return self.compiler.obs.copy()
         else:
             return self.call_vectorized(*args)
             
@@ -84,11 +37,7 @@ class Func(BaseFunc):
             assert(args[i].shape == shape)
             buf[i,:] = args[i].ravel()            
         
-        ptr = buf.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
-        status = lib._execute_vectorized(self.p, ptr, n)
-        
-        if not status:
-            raise ValueError("cannot execute the model")
+        self.compiler.execute_vectorized(buf)
         
         res = []
         for i in range(self.count_obs):            
@@ -98,44 +47,43 @@ class Func(BaseFunc):
         return res
 
 
-class OdeFunc(BaseFunc):
-    def __init__(self, model, ty="native", use_simd=False):
-        super().__init__(model, ty=ty, use_simd=use_simd)
+class OdeFunc:
+    def __init__(self, Compiler, model, ty="native", use_simd=False):
+        self.compiler = Compiler(model, ty=ty, use_simd=use_simd)
 
     def __call__(self, t, y, *args):
         y = np.array(y, dtype="double")
-        self._states[:] = y
+        self.compiler.states[:] = y
 
         if len(args) > 0:
             p = np.array(args, dtype="double")
-            self._params[:] = p
+            self.compiler.params[:] = p
 
-        status = lib._execute(self.p, t)
+        self.compiler.execute()
+        return self.compiler.diffs.copy()
+        
+    def get_u0(self):
+        return self.compiler.get_u0()
 
-        if not status:
-            raise ValueError("cannot execute the model")
+    def get_p(self):
+        return self.compiler.get_p()
+        
 
-        return self._diffs.copy()
-
-
-class JacFunc(BaseFunc):
-    def __init__(self, model, ty="native", use_simd=False):
-        super().__init__(model, ty=ty, use_simd=use_simd)
+class JacFunc:
+    def __init__(self, Compiler, model, ty="native", use_simd=False):
+        self.compiler = Compiler(model, ty=ty, use_simd=use_simd)
+        self.count_states = self.compiler.count_states
 
     def __call__(self, t, y, *args):
         y = np.array(y, dtype="double")
-        self._states[:] = y
+        self.compiler.states[:] = y
 
         if len(args) > 0:
             p = np.array(args, dtype="double")
-            self._params[:] = p
+            self.compiler.params[:] = p
 
-        status = lib._execute(self.p, t)
-
-        if not status:
-            raise ValueError("cannot execute the model")
-
-        jac = self._obs.copy()        
+        self.compiler.execute()
+        jac = self.compiler.obs.copy()        
         return jac.reshape((self.count_states, self.count_states))
 
 
@@ -169,7 +117,7 @@ def compile_func(states, eqs, params=None, obs=None, ty="native", use_simd=True)
     >>> assert(np.all(f(3, 5) == [8., 15.]))
     """
     model = structure.model(states, eqs, params=params, obs=obs)
-    return Func(json.dumps(model), ty=ty, use_simd=use_simd)
+    return Func(engine.RustyCompiler, json.dumps(model), ty=ty, use_simd=use_simd)
 
 
 def compile_ode(iv, states, odes, params=None, ty="native", use_simd=False):
@@ -207,7 +155,7 @@ def compile_ode(iv, states, odes, params=None, ty="native", use_simd=False):
     >>> np.testing.assert_allclose(sol.y[0,:], np.sin(t_eval), atol=0.005)
     """
     model = structure.model_ode(iv, states, odes, params)
-    return OdeFunc(json.dumps(model), ty=ty, use_simd=use_simd)
+    return OdeFunc(engine.RustyCompiler, json.dumps(model), ty=ty, use_simd=use_simd)
     
 def compile_jac(iv, states, odes, params=None, ty="native", use_simd=False):
     """Genenrates and compiles Jacobian for an ODE system.
@@ -219,7 +167,7 @@ def compile_jac(iv, states, odes, params=None, ty="native", use_simd=False):
         the number of state variables. 
     """
     model = structure.model_jac(iv, states, odes, params)
-    return JacFunc(json.dumps(model), ty=ty, use_simd=use_simd)
+    return JacFunc(engine.RustyCompiler, json.dumps(model), ty=ty, use_simd=use_simd)
 
 def compile_json(model, ty="native", use_simd=True):
-    return OdeFunc(model, ty=ty, use_simd=use_simd)
+    return OdeFunc(engine.RustyCompiler, model, ty=ty, use_simd=use_simd)
