@@ -1,64 +1,60 @@
 import os
 import sys
+import json
 import ctypes
 import platform
 import numpy as np
 
-def find_dll(substr):
-    files = os.listdir(os.path.dirname(__file__))
-    matches = list(filter(lambda s: s.find(substr) >= 0, files))
-    if len(matches) == 0:
-        return None
-    else:
-        return matches[0]
-
-
-dll_name = None
-
-if sys.platform == "linux" and platform.machine() == "x86_64":
-    dll_name = find_dll("x86_64-linux")
-if sys.platform == "linux" and platform.machine() == "aarch64":
-    dll_name = find_dll("aarch64-linux")
-if sys.platform == "darwin":
-    dll_name = find_dll("darwin")
-elif sys.platform == "win32":
-    dll_name = find_dll("win_amd64")
-
-if dll_name is None:
-    raise ValueError("unsupported platform (consider installing symfit from conda-forge as `conda install -c conda-forge symjit`)")
-
-# print(dll_name)
-
-dll_path = os.path.join(os.path.dirname(__file__), dll_name)
-dll = ctypes.CDLL(dll_path)
 
 class Engine:
     def __init__(self):
-        self._info = dll.info
+        self.valid = False
+        dll_name = None
+
+        if sys.platform == "linux" and platform.machine() == "x86_64":
+            dll_name = self.find_dll("x86_64-linux")
+        if sys.platform == "linux" and platform.machine() == "aarch64":
+            dll_name = self.find_dll("aarch64-linux")
+        if sys.platform == "darwin":
+            dll_name = self.find_dll("darwin")
+        elif sys.platform == "win32":
+            dll_name = self.find_dll("win_amd64")
+
+        if dll_name is None:
+            raise ValueError("unsupported platform (consider installing symfit from conda-forge as `conda install -c conda-forge symjit`)")
+
+        dll_path = os.path.join(os.path.dirname(__file__), dll_name)
+        self.dll = ctypes.CDLL(dll_path)
+        self.populate()
+        self.valid = True
+
+    
+    def populate(self):
+        self._info = self.dll.info
         self._info.argtypes = []
         self._info.restype = ctypes.c_char_p
 
-        self._check_status = dll.check_status
+        self._check_status = self.dll.check_status
         self._check_status.argtypes = [ctypes.c_void_p]
         self._check_status.restype = ctypes.c_char_p
 
-        self._count_states = dll.count_states
+        self._count_states = self.dll.count_states
         self._count_states.argtypes = [ctypes.c_void_p]
         self._count_states.restype = ctypes.c_size_t
 
-        self._count_params = dll.count_params
+        self._count_params = self.dll.count_params
         self._count_params.argtypes = [ctypes.c_void_p]
         self._count_params.restype = ctypes.c_size_t
 
-        self._count_obs = dll.count_obs
+        self._count_obs = self.dll.count_obs
         self._count_obs.argtypes = [ctypes.c_void_p]
         self._count_obs.restype = ctypes.c_size_t
 
-        self._count_diffs = dll.count_diffs
+        self._count_diffs = self.dll.count_diffs
         self._count_diffs.argtypes = [ctypes.c_void_p]
         self._count_diffs.restype = ctypes.c_size_t
 
-        self._run = dll.run
+        self._run = self.dll.run
         self._run.argtypes = [
             ctypes.c_void_p,  # handle
             ctypes.POINTER(ctypes.c_double),  # du
@@ -70,14 +66,14 @@ class Engine:
         ]
         self._run.restype = ctypes.c_bool
 
-        self._execute = dll.execute
+        self._execute = self.dll.execute
         self._execute.argtypes = [
             ctypes.c_void_p,  # handle
             ctypes.c_double,  # t
         ]
         self._execute.restype = ctypes.c_bool
         
-        self._execute_vectorized = dll.execute_vectorized
+        self._execute_vectorized = self.dll.execute_vectorized
         self._execute_vectorized.argtypes = [
             ctypes.c_void_p,  # handle
             ctypes.POINTER(ctypes.c_double),    # buf
@@ -85,7 +81,7 @@ class Engine:
         ]
         self._execute_vectorized.restype = ctypes.c_bool
 
-        self._fill_u0 = dll.fill_u0
+        self._fill_u0 = self.dll.fill_u0
         self._fill_u0.argtypes = [
             ctypes.c_void_p,  # handle
             ctypes.POINTER(ctypes.c_double),  # u0
@@ -93,7 +89,7 @@ class Engine:
         ]
         self._fill_u0.restype = ctypes.c_bool
 
-        self._fill_p = dll.fill_p
+        self._fill_p = self.dll.fill_p
         self._fill_p.argtypes = [
             ctypes.c_void_p,  # handle
             ctypes.POINTER(ctypes.c_double),  # p
@@ -101,36 +97,45 @@ class Engine:
         ]
         self._fill_p.restype = ctypes.c_bool
 
-        self._compile = dll.compile
+        self._compile = self.dll.compile
         self._compile.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_bool]
         self._compile.restype = ctypes.c_void_p
 
-        self._dump = dll.dump
+        self._dump = self.dll.dump
         self._dump.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
         self._dump.restype = ctypes.c_bool
 
-        self._finalize = dll.finalize
+        self._finalize = self.dll.finalize
         self._finalize.argtypes = [ctypes.c_void_p]
         self._finalize.restype = None
 
-        self._ptr_states = dll.ptr_states
+        self._ptr_states = self.dll.ptr_states
         self._ptr_states.argtypes = [ctypes.c_void_p]
         self._ptr_states.restype = ctypes.POINTER(ctypes.c_double)
 
-        self._ptr_params = dll.ptr_params
+        self._ptr_params = self.dll.ptr_params
         self._ptr_params.argtypes = [ctypes.c_void_p]
         self._ptr_params.restype = ctypes.POINTER(ctypes.c_double)
 
-        self._ptr_obs = dll.ptr_obs
+        self._ptr_obs = self.dll.ptr_obs
         self._ptr_obs.argtypes = [ctypes.c_void_p]
         self._ptr_obs.restype = ctypes.POINTER(ctypes.c_double)
 
-        self._ptr_diffs = dll.ptr_diffs
+        self._ptr_diffs = self.dll.ptr_diffs
         self._ptr_diffs.argtypes = [ctypes.c_void_p]
         self._ptr_diffs.restype = ctypes.POINTER(ctypes.c_double)
 
     def info(self):
         return self._info()
+        
+    def find_dll(self, substr):
+        files = os.listdir(os.path.dirname(__file__))
+        matches = list(filter(lambda s: s.find(substr) >= 0, files))
+        if len(matches) == 0:
+            return None
+        else:
+            return matches[0]
+        
 
 #################################################################
 
@@ -141,7 +146,7 @@ def from_raw_parts(ptr, count):
 
 class RustyCompiler:        
     def __init__(self, model, ty="native", use_simd=True):
-        self.p = lib._compile(model.encode("utf-8"), ty.encode("utf8"), use_simd)
+        self.p = lib._compile(json.dumps(model).encode("utf-8"), ty.encode("utf8"), use_simd)
         status = lib._check_status(self.p)
         if status != b"Success":
             raise ValueError(status.decode())

@@ -1,4 +1,3 @@
-import json
 import numpy as np
 import numbers
 
@@ -7,8 +6,8 @@ from . import structure
       
 
 class Func:
-    def __init__(self, Compiler, model, ty="native", use_simd=True):
-        self.compiler = Compiler(model, ty=ty, use_simd=use_simd)
+    def __init__(self, compiler):
+        self.compiler = compiler
         self.count_states = self.compiler.count_states
         self.count_params = self.compiler.count_params
         self.count_obs = self.compiler.count_obs        
@@ -46,10 +45,13 @@ class Func:
             
         return res
 
+    def dump(self, name, what="scalar"):
+        self.compiler.dump(name, what=what)
+
 
 class OdeFunc:
-    def __init__(self, Compiler, model, ty="native", use_simd=False):
-        self.compiler = Compiler(model, ty=ty, use_simd=use_simd)
+    def __init__(self, compiler):
+        self.compiler = compiler
 
     def __call__(self, t, y, *args):
         y = np.array(y, dtype="double")
@@ -59,7 +61,7 @@ class OdeFunc:
             p = np.array(args, dtype="double")
             self.compiler.params[:] = p
 
-        self.compiler.execute()
+        self.compiler.execute(t)
         return self.compiler.diffs.copy()
         
     def get_u0(self):
@@ -68,10 +70,13 @@ class OdeFunc:
     def get_p(self):
         return self.compiler.get_p()
         
+    def dump(self, name, what="scalar"):
+        self.compiler.dump(name, what=what)        
+        
 
 class JacFunc:
-    def __init__(self, Compiler, model, ty="native", use_simd=False):
-        self.compiler = Compiler(model, ty=ty, use_simd=use_simd)
+    def __init__(self, compiler):
+        self.compiler = compiler
         self.count_states = self.compiler.count_states
 
     def __call__(self, t, y, *args):
@@ -85,6 +90,9 @@ class JacFunc:
         self.compiler.execute()
         jac = self.compiler.obs.copy()        
         return jac.reshape((self.count_states, self.count_states))
+        
+    def dump(self, name, what="scalar"):
+        self.compiler.dump(name, what=what)        
 
 
 def compile_func(states, eqs, params=None, obs=None, ty="native", use_simd=True):
@@ -117,7 +125,8 @@ def compile_func(states, eqs, params=None, obs=None, ty="native", use_simd=True)
     >>> assert(np.all(f(3, 5) == [8., 15.]))
     """
     model = structure.model(states, eqs, params=params, obs=obs)
-    return Func(engine.RustyCompiler, json.dumps(model), ty=ty, use_simd=use_simd)
+    compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd)
+    return Func(compiler)
 
 
 def compile_ode(iv, states, odes, params=None, ty="native", use_simd=False):
@@ -155,7 +164,8 @@ def compile_ode(iv, states, odes, params=None, ty="native", use_simd=False):
     >>> np.testing.assert_allclose(sol.y[0,:], np.sin(t_eval), atol=0.005)
     """
     model = structure.model_ode(iv, states, odes, params)
-    return OdeFunc(engine.RustyCompiler, json.dumps(model), ty=ty, use_simd=use_simd)
+    compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd)
+    return OdeFunc(compiler)
     
 def compile_jac(iv, states, odes, params=None, ty="native", use_simd=False):
     """Genenrates and compiles Jacobian for an ODE system.
@@ -167,7 +177,9 @@ def compile_jac(iv, states, odes, params=None, ty="native", use_simd=False):
         the number of state variables. 
     """
     model = structure.model_jac(iv, states, odes, params)
-    return JacFunc(engine.RustyCompiler, json.dumps(model), ty=ty, use_simd=use_simd)
+    engine.RustyCompiler(model, ty=ty, use_simd=use_simd)
+    return JacFunc(compiler)
 
 def compile_json(model, ty="native", use_simd=True):
-    return OdeFunc(engine.RustyCompiler, model, ty=ty, use_simd=use_simd)
+    engine.RustyCompiler(model, ty=ty, use_simd=use_simd)
+    return OdeFunc(compiler)
