@@ -145,8 +145,10 @@ def from_raw_parts(ptr, count):
     return np.ctypeslib.as_array(ptr, shape=(count,))
 
 class RustyCompiler:        
-    def __init__(self, model, ty="native", use_simd=True):
-        self.p = lib._compile(json.dumps(model).encode("utf-8"), ty.encode("utf8"), use_simd)
+    def __init__(self, model, ty="native", use_simd=True, convert=True):
+        if convert:
+            model = json.dumps(model)
+        self.p = lib._compile(model.encode("utf-8"), ty.encode("utf8"), use_simd)
         status = lib._check_status(self.p)
         if status != b"Success":
             raise ValueError(status.decode())

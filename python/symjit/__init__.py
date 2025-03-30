@@ -177,9 +177,13 @@ def compile_jac(iv, states, odes, params=None, ty="native", use_simd=False):
         the number of state variables. 
     """
     model = structure.model_jac(iv, states, odes, params)
-    engine.RustyCompiler(model, ty=ty, use_simd=use_simd)
+    compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd)
     return JacFunc(compiler)
 
 def compile_json(model, ty="native", use_simd=True):
-    engine.RustyCompiler(model, ty=ty, use_simd=use_simd)
+    """Compiles CellML models
+        CellML json files are extracted using CellMLToolkit.jl
+        model is already in Json format; hence, `convert = False`
+    """
+    compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd, convert=False)
     return OdeFunc(compiler)
