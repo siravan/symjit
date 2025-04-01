@@ -17,6 +17,11 @@ pub struct AmdCompilerSimd {
     allocs: HashMap<Word, u8>,
 }
 
+#[cfg(target_family = "unix")]
+const COUNT_TEMP_YMM: u8 = 13;  // YMM3-YMM15
+#[cfg(target_family = "windows")]
+const COUNT_TEMP_YMM: u8 = 3;   // YMM3-YMM5 (Windows ABI)
+
 impl AmdCompilerSimd {
     pub fn new() -> AmdCompilerSimd {
         Self {
@@ -131,11 +136,11 @@ impl AmdCompilerSimd {
         if let Some(s) = self.allocs.get(&r) {
             let s = *s;
 
-            if s < 4 {
+            if s < COUNT_TEMP_YMM {
                 if rename {
-                    return s + 4;
+                    return s + 3;
                 } else {
-                    self.emit(amd! {vmovapd ymm(x), ymm(s+4)});
+                    self.emit(amd! {vmovapd ymm(x), ymm(s+3)});
                     return x;
                 }
             }
@@ -157,8 +162,8 @@ impl AmdCompilerSimd {
         if let Some(s) = self.allocs.get(&r) {
             let s = *s;
 
-            if s < 4 {
-                self.emit(amd! {vmovapd ymm(s+4), ymm(x)});
+            if s < COUNT_TEMP_YMM {
+                self.emit(amd! {vmovapd ymm(s+3), ymm(x)});
                 return;
             }
         }

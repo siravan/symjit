@@ -17,6 +17,11 @@ pub struct AmdCompiler {
     allocs: HashMap<Word, u8>,
 }
 
+#[cfg(target_family = "unix")]
+const COUNT_TEMP_XMM: u8 = 13;  // XMM3-XMM15
+#[cfg(target_family = "windows")]
+const COUNT_TEMP_XMM: u8 = 3;   // XMM3-XMM5 (Window's ABI)
+
 impl AmdCompiler {
     pub fn new() -> AmdCompiler {
         Self {
@@ -96,9 +101,7 @@ impl AmdCompiler {
         if let Some(s) = self.allocs.get(&r) {
             let s = *s;
 
-            // the shadow stack uses XMM3, XMM4, and XMM5
-            // this is because only XMM0-Xmm5 are volatime in Windows ABI
-            if s < 3 {
+            if s < COUNT_TEMP_XMM {
                 if rename {
                     return s + 3;
                 } else {
@@ -127,9 +130,7 @@ impl AmdCompiler {
         if let Some(s) = self.allocs.get(&r) {
             let s = *s;
 
-            // the shadow stack uses XMM3, XMM4, and XMM5
-            // this is because only XMM0-Xmm5 are volatime in Windows ABI
-            if s < 3 {
+            if s < COUNT_TEMP_XMM {
                 self.emit(amd! {movapd xmm(s+3), xmm(x)});
                 return;
             }

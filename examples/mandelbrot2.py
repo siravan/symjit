@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from sympy import symbols
+from sympy import symbols, expand
 from symjit import compile_func
 
 x, y, a, b = symbols("x y a b")
@@ -13,8 +13,8 @@ def quad_map(x, y, a, b):
 X = 0
 Y = 0
 
-for i in range(10):
-    X, Y = quad_map(X, Y, a, b)
+for i in range(12):
+    X, Y = quad_map(X, Y, a, b)    
     
 f = compile_func([a, b], [X, Y])
 

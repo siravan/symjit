@@ -114,11 +114,56 @@ macro_rules! vex2sd {
 /// This is the three-byte VEX prefix (VEX3) for packed-double (pd)
 /// and 256-bit ymm registers
 macro_rules! vex3pd {
+    ($reg:expr, $vreg:expr, $rm:expr) => {{
+        let r = ($reg & 8) << 4;
+        let b = ($rm & 8) << 2;
+        let vvvv = $vreg << 3;
+        vec![0xc4, (r | b | 1) ^ 0xe0, (vvvv | 5) ^ 0x78]
+    }};
     ($reg:expr, $vreg:expr, $rm:expr, $encoding:expr) => {{
         let r = ($reg & 8) << 4;
         let b = ($rm & 8) << 2;
         let vvvv = $vreg << 3;
         vec![0xc4, (r | b | $encoding) ^ 0xe0, (vvvv | 5) ^ 0x78]
+    }};
+}
+
+/// This is the three-byte VEX prefix (VEX3) for packed-double (pd)
+/// and 256-bit ymm registers
+macro_rules! vex3sd {
+    ($reg:expr, $vreg:expr, $rm:expr) => {{
+        let r = ($reg & 8) << 4;
+        let b = ($rm & 8) << 2;
+        let vvvv = $vreg << 3;
+        vec![0xc4, (r | b | 1) ^ 0xe0, (vvvv | 3) ^ 0x78]
+    }};
+    ($reg:expr, $vreg:expr, $rm:expr, $encoding:expr) => {{
+        let r = ($reg & 8) << 4;
+        let b = ($rm & 8) << 2;
+        let vvvv = $vreg << 3;
+        vec![0xc4, (r | b | $encoding) ^ 0xe0, (vvvv | 3) ^ 0x78]
+    }};
+}
+
+macro_rules! vex_sd {
+    ($reg:expr, $vreg:expr, $rm:expr) => {{
+        let rm = $rm;
+        if rm < 8 {
+            vex2sd!($reg, $vreg)
+        } else {
+            vex3sd!($reg, $vreg, rm)
+        }
+    }};
+}
+
+macro_rules! vex_pd {
+    ($reg:expr, $vreg:expr, $rm:expr) => {{
+        let rm = $rm;
+        if rm < 8 {
+            vex2pd!($reg, $vreg)
+        } else {
+            vex3pd!($reg, $vreg, rm)
+        }
     }};
 }
 
@@ -160,31 +205,38 @@ macro_rules! amd {
     // avx
     (vmovsd xmm($reg:expr), [$rm:ident + $offset:expr]) => {{
         let reg = $reg;
-        assemble![; vex2sd!(reg, 0); 0x10; modrm_mem!(reg, reg!($rm), $offset)]
+        let rm = reg!($rm);
+        assemble![; vex_sd!(reg, 0, rm); 0x10; modrm_mem!(reg, rm, $offset)]
     }};
     (vmovsd [$rm:ident + $offset:expr], xmm($reg:expr)) => {{
         let reg = $reg;
-        assemble![; vex2sd!(reg, 0); 0x11; modrm_mem!(reg, reg!($rm), $offset)]
+        let rm = reg!($rm);
+        assemble![; vex_sd!(reg, 0, rm); 0x11; modrm_mem!(reg, rm, $offset)]
     }};
     (vmovapd ymm($reg:expr), ymm($rm:expr)) => {{
-            let reg = $reg;
-            assemble![; vex2pd!(reg, 0); 0x28, modrm_reg!(reg, $rm);]
+        let reg = $reg;
+        let rm = $rm;
+        assemble![; vex_pd!(reg, 0, rm); 0x28, modrm_reg!(reg, rm);]
     }};
     (vmovapd ymm($reg:expr), [$rm:ident + $offset:expr]) => {{
         let reg = $reg;
-        assemble![; vex2pd!(reg, 0); 0x28; modrm_mem!(reg, reg!($rm), $offset)]
+        let rm = reg!($rm);
+        assemble![; vex_pd!(reg, 0, rm); 0x28; modrm_mem!(reg, rm, $offset)]
     }};
     (vmovapd [$rm:ident + $offset:expr], ymm($reg:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd!(reg, 0); 0x29; modrm_mem!(reg, reg!($rm), $offset)]
+        let rm = reg!($rm);
+        assemble![; vex_pd!(reg, 0, rm); 0x29; modrm_mem!(reg, rm, $offset)]
     }};
     (vmovupd ymm($reg:expr), [$rm:ident + $offset:expr]) => {{
         let reg = $reg;
-        assemble![; vex2pd!(reg, 0); 0x10; modrm_mem!(reg, reg!($rm), $offset)]
+        let rm = reg!($rm);
+        assemble![; vex_pd!(reg, 0, rm); 0x10; modrm_mem!(reg, rm, $offset)]
     }};
     (vmovupd [$rm:ident + $offset:expr], ymm($reg:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd!(reg, 0); 0x11; modrm_mem!(reg, reg!($rm), $offset)]
+        let rm = reg!($rm);
+        assemble![; vex_pd!(reg, 0, rm); 0x11; modrm_mem!(reg, rm, $offset)]
     }};
     (vbroadcastsd ymm($reg:expr), qword ptr [$rm:ident + $offset:expr]) => {{
         let reg = $reg;
@@ -193,76 +245,93 @@ macro_rules! amd {
     }};
     (vaddpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd!(reg, $vreg); 0x58, modrm_reg!($reg, $rm);]
+        let rm = $rm;
+        assemble![; vex_pd!(reg, $vreg, rm); 0x58, modrm_reg!(reg, rm);]
     }};
     (vsubpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd!(reg, $vreg); 0x5c, modrm_reg!($reg, $rm);]
+        let rm = $rm;
+        assemble![; vex_pd!(reg, $vreg, rm); 0x5c, modrm_reg!(reg, rm);]
     }};
     (vmulpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd!(reg, $vreg); 0x59, modrm_reg!($reg, $rm);]
+        let rm = $rm;
+        assemble![; vex_pd!(reg, $vreg, rm); 0x59, modrm_reg!(reg, rm);]
     }};
     (vdivpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd!(reg, $vreg); 0x5e, modrm_reg!($reg, $rm);]
+        let rm = $rm;
+        assemble![; vex_pd!(reg, $vreg, rm); 0x5e, modrm_reg!(reg, rm);]
     }};
     (vsqrtpd ymm($reg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd!(reg, 0); 0x51, modrm_reg!($reg, $rm);]
+        let rm = $rm;
+        assemble![; vex_pd!(reg, 0, rm); 0x51, modrm_reg!(reg, rm);]
     }};
     (vandpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd!(reg, $vreg); 0x54, modrm_reg!($reg, $rm);]
+        let rm = $rm;
+        assemble![; vex_pd!(reg, $vreg, rm); 0x54, modrm_reg!(reg, rm);]
     }};
     (vandnpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd!(reg, $vreg); 0x55, modrm_reg!($reg, $rm);]
+        let rm = $rm;
+        assemble![; vex_pd!(reg, $vreg, rm); 0x55, modrm_reg!(reg, rm);]
     }};
     (vorpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd!(reg, $vreg); 0x56, modrm_reg!($reg, $rm);]
+        let rm = $rm;
+        assemble![; vex_pd!(reg, $vreg, rm); 0x56, modrm_reg!(reg, rm);]
     }};
     (vxorpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd!(reg, $vreg); 0x57, modrm_reg!($reg, $rm);]
+        let rm = $rm;
+        assemble![; vex_pd!(reg, $vreg, rm); 0x57, modrm_reg!(reg, rm);]
     }};
     (vcmpeqpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd!(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 0;]
+        let rm = $rm;
+        assemble![; vex_pd!(reg, $vreg, rm); 0xc2, modrm_reg!(reg, rm), 0;]
     }};
     (vcmpltpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd!(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 1;]
+        let rm = $rm;
+        assemble![; vex_pd!(reg, $vreg, rm); 0xc2, modrm_reg!(reg, rm), 1;]
     }};
     (vcmplepd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd!(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 2;]
+        let rm = $rm;
+        assemble![; vex_pd!(reg, $vreg, rm); 0xc2, modrm_reg!(reg, rm), 2;]
     }};
     (vcmpunordpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd!(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 3;]
+        let rm = $rm;
+        assemble![; vex_pd!(reg, $vreg, rm); 0xc2, modrm_reg!(reg, rm), 3;]
     }};
     (vcmpneqpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd!(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 4;]
+        let rm = $rm;
+        assemble![; vex_pd!(reg, $vreg, rm); 0xc2, modrm_reg!(reg, rm), 4;]
     }};
     (vcmpnltpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd!(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 5;]
+        let rm = $rm;
+        assemble![; vex_pd!(reg, $vreg, rm); 0xc2, modrm_reg!(reg, rm), 5;]
     }};
     (vcmpnlepd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd!(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 6;]
+        let rm = $rm;
+        assemble![; vex_pd!(reg, $vreg, rm); 0xc2, modrm_reg!(reg, rm), 6;]
     }};
     (vcmpordpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr)) => {{
         let reg = $reg;
-        assemble![; vex2pd!(reg, $vreg); 0xc2, modrm_reg!($reg, $rm), 7;]
+        let rm = $rm;
+        assemble![; vex_pd!(reg, $vreg, rm); 0xc2, modrm_reg!(reg, rm), 7;]
     }};
     (vzeroupper) => {{
         assemble![0xc5, 0xf8, 0x77;]
     }};
-    
+
     // general registers
     (mov $reg:ident, $rm:ident) => {
         {

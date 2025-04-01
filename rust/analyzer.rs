@@ -147,7 +147,7 @@ impl Stack {
         assert!(*w == p);
         self.stack.len()
     }
-    
+
     pub fn capacity(&self) -> usize {
         self.cap
     }
