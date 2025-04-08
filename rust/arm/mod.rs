@@ -49,6 +49,7 @@ impl ArmCompiler {
             "or" => self.emit(arm! {orr v(0).8b, v(rx).8b, v(ry).8b}),
             "xor" => self.emit(arm! {eor v(0).8b, v(rx).8b, v(ry).8b}),
             "neg" => self.emit(arm! {fneg d(0), d(rx)}),
+            "abs" => self.emit(arm! {fabs d(0), d(rx)}),
             "root" => self.emit(arm! {fsqrt d(0), d(rx)}),
             "neq" => {
                 self.emit(arm! {fcmeq d(0), d(rx), d(ry)});

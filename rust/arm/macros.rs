@@ -134,6 +134,9 @@ macro_rules! arm {
     (fneg d($rd:expr), d($rn:expr)) => {
         0x1e614000 | rd!($rd) | rn!($rn)
     };
+    (fabs d($rd:expr), d($rn:expr)) => {
+        0x1e60c000 | rd!($rd) | rn!($rn)
+    };
 
     // logical ops
     (and v($rd:expr).8b, v($rn:expr).8b, v($rm:expr).8b) => {
