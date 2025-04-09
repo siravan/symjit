@@ -1,6 +1,9 @@
+import sys
 from sympy import *
 from symjit import *
 import numpy as np
+
+backend = "python" if len(sys.argv) > 2 and sys.argv[1] == "py" else "rust"
 
 x, y = symbols('x y')
 
@@ -60,7 +63,7 @@ Y = np.random.rand(15) * 0.9 + 0.1
 
 for eq in eqs:
     print('testing ', eq)
-    f = compile_func([x, y], eq, use_simd=True)
+    f = compile_func([x, y], eq, use_simd=True, backend=backend)
     g = lambdify([x, y], eq)
     np.testing.assert_array_almost_equal(f(X[0], Y[0]), g(X[0], Y[0]))
     np.testing.assert_array_almost_equal(f(X, Y), g(X, Y))

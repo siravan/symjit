@@ -1,7 +1,11 @@
+import sys
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 from sympy import symbols, expand
 from symjit import compile_func
+
+backend = "python" if len(sys.argv) > 2 and sys.argv[1] == "py" else "rust"
 
 x, y, a, b = symbols("x y a b")
 
@@ -16,12 +20,16 @@ Y = 0
 for i in range(12):
     X, Y = quad_map(X, Y, a, b)    
     
-f = compile_func([a, b], [X, Y])
+t0 = time.time()    
+    
+f = compile_func([a, b], [X, Y], backend=backend)
 
 X, Y = f(A, B)
 
-Z = np.hypot(X, Y)    
+print(f"compilation + running time: {1000*(time.time()-t0):.1f} ms")
 
-plt.imshow(Z < 2)
+# Z = np.hypot(X, Y)    
+
+plt.imshow((np.abs(X) < 2) & (np.abs(Y) < 2))
 plt.show()
 

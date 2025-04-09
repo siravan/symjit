@@ -8,7 +8,6 @@ import numpy as np
 
 class Engine:
     def __init__(self):
-        self.valid = False
         dll_name = None
 
         if sys.platform == "linux" and platform.machine() == "x86_64":
@@ -19,15 +18,18 @@ class Engine:
             dll_name = self.find_dll("darwin")
         elif sys.platform == "win32":
             dll_name = self.find_dll("win_amd64")
-
+            
         if dll_name is None:
-            raise ValueError("unsupported platform (consider installing symfit from conda-forge as `conda install -c conda-forge symjit`)")
-
-        dll_path = os.path.join(os.path.dirname(__file__), dll_name)
-        self.dll = ctypes.CDLL(dll_path)
-        self.populate()
-        self.valid = True
-
+            self.is_valid = False
+            return        
+    
+        try:
+            dll_path = os.path.join(os.path.dirname(__file__), dll_name)
+            self.dll = ctypes.CDLL(dll_path)
+            self.populate()            
+            self.is_valid = True
+        except:
+            self.is_valid = False
     
     def populate(self):
         self._info = self.dll.info

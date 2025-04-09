@@ -1,12 +1,15 @@
+import sys
+from math import pi
 import numpy as np
 from scipy.integrate import quad
 from sympy import symbols, atan, sqrt
 from symjit import compile_func
-from math import pi
+
+backend = "python" if len(sys.argv) > 2 and sys.argv[1] == "py" else "rust"
 
 x = symbols("x")
 # Ahmed's Integral (Inside Interesting Integrals, 6.2)
-f = compile_func([x], [atan(sqrt(2+x**2)) / ((1+x**2)*sqrt(2+x**2))])
+f = compile_func([x], [atan(sqrt(2+x**2)) / ((1+x**2)*sqrt(2+x**2))], backend=backend)
 
 sol = quad(f, 0.0, 1.0)
 

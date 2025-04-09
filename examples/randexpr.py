@@ -1,6 +1,9 @@
+import sys
 from sympy import *
 from random import random, randint
 from symjit import compile_func
+
+backend = "python" if len(sys.argv) > 2 and sys.argv[1] == "py" else "rust"
 
 
 def generate_random_expr(d, *xs):
@@ -33,7 +36,7 @@ def generate_random_unary(d, *xs):
     elif r < 0.4:
         return 1 / eq
     else:        
-        u = [sin, cos, tan, sinh, cosh, tanh, exp, sqrt]
+        u = [sin, cos, tan, sinh, cosh, tanh, exp, sqrt, log]
         f = u[randint(0, len(u)-1)]
         return f(eq)
 
@@ -57,24 +60,36 @@ def generate_random_binary(d, *xs):
 
 x, y, z = symbols('x y z')
 
+X = [random() for i in range(3)]
+Y = [random() for i in range(3)]
+Z = [random() for i in range(3)]
+
+print('X = ', X)
+print('Y = ', Y)
+print('Z = ', Z)
+
 for i in range(100):
     q = generate_random_expr(5, x, y, z)
-    print(q)
+    print(q, end=": ")
     
     try:
-        f = compile_func([x, y, z], [q])
-        g = lambdify([x, y, z], [q])
+        b = False
+        for i in range(3):
+            f = compile_func([x, y, z], [q], backend=backend)
+            g = lambdify([x, y, z], [q])
+            
+            F = f(X[i], Y[i], Z[i])
+            G = g(X[i], Y[i], Z[i])
         
-        X = random()
-        Y = random()
-        Z = random()
-        
-        F = f(X, Y, Z)
-        G = g(X, Y, Z)
-        
-        print(float(F[0]) - float(G[0]) < 1e-10)
-    except:
-        print('Error!')      
+            if float(F[0]) - float(G[0]) < 1e-10:
+                b = True
+                break
+        if b:
+            print('\033[32mpass\033[0m')
+        else:
+            print('\033[31mfail\033[0m')
+    except Exception as err:
+        print('Error!', err)      
     
         
         

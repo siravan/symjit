@@ -3,7 +3,8 @@ import numbers
 
 from . import engine
 from . import structure
-      
+
+import pyengine      
 
 class Func:
     def __init__(self, compiler):
@@ -95,7 +96,18 @@ class JacFunc:
         self.compiler.dump(name, what=what)        
 
 
-def compile_func(states, eqs, params=None, obs=None, ty="native", use_simd=True):
+def can_use_rust(backend):
+    if not backend in ["python", "rust"]:
+        raise ValueError(f"invalide backend: {backend}")
+    return backend == "rust" and engine.lib.is_valid
+        
+def can_use_python(backend):
+    if not backend in ["python", "rust"]:
+        raise ValueError(f"invalide backend: {backend}")
+    return pyengine.can_compile()        
+
+
+def compile_func(states, eqs, params=None, obs=None, ty="native", use_simd=True, backend="rust"):
     """Compile a list of symbolic expression into an executable form.
     compile_func tries to mimic sympy lambdify, but instead of generating
     a standard python funciton, it returns a callable (Func object) that
@@ -124,12 +136,19 @@ def compile_func(states, eqs, params=None, obs=None, ty="native", use_simd=True)
     >>> f = compile_func([x, y], [x+y, x*y])
     >>> assert(np.all(f(3, 5) == [8., 15.]))
     """
-    model = structure.model(states, eqs, params=params, obs=obs)
-    compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd)
+    if can_use_rust(backend):
+        model = structure.model(states, eqs, params=params, obs=obs)
+        compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd)
+    elif can_use_python(backend):
+        model = pyengine.tree.model(states, eqs, params, obs)
+        compiler = pyengine.PyCompiler(model, ty=ty)
+    else:
+        raise ValueError("unsupported platform")
+
     return Func(compiler)
 
 
-def compile_ode(iv, states, odes, params=None, ty="native", use_simd=False):
+def compile_ode(iv, states, odes, params=None, ty="native", use_simd=False, backend="rust"):
     """Compile a symbolic ODE model into an executable form suitable for 
     passung to scipy.integrate.solve_ivp.    
     
@@ -163,11 +182,18 @@ def compile_ode(iv, states, odes, params=None, ty="native", use_simd=False):
 
     >>> np.testing.assert_allclose(sol.y[0,:], np.sin(t_eval), atol=0.005)
     """
-    model = structure.model_ode(iv, states, odes, params)
-    compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd)
+    if can_use_rust(backend):
+        model = structure.model_ode(iv, states, odes, params)
+        compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd)
+    elif can_use_python(backend):        
+        model = pyengine.tree.model_ode(iv, states, odes, params)
+        compiler = pyengine.PyCompiler(model)
+    else:
+        raise ValueError("unsupported platform")        
+    
     return OdeFunc(compiler)
     
-def compile_jac(iv, states, odes, params=None, ty="native", use_simd=False):
+def compile_jac(iv, states, odes, params=None, ty="native", use_simd=False, backend="rust"):
     """Genenrates and compiles Jacobian for an ODE system.
         It accepts the same arguments as `compile_ode`.
         
@@ -176,8 +202,15 @@ def compile_jac(iv, states, odes, params=None, ty="native", use_simd=False):
         However, it returns a n-by-n Jacobian matrix, where n is
         the number of state variables. 
     """
-    model = structure.model_jac(iv, states, odes, params)
-    compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd)
+    if can_use_rust(backend):
+        model = structure.model_jac(iv, states, odes, params)
+        compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd)
+    elif can_use_python(backend):
+        model = pyengine.tree.model_jac(iv, states, odes, params)
+        compiler = pyengine.PyCompiler(model)
+    else:
+        raise ValueError("unsupported platform")        
+                
     return JacFunc(compiler)
 
 def compile_json(model, ty="native", use_simd=True):
@@ -187,3 +220,4 @@ def compile_json(model, ty="native", use_simd=True):
     """
     compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd, convert=False)
     return OdeFunc(compiler)
+    

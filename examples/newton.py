@@ -1,3 +1,4 @@
+import sys
 from sympy import symbols, I, re, im, diff
 from sympy.polys.specialpolys import swinnerton_dyer_poly
 from symjit import compile_func
@@ -6,6 +7,8 @@ from math import sqrt
 import numpy as np
 import matplotlib.pyplot as plt
 
+backend = "python" if len(sys.argv) > 2 and sys.argv[1] == "py" else "rust"
+
 z = symbols('z')
 x, y = symbols('x y', real=True)
 
@@ -13,7 +16,7 @@ x, y = symbols('x y', real=True)
 p = swinnerton_dyer_poly(4, z)
 print(p)
 
-g = compile_func([z], [p])
+g = compile_func([z], [p], backend=backend)
 
 for i in range(16):
     u = ((sqrt(2) if i & 1 != 0 else -sqrt(2)) + 
@@ -27,7 +30,7 @@ dp = diff(p, z)
 p = p.subs({z: x + I*y})
 dp = dp.subs({z: x + I*y})
 
-f = compile_func([x, y], [re(p), im(p), re(dp), im(dp)])
+f = compile_func([x, y], [re(p), im(p), re(dp), im(dp)], backend=backend)
 
 x0 = 5 * (random() - 0.5)
 y0 = random()
