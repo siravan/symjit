@@ -1,0 +1,16 @@
+import sys
+import numpy as np
+import scipy.integrate
+import matplotlib.pyplot as plt
+from sympy import symbols
+from symjit import compile_ode
+
+backend = "python" if len(sys.argv) > 1 and sys.argv[1] == "py" else "rust"
+
+t, x, y = symbols("t x y")
+f = compile_ode(t, (x, y), (y, -x*t), backend=backend)
+t_eval = np.arange(0, 20, 0.01)
+sol = scipy.integrate.solve_ivp(f, (0, 20), (0.0, 1.0), t_eval=t_eval)
+
+plt.plot(t_eval, sol.y.T)
+plt.show()
