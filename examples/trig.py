@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from sympy import symbols
 from symjit import compile_ode
 
-backend = "python" if len(sys.argv) > 2 and sys.argv[1] == "py" else "rust"
+backend = "python" if len(sys.argv) > 1 and sys.argv[1] == "py" else "rust"
 
 t, x, y = symbols("t x y")
 f = compile_ode(t, (x, y), (y, -x), backend=backend)

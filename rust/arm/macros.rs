@@ -38,6 +38,14 @@ macro_rules! imm {
     }};
 }
 
+macro_rules! imm16 {
+    ($x:expr) => {{
+        let x = $x;
+        assert!(x < 65536);
+        (x as u32) << 5
+    }};
+}
+
 macro_rules! ofs {
     ($x:expr) => {{
         let x = $x;
@@ -77,16 +85,26 @@ macro_rules! arm {
     (mov x($rd:expr), x($rm:expr)) => {
         0xaa0003e0 | rd!($rd) | rm!($rm)
     };
+    (movz x($rd:expr), #$imm16:expr) => {
+        0xd2800000 | rd!($rd) | imm16!($imm16)
+    };
 
     // single register load/store instructions
     (ldr d($rd:expr), [x($rn:expr), #$ofs:expr]) => {
         0xfd400000 | rd!($rd) | rn!($rn) | ofs!($ofs)
     };
+    (ldr d($rd:expr), [x($rn:expr), x($rm:expr), lsl #3]) => {
+        0xfc607800 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
     (ldr x($rd:expr), [x($rn:expr), #$ofs:expr]) => {
         0xf9400000 | rd!($rd) | rn!($rn) | ofs!($ofs)
     };
+    
     (str d($rd:expr), [x($rn:expr), #$ofs:expr]) => {
         0xfd000000 | rd!($rd) | rn!($rn) | ofs!($ofs)
+    };
+    (str d($rd:expr), [x($rn:expr), x($rm:expr), lsl #3]) => {
+        0xfc207800 | rd!($rd) | rn!($rn) | rm!($rm)
     };
     (str x($rd:expr), [x($rn:expr), #$ofs:expr]) => {
         0xf9000000 | rd!($rd) | rn!($rn) | ofs!($ofs)

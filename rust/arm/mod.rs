@@ -124,7 +124,12 @@ impl ArmCompiler {
             let k = self.stack.pop(&r);
             self.emit(arm! {ldr d(x), [sp, #8*k]});
         } else {
-            self.emit(arm! {ldr d(x), [x(19), #8*r.0]});
+            if r.0 < 4096 {
+                self.emit(arm! {ldr d(x), [x(19), #8*r.0]});
+            } else {
+                self.emit(arm! {movz x(1), #r.0});
+                self.emit(arm! {ldr d(x), [x(19), x(1), lsl #3]});
+            }                
         };
 
         x
@@ -152,7 +157,12 @@ impl ArmCompiler {
             let k = self.stack.push(&r);
             self.emit(arm! {str d(x), [sp, #8*k]});
         } else {
-            self.emit(arm! {str d(x), [x(19), #8*r.0]});
+            if r.0 < 4096 {
+                self.emit(arm! {str d(x), [x(19), #8*r.0]});
+            } else {
+                self.emit(arm! {movz x(1), #r.0});
+                self.emit(arm! {str d(x), [x(19), x(1), lsl #3]});            
+            }                
         }
     }
 

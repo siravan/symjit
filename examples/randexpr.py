@@ -3,7 +3,7 @@ from sympy import *
 from random import random, randint
 from symjit import compile_func
 
-backend = "python" if len(sys.argv) > 2 and sys.argv[1] == "py" else "rust"
+backend = "python" if len(sys.argv) > 1 and sys.argv[1] == "py" else "rust"
 
 
 def generate_random_expr(d, *xs):

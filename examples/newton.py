@@ -7,7 +7,7 @@ from math import sqrt
 import numpy as np
 import matplotlib.pyplot as plt
 
-backend = "python" if len(sys.argv) > 2 and sys.argv[1] == "py" else "rust"
+backend = "python" if len(sys.argv) > 1 and sys.argv[1] == "py" else "rust"
 
 z = symbols('z')
 x, y = symbols('x y', real=True)

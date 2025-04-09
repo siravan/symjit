@@ -3,10 +3,10 @@ import numpy as np
 from sympy import *
 from symjit import compile_func
 
-backend = "python" if len(sys.argv) > 2 and sys.argv[1] == "py" else "rust"
+backend = "python" if len(sys.argv) > 1 and sys.argv[1] == "py" else "rust"
 
 x, y = symbols('x y')
-f = compile_func([x, y], [x+y, x*y], backend_backend)
+f = compile_func([x, y], [x+y, x*y], backend=backend)
 g = lambdify([x, y], [x+y, x*y])
 
 u = np.random.rand(10)

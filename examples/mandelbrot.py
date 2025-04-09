@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from sympy import symbols
 from symjit import compile_func
 
-backend = "python" if len(sys.argv) > 2 and sys.argv[1] == "py" else "rust"
+backend = "python" if len(sys.argv) > 1 and sys.argv[1] == "py" else "rust"
 
 x, y, a, b = symbols("x y a b")
 

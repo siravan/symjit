@@ -1,9 +1,11 @@
+import sys
 import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 from sympy import symbols
-
 from symjit import compile_ode, compile_jac
+
+backend = "python" if len(sys.argv) > 1 and sys.argv[1] == "py" else "rust"
 
 t, x, y = symbols("t x y")
 alpha, beta, gamma, delta = symbols("alpha beta gamma delta")

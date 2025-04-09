@@ -3,7 +3,7 @@ from sympy import *
 from symjit import *
 import numpy as np
 
-backend = "python" if len(sys.argv) > 2 and sys.argv[1] == "py" else "rust"
+backend = "python" if len(sys.argv) > 1 and sys.argv[1] == "py" else "rust"
 
 x, y = symbols('x y')
 
