@@ -4,7 +4,7 @@ class Assembler:
         self.tail = None
         self.labels = {}
         self.jumps = []
-        
+
     def append_byte(self, *b):
         self.buf.extend(b)
 
@@ -14,7 +14,7 @@ class Assembler:
         self.buf.append((u >> 8) & 0xFF)
         self.buf.append((u >> 16) & 0xFF)
         self.buf.append((u >> 24) & 0xFF)
-        
+
     def begin_prepend(self):
         assert self.tail is None
         self.tail = self.buf
@@ -37,12 +37,11 @@ class Assembler:
     def jump(self, label, code=0):
         self.jumps.append((label, len(self.buf)))
         self.append_word(code)
-            
+
     def test(self, b):
         if self.buf == bytes(b):
             print(f"pass: {b}")
             self.buf.clear()
             return True
         else:
-            return False            
-
+            return False

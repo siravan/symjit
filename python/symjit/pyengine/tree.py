@@ -134,7 +134,9 @@ class IfElse:
 
     def compile(self, dst, prog, mem, vt):
         sp = mem.push()
-        use_reg_cond = sp < prog.count_shadows and self.true_val.is_pure and self.false_val.is_pure
+        use_reg_cond = (
+            sp < prog.count_shadows and self.true_val.is_pure and self.false_val.is_pure
+        )
 
         if use_reg_cond:
             self.cond.compile(prog.first_shadow + sp, prog, mem, vt)
@@ -168,7 +170,7 @@ class IfElse:
         else:
             prog.load_stack(2, sp)
             c = 2
-            
+
         prog.ifelse(dst, c, 0, f)
 
 
@@ -229,7 +231,7 @@ class Model:
         self.params = params
         self.obs = obs
         self.odes = odes
-        self.eqs = eqs        
+        self.eqs = eqs
 
     def __repr__(self):
         return f"""Model(
@@ -248,10 +250,10 @@ class Model:
         for eq in self.odes:
             eq.compile(dst, prog, mem, vt)
 
-        # we need to prepend and not append prologue 
+        # we need to prepend and not append prologue
         # because we don't know the stack size until
         # after compiling the body of the function
-        prog.prepend_prologue() 
+        prog.prepend_prologue()
         prog.append_epilogue()
 
 
@@ -278,6 +280,7 @@ def is_pure(op):
         "xor",
     ]
     return op in ops
+
 
 # ******************** Lowering ***********************
 
@@ -442,7 +445,7 @@ def model(states, eqs, params=None, obs=None):
         params = []
 
     if obs is None:
-        obs = [f"${i}" for i in range(len(eqs))]   
+        obs = [f"${i}" for i in range(len(eqs))]
 
     model = Model(
         Var("$_"),  # iv
@@ -454,7 +457,8 @@ def model(states, eqs, params=None, obs=None):
     )
 
     return model
-    
+
+
 def model_ode(iv, states, odes, params=None):
     try:
         states = list(states)
@@ -470,17 +474,18 @@ def model_ode(iv, states, odes, params=None):
 
     if params is None:
         params = []
-        
+
     model = Model(
         Var(iv),
         [Var(x) for x in states],  # states
         [Var(x) for x in params],  # params
-        [],     # obs
-        [],     # eqs
-        [EqDiff(Var(lhs), lower(rhs)) for (lhs, rhs) in zip(states, odes)],  # odes        
+        [],  # obs
+        [],  # eqs
+        [EqDiff(Var(lhs), lower(rhs)) for (lhs, rhs) in zip(states, odes)],  # odes
     )
 
     return model
+
 
 def model_jac(iv, states, odes, params=None):
     try:
@@ -494,29 +499,27 @@ def model_jac(iv, states, odes, params=None):
         odes = [odes]
 
     assert len(states) == len(odes)
-    
+
     n = len(states)
     eqs = []
     obs = []
-    
+
     for i in range(n):
         for j in range(n):
             df = diff(odes[i], states[j])
             eqs.append(df)
             obs.append(f"${i}_{j}")
-            
+
     if params is None:
         params = []
-        
+
     model = Model(
         Var(iv),
         [Var(x) for x in states],  # states
         [Var(x) for x in params],  # params
         [Var(x) for x in obs],  # obs
-        [Eq(Var(lhs), lower(rhs)) for (lhs, rhs) in zip(obs, eqs)], # eqs
-        [],     # odes        
+        [Eq(Var(lhs), lower(rhs)) for (lhs, rhs) in zip(obs, eqs)],  # eqs
+        [],  # odes
     )
-    
-    return model
-        
 
+    return model

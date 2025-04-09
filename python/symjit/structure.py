@@ -23,8 +23,8 @@ def operation(func):
     op = str(func)
     if func == sqrt:
         op = "root"
-    elif func == log: 
-        op = "ln"   # this is confusing but sympy uses `log` for natural logarithm
+    elif func == log:
+        op = "ln"  # this is confusing but sympy uses `log` for natural logarithm
     elif func == Abs:
         op = "abs"
     elif func == asin:
@@ -39,12 +39,12 @@ def operation(func):
         op = "arccosh"
     elif func == atanh:
         op = "arctanh"
-        
+
     return op
 
 
 def process_mul(y):
-    assert(y.is_Mul)
+    assert y.is_Mul
     if len(y.args) == 2 and y.args[1].is_Pow and y.args[1].args[1] == -1:
         return tree_node("divide", [y.args[0], y.args[1].args[0]])
     else:
@@ -52,7 +52,7 @@ def process_mul(y):
 
 
 def process_pow(y):
-    assert(y.is_Pow)
+    assert y.is_Pow
     power = y.args[1]
     arg = y.args[0]
 
@@ -77,12 +77,12 @@ def process_pow(y):
 def tree(y):
     if y.is_Add:
         return tree_node("plus", y.args)
-    elif y.is_Mul:        
+    elif y.is_Mul:
         return process_mul(y)
     elif y.is_Pow:
         return process_pow(y)
     elif y.is_Function:
-        return tree_node(operation(y.func), y.args)        
+        return tree_node(operation(y.func), y.args)
     else:
         raise ValueError("unreognized tree type")
 
@@ -179,7 +179,7 @@ def model(states, eqs, params=None, obs=None):
 
     if params is None:
         params = []
-        
+
     if obs is None:
         obs = [Symbol(f"${i}") for i in range(len(eqs))]
 
@@ -189,9 +189,7 @@ def model(states, eqs, params=None, obs=None):
         "states": [var(x) for x in states],
         "algs": [],
         "odes": [],
-        "obs": [
-            equation(expr(lhs), expr(rhs)) for (lhs, rhs) in zip(obs, eqs)
-        ],
+        "obs": [equation(expr(lhs), expr(rhs)) for (lhs, rhs) in zip(obs, eqs)],
     }
 
     return d
@@ -223,8 +221,8 @@ def model_ode(iv, states, odes, params=None):
     }
 
     return d
-    
- 
+
+
 def model_jac(iv, states, odes, params=None):
     try:
         states = list(states)
@@ -237,10 +235,10 @@ def model_jac(iv, states, odes, params=None):
         odes = [odes]
 
     assert len(states) == len(odes)
-    
+
     n = len(states)
     eqs = []
-    
+
     for i in range(n):
         for j in range(n):
             df = diff(odes[i], states[j])
@@ -255,7 +253,9 @@ def model_jac(iv, states, odes, params=None):
         "states": [var(x) for x in states],
         "algs": [],
         "odes": [],
-        "obs": [equation(expr(Symbol(f"${i}")), expr(rhs)) for (i, rhs) in enumerate(eqs)],
+        "obs": [
+            equation(expr(Symbol(f"${i}")), expr(rhs)) for (i, rhs) in enumerate(eqs)
+        ],
     }
 
     return d

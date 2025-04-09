@@ -9,11 +9,12 @@ backend = "python" if len(sys.argv) > 1 and sys.argv[1] == "py" else "rust"
 
 x = symbols("x")
 # Ahmed's Integral (Inside Interesting Integrals, 6.2)
-f = compile_func([x], [atan(sqrt(2+x**2)) / ((1+x**2)*sqrt(2+x**2))], backend=backend)
+f = compile_func(
+    [x], [atan(sqrt(2 + x**2)) / ((1 + x**2) * sqrt(2 + x**2))], backend=backend
+)
 
 sol = quad(f, 0.0, 1.0)
 
-np.testing.assert_approx_equal(sol[0], 5*pi**2/96)
+np.testing.assert_approx_equal(sol[0], 5 * pi**2 / 96)
 
-print('ok!')
-
+print("ok!")

@@ -123,13 +123,11 @@ impl ArmCompiler {
         } else if r.is_temp() {
             let k = self.stack.pop(&r);
             self.emit(arm! {ldr d(x), [sp, #8*k]});
+        } else if r.0 < 4096 {
+            self.emit(arm! {ldr d(x), [x(19), #8*r.0]});
         } else {
-            if r.0 < 4096 {
-                self.emit(arm! {ldr d(x), [x(19), #8*r.0]});
-            } else {
-                self.emit(arm! {movz x(1), #r.0});
-                self.emit(arm! {ldr d(x), [x(19), x(1), lsl #3]});
-            }                
+            self.emit(arm! {movz x(1), #r.0});
+            self.emit(arm! {ldr d(x), [x(19), x(1), lsl #3]});        
         };
 
         x
@@ -156,13 +154,11 @@ impl ArmCompiler {
         if r.is_temp() {
             let k = self.stack.push(&r);
             self.emit(arm! {str d(x), [sp, #8*k]});
-        } else {
-            if r.0 < 4096 {
+        } else if r.0 < 4096 {
                 self.emit(arm! {str d(x), [x(19), #8*r.0]});
-            } else {
-                self.emit(arm! {movz x(1), #r.0});
-                self.emit(arm! {str d(x), [x(19), x(1), lsl #3]});            
-            }                
+        } else {
+            self.emit(arm! {movz x(1), #r.0});
+            self.emit(arm! {str d(x), [x(19), x(1), lsl #3]});            
         }
     }
 

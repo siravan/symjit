@@ -18,9 +18,9 @@ pub struct AmdCompilerSimd {
 }
 
 #[cfg(target_family = "unix")]
-const COUNT_TEMP_YMM: u8 = 13;  // YMM3-YMM15
+const COUNT_TEMP_YMM: u8 = 13; // YMM3-YMM15
 #[cfg(target_family = "windows")]
-const COUNT_TEMP_YMM: u8 = 3;   // YMM3-YMM5 (Windows ABI)
+const COUNT_TEMP_YMM: u8 = 3; // YMM3-YMM5 (Windows ABI)
 
 impl AmdCompilerSimd {
     pub fn new() -> AmdCompilerSimd {

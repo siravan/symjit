@@ -18,19 +18,19 @@ class Engine:
             dll_name = self.find_dll("darwin")
         elif sys.platform == "win32":
             dll_name = self.find_dll("win_amd64")
-            
+
         if dll_name is None:
             self.is_valid = False
-            return        
-    
+            return
+
         try:
             dll_path = os.path.join(os.path.dirname(__file__), dll_name)
             self.dll = ctypes.CDLL(dll_path)
-            self.populate()            
+            self.populate()
             self.is_valid = True
         except:
             self.is_valid = False
-    
+
     def populate(self):
         self._info = self.dll.info
         self._info.argtypes = []
@@ -74,12 +74,12 @@ class Engine:
             ctypes.c_double,  # t
         ]
         self._execute.restype = ctypes.c_bool
-        
+
         self._execute_vectorized = self.dll.execute_vectorized
         self._execute_vectorized.argtypes = [
             ctypes.c_void_p,  # handle
-            ctypes.POINTER(ctypes.c_double),    # buf
-            ctypes.c_size_t                     # n
+            ctypes.POINTER(ctypes.c_double),  # buf
+            ctypes.c_size_t,  # n
         ]
         self._execute_vectorized.restype = ctypes.c_bool
 
@@ -129,7 +129,7 @@ class Engine:
 
     def info(self):
         return self._info()
-        
+
     def find_dll(self, substr):
         files = os.listdir(os.path.dirname(__file__))
         matches = list(filter(lambda s: s.find(substr) >= 0, files))
@@ -137,16 +137,18 @@ class Engine:
             return None
         else:
             return matches[0]
-        
+
 
 #################################################################
 
-lib = Engine()   # interface to the rust codegen engine
+lib = Engine()  # interface to the rust codegen engine
+
 
 def from_raw_parts(ptr, count):
     return np.ctypeslib.as_array(ptr, shape=(count,))
 
-class RustyCompiler:        
+
+class RustyCompiler:
     def __init__(self, model, ty="native", use_simd=True, convert=True):
         if convert:
             model = json.dumps(model)
@@ -158,7 +160,7 @@ class RustyCompiler:
 
     def __del__(self):
         lib._finalize(self.p)
-        
+
     def get_u0(self):
         u0 = np.zeros(self.count_states, dtype="double")
         lib._fill_u0(self.p, np.ctypeslib.as_ctypes(u0), self.count_states)
@@ -179,22 +181,20 @@ class RustyCompiler:
         self.params = from_raw_parts(lib._ptr_params(self.p), self.count_params)
         self.obs = from_raw_parts(lib._ptr_obs(self.p), self.count_obs)
         self.diffs = from_raw_parts(lib._ptr_diffs(self.p), self.count_diffs)
-        
+
     def dump(self, name, what="scalar"):
         if not lib._dump(self.p, name.encode("utf-8"), what.encode("utf-8")):
             raise ValueError("cannot dump the requested code")
         with open(name, "rb") as fd:
-            buf = fd.read()            
+            buf = fd.read()
             return buf
-            
-    def execute(self, t = 0.0):
+
+    def execute(self, t=0.0):
         if not lib._execute(self.p, t):
-            raise ValueError("cannot execute the model")            
-        
+            raise ValueError("cannot execute the model")
+
     def execute_vectorized(self, buf):
         ptr = buf.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         n = buf.shape[1]
         if not lib._execute_vectorized(self.p, ptr, n):
             raise ValueError("cannot execute the model")
-
-            

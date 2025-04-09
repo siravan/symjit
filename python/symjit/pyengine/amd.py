@@ -3,6 +3,7 @@ import sys
 from . import assembler
 from . import vectorizer
 
+
 def reg_index(reg):
     if isinstance(reg, int):
         return reg
@@ -46,8 +47,8 @@ def reg_index(reg):
 class Amd(assembler.Assembler):
     def __init__(self):
         super().__init__()
-        self.is_win = (sys.platform == "win32")        
-        
+        self.is_win = sys.platform == "win32"
+
     def apply_jumps(self):
         for label, k in self.jumps:
             target = self.labels[label]
@@ -55,7 +56,7 @@ class Amd(assembler.Assembler):
             self.buf[k] = offset & 0xFF
             self.buf[k + 1] = (offset >> 8) & 0xFF
             self.buf[k + 2] = (offset >> 16) & 0xFF
-            self.buf[k + 3] = (offset >> 24) & 0xFF                
+            self.buf[k + 3] = (offset >> 24) & 0xFF
 
     def modrm_reg(self, reg, rm):
         reg = reg_index(reg)
@@ -101,7 +102,7 @@ class Amd(assembler.Assembler):
         self.append_byte(0xC5)
         self.append_byte((r | vvvv | 3) ^ 0xF8)
 
-    def vex3pd(self, reg, vreg, rm, encoding = 1):
+    def vex3pd(self, reg, vreg, rm, encoding=1):
         """This is the three-byte VEX prefix (VEX3) for packed-double (pd)
         and 256-bit ymm registers"""
         r = (reg & 8) << 4
@@ -110,8 +111,8 @@ class Amd(assembler.Assembler):
         self.append_byte(0xC4)
         self.append_byte((r | b | encoding) ^ 0xE0)
         self.append_byte((vvvv | 5) ^ 0x78)
-        
-    def vex3sd(self, reg, vreg, rm, encoding = 1):
+
+    def vex3sd(self, reg, vreg, rm, encoding=1):
         """This is the three-byte VEX prefix (VEX3) for packed-double (pd)
         and 256-bit ymm registers"""
         r = (reg & 8) << 4
@@ -119,8 +120,8 @@ class Amd(assembler.Assembler):
         vvvv = vreg << 3
         self.append_byte(0xC4)
         self.append_byte((r | b | encoding) ^ 0xE0)
-        self.append_byte((vvvv | 3) ^ 0x78)    
-        
+        self.append_byte((vvvv | 3) ^ 0x78)
+
     def vex_sd(self, reg, vreg, rm):
         rm = reg_index(rm)
         if rm < 8:
@@ -367,9 +368,8 @@ class Amd(assembler.Assembler):
     def jnz(self, label):
         self.append_byte(0x0F, 0x85)
         self.jump(label)
-        
-        
-        
+
+
 class AmdIR:
     def __init__(self, mem):
         self.amd = Amd()
@@ -377,144 +377,144 @@ class AmdIR:
         # shadows are XMM/YMM registers that shadow the stack slots
         self.first_shadow = 3
         self.count_shadows = 3 if sys.platform == "win32" else 13
-        
+
     def vectorize(self):
-        return vectorizer.vectorize_amd(self.amd, self.mem)        
-        
+        return vectorizer.vectorize_amd(self.amd, self.mem)
+
     def buf(self):
         return self.amd.buf
-        
+
     def load_stack(self, dst, idx):
         self.amd.movsd_xmm_mem(dst, "rsp", 8 * idx)
-        
+
     def save_stack(self, src, idx):
         self.amd.movsd_mem_xmm("rsp", 8 * idx, src)
-        
+
     def load_mem(self, dst, idx):
         self.amd.movsd_xmm_mem(dst, "rbp", 8 * idx)
-        
+
     def save_mem(self, src, idx):
         self.amd.movsd_mem_xmm("rbp", 8 * idx, src)
-        
-    def neg(self, dst):        
+
+    def neg(self, dst):
         self.amd.movsd_xmm_mem(1, "rbp", 8 * self.mem.constant(-0.0))
         self.amd.vxorpd(dst, 0, 1)
-        
-    def abs(self, dst):       
+
+    def abs(self, dst):
         self.amd.movsd_xmm_mem(1, "rbp", 8 * self.mem.constant(-0.0))
         self.amd.vandnpd(dst, 1, 0)
-        
-    def root(self, dst):      
+
+    def root(self, dst):
         self.amd.vsqrtsd(dst, 0)
-        
+
     def square(self, dst):
         self.amd.vmulsd(dst, 0, 0)
-        
+
     def cube(self, dst):
         self.amd.vmulsd(1, 0, 0)
         self.amd.vmulsd(dst, 0, 1)
-        
-    def recip(self, dst):     
+
+    def recip(self, dst):
         self.amd.movsd_xmm_mem(1, "rbp", 8 * self.mem.constant(1.0))
         self.amd.vdivsd(dst, 1, 0)
-        
+
     def plus(self, dst, r):
         self.amd.vaddsd(dst, 0, r)
 
     def minus(self, dst, r):
         self.amd.vsubsd(dst, 0, r)
-        
+
     def times(self, dst, r):
         self.amd.vmulsd(dst, 0, r)
-        
+
     def divide(self, dst, r):
-        self.amd.vdivsd(dst, 0, r)        
-        
+        self.amd.vdivsd(dst, 0, r)
+
     def gt(self, dst, r):
         self.amd.vcmpnlesd(dst, 0, r)
 
     def geq(self, dst, r):
         self.amd.vcmpnltsd(dst, 0, r)
-        
+
     def lt(self, dst, r):
         self.amd.vcmpltsd(dst, 0, r)
-        
+
     def leq(self, dst, r):
         self.amd.vcmplesd(dst, 0, r)
-        
+
     def eq(self, dst, r):
         self.amd.vcmpeqsd(dst, 0, r)
-        
+
     def neq(self, dst, r):
         self.amd.vcmpneqsd(dst, 0, r)
-        
+
     def boolean_and(self, dst, r):
         self.amd.vandpd(dst, 0, r)
-        
+
     def boolean_or(self, dst, r):
         self.amd.vorpd(dst, 0, r)
-        
+
     def boolean_xor(self, dst, r):
-        self.amd.vxorpd(dst, 0, r)        
-        
+        self.amd.vxorpd(dst, 0, r)
+
     def call_unary(self, dst, idx):
         # Windows 32-byte home area
         if self.amd.is_win:
             self.amd.sub_rsp(32)
-            
-        self.amd.mov_reg_mem("rax", "rbx", 8 * idx)
-        self.amd.call("rax")
-        
-        if dst != 0:
-            self.amd.movapd(dst, 0)
-            
-        if self.amd.is_win:
-            self.amd.add_rsp(32)            
-    
-    def call_binary(self, dst, r, idx):
-        # Windows 32-byte home area
-        if self.amd.is_win:
-            self.amd.sub_rsp(32)
-            
-        if r != 1:
-            self.amd.movapd(1, r)            
-            
+
         self.amd.mov_reg_mem("rax", "rbx", 8 * idx)
         self.amd.call("rax")
 
         if dst != 0:
             self.amd.movapd(dst, 0)
-            
+
         if self.amd.is_win:
-            self.amd.add_rsp(32)            
-            
+            self.amd.add_rsp(32)
+
+    def call_binary(self, dst, r, idx):
+        # Windows 32-byte home area
+        if self.amd.is_win:
+            self.amd.sub_rsp(32)
+
+        if r != 1:
+            self.amd.movapd(1, r)
+
+        self.amd.mov_reg_mem("rax", "rbx", 8 * idx)
+        self.amd.call("rax")
+
+        if dst != 0:
+            self.amd.movapd(dst, 0)
+
+        if self.amd.is_win:
+            self.amd.add_rsp(32)
+
     def ifelse(self, dst, cond, true_reg, false_reg):
         self.amd.vandpd(true_reg, true_reg, cond)
         self.amd.vandnpd(cond, cond, false_reg)
         self.amd.vorpd(dst, true_reg, cond)
-        
+
     def stack_size(self):
         cap = self.mem.stack_size
         pad = (cap + 1) & 1
         return (cap + pad) * 8
-        
+
     def prepend_prologue(self):
         # note that we generate the prologue after the main body
-        # because we need to know the stack size        
-        self.amd.begin_prepend()        
-        
+        # because we need to know the stack size
+        self.amd.begin_prepend()
+
         self.amd.push("rbp")
         self.amd.push("rbx")
-        
+
         if self.amd.is_win:
             self.amd.mov("rbp", "rcx")
-            self.amd.mov("rbx", "rdx")  # different than the rust code        
+            self.amd.mov("rbx", "rdx")  # different than the rust code
         else:
             self.amd.mov("rbp", "rdi")
             self.amd.mov("rbx", "rsi")  # different than the rust code
-        
+
         self.amd.sub_rsp(self.stack_size())
-        self.amd.end_prepend()        
+        self.amd.end_prepend()
 
     def append_epilogue(self):
         self.amd.vzeroupper()
@@ -523,9 +523,9 @@ class AmdIR:
         self.amd.pop("rbp")
         self.amd.ret()
 
-        
-        
+
 ##########################################################################
+
 
 def test_avx():
     amd = Amd()

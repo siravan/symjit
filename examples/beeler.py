@@ -15,7 +15,9 @@ u0 = f.get_u0()
 p = f.get_p()
 
 t_eval = np.arange(0, 2000, 1.0)
-sol = scipy.integrate.solve_ivp(f, (0, 2000), u0, t_eval=t_eval, args=p, method='BDF', max_step=0.1)
+sol = scipy.integrate.solve_ivp(
+    f, (0, 2000), u0, t_eval=t_eval, args=p, method="BDF", max_step=0.1
+)
 
 plt.plot(t_eval, sol.y[6, :])
 plt.show()

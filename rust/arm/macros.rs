@@ -99,7 +99,7 @@ macro_rules! arm {
     (ldr x($rd:expr), [x($rn:expr), #$ofs:expr]) => {
         0xf9400000 | rd!($rd) | rn!($rn) | ofs!($ofs)
     };
-    
+
     (str d($rd:expr), [x($rn:expr), #$ofs:expr]) => {
         0xfd000000 | rd!($rd) | rn!($rn) | ofs!($ofs)
     };
