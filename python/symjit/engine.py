@@ -182,7 +182,10 @@ class RustyCompiler:
         
     def dump(self, name, what="scalar"):
         if not lib._dump(self.p, name.encode("utf-8"), what.encode("utf-8")):
-            print("cannot dump the requested code")
+            raise ValueError("cannot dump the requested code")
+        with open(name, "rb") as fd:
+            buf = fd.read()            
+            return buf
             
     def execute(self, t = 0.0):
         if not lib._execute(self.p, t):

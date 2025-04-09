@@ -312,6 +312,7 @@ class PyCompiler:
 
     def populate(self):
         first_state = self.mem.first_state
+        self.first_state = first_state
         first_param = self.mem.first_param
         first_obs = self.mem.first_obs
         first_diff = self.mem.first_diff
@@ -326,19 +327,22 @@ class PyCompiler:
         self.obs = self.heap[first_obs:first_obs+self.count_obs]
         self.diffs = self.heap[first_diff:first_diff+self.count_diffs]        
         
-    def dump(self, name, what="scalar"):
+    def dump(self, name=None, what="scalar"):
         if what == "scalar":
             buf = self.prog.buf()
         elif what == "vectorized":
             buf = self.vprog.buf
         else:
             raise ValueError("undefined `what`")
-            
+
         with open(name, "wb") as fd:
             fd.write(buf)
+        
+        return buf            
             
     def execute(self, t = 0.0):
         if self.can_run:
+            self.heap[self.first_state - 1] = t
             self.func(self.heap_ptr, self.table_ptr)
         
     def execute_vectorized(self, buf):

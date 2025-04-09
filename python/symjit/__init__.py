@@ -1,10 +1,10 @@
 import numpy as np
 import numbers
+import importlib
 
 from . import engine
-from . import structure
-
-import pyengine      
+from . import structure    
+from . import pyengine
 
 class Func:
     def __init__(self, compiler):
@@ -72,7 +72,7 @@ class OdeFunc:
         return self.compiler.get_p()
         
     def dump(self, name, what="scalar"):
-        self.compiler.dump(name, what=what)        
+        return self.compiler.dump(name, what=what)        
         
 
 class JacFunc:

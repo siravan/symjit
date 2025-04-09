@@ -229,7 +229,7 @@ class Model:
         self.params = params
         self.obs = obs
         self.odes = odes
-        self.eqs = eqs
+        self.eqs = eqs        
 
     def __repr__(self):
         return f"""Model(

@@ -85,7 +85,23 @@ impl Frame {
             WordType::Temp => {
                 return self.alloc_temp();
             }
-            WordType::Const(_) => {}
+            WordType::Const(val) => {
+                // reuse constants
+                // note: we use a naive search here instead of a HashMap
+                // because f64 is not hashable
+                
+                for (i, w) in self.words.iter().enumerate() {
+                    if let WordType::Const(x) = w {
+                        // note the check with -0.0
+                        // this is because 0.0 == -0.0, but we need a separate -0.0
+                        // for abs and neg functions
+                        if *val == *x && *val != -0.0 {
+                            return Word(i, 0)
+                        }
+                    }
+                } 
+                               
+            }
             WordType::Var(s) | WordType::State(s, _) | WordType::Param(s, _) | WordType::Obs(s) => {
                 if let Some(_x) = self.named.insert(s.clone(), idx) {
                     panic!("key already exists")
@@ -108,7 +124,7 @@ impl Frame {
         if r.is_temp() {
             self.freed.push(r);
         };
-    }
+    }    
 
     pub fn is_state(&self, r: &Word) -> bool {
         !r.is_temp() && matches!(self.words[r.0], WordType::State(_, _))
