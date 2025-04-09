@@ -190,8 +190,8 @@ class Code:
             self.addr = Code.alloc(
                 None,
                 size,
-                MEM_RESERVE | MEM_COMMIT,
-                PAGE_EXECUTE_READWRITE
+                Code.MEM_RESERVE | Code.MEM_COMMIT,
+                Code.PAGE_EXECUTE_READWRITE
             )
             buf = bytes(buf)
             ctypes.memmove(self.addr, buf, len(buf))
@@ -240,7 +240,7 @@ class Code:
 
     def __del__(self):
         if sys.platform == "win32":
-            Code.free(self.addr, 0, MEM_RELEASE)
+            Code.free(self.addr, 0, Code.MEM_RELEASE)
             # note: for linux, mmap takes care of releasing memory
 
 

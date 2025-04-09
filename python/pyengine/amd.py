@@ -474,7 +474,7 @@ class AmdIR:
     def call_binary(self, dst, r, idx):
         # Windows 32-byte home area
         if self.amd.is_win:
-            amd.sub_rsp(32)
+            self.amd.sub_rsp(32)
             
         if r != 1:
             self.amd.movapd(1, r)            
