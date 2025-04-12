@@ -18,7 +18,7 @@ pub struct AmdCompiler {
 }
 
 #[cfg(target_family = "unix")]
-const COUNT_TEMP_XMM: u8 = 13; // XMM3-XMM15
+const COUNT_TEMP_XMM: u8 = 9; // XMM3-XMM15
 #[cfg(target_family = "windows")]
 const COUNT_TEMP_XMM: u8 = 3; // XMM3-XMM5 (Window's ABI)
 
@@ -56,7 +56,7 @@ impl AmdCompiler {
                 self.emit(amd! {xorpd xmm(0), xmm(1)});
             }
             "abs" => {
-                self.emit(amd! {movsd xmm(1), xmm(0)});
+                self.emit(amd! {movapd xmm(1), xmm(0)});
                 self.emit(amd! {movsd xmm(0), qword ptr [rbp+8*Frame::MINUS_ZERO.0]});
                 self.emit(amd! {andnpd xmm(0), xmm(1)});
             }
@@ -67,18 +67,18 @@ impl AmdCompiler {
                 self.emit(amd! {mulsd xmm(0), xmm(0)});
             }
             "cube" => {
-                self.emit(amd! {movsd xmm(1), xmm(0)});
+                self.emit(amd! {movapd xmm(1), xmm(0)});
                 self.emit(amd! {mulsd xmm(0), xmm(0)});
                 self.emit(amd! {mulsd xmm(0), xmm(1)});
             }
             "recip" => {
-                self.emit(amd! {movsd xmm(1), xmm(0)});
+                self.emit(amd! {movapd xmm(1), xmm(0)});
                 self.emit(amd! {movsd xmm(0), qword ptr [rbp+8*Frame::ONE.0]});
                 self.emit(amd! {divsd xmm(0), xmm(1)});
             }
             "power" | "rem" => {
                 if ry != 1 {
-                    self.emit(amd! {movsd xmm(1), xmm(ry)});
+                    self.emit(amd! {movapd xmm(1), xmm(ry)});
                 }
                 self.emit(amd! {mov rax, qword ptr [rbx+8*p.0]});
                 self.emit(amd! {call rax});
