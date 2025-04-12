@@ -163,17 +163,19 @@ impl ArmCompiler {
     }
 
     fn prologue(&mut self, n: usize) {
-        self.emit(arm! {sub sp, sp, #n+32});
-        self.emit(arm! {str lr, [sp, #n]});
-        self.emit(arm! {stp x(19), x(20), [sp, #n+16]});
+        self.emit(arm! {sub sp, sp, #32});
+        self.emit(arm! {str lr, [sp, #0]});
+        self.emit(arm! {stp x(19), x(20), [sp, #16]});
+        self.emit(arm! {sub sp, sp, #n});
         self.emit(arm! {mov x(19), x(0)});
         self.emit(arm! {mov x(20), x(2)});
     }
 
     fn epilogue(&mut self, n: usize) {
-        self.emit(arm! {ldp x(19), x(20), [sp, #n+16]});
-        self.emit(arm! {ldr lr, [sp, #n]});
-        self.emit(arm! {add sp, sp, #n+32});
+        self.emit(arm! {add sp, sp, #n});
+        self.emit(arm! {ldp x(19), x(20), [sp, #16]});
+        self.emit(arm! {ldr lr, [sp, #0]});
+        self.emit(arm! {add sp, sp, #32});
         self.emit(arm! {ret});
     }
 

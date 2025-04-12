@@ -419,9 +419,10 @@ class ArmIR:
         self.arm.begin_prepend()
 
         n = self.stack_size()
-        self.arm.sub_imm("sp", "sp", n + 32)
-        self.arm.str_x("lr", "sp", n)
-        self.arm.stp_x(19, 20, "sp", n + 16)
+        self.arm.sub_imm("sp", "sp", 32)
+        self.arm.str_x("lr", "sp", 0)
+        self.arm.stp_x(19, 20, "sp", 16)
+        self.arm.sub_imm("sp", "sp", n)
         self.arm.mov(19, 0)
         self.arm.mov(20, 1)  # different than Rust
 
@@ -429,9 +430,10 @@ class ArmIR:
 
     def append_epilogue(self):
         n = self.stack_size()
-        self.arm.ldp_x(19, 20, "sp", n + 16)
-        self.arm.ldr_x("lr", "sp", n)
-        self.arm.add_imm("sp", "sp", n + 32)
+        self.arm.add_imm("sp", "sp", n)
+        self.arm.ldp_x(19, 20, "sp", 16)
+        self.arm.ldr_x("lr", "sp", 0)
+        self.arm.add_imm("sp", "sp", 32)
         self.arm.ret()
 
 
