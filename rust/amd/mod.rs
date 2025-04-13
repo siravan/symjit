@@ -18,7 +18,7 @@ pub struct AmdCompiler {
 }
 
 #[cfg(target_family = "unix")]
-const COUNT_TEMP_XMM: u8 = 9; // XMM3-XMM15
+const COUNT_TEMP_XMM: u8 = 13; // XMM3-XMM15
 #[cfg(target_family = "windows")]
 const COUNT_TEMP_XMM: u8 = 3; // XMM3-XMM5 (Window's ABI)
 

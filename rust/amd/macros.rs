@@ -91,18 +91,16 @@ macro_rules! modrm_mem {
     }};
 }
 
-// remove the REX byte if it is not needed 
+// remove the REX byte if it is not needed
 // this happens if none of XMM8-XMM15 are used
 macro_rules! filter_rex {
-    ($v:expr) => {
-        {
-            let mut v = $v;
-            if (v[0] == 0x66 || v[0] == 0xf2) && v[1] == 0x48 {
-                v.remove(1);
-            };
-            v
-        }
-    }
+    ($v:expr) => {{
+        let mut v = $v;
+        if (v[0] == 0x66 || v[0] == 0xf2) && v[1] == 0x48 {
+            v.remove(1);
+        };
+        v
+    }};
 }
 
 macro_rules! assemble {
@@ -148,14 +146,14 @@ macro_rules! amd {
             let reg = $reg;
             let rm = reg!($rm);
             assemble![0xf2, rex!(reg, rm), 0x0f, 0x10; modrm_mem!(reg, rm, $offset)]
-        }            
+        }
     };
     (movsd qword ptr [$rm:ident + $offset:expr], xmm($reg:expr)) => {
         {
             let reg = $reg;
             let rm = reg!($rm);
             assemble![0xf2, rex!(reg, rm), 0x0f, 0x11; modrm_mem!(reg, rm, $offset)]
-        }            
+        }
     };
     (movq xmm($reg:expr), $rm:ident) => {
         {
@@ -184,7 +182,7 @@ macro_rules! amd {
             let rm = reg!($rm);
             assemble![rex!(reg, rm), 0x8b; modrm_mem!(reg, rm, $offset)]
         }
-    };     
+    };
     (mov qword ptr [$rm:ident + $offset:expr], $reg:ident) => {
         {
             let reg = reg!($reg);
