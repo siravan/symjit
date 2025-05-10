@@ -9,6 +9,8 @@ mod register;
 mod runnable;
 mod utils;
 
+mod tree;
+
 mod amd;
 mod arm;
 mod avx;

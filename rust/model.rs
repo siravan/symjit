@@ -5,6 +5,8 @@ use serde::Deserialize;
 use crate::code::*;
 use crate::register::*;
 
+use crate::tree::*;
+
 /// Lowers Expr and its constituents into an intermediate representation
 pub trait Lower {
     fn lower(&self, prog: &mut Program) -> Result<Word>;
@@ -85,6 +87,10 @@ impl Program {
         // resolved. If not, it returns an Err. This is to
         // prevent a panic later when virtual table is formed.
         VirtualTable::<f64>::confirm(&prog.ft)?;
+
+        let mut builder = Builder::new();
+        let _ = ml.transform(&mut builder);
+        println!("{:#?}", builder);
 
         Ok(prog)
     }
@@ -213,6 +219,14 @@ impl Lower for Variable {
     }
 }
 
+impl Transformer for Variable {
+    fn transform(&self, builder: &mut Builder) -> Node {
+        Node::Var {
+            name: self.name.clone(),
+        }
+    }
+}
+
 /// Expr tree
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type")]
@@ -331,6 +345,107 @@ impl Expr {
 
         Ok(x)
     }
+
+    //**************** Statement *****************//
+
+    fn transform_unary(&self, builder: &mut Builder, op: &str, args: &[Expr]) -> Node {
+        let intrinsic_ops = vec!["neq", "abs", "not", "root", "square", "cube", "recip"];
+
+        let x = args[0].transform(builder);
+
+        if intrinsic_ops.contains(&op) {
+            Node::Unary {
+                op: op.to_string(),
+                arg: Box::new(x),
+            }
+        } else {
+            let dst = builder.create_temp();
+            builder.add_stmt(Statement::Call {
+                op: op.to_string(),
+                lhs: dst.clone(),
+                args: vec![x],
+            });
+            Node::Var { name: dst }
+        }
+    }
+
+    fn transform_binary(&self, builder: &mut Builder, op: &str, args: &[Expr]) -> Node {
+        let intrinsic_ops = vec![
+            "plus", "minus", "neg", "times", "divide", "gt", "geq", "lt", "leq", "eq", "neq",
+            "and", "or", "xor", "if_pos", "if_neg",
+        ];
+
+        let l = args[0].transform(builder);
+        let r = args[1].transform(builder);
+
+        if intrinsic_ops.contains(&op) {
+            Node::Binary {
+                op: op.to_string(),
+                left: Box::new(l),
+                right: Box::new(r),
+            }
+        } else {
+            let dst = builder.create_temp();
+            builder.add_stmt(Statement::Call {
+                op: op.to_string(),
+                lhs: dst.clone(),
+                args: vec![l, r],
+            });
+            Node::Var { name: dst }
+        }
+    }
+
+    fn transform_ternary(&self, builder: &mut Builder, op: &str, args: &[Expr]) -> Node {
+        if op != "ifelse" {
+            return self.transform_poly(builder, op, args);
+        }
+
+        let cond = args[0].transform(builder);
+        let tmp = builder.create_temp();
+        builder.add_stmt(Statement::Assign {
+            lhs: tmp.clone(),
+            rhs: cond,
+        });
+        let tmp = Node::Var { name: tmp };
+
+        let true_val = args[1].transform(builder);
+        let false_val = args[2].transform(builder);
+
+        let st = Node::Binary {
+            op: "select_if".to_string(),
+            left: Box::new(tmp.clone()),
+            right: Box::new(true_val),
+        };
+        let sf = Node::Binary {
+            op: "select_else".to_string(),
+            left: Box::new(tmp.clone()),
+            right: Box::new(false_val),
+        };
+        Node::Binary {
+            op: "or".to_string(),
+            left: Box::new(st),
+            right: Box::new(sf),
+        }
+    }
+
+    fn transform_poly(&self, builder: &mut Builder, op: &str, args: &[Expr]) -> Node {
+        if !(op == "plus" || op == "times") {
+            panic!("missing poly op: {}", op);
+        }
+
+        let mut x = args[0].transform(builder);
+
+        for arg in args.iter().skip(1) {
+            let y = arg.transform(builder);
+            x = Node::Binary {
+                op: op.to_string(),
+                left: Box::new(x),
+                right: Box::new(y),
+            };
+        }
+
+        x
+    }
 }
 
 impl Lower for Expr {
@@ -369,6 +484,21 @@ impl Lower for Expr {
     }
 }
 
+impl Transformer for Expr {
+    fn transform(&self, builder: &mut Builder) -> Node {
+        match self {
+            Expr::Const { val } => Node::Const { val: *val },
+            Expr::Var { name } => Node::Var { name: name.clone() },
+            Expr::Tree { op, args } => match args.len() {
+                1 => self.transform_unary(builder, op.as_str(), &args),
+                2 => self.transform_binary(builder, op.as_str(), &args),
+                3 => self.transform_ternary(builder, op.as_str(), &args),
+                _ => self.transform_poly(builder, op.as_str(), &args),
+            },
+        }
+    }
+}
+
 /// Represents lhs ~ rhs
 #[derive(Debug, Clone, Deserialize)]
 pub struct Equation {
@@ -392,6 +522,18 @@ impl Lower for Equation {
 
         prog.push_unary("mov", src, dst);
         Ok(Frame::ZERO)
+    }
+}
+
+impl Transformer for Equation {
+    fn transform(&self, builder: &mut Builder) -> Node {
+        if let Some(name) = self.lhs.var() {
+            let rhs = self.rhs.transform(builder);
+            builder.add_stmt(Statement::Assign { lhs: name, rhs });
+            Node::Void
+        } else {
+            panic!("lhs not found!");
+        }
     }
 }
 
@@ -425,5 +567,14 @@ impl Lower for CellModel {
         }
 
         Ok(Frame::ZERO)
+    }
+}
+
+impl Transformer for CellModel {
+    fn transform(&self, builder: &mut Builder) -> Node {
+        for eq in &self.obs {
+            eq.transform(builder);
+        }
+        Node::Void
     }
 }

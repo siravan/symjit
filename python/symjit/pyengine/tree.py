@@ -245,10 +245,12 @@ class Model:
 
     def compile(self, dst, prog, mem, vt):
         for eq in self.eqs:
-            eq.compile(dst, prog, mem, vt)
+            if eq is not None:
+                eq.compile(dst, prog, mem, vt)
 
         for eq in self.odes:
-            eq.compile(dst, prog, mem, vt)
+            if eq is not None:
+                eq.compile(dst, prog, mem, vt)
 
         # we need to prepend and not append prologue
         # because we don't know the stack size until
