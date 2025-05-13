@@ -50,16 +50,21 @@ impl Program {
 
         frame.alloc(WordType::Var(ml.iv.name.clone()));
 
+        let mut builder = Builder::new();
+
         for v in &ml.states {
+            builder.sym_table.add_mem(&v.name);
             frame.alloc(WordType::State(v.name.clone(), v.val));
         }
 
         for v in &ml.params {
+            builder.sym_table.add_mem(&v.name);
             frame.alloc(WordType::Param(v.name.clone(), v.val));
         }
 
         for eq in &ml.obs {
             if let Some(name) = eq.lhs.var() {
+                builder.sym_table.add_mem(&name);
                 frame.alloc(WordType::Obs(name));
             } else {
                 return Err(anyhow!("lhs var not found"));
@@ -88,9 +93,9 @@ impl Program {
         // prevent a panic later when virtual table is formed.
         VirtualTable::<f64>::confirm(&prog.ft)?;
 
-        let mut builder = Builder::new();
         let _ = ml.transform(&mut builder);
         println!("{:#?}", builder);
+        builder.compile();
 
         Ok(prog)
     }
@@ -221,9 +226,7 @@ impl Lower for Variable {
 
 impl Transformer for Variable {
     fn transform(&self, builder: &mut Builder) -> Node {
-        Node::Var {
-            name: self.name.clone(),
-        }
+        builder.create_var(&self.name)
     }
 }
 
@@ -354,18 +357,17 @@ impl Expr {
         let x = args[0].transform(builder);
 
         if intrinsic_ops.contains(&op) {
-            Node::Unary {
-                op: op.to_string(),
-                arg: Box::new(x),
-            }
+            builder.create_unary(op, x)
         } else {
-            let dst = builder.create_temp();
+            let (dst, name) = builder.add_tmp();
+            
             builder.add_stmt(Statement::Call {
                 op: op.to_string(),
                 lhs: dst.clone(),
                 args: vec![x],
             });
-            Node::Var { name: dst }
+            
+            dst
         }
     }
 
@@ -379,19 +381,17 @@ impl Expr {
         let r = args[1].transform(builder);
 
         if intrinsic_ops.contains(&op) {
-            Node::Binary {
-                op: op.to_string(),
-                left: Box::new(l),
-                right: Box::new(r),
-            }
+            builder.create_binary(op, l, r)
         } else {
-            let dst = builder.create_temp();
+            let (dst, name) = builder.add_tmp();
+            
             builder.add_stmt(Statement::Call {
                 op: op.to_string(),
                 lhs: dst.clone(),
                 args: vec![l, r],
             });
-            Node::Var { name: dst }
+
+            dst
         }
     }
 
@@ -401,31 +401,19 @@ impl Expr {
         }
 
         let cond = args[0].transform(builder);
-        let tmp = builder.create_temp();
+        let (tmp, name) = builder.add_tmp();
+
         builder.add_stmt(Statement::Assign {
             lhs: tmp.clone(),
             rhs: cond,
         });
-        let tmp = Node::Var { name: tmp };
 
         let true_val = args[1].transform(builder);
         let false_val = args[2].transform(builder);
 
-        let st = Node::Binary {
-            op: "select_if".to_string(),
-            left: Box::new(tmp.clone()),
-            right: Box::new(true_val),
-        };
-        let sf = Node::Binary {
-            op: "select_else".to_string(),
-            left: Box::new(tmp.clone()),
-            right: Box::new(false_val),
-        };
-        Node::Binary {
-            op: "or".to_string(),
-            left: Box::new(st),
-            right: Box::new(sf),
-        }
+        let st = builder.create_binary("select_if", tmp.clone(), true_val);
+        let sf = builder.create_binary("select_else", tmp.clone(), false_val);
+        builder.create_binary("or", st, sf)
     }
 
     fn transform_poly(&self, builder: &mut Builder, op: &str, args: &[Expr]) -> Node {
@@ -437,11 +425,7 @@ impl Expr {
 
         for arg in args.iter().skip(1) {
             let y = arg.transform(builder);
-            x = Node::Binary {
-                op: op.to_string(),
-                left: Box::new(x),
-                right: Box::new(y),
-            };
+            x = builder.create_binary(op, x, y);
         }
 
         x
@@ -487,8 +471,8 @@ impl Lower for Expr {
 impl Transformer for Expr {
     fn transform(&self, builder: &mut Builder) -> Node {
         match self {
-            Expr::Const { val } => Node::Const { val: *val },
-            Expr::Var { name } => Node::Var { name: name.clone() },
+            Expr::Const { val } => builder.create_const(*val),
+            Expr::Var { name } => builder.create_var(name),
             Expr::Tree { op, args } => match args.len() {
                 1 => self.transform_unary(builder, op.as_str(), &args),
                 2 => self.transform_binary(builder, op.as_str(), &args),
@@ -529,8 +513,9 @@ impl Transformer for Equation {
     fn transform(&self, builder: &mut Builder) -> Node {
         if let Some(name) = self.lhs.var() {
             let rhs = self.rhs.transform(builder);
-            builder.add_stmt(Statement::Assign { lhs: name, rhs });
-            Node::Void
+            let lhs = builder.create_var(name.as_str());
+            builder.add_stmt(Statement::Assign {lhs , rhs});
+            builder.create_void()
         } else {
             panic!("lhs not found!");
         }
@@ -575,6 +560,6 @@ impl Transformer for CellModel {
         for eq in &self.obs {
             eq.transform(builder);
         }
-        Node::Void
+        builder.create_void()
     }
 }

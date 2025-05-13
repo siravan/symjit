@@ -9,6 +9,7 @@ mod register;
 mod runnable;
 mod utils;
 
+mod assembler;
 mod tree;
 
 mod amd;
