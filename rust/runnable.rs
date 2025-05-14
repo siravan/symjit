@@ -9,6 +9,9 @@ use crate::interpreter::Interpreter;
 #[cfg(feature = "wasm")]
 use crate::wasm::WasmCompiler;
 
+use crate::machine::MachineCode;
+use crate::code::{BinaryFunc, VirtualTable};
+
 #[derive(PartialEq)]
 pub enum CompilerType {
     ByteCode,
@@ -37,17 +40,18 @@ impl Runnable {
     pub fn new(prog: Program, ty: CompilerType, use_simd: bool) -> Runnable {
         let compiled: Box<dyn Compiled<f64>> = match ty {
             CompilerType::ByteCode => Box::new(Interpreter::new().compile(&prog)),
-            CompilerType::Amd => Box::new(AmdCompiler::new().compile(&prog)),
+            // CompilerType::Amd => Box::new(AmdCompiler::new().compile(&prog)),
             CompilerType::Arm => Box::new(ArmCompiler::new().compile(&prog)),
 
             #[cfg(feature = "wasm")]
             CompilerType::Wasm => Box::new(WasmCompiler::new().compile(&prog)),
-            #[cfg(target_arch = "x86_64")]
-            CompilerType::Native => Box::new(AmdCompiler::new().compile(&prog)),
+            //#[cfg(target_arch = "x86_64")]
+            //CompilerType::Native => Box::new(AmdCompiler::new().compile(&prog)),
             #[cfg(target_arch = "aarch64")]
             CompilerType::Native => Box::new(ArmCompiler::new().compile(&prog)),
             #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
-            CompilerType::Native => Box::new(Interpreter::new().compile(&prog)),
+            CompilerType::Native => Box::new(Interpreter::new().compile(&prog)),            
+            _ => Box::new(Interpreter::new().compile(&prog)),            
         };
 
         #[cfg(target_arch = "x86_64")]
@@ -69,6 +73,46 @@ impl Runnable {
         let count_params = prog.frame.count_params();
         let count_obs = prog.frame.count_obs();
         let count_diffs = prog.frame.count_diffs();
+
+        Runnable {
+            // prog,
+            compiled,
+            compiled_simd,
+            first_state,
+            first_param,
+            first_obs,
+            first_diff,
+            count_states,
+            count_params,
+            count_obs,
+            count_diffs,
+        }
+    }
+    
+    pub fn new_from_builder(mut prog: Program) -> Runnable {
+        let ir = prog.builder.compile();
+
+        let code = MachineCode::new(
+            "x86_64",
+            ir.bytes(),
+            VirtualTable::<f64>::from_names(&prog.ft),
+            prog.builder.mem(),
+        );
+        
+        println!("{:?}", code.mem());
+    
+        let compiled: Box<dyn Compiled<f64>> = Box::new(code);
+        let compiled_simd = None; 
+
+        let first_state = 5;
+        let first_param = 0;
+        let first_obs = prog.count_states + 5;
+        let first_diff = 0;
+
+        let count_states = prog.count_states;
+        let count_params = 0;
+        let count_obs = prog.count_obs;
+        let count_diffs = 0;
 
         Runnable {
             // prog,

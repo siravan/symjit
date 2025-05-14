@@ -19,6 +19,9 @@ pub struct Program {
     pub frame: Frame,           // memory (states, registers, constants, ...)
     pub ft: Vec<String>,        // function table (the name of functions)
                                 //pub vt: Vec<BinaryFunc<f64>>,    // virtual table (pointer to the functions)
+    pub builder: Builder,
+    pub count_states: usize,
+    pub count_obs: usize,                                
 }
 
 impl Program {
@@ -52,6 +55,11 @@ impl Program {
 
         let mut builder = Builder::new();
 
+        for i in 0..4 {
+            builder.sym_table.add_mem(format!("_const_{}", i).as_str());
+        }        
+        builder.sym_table.add_mem("$_");
+
         for v in &ml.states {
             builder.sym_table.add_mem(&v.name);
             frame.alloc(WordType::State(v.name.clone(), v.val));
@@ -78,24 +86,27 @@ impl Program {
                 return Err(anyhow!("lhs diff var not found"));
             }
         }
+        
+        let _ = ml.transform(&mut builder);
+        println!("{:#?}", builder);
+        builder.compile();
 
         let mut prog = Program {
             code: Vec::new(),
             frame,
             ft: Vec::new(),
+            builder,
+            count_states: ml.states.len(),
+            count_obs: ml.obs.len()
         };
-
+        
         ml.lower(&mut prog)?;
         prog.code.push(Instruction::Nop);
 
         // we call confirm here to ensure all functions are
         // resolved. If not, it returns an Err. This is to
         // prevent a panic later when virtual table is formed.
-        VirtualTable::<f64>::confirm(&prog.ft)?;
-
-        let _ = ml.transform(&mut builder);
-        println!("{:#?}", builder);
-        builder.compile();
+        VirtualTable::<f64>::confirm(&prog.ft)?;        
 
         Ok(prog)
     }

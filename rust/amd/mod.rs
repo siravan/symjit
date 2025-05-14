@@ -2,24 +2,10 @@ mod asm;
 
 use asm::Amd;
 
-use super::machine::MachineCode;
-use super::model::Program;
-use super::utils::*;
-use crate::code::{BinaryFunc, VirtualTable};
+use crate::code::BinaryFunc;
 
 pub struct AmdCompiler {
     amd: Amd,
-}
-
-impl Compiler<MachineCode<f64>> for AmdCompiler {
-    fn compile(&mut self, prog: &Program) -> MachineCode<f64> {
-        MachineCode::new(
-            "x86_64",
-            self.bytes(),
-            VirtualTable::<f64>::from_names(&prog.ft),
-            prog.frame.mem(),
-        )
-    }
 }
 
 impl AmdCompiler {
@@ -286,5 +272,9 @@ impl AmdCompiler {
             let u: u64 = unsafe { std::mem::transmute(f) };
             self.amd.quad(u);
         }
+    }
+    
+    pub fn apply_jumps(&mut self) {
+        self.amd.a.apply_jumps();
     }
 }

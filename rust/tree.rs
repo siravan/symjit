@@ -199,7 +199,7 @@ impl Node {
             _ => panic!("binary operation is not recognized")
         };
 
-        r
+        dst
     }
 }
 
@@ -322,7 +322,7 @@ impl Builder {
         (tmp, name.to_string())
     }
 
-    pub fn compile(&mut self) {
+    pub fn compile(&mut self) -> AmdCompiler {
         let mut ir = AmdCompiler::new();
 
         let cap = self.sym_table.num_stack;
@@ -336,7 +336,15 @@ impl Builder {
         }
         
         ir.epilogue(n);
-        println!("{:02x?}", ir.bytes());
+        
+        ir.apply_jumps();
+        // println!("{:02x?}", ir.bytes());
+        
+        ir
+    }
+    
+    pub fn mem(&self) -> Vec<f64> {
+        vec![0.0; self.sym_table.num_mem]
     }
 }
 

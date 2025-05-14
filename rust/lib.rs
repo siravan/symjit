@@ -94,6 +94,7 @@ pub unsafe extern "C" fn compile(
     // println!("{:#?}", &prog.ft);
 
     res.func = match ty {
+        "v2" => Some(Runnable::new_from_builder(prog)),
         "bytecode" => Some(Runnable::new(prog, CompilerType::ByteCode, use_simd)),
         "arm" => Some(Runnable::new(prog, CompilerType::Arm, use_simd)),
         "amd" => Some(Runnable::new(prog, CompilerType::Amd, use_simd)),
