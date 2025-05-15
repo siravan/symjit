@@ -81,6 +81,8 @@ impl Program {
 
         for eq in &ml.odes {
             if let Some(name) = eq.lhs.diff_var() {
+                let name = format!("δ{}", name);
+                builder.sym_table.add_mem(&name);
                 frame.alloc(WordType::Diff(name));
             } else {
                 return Err(anyhow!("lhs diff var not found"));
@@ -509,14 +511,19 @@ impl Lower for Equation {
 
 impl Transformer for Equation {
     fn transform(&self, builder: &mut Builder) -> Result<Node> {
-        if let Some(name) = self.lhs.var() {
-            let rhs = self.rhs.transform(builder)?;
-            let lhs = builder.create_var(name.as_str());
-            builder.add_assign(lhs, rhs);
-            Ok(builder.create_void())
+        let var = if let Some(var) = self.lhs.diff_var() {
+            format!("δ{}", var)
+        } else if let Some(var) = self.lhs.var() {
+            var
         } else {
-            Err(anyhow!("lhs not found!"))
-        }
+            return Err(anyhow!("lhs should be a variable"));
+        };
+        
+        let rhs = self.rhs.transform(builder)?;
+        let lhs = builder.create_var(var.as_str());
+        builder.add_assign(lhs, rhs);
+        
+        Ok(builder.create_void())        
     }
 }
 
@@ -558,6 +565,11 @@ impl Transformer for CellModel {
         for eq in &self.obs {
             eq.transform(builder)?;
         }
+        
+        for eq in &self.odes {
+            eq.transform(builder)?;
+        }
+        
         Ok(builder.create_void())
     }
 }
