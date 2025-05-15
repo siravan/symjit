@@ -93,7 +93,7 @@ impl<T: Float> VirtualTable<T> {
     }
 
     // Finds the function reference for op
-    fn from_str(op: &str) -> Result<BinaryFunc<T>> {
+    pub fn from_str(op: &str) -> Result<BinaryFunc<T>> {
         let f = match op {
             "nop" => Self::nop,
             "mov" => Self::mov,

@@ -1,7 +1,11 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
+
+use anyhow::Result;
 
 use crate::amd::AmdCompiler;
 use crate::model::Expr;
+use crate::code::VirtualTable;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Loc {
@@ -131,7 +135,8 @@ impl Node {
     
     fn compile_const(&self, ir: &mut AmdCompiler, base: u8, idx: u32) -> u8 {
         let r = 2 + base;
-        ir.load_const(r, idx);
+        let label = format!("_const_{}_", idx);
+        ir.load_const(r, &label);
         r
     }
     
@@ -155,6 +160,11 @@ impl Node {
             "square" => ir.square(r),
             "cube" => ir.cube(r),
             "recip" => ir.recip(r),
+            "_call_" => {
+                if r != 0 {
+                    ir.fmov(0, r);
+                }
+            }
             _ => panic!("unary operation is not recognized")
         };
 
@@ -196,10 +206,31 @@ impl Node {
             "xor" => ir.xor(dst, l, r),
             "select_if" => ir.select_if(dst, l, r),
             "select_else" => ir.select_else(dst, l, r),        
+            "_call_" => Self::call(ir, l, r),
             _ => panic!("binary operation is not recognized")
         };
 
         dst
+    }
+    
+    fn call(ir: &mut AmdCompiler, l: u8, r: u8) {
+        if l == 1 && r == 0 {
+            ir.fmov(2, 0);
+            ir.fmov(0, 1);
+            ir.fmov(1, 2);
+        } else if r == 0 {
+            ir.fmov(1, 0);
+            if l != 0 {
+                ir.fmov(0, l);
+            }
+        } else {
+            if l != 0 {
+                ir.fmov(0, l);                
+            }
+            if r != 0 {
+                ir.fmov(1, r);
+            }
+        }
     }
 }
 
@@ -212,24 +243,53 @@ pub enum Statement {
     Call {
         op: String,
         lhs: Node,
-        args: Vec<Node>,
+        arg: Node,
     },
 }
 
 impl Statement {
+    fn assign(lhs: Node, rhs: Node) -> Statement {
+        Statement::Assign{lhs, rhs}        
+    }
+    
+    fn call(op: &str, lhs: Node, arg: Node) -> Statement {
+        Statement::Call{
+            op: op.to_string(),
+            lhs,
+            arg        
+        }        
+    }
+
     pub fn compile(&self, builder: &Builder, ir: &mut AmdCompiler) {
         match &self {
             Statement::Assign{lhs, rhs} => {
                 let r = rhs.compile(ir, 0);
-                
-                if let Node::Var{loc, ..} = lhs {
-                    match loc {
-                        Loc::Stack(idx) => ir.save_stack(r, *idx),
-                        Loc::Mem(idx) => ir.save_mem(r, *idx),
-                    }
-                }                   
+                Self::save(ir, r, lhs);
             },
-            Statement::Call{..} => {}
+            Statement::Call{op, lhs, arg} => {
+                let _ = arg.compile(ir, 0);
+                let label = format!("_func_{}_", op);
+                ir.call(&label);                
+                Self::save(ir, 0, lhs);                    
+            }
+        }
+    }
+    
+    fn load(ir: &mut AmdCompiler, r: u8, v: &Node) {
+        if let Node::Var{loc, ..} = v {
+            match loc {
+                Loc::Stack(idx) => ir.load_stack(r, *idx),
+                Loc::Mem(idx) => ir.load_mem(r, *idx),
+            }
+        }
+    }
+    
+    fn save(ir: &mut AmdCompiler, r: u8, v: &Node) {
+        if let Node::Var{loc, ..} = v {
+            match loc {
+                Loc::Stack(idx) => ir.save_stack(r, *idx),
+                Loc::Mem(idx) => ir.save_mem(r, *idx),
+            }
         }
     }
 }
@@ -240,6 +300,7 @@ pub struct Builder {
     pub consts: Vec<f64>,
     pub sym_table: SymbolTable,
     pub num_tmp: usize,
+    pub ft: HashSet<String>,        // function table (the name of functions)
 }
 
 impl Builder {
@@ -251,11 +312,27 @@ impl Builder {
             consts: Vec::new(),
             sym_table: SymbolTable::new(),
             num_tmp: 0,
+            ft: HashSet::new(),
         }
     }
 
-    pub fn add_stmt(&mut self, st: Statement) {
-        self.stmts.push(st);
+    pub fn add_assign(&mut self, lhs: Node, rhs: Node) {
+        self.stmts.push(Statement::assign(lhs, rhs));
+    }
+    
+    pub fn add_call(&mut self, op: &str, lhs: Node, args: Vec<Node>) {
+        let arg = match args.len() {
+            1 => {
+                self.create_unary("_call_", args[0].clone())
+            },
+            2 => {
+                self.create_binary("_call_", args[0].clone(), args[1].clone())
+            },
+            _ => { panic!("more than two arguments are not supported yet!"); }
+        };
+        
+        self.stmts.push(Statement::call(op, lhs, arg));
+        self.ft.insert(op.to_string());
     }
 
     pub fn create_void(&mut self) -> Node {
@@ -335,10 +412,11 @@ impl Builder {
             stmt.compile(&self, &mut ir);
         }
         
-        ir.epilogue(n);
-        
+        ir.epilogue(n);        
+        self.append_const_section(&mut ir);         
+        self.append_vt_section(&mut ir);
         ir.apply_jumps();
-        // println!("{:02x?}", ir.bytes());
+        println!("{:02x?}", ir.bytes());
         
         ir
     }
@@ -346,8 +424,27 @@ impl Builder {
     pub fn mem(&self) -> Vec<f64> {
         vec![0.0; self.sym_table.num_mem]
     }
+    
+    fn append_const_section(&self, ir: &mut AmdCompiler) {
+        for (idx, val) in self.consts.iter().enumerate() {
+            let label = format!("_const_{}_", idx);
+            ir.set_label(label.as_str());
+            let u: u64 = unsafe { std::mem::transmute(*val) };
+            ir.append_quad(u);
+        }
+    }
+    
+    fn append_vt_section(&self, ir: &mut AmdCompiler) {
+        for f in self.ft.iter() {
+            let label = format!("_func_{}_", f);
+            ir.set_label(label.as_str());
+            let p = VirtualTable::<f64>::from_str(f).expect("func not found");
+            let u: u64 = unsafe { std::mem::transmute(p) };
+            ir.append_quad(u);
+        }
+    }
 }
 
 pub trait Transformer {
-    fn transform(&self, builder: &mut Builder) -> Node;
+    fn transform(&self, builder: &mut Builder) -> Result<Node>;
 }

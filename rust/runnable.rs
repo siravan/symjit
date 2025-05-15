@@ -98,9 +98,7 @@ impl Runnable {
             VirtualTable::<f64>::from_names(&prog.ft),
             prog.builder.mem(),
         );
-        
-        println!("{:?}", code.mem());
-    
+            
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
         let compiled_simd = None; 
 

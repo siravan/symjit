@@ -12,19 +12,52 @@ impl AmdCompiler {
     pub fn new() -> AmdCompiler {
         AmdCompiler { amd: Amd::new() }
     }
-
+    
+    // assembler's methods    
     pub fn bytes(&self) -> Vec<u8> {
-        self.amd.bytes()
+        self.amd.a.bytes()
     }
 
+    pub fn append_byte(&mut self, b: u8) {
+        self.amd.a.append_byte(b);
+    }
+
+    pub fn append_bytes(&mut self, bs: &[u8]) {
+        self.amd.a.append_bytes(bs);
+    }
+
+    pub fn append_word(&mut self, u: u32) {
+        self.amd.a.append_word(u);
+    }
+    
+    pub fn append_quad(&mut self, u: u64) {
+        self.amd.a.append_quad(u);
+    }
+
+    pub fn ip(&self) -> usize {
+        self.amd.a.ip()
+    }
+
+    pub fn set_label(&mut self, label: &str) {
+        self.amd.a.set_label(label);
+    }
+
+    pub fn jump(&mut self, label: &str, code: u32) {
+        self.amd.a.jump(label, code)
+    }
+
+    pub fn apply_jumps(&mut self) {
+        self.amd.a.apply_jumps();
+    }    
+    
+    //***********************************
     pub fn fmov(&mut self, dst: u8, r: u8) {
         self.amd.vmovapd(dst, r);
     }
     
-    pub fn load_const(&mut self, dst: u8, idx: u32) {
-        let label = format!("_const_{}_", idx);
-        self.amd.vmovsd_xmm_label(dst, label.as_str());
-    }
+    pub fn load_const(&mut self, dst: u8, label: &str) {
+        self.amd.vmovsd_xmm_label(dst, label);
+    }    
 
     pub fn load_mem(&mut self, dst: u8, idx: u32) {
         let offset = 8 * idx as i32;
@@ -131,51 +164,19 @@ impl AmdCompiler {
         self.amd.vcmpeqsd(1, 1, 1);
         self.amd.vxorpd(dst, dst, 1);
     }
-
-    pub fn call_unary(&mut self, dst: u8, idx: u32) {
+    
+    pub fn call(&mut self, label: &str) {
         self.amd.vzeroupper();
 
         // Windows 32-byte home area
         #[cfg(target_family = "windows")]
         self.amd.sub_rsp(32);
 
-        let label = format!("_func_{}_", idx);
-        self.amd.mov_reg_label(Amd::RAX, label.as_str());
+        self.amd.mov_reg_label(Amd::RAX, label);
         self.amd.call(Amd::RAX);
-
-        if dst != 0 {
-            self.amd.vmovapd(dst, 0);
-        }
 
         #[cfg(target_family = "windows")]
         self.amd.add_rsp(32);
-    }
-
-    pub fn call_binary(&mut self, dst: u8, r: u8, idx: u32) {
-        self.amd.vzeroupper();
-
-        // Windows 32-byte home area
-        #[cfg(target_family = "windows")]
-        self.amd.sub_rsp(32);
-
-        if r != 1 {
-            self.amd.vmovapd(1, r);
-        }
-
-        let label = format!("_func_{}_", idx);
-        self.amd.mov_reg_label(Amd::RAX, label.as_str());
-        self.amd.call(Amd::RAX);
-
-        if dst != 0 {
-            self.amd.vmovapd(dst, 0);
-        }
-
-        #[cfg(target_family = "windows")]
-        self.amd.add_rsp(32);
-    }
-
-    pub fn set_label(&mut self, label: &str) {
-        self.amd.a.set_label(label);
     }
 
     pub fn branch(&mut self, label: &str) {
@@ -225,6 +226,7 @@ impl AmdCompiler {
         self.amd.pop(Amd::RBX);
         self.amd.pop(Amd::RBP);
         self.amd.ret();
+        self.predefined_consts();
     }
 
     #[cfg(target_family = "windows")]
@@ -233,6 +235,19 @@ impl AmdCompiler {
         self.amd.mov(Amd::RBX, Amd::RSP, 0x10);
         self.amd.mov(Amd::RBP, Amd::RSP, 0x08);
         self.amd.ret();
+        self.predefined_consts();
+    }
+        
+    fn predefined_consts(&mut self) {        
+        self.align();
+    
+        self.set_label("_minus_zero_");
+        let u: u64 = unsafe { std::mem::transmute(-0.0f64) };
+        self.append_quad(u);
+
+        self.set_label("_one_");
+        let u: u64 = unsafe { std::mem::transmute(1.0f64) };
+        self.append_quad(u);        
     }
 
     fn align(&mut self) {
@@ -242,39 +257,5 @@ impl AmdCompiler {
             self.amd.nop();
             n += 1
         }
-    }
-
-    pub fn append_const_section(&mut self, p: &[f64]) {
-        self.align();
-
-        self.set_label("_minus_zero_");
-        let u: u64 = unsafe { std::mem::transmute(-0.0f64) };
-        self.amd.quad(u);
-
-        self.set_label("_one_");
-        let u: u64 = unsafe { std::mem::transmute(1.0f64) };
-        self.amd.quad(u);
-
-        for (idx, val) in p.iter().enumerate() {
-            let label = format!("_const_{}_", idx);
-            self.set_label(label.as_str());
-            let u: u64 = unsafe { std::mem::transmute(val) };
-            self.amd.quad(u);
-        }
-    }
-
-    pub fn append_vt_section(&mut self, vt: &[BinaryFunc<f64>]) {
-        self.align();
-
-        for (idx, f) in vt.iter().enumerate() {
-            let label = format!("_func_{}_", idx);
-            self.set_label(label.as_str());
-            let u: u64 = unsafe { std::mem::transmute(f) };
-            self.amd.quad(u);
-        }
-    }
-    
-    pub fn apply_jumps(&mut self) {
-        self.amd.a.apply_jumps();
     }
 }

@@ -43,6 +43,10 @@ impl Amd {
     pub fn append_word(&mut self, u: u32) {
         self.a.append_word(u)
     }
+    
+    pub fn append_quad(&mut self, u: u64) {
+        self.a.append_quad(u)
+    }
 
     pub fn modrm_reg(&mut self, reg: u8, rm: u8) {
         self.append_byte(0xc0 + ((reg & 7) << 3) + (rm & 7))
@@ -401,12 +405,6 @@ impl Amd {
         // an unordered result
         self.append_bytes(&[0x0f, 0x8a]);
         self.a.jump(label, 0);
-    }
-
-    pub fn quad(&mut self, val: u64) {
-        // pseudo-instruction dq
-        self.append_word(val as u32);
-        self.append_word((val >> 32) as u32);
     }
 
     pub fn nop(&mut self) {

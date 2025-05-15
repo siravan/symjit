@@ -31,15 +31,20 @@ impl Assembler {
         }
     }
 
-    pub fn append_word(&mut self, u: u32) {
+    pub fn append_word(&mut self, mut u: u32) {
         // appends u (uint32) as little-endian
-        let q = [
-            (u & 0xff) as u8,
-            ((u >> 8) & 0xff) as u8,
-            ((u >> 16) & 0xff) as u8,
-            ((u >> 24) & 0xff) as u8,
-        ];
-        self.append_bytes(&q);
+        for i in 0..4 {
+            self.append_byte((u & 0xff) as u8);
+            u = u >> 8;
+        }
+    }
+    
+    pub fn append_quad(&mut self, mut u: u64) {
+        // appends u (uint32) as little-endian
+        for i in 0..8 {
+            self.append_byte((u & 0xff) as u8);
+            u = u >> 8;
+        }
     }
 
     pub fn ip(&self) -> usize {
