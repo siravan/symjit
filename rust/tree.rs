@@ -354,7 +354,7 @@ impl Builder {
     }
 
     pub fn create_var(&mut self, name: &str) -> Node {
-        let loc = self.sym_table.find(name).expect("variable not found");        
+        let loc = self.sym_table.find(name).expect(&format!("variable {} not found", name));
         Node::Var {
             name: name.to_string(),
             loc
@@ -373,7 +373,7 @@ impl Builder {
     pub fn create_binary(&mut self, op: &str, left: Node, right: Node) -> Node {
         let l = left.ershov_number();
         let r = right.ershov_number();
-        let ershov = if l == r { l + 1 } else { l };
+        let ershov = if l == r { l + 1 } else { l.max(r) };
         Node::Binary {
             op: op.to_string(),
             left: Box::new(left),

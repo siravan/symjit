@@ -85,7 +85,8 @@ pub unsafe extern "C" fn compile(
 
     let prog = match Program::new(&ml) {
         Ok(prog) => prog,
-        Err(_) => {
+        Err(msg) => {
+            println!("{}", msg);
             res.status = CompilerStatus::CompilationError;
             return Box::into_raw(Box::new(res)) as *const _;
         }

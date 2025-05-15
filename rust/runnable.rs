@@ -89,28 +89,31 @@ impl Runnable {
         }
     }
     
-    pub fn new_from_builder(mut prog: Program) -> Runnable {
-        let ir = prog.builder.compile();
+    pub fn new_from_builder(mut prog: Program) -> Runnable {    
+        let first_state = 5;
+        let first_param = first_state + prog.count_states;
+        let first_obs = first_param + prog.count_params;
+        let first_diff = first_obs + prog.count_obs;
+        let size = first_diff + prog.count_diffs + 1;
+
+        let count_states = prog.count_states;
+        let count_params = prog.count_params;
+        let count_obs = prog.count_obs;
+        let count_diffs = prog.count_diffs;
+        
+        let mem: Vec<f64> = vec![0.0; size];
+        
+        let ir = prog.builder.compile();        
 
         let code = MachineCode::new(
             "x86_64",
             ir.bytes(),
             VirtualTable::<f64>::from_names(&prog.ft),
-            prog.builder.mem(),
+            mem,
         );
             
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
         let compiled_simd = None; 
-
-        let first_state = 5;
-        let first_param = 0;
-        let first_obs = prog.count_states + 5;
-        let first_diff = 0;
-
-        let count_states = prog.count_states;
-        let count_params = 0;
-        let count_obs = prog.count_obs;
-        let count_diffs = 0;
 
         Runnable {
             // prog,

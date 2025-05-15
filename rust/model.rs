@@ -21,7 +21,9 @@ pub struct Program {
                                 //pub vt: Vec<BinaryFunc<f64>>,    // virtual table (pointer to the functions)
     pub builder: Builder,
     pub count_states: usize,
-    pub count_obs: usize,                                
+    pub count_params: usize,
+    pub count_obs: usize,   
+    pub count_diffs: usize,                              
 }
 
 impl Program {
@@ -58,7 +60,7 @@ impl Program {
         for i in 0..4 {
             builder.sym_table.add_mem(format!("_const_{}", i).as_str());
         }        
-        builder.sym_table.add_mem("$_");
+        builder.sym_table.add_mem(&ml.iv.name);
 
         for v in &ml.states {
             builder.sym_table.add_mem(&v.name);
@@ -78,7 +80,7 @@ impl Program {
                 return Err(anyhow!("lhs var not found"));
             }
         }
-
+        
         for eq in &ml.odes {
             if let Some(name) = eq.lhs.diff_var() {
                 let name = format!("δ{}", name);
@@ -87,10 +89,10 @@ impl Program {
             } else {
                 return Err(anyhow!("lhs diff var not found"));
             }
-        }
+        }        
         
         let _ = ml.transform(&mut builder);
-        println!("{:#?}", builder);
+        println!("{:#?}", builder);        
 
         let mut prog = Program {
             code: Vec::new(),
@@ -98,7 +100,9 @@ impl Program {
             ft: Vec::new(),
             builder,
             count_states: ml.states.len(),
-            count_obs: ml.obs.len()
+            count_params: ml.params.len(),
+            count_obs: ml.obs.len(),
+            count_diffs: ml.odes.len(),
         };
         
         ml.lower(&mut prog)?;
@@ -492,6 +496,7 @@ pub struct Equation {
 
 impl Lower for Equation {
     fn lower(&self, prog: &mut Program) -> Result<Word> {
+        /*
         let dst = if let Some(var) = self.lhs.diff_var() {
             prog.reg_diff(&var)?
         } else if let Some(var) = self.lhs.var() {
@@ -505,19 +510,20 @@ impl Lower for Equation {
         let src = self.rhs.lower(prog)?;
 
         prog.push_unary("mov", src, dst);
+        */
         Ok(Frame::ZERO)
     }
 }
 
 impl Transformer for Equation {
     fn transform(&self, builder: &mut Builder) -> Result<Node> {
-        let var = if let Some(var) = self.lhs.diff_var() {
+        let var = if let Some(var) = self.lhs.diff_var() {            
             format!("δ{}", var)
         } else if let Some(var) = self.lhs.var() {
             var
         } else {
             return Err(anyhow!("lhs should be a variable"));
-        };
+        };        
         
         let rhs = self.rhs.transform(builder)?;
         let lhs = builder.create_var(var.as_str());

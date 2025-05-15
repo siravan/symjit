@@ -110,7 +110,7 @@ def can_use_python(backend):
 
 
 def compile_func(
-    states, eqs, params=None, obs=None, ty="native", use_simd=True, backend="rust"
+    states, eqs, params=None, obs=None, ty="v2", use_simd=True, backend="rust"
 ):
     """Compile a list of symbolic expression into an executable form.
     compile_func tries to mimic sympy lambdify, but instead of generating
@@ -155,7 +155,7 @@ def compile_func(
 
 
 def compile_ode(
-    iv, states, odes, params=None, ty="native", use_simd=False, backend="rust"
+    iv, states, odes, params=None, ty="v2", use_simd=False, backend="rust"
 ):
     """Compile a symbolic ODE model into an executable form suitable for
     passung to scipy.integrate.solve_ivp.
@@ -205,7 +205,7 @@ def compile_ode(
 
 
 def compile_jac(
-    iv, states, odes, params=None, ty="native", use_simd=False, backend="rust"
+    iv, states, odes, params=None, ty="v2", use_simd=False, backend="rust"
 ):
     """Genenrates and compiles Jacobian for an ODE system.
         iv: a single symbol, the independent variable.
@@ -236,7 +236,7 @@ def compile_jac(
     return JacFunc(compiler)
 
 
-def compile_json(model, ty="native", use_simd=True):
+def compile_json(model, ty="v2", use_simd=True):
     """Compiles CellML models
     CellML json files are extracted using CellMLToolkit.jl
     model is already in Json format; hence, `convert = False`
