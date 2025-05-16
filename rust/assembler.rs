@@ -38,7 +38,7 @@ impl Assembler {
             u = u >> 8;
         }
     }
-    
+
     pub fn append_quad(&mut self, mut u: u64) {
         // appends u (uint32) as little-endian
         for i in 0..8 {

@@ -3,14 +3,14 @@ use crate::utils::*;
 //use std::simd::f64x4;
 
 use crate::amd::AmdCompiler;
-use crate::arm::ArmCompiler;
-use crate::avx::AmdCompilerSimd;
-use crate::interpreter::Interpreter;
-#[cfg(feature = "wasm")]
-use crate::wasm::WasmCompiler;
+// use crate::arm::ArmCompiler;
+// use crate::avx::AmdCompilerSimd;
+// use crate::interpreter::Interpreter;
+// #[cfg(feature = "wasm")]
+//use crate::wasm::WasmCompiler;
 
-use crate::machine::MachineCode;
 use crate::code::{BinaryFunc, VirtualTable};
+use crate::machine::MachineCode;
 
 #[derive(PartialEq)]
 pub enum CompilerType {
@@ -20,6 +20,7 @@ pub enum CompilerType {
     Arm,
     #[cfg(feature = "wasm")]
     Wasm,
+    Amd2,
 }
 
 pub struct Runnable {
@@ -37,59 +38,60 @@ pub struct Runnable {
 }
 
 impl Runnable {
-    pub fn new(prog: Program, ty: CompilerType, use_simd: bool) -> Runnable {
-        let compiled: Box<dyn Compiled<f64>> = match ty {
-            CompilerType::ByteCode => Box::new(Interpreter::new().compile(&prog)),
-            // CompilerType::Amd => Box::new(AmdCompiler::new().compile(&prog)),
-            CompilerType::Arm => Box::new(ArmCompiler::new().compile(&prog)),
+    /*
+        pub fn new(prog: Program, ty: CompilerType, use_simd: bool) -> Runnable {
+            let compiled: Box<dyn Compiled<f64>> = match ty {
+                CompilerType::ByteCode => Box::new(Interpreter::new().compile(&prog)),
+                // CompilerType::Amd => Box::new(AmdCompiler::new().compile(&prog)),
+                CompilerType::Arm => Box::new(ArmCompiler::new().compile(&prog)),
 
-            #[cfg(feature = "wasm")]
-            CompilerType::Wasm => Box::new(WasmCompiler::new().compile(&prog)),
-            //#[cfg(target_arch = "x86_64")]
-            //CompilerType::Native => Box::new(AmdCompiler::new().compile(&prog)),
-            #[cfg(target_arch = "aarch64")]
-            CompilerType::Native => Box::new(ArmCompiler::new().compile(&prog)),
-            #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
-            CompilerType::Native => Box::new(Interpreter::new().compile(&prog)),            
-            _ => Box::new(Interpreter::new().compile(&prog)),            
-        };
-
-        #[cfg(target_arch = "x86_64")]
-        let compiled_simd: Option<Box<dyn Compiled<f64x4>>> =
-            if use_simd && is_x86_feature_detected!("avx") {
-                Some(Box::new(AmdCompilerSimd::new().compile(&prog)))
-            } else {
-                None
+                #[cfg(feature = "wasm")]
+                CompilerType::Wasm => Box::new(WasmCompiler::new().compile(&prog)),
+                //#[cfg(target_arch = "x86_64")]
+                //CompilerType::Native => Box::new(AmdCompiler::new().compile(&prog)),
+                #[cfg(target_arch = "aarch64")]
+                CompilerType::Native => Box::new(ArmCompiler::new().compile(&prog)),
+                #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+                CompilerType::Native => Box::new(Interpreter::new().compile(&prog)),
+                _ => Box::new(Interpreter::new().compile(&prog)),
             };
-        #[cfg(not(target_arch = "x86_64"))]
-        let compiled_simd = None; // Box::new(Compiled::<f64x4>::dummy());;
 
-        let first_state = prog.frame.first_state().unwrap();
-        let first_param = prog.frame.first_param().unwrap_or(first_state);
-        let first_obs = prog.frame.first_obs().unwrap_or(first_param);
-        let first_diff = prog.frame.first_diff().unwrap_or(first_obs);
+            #[cfg(target_arch = "x86_64")]
+            let compiled_simd: Option<Box<dyn Compiled<f64x4>>> =
+                if use_simd && is_x86_feature_detected!("avx") {
+                    Some(Box::new(AmdCompilerSimd::new().compile(&prog)))
+                } else {
+                    None
+                };
+            #[cfg(not(target_arch = "x86_64"))]
+            let compiled_simd = None; // Box::new(Compiled::<f64x4>::dummy());;
 
-        let count_states = prog.frame.count_states();
-        let count_params = prog.frame.count_params();
-        let count_obs = prog.frame.count_obs();
-        let count_diffs = prog.frame.count_diffs();
+            let first_state = prog.frame.first_state().unwrap();
+            let first_param = prog.frame.first_param().unwrap_or(first_state);
+            let first_obs = prog.frame.first_obs().unwrap_or(first_param);
+            let first_diff = prog.frame.first_diff().unwrap_or(first_obs);
 
-        Runnable {
-            // prog,
-            compiled,
-            compiled_simd,
-            first_state,
-            first_param,
-            first_obs,
-            first_diff,
-            count_states,
-            count_params,
-            count_obs,
-            count_diffs,
+            let count_states = prog.frame.count_states();
+            let count_params = prog.frame.count_params();
+            let count_obs = prog.frame.count_obs();
+            let count_diffs = prog.frame.count_diffs();
+
+            Runnable {
+                // prog,
+                compiled,
+                compiled_simd,
+                first_state,
+                first_param,
+                first_obs,
+                first_diff,
+                count_states,
+                count_params,
+                count_obs,
+                count_diffs,
+            }
         }
-    }
-    
-    pub fn new_from_builder(mut prog: Program) -> Runnable {    
+    */
+    pub fn new(mut prog: Program, ty: CompilerType, use_simd: bool) -> Runnable {
         let first_state = 5;
         let first_param = first_state + prog.count_states;
         let first_obs = first_param + prog.count_params;
@@ -100,20 +102,15 @@ impl Runnable {
         let count_params = prog.count_params;
         let count_obs = prog.count_obs;
         let count_diffs = prog.count_diffs;
-        
-        let mem: Vec<f64> = vec![0.0; size];
-        
-        let ir = prog.builder.compile();        
 
-        let code = MachineCode::new(
-            "x86_64",
-            ir.bytes(),
-            VirtualTable::<f64>::from_names(&prog.ft),
-            mem,
-        );
-            
+        let mem: Vec<f64> = vec![0.0; size];
+
+        let ir = prog.builder.compile();
+
+        let code = MachineCode::new("x86_64", ir.bytes(), Vec::new(), mem);
+
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
-        let compiled_simd = None; 
+        let compiled_simd = None;
 
         Runnable {
             // prog,

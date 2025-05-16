@@ -1,6 +1,6 @@
 use std::ffi::{c_char, CStr, CString};
 
-mod analyzer;
+// mod analyzer;
 mod code;
 mod machine;
 mod memory;
@@ -13,9 +13,9 @@ mod assembler;
 mod tree;
 
 mod amd;
-mod arm;
-mod avx;
-mod interpreter;
+// mod arm;
+// mod avx;
+// mod interpreter;
 #[cfg(feature = "wasm")]
 mod wasm;
 
@@ -95,7 +95,7 @@ pub unsafe extern "C" fn compile(
     // println!("{:#?}", &prog.ft);
 
     res.func = match ty {
-        "v2" => Some(Runnable::new_from_builder(prog)),
+        "v2" => Some(Runnable::new(prog, CompilerType::Amd2, use_simd)),
         "bytecode" => Some(Runnable::new(prog, CompilerType::ByteCode, use_simd)),
         "arm" => Some(Runnable::new(prog, CompilerType::Arm, use_simd)),
         "amd" => Some(Runnable::new(prog, CompilerType::Amd, use_simd)),

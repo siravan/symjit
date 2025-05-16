@@ -3,9 +3,9 @@ use std::collections::HashSet;
 
 use anyhow::Result;
 
-use crate::amd::AmdCompiler;
-use crate::model::Expr;
+use crate::amd::{AmdCompiler, AmdFamily};
 use crate::code::VirtualTable;
+use crate::model::Expr;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Loc {
@@ -34,7 +34,7 @@ impl SymbolTable {
         let mut s = SymbolTable {
             syms: HashMap::new(),
             num_stack: 0,
-            num_mem: 0,            
+            num_mem: 0,
         };
 
         for i in 0..SymbolTable::SPILL_AREA {
@@ -57,7 +57,7 @@ impl SymbolTable {
                 };
                 self.syms.insert(name.to_string(), sym);
                 loc
-            }                
+            }
         }
     }
 
@@ -75,13 +75,13 @@ impl SymbolTable {
                 self.syms.insert(name.to_string(), sym);
                 loc
             }
-        }            
+        }
     }
-    
+
     pub fn find(&self, name: &str) -> Option<Loc> {
         match self.syms.get(name) {
             Some(sym) => Some(sym.loc),
-            None => None
+            None => None,
         }
     }
 }
@@ -116,42 +116,56 @@ impl Node {
     pub fn ershov_number(&self) -> usize {
         match self {
             Node::Void => 0,
-            Node::Const {..} => 1,
-            Node::Var {..} => 1,
+            Node::Const { .. } => 1,
+            Node::Var { .. } => 1,
             Node::Unary { ershov, .. } => *ershov,
             Node::Binary { ershov, .. } => *ershov,
         }
     }
-    
+
     pub fn compile(&self, ir: &mut AmdCompiler, base: u8) -> u8 {
         match self {
             Node::Void => 0,
-            Node::Const {idx,..} => self.compile_const(ir, base, *idx),
-            Node::Var {loc,..} => self.compile_var(ir, base, *loc),
-            Node::Unary {op, arg, ershov} => self.compile_unary(ir, base, op.as_str(), arg, *ershov),
-            Node::Binary {op, left, right, ershov} => self.compile_binary(ir, base, op.as_str(), left, right, *ershov),
+            Node::Const { idx, .. } => self.compile_const(ir, base, *idx),
+            Node::Var { loc, .. } => self.compile_var(ir, base, *loc),
+            Node::Unary { op, arg, ershov } => {
+                self.compile_unary(ir, base, op.as_str(), arg, *ershov)
+            }
+            Node::Binary {
+                op,
+                left,
+                right,
+                ershov,
+            } => self.compile_binary(ir, base, op.as_str(), left, right, *ershov),
         }
     }
-    
+
     fn compile_const(&self, ir: &mut AmdCompiler, base: u8, idx: u32) -> u8 {
-        let r = 2 + base;
+        let r = ir.first_shadow() + base;
         let label = format!("_const_{}_", idx);
         ir.load_const(r, &label);
         r
     }
-    
+
     fn compile_var(&self, ir: &mut AmdCompiler, base: u8, loc: Loc) -> u8 {
-        let r = 2 + base;
+        let r = ir.first_shadow() + base;
         match loc {
             Loc::Stack(idx) => ir.load_stack(r, idx),
-            Loc::Mem(idx) => ir.load_mem(r, idx),            
+            Loc::Mem(idx) => ir.load_mem(r, idx),
         };
         r
     }
-    
-    fn compile_unary(&self, ir: &mut AmdCompiler, base: u8, op: &str, arg: &Node, ershov: usize) -> u8 {
+
+    fn compile_unary(
+        &self,
+        ir: &mut AmdCompiler,
+        base: u8,
+        op: &str,
+        arg: &Node,
+        ershov: usize,
+    ) -> u8 {
         let r = arg.compile(ir, base);
-        
+
         match op {
             "neg" => ir.neg(r),
             "not" => ir.not(r),
@@ -165,35 +179,66 @@ impl Node {
                     ir.fmov(0, r);
                 }
             }
-            _ => panic!("unary operation is not recognized")
+            _ => panic!("unary operation is not recognized"),
         };
 
         r
     }
-    
-    fn compile_binary(&self, ir: &mut AmdCompiler, base: u8, op: &str, left: &Node, right: &Node, ershov: usize) -> u8 {
-        let dst = 2 + base + (ershov as u8) - 1;
+
+    fn compile_binary(
+        &self,
+        ir: &mut AmdCompiler,
+        base: u8,
+        op: &str,
+        left: &Node,
+        right: &Node,
+        ershov: usize,
+    ) -> u8 {
+        let mut dst = ir.first_shadow() + base + (ershov as u8) - 1;
+
         let el = left.ershov_number();
         let er = right.ershov_number();
-        
+
         let mut l = 0;
         let mut r = 0;
-        
-        if el == er {
-            l = left.compile(ir, base + 1);
-            r = right.compile(ir, base);
-        } else if el > er {        
-            l = left.compile(ir, base);
-            r = right.compile(ir, base);
-        } else {            
-            r = right.compile(ir, base);
-            l = left.compile(ir, base);
+
+        let last = ir.first_shadow() + ir.count_shadows();
+
+        if dst < last {
+            if el == er {
+                l = left.compile(ir, base + 1);
+                r = right.compile(ir, base);
+            } else if el > er {
+                l = left.compile(ir, base);
+                r = right.compile(ir, base);
+            } else {
+                r = right.compile(ir, base);
+                l = left.compile(ir, base);
+            }
+        } else {
+            let spill: u32 = (dst - last) as u32;
+
+            if er <= el {
+                l = left.compile(ir, 0);
+                ir.save_stack(l, spill);
+                r = right.compile(ir, 0);
+                l = 1;
+                ir.load_stack(l, spill);
+            } else {
+                r = right.compile(ir, 0);
+                ir.save_stack(r, spill);
+                l = left.compile(ir, 0);
+                r = 1;
+                ir.load_stack(r, spill);
+            }
+
+            dst = 0;
         }
-        
+
         match op {
             "plus" => ir.plus(dst, l, r),
-            "minus"  => ir.minus(dst, l, r),
-            "times"  => ir.times(dst, l, r),
+            "minus" => ir.minus(dst, l, r),
+            "times" => ir.times(dst, l, r),
             "divide" => ir.divide(dst, l, r),
             "gt" => ir.gt(dst, l, r),
             "geq" => ir.geq(dst, l, r),
@@ -205,14 +250,14 @@ impl Node {
             "or" => ir.or(dst, l, r),
             "xor" => ir.xor(dst, l, r),
             "select_if" => ir.select_if(dst, l, r),
-            "select_else" => ir.select_else(dst, l, r),        
+            "select_else" => ir.select_else(dst, l, r),
             "_call_" => Self::call(ir, l, r),
-            _ => panic!("binary operation is not recognized")
+            _ => panic!("binary operation is not recognized"),
         };
 
         dst
     }
-    
+
     fn call(ir: &mut AmdCompiler, l: u8, r: u8) {
         if l == 1 && r == 0 {
             ir.fmov(2, 0);
@@ -225,7 +270,7 @@ impl Node {
             }
         } else {
             if l != 0 {
-                ir.fmov(0, l);                
+                ir.fmov(0, l);
             }
             if r != 0 {
                 ir.fmov(1, r);
@@ -236,56 +281,49 @@ impl Node {
 
 #[derive(Debug, Clone)]
 pub enum Statement {
-    Assign {
-        lhs: Node,
-        rhs: Node,
-    },
-    Call {
-        op: String,
-        lhs: Node,
-        arg: Node,
-    },
+    Assign { lhs: Node, rhs: Node },
+    Call { op: String, lhs: Node, arg: Node },
 }
 
 impl Statement {
     fn assign(lhs: Node, rhs: Node) -> Statement {
-        Statement::Assign{lhs, rhs}        
+        Statement::Assign { lhs, rhs }
     }
-    
+
     fn call(op: &str, lhs: Node, arg: Node) -> Statement {
-        Statement::Call{
+        Statement::Call {
             op: op.to_string(),
             lhs,
-            arg        
-        }        
+            arg,
+        }
     }
 
     pub fn compile(&self, builder: &Builder, ir: &mut AmdCompiler) {
         match &self {
-            Statement::Assign{lhs, rhs} => {
+            Statement::Assign { lhs, rhs } => {
                 let r = rhs.compile(ir, 0);
                 Self::save(ir, r, lhs);
-            },
-            Statement::Call{op, lhs, arg} => {
+            }
+            Statement::Call { op, lhs, arg } => {
                 let _ = arg.compile(ir, 0);
                 let label = format!("_func_{}_", op);
-                ir.call(&label);                
-                Self::save(ir, 0, lhs);                    
+                ir.call(&label);
+                Self::save(ir, 0, lhs);
             }
         }
     }
-    
+
     fn load(ir: &mut AmdCompiler, r: u8, v: &Node) {
-        if let Node::Var{loc, ..} = v {
+        if let Node::Var { loc, .. } = v {
             match loc {
                 Loc::Stack(idx) => ir.load_stack(r, *idx),
                 Loc::Mem(idx) => ir.load_mem(r, *idx),
             }
         }
     }
-    
+
     fn save(ir: &mut AmdCompiler, r: u8, v: &Node) {
-        if let Node::Var{loc, ..} = v {
+        if let Node::Var { loc, .. } = v {
             match loc {
                 Loc::Stack(idx) => ir.save_stack(r, *idx),
                 Loc::Mem(idx) => ir.save_mem(r, *idx),
@@ -300,11 +338,11 @@ pub struct Builder {
     pub consts: Vec<f64>,
     pub sym_table: SymbolTable,
     pub num_tmp: usize,
-    pub ft: HashSet<String>,        // function table (the name of functions)
+    pub ft: HashSet<String>, // function table (the name of functions)
 }
 
 impl Builder {
-    const first_shadow : u8 = 2;
+    const first_shadow: u8 = 2;
 
     pub fn new() -> Builder {
         Builder {
@@ -319,18 +357,16 @@ impl Builder {
     pub fn add_assign(&mut self, lhs: Node, rhs: Node) {
         self.stmts.push(Statement::assign(lhs, rhs));
     }
-    
+
     pub fn add_call(&mut self, op: &str, lhs: Node, args: Vec<Node>) {
         let arg = match args.len() {
-            1 => {
-                self.create_unary("_call_", args[0].clone())
-            },
-            2 => {
-                self.create_binary("_call_", args[0].clone(), args[1].clone())
-            },
-            _ => { panic!("more than two arguments are not supported yet!"); }
+            1 => self.create_unary("_call_", args[0].clone()),
+            2 => self.create_binary("_call_", args[0].clone(), args[1].clone()),
+            _ => {
+                panic!("more than two arguments are not supported yet!");
+            }
         };
-        
+
         self.stmts.push(Statement::call(op, lhs, arg));
         self.ft.insert(op.to_string());
     }
@@ -342,7 +378,10 @@ impl Builder {
     pub fn create_const(&mut self, val: f64) -> Node {
         for (idx, v) in self.consts.iter().enumerate() {
             if *v == val {
-                return Node::Const { val, idx : idx as u32 };
+                return Node::Const {
+                    val,
+                    idx: idx as u32,
+                };
             }
         }
 
@@ -354,10 +393,13 @@ impl Builder {
     }
 
     pub fn create_var(&mut self, name: &str) -> Node {
-        let loc = self.sym_table.find(name).expect(&format!("variable {} not found", name));
+        let loc = self
+            .sym_table
+            .find(name)
+            .expect(&format!("variable {} not found", name));
         Node::Var {
             name: name.to_string(),
-            loc
+            loc,
         }
     }
 
@@ -381,7 +423,7 @@ impl Builder {
             ershov,
         }
     }
-    
+
     pub fn add_mem(&mut self, name: &str) {
         self.sym_table.add_mem(name);
     }
@@ -389,42 +431,42 @@ impl Builder {
     pub fn add_stack(&mut self, name: &str) {
         self.sym_table.add_stack(name);
     }
-    
+
     pub fn add_tmp(&mut self) -> (Node, String) {
         let name = format!("ψ{}", self.num_tmp);
         self.num_tmp += 1;
-        let loc = self.sym_table.add_stack(name.as_str());        
-        let tmp = Node::Var { name: name.to_string(), loc };
-        
+        let loc = self.sym_table.add_stack(name.as_str());
+        let tmp = Node::Var {
+            name: name.to_string(),
+            loc,
+        };
+
         (tmp, name.to_string())
     }
 
     pub fn compile(&mut self) -> AmdCompiler {
-        let mut ir = AmdCompiler::new();
+        // let mut ir = AmdCompiler::new(AmdFamily::AvxScalar);
+        let mut ir = AmdCompiler::new(AmdFamily::SSEScalar);
 
         let cap = self.sym_table.num_stack;
         let pad = cap & 1;
-        let n: u32 = ((cap + pad) * 8) as u32;
+        let n: u32 = (cap + pad) as u32;
 
         ir.prologue(n);
-        
+
         for stmt in self.stmts.iter() {
             stmt.compile(&self, &mut ir);
         }
-        
-        ir.epilogue(n);        
-        self.append_const_section(&mut ir);         
+
+        ir.epilogue(n);
+        self.append_const_section(&mut ir);
         self.append_vt_section(&mut ir);
         ir.apply_jumps();
         println!("{:02x?}", ir.bytes());
-        
+
         ir
     }
-    
-    pub fn mem(&self) -> Vec<f64> {
-        vec![0.0; self.sym_table.num_mem]
-    }
-    
+
     fn append_const_section(&self, ir: &mut AmdCompiler) {
         for (idx, val) in self.consts.iter().enumerate() {
             let label = format!("_const_{}_", idx);
@@ -433,7 +475,7 @@ impl Builder {
             ir.append_quad(u);
         }
     }
-    
+
     fn append_vt_section(&self, ir: &mut AmdCompiler) {
         for f in self.ft.iter() {
             let label = format!("_func_{}_", f);

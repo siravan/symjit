@@ -297,7 +297,7 @@ class PyCompiler:
     def assembler(self, ty):
         a = arch()
 
-        if a == "amd" and (ty == "native" or ty == "amd"):
+        if a == "amd" and (ty == "native" or ty == "amd" or ty == "v2"):
             prog = amd.AmdIR
             self.can_run = True
         elif a == "arm" and (ty == "native" or ty == "arm"):
