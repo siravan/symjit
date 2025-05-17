@@ -9,8 +9,7 @@ pub struct MachineCode<T> {
     machine_code: Vec<u8>,
     #[allow(dead_code)]
     code: Memory, // code needs to be here for f to stay valid
-    f: fn(&[T], &[BinaryFunc<f64>]),
-    vt: Vec<BinaryFunc<f64>>,
+    f: fn(&[T]),
     _mem: Vec<T>,
 }
 
@@ -18,7 +17,6 @@ impl<T> MachineCode<T> {
     pub fn new(
         arch: &str,
         machine_code: Vec<u8>,
-        vt: Vec<BinaryFunc<f64>>,
         _mem: Vec<T>,
     ) -> MachineCode<T> {
         #[cfg(target_arch = "x86_64")]
@@ -41,13 +39,12 @@ impl<T> MachineCode<T> {
 
         code.set_readable_and_executable().unwrap();
 
-        let f: fn(&[T], &[BinaryFunc<f64>]) = unsafe { std::mem::transmute(p) };
+        let f: fn(&[T]) = unsafe { std::mem::transmute(p) };
 
         MachineCode {
             machine_code,
             code,
             f,
-            vt,
             _mem,
         }
     }
@@ -56,7 +53,7 @@ impl<T> MachineCode<T> {
 impl<T> Compiled<T> for MachineCode<T> {
     #[inline]
     fn exec(&mut self) {
-        (self.f)(&mut self._mem, &self.vt);
+        (self.f)(&mut self._mem);
     }
 
     #[inline]

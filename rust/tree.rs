@@ -126,74 +126,107 @@ impl Node {
     pub fn compile(&self, ir: &mut AmdCompiler, base: u8) -> u8 {
         match self {
             Node::Void => 0,
-            Node::Const { idx, .. } => self.compile_const(ir, base, *idx),
-            Node::Var { loc, .. } => self.compile_var(ir, base, *loc),
-            Node::Unary { op, arg, ershov } => {
-                self.compile_unary(ir, base, op.as_str(), arg, *ershov)
-            }
-            Node::Binary {
-                op,
-                left,
-                right,
-                ershov,
-            } => self.compile_binary(ir, base, op.as_str(), left, right, *ershov),
+            Node::Const { .. } => self.compile_const(ir, base),
+            Node::Var { .. } => self.compile_var(ir, base),
+            Node::Unary { .. } => self.compile_unary(ir, base),
+            Node::Binary { .. } => self.compile_binary(ir, base),
         }
     }
 
-    fn compile_const(&self, ir: &mut AmdCompiler, base: u8, idx: u32) -> u8 {
-        let r = ir.first_shadow() + base;
-        let label = format!("_const_{}_", idx);
-        ir.load_const(r, &label);
-        r
+    fn compile_const(&self, ir: &mut AmdCompiler, base: u8) -> u8 {
+        if let Node::Const { idx, .. } = &self {
+            let r = ir.first_shadow() + base;
+            let label = format!("_const_{}_", idx);
+            ir.load_const(r, &label);
+            r
+        } else {
+            panic!("should not get here!");
+        }
     }
 
-    fn compile_var(&self, ir: &mut AmdCompiler, base: u8, loc: Loc) -> u8 {
-        let r = ir.first_shadow() + base;
-        match loc {
-            Loc::Stack(idx) => ir.load_stack(r, idx),
-            Loc::Mem(idx) => ir.load_mem(r, idx),
-        };
-        r
+    fn compile_var(&self, ir: &mut AmdCompiler, base: u8) -> u8 {
+        if let Node::Var { loc, .. } = &self {
+            let r = ir.first_shadow() + base;
+            match loc {
+                Loc::Stack(idx) => ir.load_stack(r, *idx),
+                Loc::Mem(idx) => ir.load_mem(r, *idx),
+            };
+            r
+        } else {
+            panic!("should not get here!");
+        }
     }
 
-    fn compile_unary(
-        &self,
-        ir: &mut AmdCompiler,
-        base: u8,
-        op: &str,
-        arg: &Node,
-        ershov: usize,
-    ) -> u8 {
-        let r = arg.compile(ir, base);
+    fn compile_unary(&self, ir: &mut AmdCompiler, base: u8) -> u8 {
+        if let Node::Unary { op, arg, ershov } = self {
+            let r = arg.compile(ir, base);
 
-        match op {
-            "neg" => ir.neg(r),
-            "not" => ir.not(r),
-            "abs" => ir.abs(r),
-            "root" => ir.root(r),
-            "square" => ir.square(r),
-            "cube" => ir.cube(r),
-            "recip" => ir.recip(r),
-            "_call_" => {
-                if r != 0 {
-                    ir.fmov(0, r);
+            match op.as_str() {
+                "neg" => ir.neg(r),
+                "not" => ir.not(r),
+                "abs" => ir.abs(r),
+                "root" => ir.root(r),
+                "square" => ir.square(r),
+                "cube" => ir.cube(r),
+                "recip" => ir.recip(r),
+                "_call_" => {
+                    if r != 0 {
+                        ir.fmov(0, r);
+                    }
                 }
-            }
-            _ => panic!("unary operation is not recognized"),
-        };
+                _ => panic!("unary operation is not recognized"),
+            };
 
-        r
+            r
+        } else {
+            panic!("should not get here!");
+        }
     }
 
-    fn compile_binary(
+    fn compile_binary(&self, ir: &mut AmdCompiler, base: u8) -> u8 {
+        if let Node::Binary {
+            op,
+            left,
+            right,
+            ershov,
+        } = self
+        {
+            let (dst, l, r) = self.alloc(ir, base, left, right, *ershov);
+
+            match op.as_str() {
+                "plus" => ir.plus(dst, l, r),
+                "minus" => ir.minus(dst, l, r),
+                "times" => ir.times(dst, l, r),
+                "divide" => ir.divide(dst, l, r),
+                "gt" => ir.gt(dst, l, r),
+                "geq" => ir.geq(dst, l, r),
+                "lt" => ir.lt(dst, l, r),
+                "leq" => ir.leq(dst, l, r),
+                "eq" => ir.eq(dst, l, r),
+                "neq" => ir.neq(dst, l, r),
+                "and" => ir.and(dst, l, r),
+                "or" => ir.or(dst, l, r),
+                "xor" => ir.xor(dst, l, r),
+                "select_if" => ir.select_if(dst, l, r),
+                "select_else" => ir.select_else(dst, l, r),
+                "_call_" => Self::call(ir, l, r),
+                _ => panic!("binary operation is not recognized"),
+            };
+
+            dst
+        } else {
+            panic!("should not get here!");
+        }
+    }
+
+    fn alloc(
         &self,
         ir: &mut AmdCompiler,
         base: u8,
-        op: &str,
         left: &Node,
         right: &Node,
         ershov: usize,
-    ) -> u8 {
+    ) -> (u8, u8, u8) {
         let mut dst = ir.first_shadow() + base + (ershov as u8) - 1;
 
         let el = left.ershov_number();
@@ -233,29 +266,9 @@ impl Node {
             }
 
             dst = 0;
-        }
-
-        match op {
-            "plus" => ir.plus(dst, l, r),
-            "minus" => ir.minus(dst, l, r),
-            "times" => ir.times(dst, l, r),
-            "divide" => ir.divide(dst, l, r),
-            "gt" => ir.gt(dst, l, r),
-            "geq" => ir.geq(dst, l, r),
-            "lt" => ir.lt(dst, l, r),
-            "leq" => ir.leq(dst, l, r),
-            "eq" => ir.eq(dst, l, r),
-            "neq" => ir.neq(dst, l, r),
-            "and" => ir.and(dst, l, r),
-            "or" => ir.or(dst, l, r),
-            "xor" => ir.xor(dst, l, r),
-            "select_if" => ir.select_if(dst, l, r),
-            "select_else" => ir.select_else(dst, l, r),
-            "_call_" => Self::call(ir, l, r),
-            _ => panic!("binary operation is not recognized"),
         };
 
-        dst
+        (dst, l, r)
     }
 
     fn call(ir: &mut AmdCompiler, l: u8, r: u8) {
@@ -282,7 +295,7 @@ impl Node {
 #[derive(Debug, Clone)]
 pub enum Statement {
     Assign { lhs: Node, rhs: Node },
-    Call { op: String, lhs: Node, arg: Node },
+    Call { op: String, lhs: Node, arg: Node, num_args: usize },
 }
 
 impl Statement {
@@ -290,11 +303,12 @@ impl Statement {
         Statement::Assign { lhs, rhs }
     }
 
-    fn call(op: &str, lhs: Node, arg: Node) -> Statement {
+    fn call(op: &str, lhs: Node, arg: Node, num_args: usize) -> Statement {
         Statement::Call {
             op: op.to_string(),
             lhs,
             arg,
+            num_args,
         }
     }
 
@@ -304,10 +318,10 @@ impl Statement {
                 let r = rhs.compile(ir, 0);
                 Self::save(ir, r, lhs);
             }
-            Statement::Call { op, lhs, arg } => {
+            Statement::Call { op, lhs, arg, num_args } => {
                 let _ = arg.compile(ir, 0);
                 let label = format!("_func_{}_", op);
-                ir.call(&label);
+                ir.call(&label, *num_args);
                 Self::save(ir, 0, lhs);
             }
         }
@@ -367,7 +381,7 @@ impl Builder {
             }
         };
 
-        self.stmts.push(Statement::call(op, lhs, arg));
+        self.stmts.push(Statement::call(op, lhs, arg, args.len()));
         self.ft.insert(op.to_string());
     }
 
@@ -444,9 +458,8 @@ impl Builder {
         (tmp, name.to_string())
     }
 
-    pub fn compile(&mut self) -> AmdCompiler {
-        // let mut ir = AmdCompiler::new(AmdFamily::AvxScalar);
-        let mut ir = AmdCompiler::new(AmdFamily::SSEScalar);
+    pub fn compile(&mut self, family: AmdFamily) -> AmdCompiler {
+        let mut ir = AmdCompiler::new(family);
 
         let cap = self.sym_table.num_stack;
         let pad = cap & 1;
@@ -462,7 +475,7 @@ impl Builder {
         self.append_const_section(&mut ir);
         self.append_vt_section(&mut ir);
         ir.apply_jumps();
-        println!("{:02x?}", ir.bytes());
+        // println!("{:02x?}", ir.bytes());
 
         ir
     }

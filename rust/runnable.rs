@@ -1,8 +1,7 @@
 use crate::model::Program;
 use crate::utils::*;
-//use std::simd::f64x4;
 
-use crate::amd::AmdCompiler;
+use crate::amd::AmdFamily;
 // use crate::arm::ArmCompiler;
 // use crate::avx::AmdCompilerSimd;
 // use crate::interpreter::Interpreter;
@@ -22,6 +21,32 @@ pub enum CompilerType {
     Wasm,
     Amd2,
 }
+
+pub struct Platform;
+
+impl Platform {
+    pub fn is_amd64() -> bool {
+        #[cfg(target_arch = "x86_64")]
+        return true;
+        #[cfg(not(target_arch = "x86_64"))]
+        return false;
+    }
+    
+    pub fn is_arm64() -> bool {
+        #[cfg(target_arch = "aarch64")]
+        return true;
+        #[cfg(not(target_arch = "aarch64"))]
+        return false;
+    }
+    
+    pub fn has_avx() -> bool {
+        #[cfg(target_arch = "x86_64")]
+        return is_x86_feature_detected!("avx");
+        #[cfg(not(target_arch = "x86_64"))]
+        return false;
+    }
+}
+
 
 pub struct Runnable {
     // pub prog: Program,
@@ -101,16 +126,31 @@ impl Runnable {
         let count_states = prog.count_states;
         let count_params = prog.count_params;
         let count_obs = prog.count_obs;
-        let count_diffs = prog.count_diffs;
-
+        let count_diffs = prog.count_diffs;      
+        
+        if !Platform::is_amd64() {
+            panic!("not amd64");
+        };
+        
         let mem: Vec<f64> = vec![0.0; size];
-
-        let ir = prog.builder.compile();
-
-        let code = MachineCode::new("x86_64", ir.bytes(), Vec::new(), mem);
-
+        
+        let ir = if Platform::has_avx() {
+            prog.builder.compile(AmdFamily::AvxScalar)
+        } else {
+            prog.builder.compile(AmdFamily::SSEScalar)
+        };
+        
+        let code = MachineCode::new("x86_64", ir.bytes(), mem);     
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
-        let compiled_simd = None;
+        
+        let compiled_simd: Option<Box<dyn Compiled<f64x4>>> = if Platform::has_avx() {
+            let ir = prog.builder.compile(AmdFamily::AvxVector);
+            let mem: Vec<f64x4> = vec![f64x4::splat(0.0); size];
+            let code = MachineCode::new("x86_64", ir.bytes(), mem);
+            Some(Box::new(code))
+        } else {
+            None
+        };        
 
         Runnable {
             // prog,
@@ -127,7 +167,6 @@ impl Runnable {
         }
     }
 
-    #[inline]
     pub fn exec(&mut self, t: f64) {
         {
             let mem = self.compiled.mem_mut();
@@ -144,16 +183,17 @@ impl Runnable {
         }
     }
 
-    pub fn exec_vectorized_scalar(&mut self, buf: &mut [f64], n: usize) {
+    pub fn exec_vectorized_scalar(&mut self, buf: &mut [f64], n: usize) {       
         let h = usize::max(self.count_states, self.count_obs);
-        assert!(buf.len() == n * h);
-
+        assert!(buf.len() == n * h);         
+        
         for t in 0..n {
             {
                 let mem = self.compiled.mem_mut();
                 mem[self.first_state - 1] = t as f64;
                 for i in 0..self.count_states {
-                    mem[self.first_state + i] = buf[i * n + t];
+                    let x = buf[i * n + t];
+                    mem[self.first_state + i] = x;
                 }
             }
 

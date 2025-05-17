@@ -33,12 +33,12 @@ impl AmdCompiler {
         #[cfg(not(target_family = "windows"))]
         return 14;
     }
-    
+
     pub fn reg_size(&self) -> u32 {
         match self.family {
             AmdFamily::AvxScalar | AmdFamily::SSEScalar => 8,
             AmdFamily::AvxVector => 32,
-        }   
+        }
     }
 
     // assembler's methods
@@ -298,7 +298,7 @@ impl AmdCompiler {
             AmdFamily::AvxScalar | AmdFamily::AvxVector => self.amd.vandpd(dst, a, b),
             AmdFamily::SSEScalar => {
                 let (x, y) = self.shrink(dst, a, b, true);
-                self.amd.andnpd(x, y);
+                self.amd.andpd(x, y);
             }
         }
     }
@@ -338,23 +338,77 @@ impl AmdCompiler {
         self.eq(1, 1, 1);
         self.xor(dst, dst, 1);
     }
+    
+    fn vzeroupper(&mut self) {
+        match self.family {
+            AmdFamily::AvxScalar | AmdFamily::AvxVector => self.amd.vzeroupper(),
+            AmdFamily::SSEScalar => {}            
+        }
+    }
 
-    pub fn call(&mut self, label: &str) {
-        if matches!(self.family, AmdFamily::AvxScalar)
-            || matches!(self.family, AmdFamily::AvxVector)
-        {
-            self.amd.vzeroupper();
+    pub fn call(&mut self, label: &str, num_args: usize) {
+        self.amd.mov_reg_label(Amd::RBX, label);        
+        
+        match self.family {
+            AmdFamily::AvxScalar | AmdFamily::SSEScalar => {
+                self.vzeroupper();   
+                #[cfg(target_family = "windows")]        
+                self.amd.sub_rsp(32); 
+                                               
+                self.amd.call(Amd::RBX);
+                
+                #[cfg(target_family = "windows")]        
+                self.amd.add_rsp(32);
+            },
+            AmdFamily::AvxVector => {                
+                match num_args {
+                    1 => self.call_vector_unary(),
+                    2 => self.call_vector_binary(),
+                    _ => { panic!("invalid number of arguments") }
+                }                
+            },
+        }
+    }    
+    
+    fn call_vector_unary(&mut self) {
+        // reserves 64 bytes in the stack
+        // 32 bytes for shadow store (mandatory in Windows)
+        // 32 bytes to save ymm0
+        self.amd.sub_rsp(32 * 2);
+        self.amd.vmovpd_mem_ymm(Amd::RSP, 32, 0);
+        
+        self.vzeroupper();   
+        
+        for i in 0..4 {
+            self.amd.vmovsd_xmm_mem(0, Amd::RSP, 32 + i * 8);
+            self.amd.call(Amd::RBX);
+            self.amd.vmovsd_mem_xmm(Amd::RSP, 32 + i * 8, 0);
         }
 
-        // Windows 32-byte home area
-        #[cfg(target_family = "windows")]
-        self.amd.sub_rsp(32);
+        self.amd.vmovpd_ymm_mem(0, Amd::RSP, 32);
+        self.amd.add_rsp(32 * 2);
+    }
+    
+    fn call_vector_binary(&mut self) {
+        // reserves 96 bytes in the stack
+        // 32 bytes for shadow store (mandatory in Windows)
+        // 32 bytes to save ymm0
+        // 32 bytes to save ymm1
+        self.amd.sub_rsp(32 * 3);
+        self.amd.vmovpd_mem_ymm(Amd::RSP, 32, 0);
+        self.amd.vmovpd_mem_ymm(Amd::RSP, 64, 1);
+        
+        self.vzeroupper();   
+        
+        for i in 0..4 {
+            self.amd.vmovsd_xmm_mem(0, Amd::RSP, 32 + i * 8);
+            self.amd.vmovsd_xmm_mem(1, Amd::RSP, 64 + i * 8);
+            self.amd.call(Amd::RBX);
+            self.amd.vmovsd_mem_xmm(Amd::RSP, 32 + i * 8, 0);
+        }
 
-        self.amd.mov_reg_label(Amd::RAX, label);
-        self.amd.call(Amd::RAX);
-
-        #[cfg(target_family = "windows")]
-        self.amd.add_rsp(32);
+        self.amd.vmovpd_ymm_mem(0, Amd::RSP, 32);
+        self.amd.add_rsp(32 * 3);
     }
 
     pub fn branch(&mut self, label: &str) {
@@ -383,6 +437,7 @@ impl AmdCompiler {
     #[cfg(target_family = "unix")]
     pub fn prologue(&mut self, n: u32) {
         self.amd.push(Amd::RBP);
+        self.amd.push(Amd::RBX);
         self.amd.mov(Amd::RBP, Amd::RDI);
 
         match self.family {
@@ -394,6 +449,7 @@ impl AmdCompiler {
     #[cfg(target_family = "windows")]
     pub fn prologue(&mut self, n: u32) {
         self.amd.mov_mem_reg(Amd::RSP, 0x08, Amd::RBP);
+        self.amd.mov_mem_reg(Amd::RSP, 0x10, Amd::RBX);
         self.amd.mov(Amd::RBP, Amd::RCX);
 
         match self.family {
@@ -409,6 +465,7 @@ impl AmdCompiler {
             AmdFamily::AvxVector => self.amd.add_rsp(32 * n),
         }
 
+        self.amd.pop(Amd::RBX);
         self.amd.pop(Amd::RBP);
         self.amd.ret();
         self.predefined_consts();
@@ -421,6 +478,7 @@ impl AmdCompiler {
             AmdFamily::AvxVector => self.amd.add_rsp(32 * n),
         }
 
+        self.amd.mov(Amd::RBX, Amd::RSP, 0x10);
         self.amd.mov(Amd::RBP, Amd::RSP, 0x08);
         self.amd.ret();
         self.predefined_consts();
