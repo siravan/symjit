@@ -554,12 +554,6 @@ impl Amd {
         self.modrm_reg(reg, rm);
     }
 
-    pub fn xchg_xmm(&mut self, reg: u8, rm: u8) {
-        self.xorpd(reg, rm);
-        self.xorpd(rm, reg);
-        self.xorpd(reg, rm);
-    }
-
     /*******************************************/
     pub fn vzeroupper(&mut self) {
         self.append_bytes(&[0xC5, 0xF8, 0x77]);

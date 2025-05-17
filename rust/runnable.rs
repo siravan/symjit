@@ -31,14 +31,14 @@ impl Platform {
         #[cfg(not(target_arch = "x86_64"))]
         return false;
     }
-    
+
     pub fn is_arm64() -> bool {
         #[cfg(target_arch = "aarch64")]
         return true;
         #[cfg(not(target_arch = "aarch64"))]
         return false;
     }
-    
+
     pub fn has_avx() -> bool {
         #[cfg(target_arch = "x86_64")]
         return is_x86_feature_detected!("avx");
@@ -46,7 +46,6 @@ impl Platform {
         return false;
     }
 }
-
 
 pub struct Runnable {
     // pub prog: Program,
@@ -126,34 +125,33 @@ impl Runnable {
         let count_states = prog.count_states;
         let count_params = prog.count_params;
         let count_obs = prog.count_obs;
-        let count_diffs = prog.count_diffs;      
-        
+        let count_diffs = prog.count_diffs;
+
         if !Platform::is_amd64() {
             panic!("not amd64");
         };
-        
+
         let mem: Vec<f64> = vec![0.0; size];
-        
-        let ir = if Platform::has_avx() {
+
+        let mut ir = if Platform::has_avx() {
             prog.builder.compile(AmdFamily::AvxScalar)
         } else {
             prog.builder.compile(AmdFamily::SSEScalar)
         };
-        
-        let code = MachineCode::new("x86_64", ir.bytes(), mem);     
+
+        let code = MachineCode::new("x86_64", ir.bytes(), mem);
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
-        
+
         let compiled_simd: Option<Box<dyn Compiled<f64x4>>> = if Platform::has_avx() {
-            let ir = prog.builder.compile(AmdFamily::AvxVector);
+            let mut ir = prog.builder.compile(AmdFamily::AvxVector);
             let mem: Vec<f64x4> = vec![f64x4::splat(0.0); size];
             let code = MachineCode::new("x86_64", ir.bytes(), mem);
             Some(Box::new(code))
         } else {
             None
-        };        
+        };
 
         Runnable {
-            // prog,
             compiled,
             compiled_simd,
             first_state,
@@ -183,10 +181,10 @@ impl Runnable {
         }
     }
 
-    pub fn exec_vectorized_scalar(&mut self, buf: &mut [f64], n: usize) {       
+    pub fn exec_vectorized_scalar(&mut self, buf: &mut [f64], n: usize) {
         let h = usize::max(self.count_states, self.count_obs);
-        assert!(buf.len() == n * h);         
-        
+        assert!(buf.len() == n * h);
+
         for t in 0..n {
             {
                 let mem = self.compiled.mem_mut();

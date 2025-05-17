@@ -10,6 +10,7 @@ mod runnable;
 mod utils;
 
 mod assembler;
+mod generator;
 mod tree;
 
 mod amd;
