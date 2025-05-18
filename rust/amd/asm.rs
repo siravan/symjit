@@ -7,7 +7,7 @@ pub struct Amd {
 impl Amd {
     pub fn new() -> Amd {
         Amd {
-            a: Assembler::new(-4),
+            a: Assembler::new(-4, 0),
         }
     }
 

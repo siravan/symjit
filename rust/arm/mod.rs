@@ -1,241 +1,188 @@
 #[macro_use]
 mod macros;
 
-use std::collections::{HashMap, HashSet};
+use crate::assembler::Assembler;
+use crate::code::BinaryFunc;
+use crate::generator::Generator;
 
-use super::analyzer::{Analyzer, Stack};
-use super::code::*;
-use super::machine::MachineCode;
-use super::model::Program;
-use super::register::{Frame, Word};
-use super::utils::*;
-
-#[derive(Debug)]
-pub struct ArmCompiler {
-    machine_code: Vec<u8>,
-    stack: Stack,
-    allocs: HashMap<Word, u8>,
+pub struct ArmGenerator {
+    a: Assembler,
 }
 
-impl ArmCompiler {
-    pub fn new() -> ArmCompiler {
-        Self {
-            machine_code: Vec::new(),
-            stack: Stack::new(),
-            allocs: HashMap::new(),
+impl ArmGenerator {
+    pub fn new() -> ArmGenerator {
+        ArmGenerator {
+            a: Assembler::new(0, 3)
         }
     }
+    
+    fn emit(&mut self, w: u32) {
+        self.a.append_word(w);
+    }    
+}
 
-    pub fn emit(&mut self, w: u32) {
-        self.machine_code.push(w as u8);
-        self.machine_code.push((w >> 8) as u8);
-        self.machine_code.push((w >> 16) as u8);
-        self.machine_code.push((w >> 24) as u8);
+impl Generator for ArmGenerator {
+    fn first_shadow(&self) -> u8 {
+        return 2;
     }
 
-    fn op_code(&mut self, op: &str, p: Proc, rx: u8, ry: u8) {
-        match op {
-            "mov" => {}
-            "plus" => self.emit(arm! {fadd d(0), d(rx), d(ry)}),
-            "minus" => self.emit(arm! {fsub d(0), d(rx), d(ry)}),
-            "times" => self.emit(arm! {fmul d(0), d(rx), d(ry)}),
-            "divide" => self.emit(arm! {fdiv d(0), d(rx), d(ry)}),
-            "gt" => self.emit(arm! {fcmgt d(0), d(rx), d(ry)}),
-            "geq" => self.emit(arm! {fcmge d(0), d(rx), d(ry)}),
-            "lt" => self.emit(arm! {fcmlt d(0), d(rx), d(ry)}),
-            "leq" => self.emit(arm! {fcmle d(0), d(rx), d(ry)}),
-            "eq" => self.emit(arm! {fcmeq d(0), d(rx), d(ry)}),
-            "and" => self.emit(arm! {and v(0).8b, v(rx).8b, v(ry).8b}),
-            "or" => self.emit(arm! {orr v(0).8b, v(rx).8b, v(ry).8b}),
-            "xor" => self.emit(arm! {eor v(0).8b, v(rx).8b, v(ry).8b}),
-            "neg" => self.emit(arm! {fneg d(0), d(rx)}),
-            "abs" => self.emit(arm! {fabs d(0), d(rx)}),
-            "root" => self.emit(arm! {fsqrt d(0), d(rx)}),
-            "neq" => {
-                self.emit(arm! {fcmeq d(0), d(rx), d(ry)});
-                self.emit(arm! {not v(0).8b, v(0).8b});
-            }
-            "square" => {
-                self.emit(arm! {fmul d(0), d(rx), d(rx)});
-            }
-            "cube" => {
-                self.emit(arm! {fmul d(1), d(rx), d(rx)});
-                self.emit(arm! {fmul d(0), d(1), d(rx)});
-            }
-            "recip" => {
-                self.emit(arm! {fmov d(1), #1.0});
-                self.emit(arm! {fdiv d(0), d(1), d(rx)});
-            }
-            "power" | "rem" => {
-                // currently, rx is either 0 or 1, and ry is 0 or 2
-                // therefore, the following logic works!
-                // however; if we implement more complex register allocation,
-                // may need to change the logic.
-                if ry != 2 {
-                    self.emit(arm! {fmov d(2), d(ry)});
-                }
-                if rx != 0 {
-                    self.emit(arm! {fmov d(0), d(rx)});
-                }
-                self.emit(arm! {fmov d(1), d(2)});
-
-                self.emit(arm! {ldr x(0), [x(20), #8*p.0]});
-                self.emit(arm! {blr x(0)});
-            }
-            _ => {
-                if rx != 0 {
-                    self.emit(arm! {fmov d(0), d(rx)});
-                }
-                self.emit(arm! {ldr x(0), [x(20), #8*p.0]});
-                self.emit(arm! {blr x(0)});
-            }
-        }
+    fn count_shadows(&self) -> u8 {
+        return 6;
     }
 
-    // d2 == true ? d0 : d1
-    fn ifelse(&mut self, rc: u8, r1: u8, r2: u8) {
-        self.emit(arm! {bsl v(rc).8b, v(r1).8b, v(r2).8b});
-        if rc != 0 {
-            self.emit(arm! {fmov d(0), d(rc)});
-        }
+    fn reg_size(&self) -> u32 {
+        return 8;
     }
 
-    fn load(&mut self, x: u8, r: Word, rename: bool) -> u8 {
-        if let Some(s) = self.allocs.get(&r) {
-            let s = *s;
-
-            if s < 4 {
-                if rename {
-                    return s + 4;
-                } else {
-                    self.emit(arm! {fmov d(x), d(s+4)});
-                    return x;
-                }
-            }
-        }
-
-        if r == Frame::ZERO {
-            self.emit(arm! {fmov d(x), #0.0});
-        } else if r == Frame::ONE {
-            self.emit(arm! {fmov d(x), #1.0});
-        } else if r == Frame::MINUS_ONE {
-            self.emit(arm! {fmov d(x), #-1.0});
-        } else if r.is_temp() {
-            let k = self.stack.pop(&r);
-            self.emit(arm! {ldr d(x), [sp, #8*k]});
-        } else if r.0 < 4096 {
-            self.emit(arm! {ldr d(x), [x(19), #8*r.0]});
-        } else {
-            self.emit(arm! {movz x(1), #r.0});
-            self.emit(arm! {ldr d(x), [x(19), x(1), lsl #3]});
-        };
-
-        x
+    fn a(&mut self) -> &mut Assembler {
+        &mut self.a
     }
 
-    fn fuse_load(&mut self, r0: Word, x: u8, r: Word, rename: bool) -> u8 {
-        if r == r0 {
-            0
-        } else {
-            self.load(x, r, rename)
-        }
+    //***********************************
+    fn fmov(&mut self, dst: u8, r: u8) {
+        self.emit(arm! {fmov d(dst), d(r)});        
     }
 
-    fn save(&mut self, x: u8, r: Word) {
-        if let Some(s) = self.allocs.get(&r) {
-            let s = *s;
-
-            if s < 4 {
-                self.emit(arm! {fmov d(s+4), d(x)});
-                return;
-            }
-        }
-
-        if r.is_temp() {
-            let k = self.stack.push(&r);
-            self.emit(arm! {str d(x), [sp, #8*k]});
-        } else if r.0 < 4096 {
-            self.emit(arm! {str d(x), [x(19), #8*r.0]});
-        } else {
-            self.emit(arm! {movz x(1), #r.0});
-            self.emit(arm! {str d(x), [x(19), x(1), lsl #3]});
-        }
+    fn fxchg(&mut self, a: u8, b: u8) {
+        self.emit(arm! {eor v(a).8b, v(a).8b, v(b).8b});
+        self.emit(arm! {eor v(b).8b, v(a).8b, v(b).8b});
+        self.emit(arm! {eor v(a).8b, v(a).8b, v(b).8b});
     }
 
-    fn prologue(&mut self, n: usize) {
-        self.emit(arm! {sub sp, sp, #32});
+    fn load_const(&mut self, dst: u8, label: &str) {
+        self.jump(label, arm! {ldr d(dst), label});
+    }
+
+    fn load_mem(&mut self, dst: u8, idx: u32) {
+        self.emit(arm! {ldr d(dst), [x(19), #8*idx]});
+    }
+
+    fn save_mem(&mut self, src: u8, idx: u32) {
+        self.emit(arm! {str d(src), [x(19), #8*idx]});
+    }
+
+    fn load_stack(&mut self, dst: u8, idx: u32) {
+        self.emit(arm! {ldr d(dst), [sp, #8*idx]});
+    }
+
+    fn save_stack(&mut self, src: u8, idx: u32) {
+        self.emit(arm! {str d(src), [sp, #8*idx]});
+    }
+
+    fn neg(&mut self, dst: u8) {
+        self.emit(arm! {fneg d(dst), d(dst)});
+    }
+
+    fn abs(&mut self, dst: u8) {
+        self.emit(arm! {fabs d(dst), d(dst)});
+    }
+
+    fn root(&mut self, dst: u8) {
+        self.emit(arm! {fsqrt d(dst), d(dst)});
+    }
+
+    fn square(&mut self, dst: u8) {
+        self.emit(arm! {fmul d(dst), d(dst), d(dst)});
+    }
+
+    fn cube(&mut self, dst: u8) {
+        self.emit(arm! {fmul d(1), d(dst), d(dst)});
+        self.emit(arm! {fmul d(dst), d(dst), d(1)});
+    }
+
+    fn recip(&mut self, dst: u8) {
+        self.emit(arm! {fmov d(1), #1.0});
+        self.emit(arm! {fdiv d(dst), d(1), d(dst)});
+    }
+
+    fn plus(&mut self, dst: u8, a: u8, b: u8) {
+        self.emit(arm! {fadd d(dst), d(a), d(b)});
+    }
+
+    fn minus(&mut self, dst: u8, a: u8, b: u8) {
+        self.emit(arm! {fsub d(dst), d(a), d(b)});
+    }
+
+    fn times(&mut self, dst: u8, a: u8, b: u8) {
+        self.emit(arm! {fmul d(dst), d(a), d(b)});
+    }
+
+    fn divide(&mut self, dst: u8, a: u8, b: u8) {
+        self.emit(arm! {fdiv d(dst), d(a), d(b)});
+    }
+
+    fn gt(&mut self, dst: u8, a: u8, b: u8) {
+        self.emit(arm! {fcmgt d(dst), d(a), d(b)});
+    }
+
+    fn geq(&mut self, dst: u8, a: u8, b: u8) {
+        self.emit(arm! {fcmge d(dst), d(a), d(b)});
+    }
+
+    fn lt(&mut self, dst: u8, a: u8, b: u8) {
+        self.emit(arm! {fcmlt d(dst), d(a), d(b)});
+    }
+
+    fn leq(&mut self, dst: u8, a: u8, b: u8) {
+        self.emit(arm! {fcmle d(dst), d(a), d(b)});
+    }
+
+    fn eq(&mut self, dst: u8, a: u8, b: u8) {
+        self.emit(arm! {fcmeq d(dst), d(a), d(b)});
+    }
+
+    fn neq(&mut self, dst: u8, a: u8, b: u8) {
+        self.emit(arm! {fcmeq d(dst), d(a), d(b)});
+        self.emit(arm! {not v(dst).8b, v(dst).8b});
+    }
+
+    fn and(&mut self, dst: u8, a: u8, b: u8) {
+        self.emit(arm! {and v(dst).8b, v(a).8b, v(b).8b});
+    }
+
+    fn andnot(&mut self, dst: u8, a: u8, b: u8) {
+        self.emit(arm! {not v(dst).8b, v(a).8b});
+        self.emit(arm! {and v(dst).8b, v(dst).8b, v(b).8b});
+    }
+
+    fn or(&mut self, dst: u8, a: u8, b: u8) {
+        self.emit(arm! {orr v(dst).8b, v(a).8b, v(b).8b});
+    }
+
+    fn xor(&mut self, dst: u8, a: u8, b: u8) {
+        self.emit(arm! {eor v(dst).8b, v(a).8b, v(b).8b});
+    }
+
+    fn not(&mut self, dst: u8) {
+        self.emit(arm! {not v(dst).8b, v(dst).8b});
+    }
+
+    fn call(&mut self, label: &str, num_args: usize) {
+        self.jump(label, arm! {ldr x(0), label});
+        self.emit(arm! {blr x(0)});   
+    }
+
+    fn select_if(&mut self, dst: u8, cond: u8, a: u8) {
+        self.and(dst, cond, a);
+    }
+
+    fn select_else(&mut self, dst: u8, cond: u8, a: u8) {
+        self.andnot(dst, cond, a);
+    }
+    
+    fn prologue(&mut self, n: u32) {
+        self.emit(arm! {sub sp, sp, #16});
         self.emit(arm! {str lr, [sp, #0]});
-        self.emit(arm! {stp x(19), x(20), [sp, #16]});
-        self.emit(arm! {sub sp, sp, #n});
-        self.emit(arm! {mov x(19), x(0)});
-        self.emit(arm! {mov x(20), x(2)});
+        self.emit(arm! {str x(19), [sp, #8]});
+        self.emit(arm! {sub sp, sp, #8*n});
+        self.emit(arm! {mov x(19), x(0)});        
     }
 
-    fn epilogue(&mut self, n: usize) {
-        self.emit(arm! {add sp, sp, #n});
-        self.emit(arm! {ldp x(19), x(20), [sp, #16]});
+    fn epilogue(&mut self, n: u32) {
+        self.emit(arm! {add sp, sp, #8*n});
+        self.emit(arm! {ldr x(19), [sp, #8]});
         self.emit(arm! {ldr lr, [sp, #0]});
-        self.emit(arm! {add sp, sp, #32});
+        self.emit(arm! {add sp, sp, #16});
         self.emit(arm! {ret});
-    }
-
-    fn codegen(&mut self, prog: &Program, saveable: &HashSet<Word>) {
-        let mut r = Frame::ZERO;
-
-        for c in prog.code.iter() {
-            match c {
-                Instruction::Unary { p, x, dst, op } => {
-                    if *x != r {
-                        self.load(0, *x, false);
-                    };
-                    self.op_code(op, *p, 0, 0);
-                    r = *dst;
-                }
-                Instruction::Binary { p, x, y, dst, op } => {
-                    let rx = self.fuse_load(r, 1, *x, true);
-                    let ry = self.fuse_load(r, 2, *y, true);
-                    self.op_code(op, *p, rx, ry);
-                    r = *dst;
-                }
-                Instruction::IfElse { x1, x2, cond, dst } => {
-                    let r1 = self.fuse_load(r, 1, *x1, true);
-                    let r2 = self.fuse_load(r, 2, *x2, true);
-                    let rc = self.fuse_load(r, 3, *cond, true);
-                    self.ifelse(rc, r1, r2);
-                    r = *dst;
-                }
-                _ => {
-                    continue;
-                }
-            }
-
-            if prog.frame.should_save(&r) || saveable.contains(&r) {
-                self.save(0, r);
-                r = Frame::ZERO;
-            }
-        }
-    }
-}
-
-impl Compiler<MachineCode<f64>> for ArmCompiler {
-    fn compile(&mut self, prog: &Program) -> MachineCode<f64> {
-        let analyzer = Analyzer::new(prog);
-        let saveable = analyzer.find_saveable();
-
-        self.allocs = analyzer.alloc_regs();
-
-        self.codegen(prog, &saveable);
-        self.machine_code.clear();
-        let n = 8 * ((self.stack.capacity() + 1) & 0xfffe);
-        self.prologue(n);
-        self.codegen(prog, &saveable);
-        self.epilogue(n);
-
-        MachineCode::new(
-            "aarch64",
-            self.machine_code.clone(),
-            VirtualTable::<f64>::from_names(&prog.ft),
-            prog.frame.mem(),
-        )
     }
 }

@@ -14,7 +14,7 @@ mod generator;
 mod tree;
 
 mod amd;
-// mod arm;
+mod arm;
 // mod avx;
 // mod interpreter;
 #[cfg(feature = "wasm")]

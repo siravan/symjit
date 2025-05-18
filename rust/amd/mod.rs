@@ -36,12 +36,13 @@ impl AmdGenerator {
         if dst == a {
             (dst, b)
         } else if dst == b {
-            // difficult case: dst == b && dst != a
+            // difficult case: dst == b, dst != a
             if !commutative {
                 self.fxchg(a, b);
             };
             (dst, a)
         } else {
+            // dst != a, dst != b, a ?= b
             self.fmov(dst, a);
             (dst, b)
         }
@@ -105,7 +106,7 @@ impl AmdGenerator {
         self.set_label("_one_");
         let u: u64 = unsafe { std::mem::transmute(1.0f64) };
         self.append_quad(u);
-        
+
         self.set_label("_all_ones_");
         self.append_quad(0xffffffffffffffff);
     }
@@ -416,7 +417,7 @@ impl Generator for AmdGenerator {
             },
         }
     }
-
+/*
     fn branch(&mut self, label: &str) {
         self.amd.jmp(label);
     }
@@ -431,7 +432,7 @@ impl Generator for AmdGenerator {
         self.amd.jpe(true_label);
         self.amd.jmp(false_label);
     }
-
+*/
     fn select_if(&mut self, dst: u8, cond: u8, a: u8) {
         self.amd.vandpd(dst, cond, a);
     }

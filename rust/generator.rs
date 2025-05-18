@@ -78,9 +78,6 @@ pub trait Generator {
     fn not(&mut self, dst: u8);
 
     fn call(&mut self, label: &str, num_args: usize);
-    fn branch(&mut self, label: &str);
-    fn branch_if(&mut self, cond: u8, true_label: &str);
-    fn branch_if_else(&mut self, cond: u8, true_label: &str, false_label: &str);
     fn select_if(&mut self, dst: u8, cond: u8, a: u8);
     fn select_else(&mut self, dst: u8, cond: u8, a: u8);
 

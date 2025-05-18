@@ -3,7 +3,7 @@ use std::collections::HashSet;
 
 use anyhow::Result;
 
-use crate::amd::{AmdGenerator, AmdFamily};
+use crate::amd::{AmdFamily, AmdGenerator};
 use crate::code::VirtualTable;
 use crate::generator::Generator;
 use crate::model::Expr;

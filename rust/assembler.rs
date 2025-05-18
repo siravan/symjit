@@ -5,15 +5,17 @@ pub struct Assembler {
     labels: HashMap<String, usize>,
     jumps: Vec<(String, usize, u32)>,
     delta: isize,
+    shift: isize,
 }
 
 impl Assembler {
-    pub fn new(delta: isize) -> Assembler {
+    pub fn new(delta: isize, shift: isize) -> Assembler {
         Assembler {
             buf: Vec::new(),
             labels: HashMap::new(),
             jumps: Vec::new(),
             delta,
+            shift,
         }
     }
 
@@ -64,12 +66,12 @@ impl Assembler {
         for (label, k, code) in self.jumps.iter() {
             let target = self.labels.get(label).expect("label not found");
             let offset = (*target as isize) - (*k as isize) + self.delta;
-            let x = (offset as u32) | *code;
+            let x = ((offset as u32) << self.shift) | *code;
 
-            self.buf[*k] = (x & 0xff) as u8;
-            self.buf[*k + 1] = ((x >> 8) & 0xff) as u8;
-            self.buf[*k + 2] = ((x >> 16) & 0xff) as u8;
-            self.buf[*k + 3] = ((x >> 24) & 0xff) as u8;
+            self.buf[*k] |= (x & 0xff) as u8;
+            self.buf[*k + 1] |= ((x >> 8) & 0xff) as u8;
+            self.buf[*k + 2] |= ((x >> 16) & 0xff) as u8;
+            self.buf[*k + 3] |= ((x >> 24) & 0xff) as u8;
         }
     }
 }
