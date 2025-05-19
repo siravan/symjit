@@ -3,6 +3,7 @@ use std::collections::HashSet;
 
 use anyhow::Result;
 
+use super::utils::Compiled;
 use crate::amd::{AmdFamily, AmdGenerator};
 use crate::code::VirtualTable;
 use crate::generator::Generator;
@@ -289,6 +290,122 @@ impl Node {
             }
         }
     }
+
+    fn eval(&self, mem: &mut [f64], stack: &mut [f64]) -> f64 {
+        const T: f64 = 1.0;
+        const F: f64 = 0.0;
+
+        match self {
+            Node::Void => 0.0,
+            Node::Const { val, .. } => *val,
+            Node::Var { loc, .. } => match loc {
+                Loc::Stack(idx) => stack[*idx as usize],
+                Loc::Mem(idx) => mem[*idx as usize],
+            },
+            Node::Unary { op, arg, .. } => {
+                let x = arg.eval(mem, stack);
+
+                match op.as_str() {
+                    "neg" => -x,
+                    "not" => T - x,
+                    "abs" => x.abs(),
+                    "root" => x.sqrt(),
+                    "square" => x * x,
+                    "cube" => x * x * x,
+                    "recip" => 1.0 / x,
+                    "_call_" => {
+                        stack[0] = x;
+                        x
+                    }
+                    _ => f64::NAN,
+                }
+            }
+            Node::Binary {
+                op, left, right, ..
+            } => {
+                let x = left.eval(mem, stack);
+                let y = right.eval(mem, stack);
+
+                match op.as_str() {
+                    "plus" => x + y,
+                    "minus" => x - y,
+                    "times" => x * y,
+                    "divide" => x / y,
+                    "gt" => {
+                        if x > y {
+                            T
+                        } else {
+                            F
+                        }
+                    }
+                    "geq" => {
+                        if x >= y {
+                            T
+                        } else {
+                            F
+                        }
+                    }
+                    "lt" => {
+                        if x < y {
+                            T
+                        } else {
+                            F
+                        }
+                    }
+                    "leq" => {
+                        if x <= y {
+                            T
+                        } else {
+                            F
+                        }
+                    }
+                    "eq" => {
+                        if x == y {
+                            T
+                        } else {
+                            F
+                        }
+                    }
+                    "neq" => {
+                        if x != y {
+                            T
+                        } else {
+                            F
+                        }
+                    }
+                    "and" => x * y,
+                    "or" => x + y,
+                    "xor" => {
+                        if x != y {
+                            T
+                        } else {
+                            F
+                        }
+                    }
+                    "select_if" => {
+                        if x != 0.0 {
+                            y
+                        } else {
+                            0.0
+                        }
+                    }
+                    "select_else" => {
+                        if x == 0.0 {
+                            y
+                        } else {
+                            0.0
+                        }
+                    }
+                    "_call_" => {
+                        stack[0] = x;
+                        stack[1] = y;
+                        x
+                    }
+                    _ => f64::NAN,
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -353,6 +470,54 @@ impl Statement {
             match loc {
                 Loc::Stack(idx) => ir.save_stack(r, *idx),
                 Loc::Mem(idx) => ir.save_mem(r, *idx),
+            }
+        }
+    }
+
+    fn eval(&self, mem: &mut [f64], stack: &mut [f64]) {
+        match &self {
+            Statement::Assign { lhs, rhs } => {
+                let u = rhs.eval(mem, stack);
+
+                if let Node::Var { loc, .. } = lhs {
+                    match loc {
+                        Loc::Stack(idx) => stack[*idx as usize] = u,
+                        Loc::Mem(idx) => mem[*idx as usize] = u,
+                    }
+                }
+            }
+            Statement::Call { op, lhs, arg, .. } => {
+                let _ = arg.eval(mem, stack);
+                let x = stack[0];
+                let y = stack[1];
+
+                let u = match op.as_str() {
+                    "sin" => x.sin(),
+                    "cos" => x.cos(),
+                    "tan" => x.tan(),
+                    "sinh" => x.sinh(),
+                    "cosh" => x.cosh(),
+                    "tanh" => x.tanh(),
+                    "arcsin" => x.asin(),
+                    "arccos" => x.acos(),
+                    "arctan" => x.atan(),
+                    "arcsinh" => x.asinh(),
+                    "arccosh" => x.acosh(),
+                    "arctanh" => x.atanh(),
+                    "exp" => x.exp(),
+                    "ln" => x.ln(),
+                    "log" => x.log10(),
+                    "power" => x.powf(y),
+                    "rem" => x % y,
+                    _ => f64::NAN,
+                };
+
+                if let Node::Var { loc, .. } = lhs {
+                    match loc {
+                        Loc::Stack(idx) => stack[*idx as usize] = u,
+                        Loc::Mem(idx) => mem[*idx as usize] = u,
+                    }
+                };
             }
         }
     }
@@ -470,7 +635,7 @@ impl Builder {
         (tmp, name.to_string())
     }
 
-    pub fn compile(&mut self, ir: &mut impl Generator) -> Vec<u8> {
+    pub fn compile(&mut self, ir: &mut impl Generator) {
         // let mut ir = Box::new(AmdGenerator::new(family));
 
         let cap = self.sym_table.num_stack;
@@ -488,8 +653,6 @@ impl Builder {
         self.append_vt_section(ir);
         ir.apply_jumps();
         println!("{:02x?}", ir.bytes());
-
-        ir.bytes()
     }
 
     fn append_const_section(&self, ir: &mut impl Generator) {
@@ -510,8 +673,50 @@ impl Builder {
             ir.append_quad(u);
         }
     }
+
+    fn eval(&self, mem: &mut [f64], stack: &mut [f64]) {
+        for stmt in self.stmts.iter() {
+            stmt.eval(mem, stack);
+        }
+    }
 }
 
 pub trait Transformer {
     fn transform(&self, builder: &mut Builder) -> Result<Node>;
+}
+
+/************************************************/
+
+pub struct ByteCode {
+    pub builder: Builder,
+    pub mem: Vec<f64>,
+    pub stack: Vec<f64>,
+}
+
+impl ByteCode {
+    pub fn new(builder: Builder, mem: Vec<f64>, size: usize) -> ByteCode {
+        let stack: Vec<f64> = vec![0.0; builder.sym_table.num_stack];
+
+        ByteCode {
+            builder,
+            mem,
+            stack,
+        }
+    }
+}
+
+impl Compiled<f64> for ByteCode {
+    fn exec(&mut self) {
+        self.builder.eval(&mut self.mem[..], &mut self.stack[..]);
+    }
+
+    fn mem(&self) -> &[f64] {
+        &self.mem[..]
+    }
+
+    fn mem_mut(&mut self) -> &mut [f64] {
+        &mut self.mem[..]
+    }
+
+    fn dump(&self, name: &str) {}
 }
