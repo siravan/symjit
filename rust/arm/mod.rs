@@ -12,13 +12,13 @@ pub struct ArmGenerator {
 impl ArmGenerator {
     pub fn new() -> ArmGenerator {
         ArmGenerator {
-            a: Assembler::new(0, 3)
+            a: Assembler::new(0, 3),
         }
     }
-    
+
     fn emit(&mut self, w: u32) {
         self.a.append_word(w);
-    }    
+    }
 }
 
 impl Generator for ArmGenerator {
@@ -40,7 +40,7 @@ impl Generator for ArmGenerator {
 
     //***********************************
     fn fmov(&mut self, dst: u8, r: u8) {
-        self.emit(arm! {fmov d(dst), d(r)});        
+        self.emit(arm! {fmov d(dst), d(r)});
     }
 
     fn fxchg(&mut self, a: u8, b: u8) {
@@ -159,7 +159,7 @@ impl Generator for ArmGenerator {
 
     fn call(&mut self, label: &str, num_args: usize) {
         self.jump(label, arm! {ldr x(0), label});
-        self.emit(arm! {blr x(0)});   
+        self.emit(arm! {blr x(0)});
     }
 
     fn select_if(&mut self, dst: u8, cond: u8, a: u8) {
@@ -169,13 +169,13 @@ impl Generator for ArmGenerator {
     fn select_else(&mut self, dst: u8, cond: u8, a: u8) {
         self.andnot(dst, cond, a);
     }
-    
+
     fn prologue(&mut self, n: u32) {
         self.emit(arm! {sub sp, sp, #16});
         self.emit(arm! {str lr, [sp, #0]});
         self.emit(arm! {str x(19), [sp, #8]});
         self.emit(arm! {sub sp, sp, #8*n});
-        self.emit(arm! {mov x(19), x(0)});        
+        self.emit(arm! {mov x(19), x(0)});
     }
 
     fn epilogue(&mut self, n: u32) {

@@ -417,22 +417,22 @@ impl Generator for AmdGenerator {
             },
         }
     }
-/*
-    fn branch(&mut self, label: &str) {
-        self.amd.jmp(label);
-    }
+    /*
+        fn branch(&mut self, label: &str) {
+            self.amd.jmp(label);
+        }
 
-    fn branch_if(&mut self, cond: u8, true_label: &str) {
-        self.amd.vucomisd(cond, cond);
-        self.amd.jpe(true_label);
-    }
+        fn branch_if(&mut self, cond: u8, true_label: &str) {
+            self.amd.vucomisd(cond, cond);
+            self.amd.jpe(true_label);
+        }
 
-    fn branch_if_else(&mut self, cond: u8, true_label: &str, false_label: &str) {
-        self.amd.vucomisd(cond, cond);
-        self.amd.jpe(true_label);
-        self.amd.jmp(false_label);
-    }
-*/
+        fn branch_if_else(&mut self, cond: u8, true_label: &str, false_label: &str) {
+            self.amd.vucomisd(cond, cond);
+            self.amd.jpe(true_label);
+            self.amd.jmp(false_label);
+        }
+    */
     fn select_if(&mut self, dst: u8, cond: u8, a: u8) {
         self.amd.vandpd(dst, cond, a);
     }

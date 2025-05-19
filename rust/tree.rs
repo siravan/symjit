@@ -124,7 +124,7 @@ impl Node {
         }
     }
 
-    pub fn compile(&self, ir: &mut AmdGenerator, base: u8) -> u8 {
+    pub fn compile(&self, ir: &mut dyn Generator, base: u8) -> u8 {
         match self {
             Node::Void => 0,
             Node::Const { .. } => self.compile_const(ir, base),
@@ -134,7 +134,7 @@ impl Node {
         }
     }
 
-    fn compile_const(&self, ir: &mut AmdGenerator, base: u8) -> u8 {
+    fn compile_const(&self, ir: &mut dyn Generator, base: u8) -> u8 {
         if let Node::Const { idx, .. } = &self {
             let r = ir.first_shadow() + base;
             let label = format!("_const_{}_", idx);
@@ -145,7 +145,7 @@ impl Node {
         }
     }
 
-    fn compile_var(&self, ir: &mut AmdGenerator, base: u8) -> u8 {
+    fn compile_var(&self, ir: &mut dyn Generator, base: u8) -> u8 {
         if let Node::Var { loc, .. } = &self {
             let r = ir.first_shadow() + base;
             match loc {
@@ -158,7 +158,7 @@ impl Node {
         }
     }
 
-    fn compile_unary(&self, ir: &mut AmdGenerator, base: u8) -> u8 {
+    fn compile_unary(&self, ir: &mut dyn Generator, base: u8) -> u8 {
         if let Node::Unary { op, arg, ershov } = self {
             let r = arg.compile(ir, base);
 
@@ -184,7 +184,7 @@ impl Node {
         }
     }
 
-    fn compile_binary(&self, ir: &mut AmdGenerator, base: u8) -> u8 {
+    fn compile_binary(&self, ir: &mut dyn Generator, base: u8) -> u8 {
         if let Node::Binary {
             op,
             left,
@@ -222,7 +222,7 @@ impl Node {
 
     fn alloc(
         &self,
-        ir: &mut AmdGenerator,
+        ir: &mut dyn Generator,
         base: u8,
         left: &Node,
         right: &Node,
@@ -272,7 +272,7 @@ impl Node {
         (dst, l, r)
     }
 
-    fn call(ir: &mut AmdGenerator, l: u8, r: u8) {
+    fn call(ir: &mut dyn Generator, l: u8, r: u8) {
         if l == 1 && r == 0 {
             ir.fxchg(1, 0);
         } else if r == 0 {
@@ -319,7 +319,7 @@ impl Statement {
         }
     }
 
-    pub fn compile(&self, builder: &Builder, ir: &mut AmdGenerator) {
+    pub fn compile(&self, builder: &Builder, ir: &mut dyn Generator) {
         match &self {
             Statement::Assign { lhs, rhs } => {
                 let r = rhs.compile(ir, 0);
@@ -339,7 +339,7 @@ impl Statement {
         }
     }
 
-    fn load(ir: &mut AmdGenerator, r: u8, v: &Node) {
+    fn load(ir: &mut dyn Generator, r: u8, v: &Node) {
         if let Node::Var { loc, .. } = v {
             match loc {
                 Loc::Stack(idx) => ir.load_stack(r, *idx),
@@ -348,7 +348,7 @@ impl Statement {
         }
     }
 
-    fn save(ir: &mut AmdGenerator, r: u8, v: &Node) {
+    fn save(ir: &mut dyn Generator, r: u8, v: &Node) {
         if let Node::Var { loc, .. } = v {
             match loc {
                 Loc::Stack(idx) => ir.save_stack(r, *idx),
@@ -470,8 +470,8 @@ impl Builder {
         (tmp, name.to_string())
     }
 
-    pub fn compile(&mut self, family: AmdFamily) -> Box<dyn Generator> {
-        let mut ir = Box::new(AmdGenerator::new(family));
+    pub fn compile(&mut self, ir: &mut impl Generator) -> Vec<u8> {
+        // let mut ir = Box::new(AmdGenerator::new(family));
 
         let cap = self.sym_table.num_stack;
         let pad = cap & 1;
@@ -480,19 +480,19 @@ impl Builder {
         ir.prologue(n);
 
         for stmt in self.stmts.iter() {
-            stmt.compile(&self, &mut ir);
+            stmt.compile(&self, ir);
         }
 
         ir.epilogue(n);
-        self.append_const_section(&mut ir);
-        self.append_vt_section(&mut ir);
+        self.append_const_section(ir);
+        self.append_vt_section(ir);
         ir.apply_jumps();
-        // println!("{:02x?}", ir.bytes());
+        println!("{:02x?}", ir.bytes());
 
-        ir
+        ir.bytes()
     }
 
-    fn append_const_section(&self, ir: &mut AmdGenerator) {
+    fn append_const_section(&self, ir: &mut impl Generator) {
         for (idx, val) in self.consts.iter().enumerate() {
             let label = format!("_const_{}_", idx);
             ir.set_label(label.as_str());
@@ -501,7 +501,7 @@ impl Builder {
         }
     }
 
-    fn append_vt_section(&self, ir: &mut AmdGenerator) {
+    fn append_vt_section(&self, ir: &mut impl Generator) {
         for f in self.ft.iter() {
             let label = format!("_func_{}_", f);
             ir.set_label(label.as_str());

@@ -1,7 +1,8 @@
 use crate::model::Program;
 use crate::utils::*;
 
-use crate::amd::AmdFamily;
+use crate::amd::{AmdFamily, AmdGenerator};
+use crate::arm::ArmGenerator;
 // use crate::arm::ArmCompiler;
 // use crate::avx::AmdCompilerSimd;
 // use crate::interpreter::Interpreter;
@@ -9,6 +10,7 @@ use crate::amd::AmdFamily;
 //use crate::wasm::WasmCompiler;
 
 use crate::code::{BinaryFunc, VirtualTable};
+use crate::generator::Generator;
 use crate::machine::MachineCode;
 
 #[derive(PartialEq)]
@@ -61,60 +63,7 @@ pub struct Runnable {
     pub count_diffs: usize,
 }
 
-impl Runnable {
-    /*
-        pub fn new(prog: Program, ty: CompilerType, use_simd: bool) -> Runnable {
-            let compiled: Box<dyn Compiled<f64>> = match ty {
-                CompilerType::ByteCode => Box::new(Interpreter::new().compile(&prog)),
-                // CompilerType::Amd => Box::new(AmdCompiler::new().compile(&prog)),
-                CompilerType::Arm => Box::new(ArmCompiler::new().compile(&prog)),
-
-                #[cfg(feature = "wasm")]
-                CompilerType::Wasm => Box::new(WasmCompiler::new().compile(&prog)),
-                //#[cfg(target_arch = "x86_64")]
-                //CompilerType::Native => Box::new(AmdCompiler::new().compile(&prog)),
-                #[cfg(target_arch = "aarch64")]
-                CompilerType::Native => Box::new(ArmCompiler::new().compile(&prog)),
-                #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
-                CompilerType::Native => Box::new(Interpreter::new().compile(&prog)),
-                _ => Box::new(Interpreter::new().compile(&prog)),
-            };
-
-            #[cfg(target_arch = "x86_64")]
-            let compiled_simd: Option<Box<dyn Compiled<f64x4>>> =
-                if use_simd && is_x86_feature_detected!("avx") {
-                    Some(Box::new(AmdCompilerSimd::new().compile(&prog)))
-                } else {
-                    None
-                };
-            #[cfg(not(target_arch = "x86_64"))]
-            let compiled_simd = None; // Box::new(Compiled::<f64x4>::dummy());;
-
-            let first_state = prog.frame.first_state().unwrap();
-            let first_param = prog.frame.first_param().unwrap_or(first_state);
-            let first_obs = prog.frame.first_obs().unwrap_or(first_param);
-            let first_diff = prog.frame.first_diff().unwrap_or(first_obs);
-
-            let count_states = prog.frame.count_states();
-            let count_params = prog.frame.count_params();
-            let count_obs = prog.frame.count_obs();
-            let count_diffs = prog.frame.count_diffs();
-
-            Runnable {
-                // prog,
-                compiled,
-                compiled_simd,
-                first_state,
-                first_param,
-                first_obs,
-                first_diff,
-                count_states,
-                count_params,
-                count_obs,
-                count_diffs,
-            }
-        }
-    */
+impl Runnable {    
     pub fn new(mut prog: Program, ty: CompilerType, use_simd: bool) -> Runnable {
         let first_state = 5;
         let first_param = first_state + prog.count_states;
@@ -127,26 +76,18 @@ impl Runnable {
         let count_obs = prog.count_obs;
         let count_diffs = prog.count_diffs;
 
-        if !Platform::is_amd64() {
-            panic!("not amd64");
-        };
-
-        let mem: Vec<f64> = vec![0.0; size];
-
-        let mut ir = if Platform::has_avx() {
-            prog.builder.compile(AmdFamily::AvxScalar)
+        let compiled = if Platform::has_avx() {
+            Self::compile_avx(&mut prog, size)
+        } else if Platform::is_amd64() {
+            Self::compile_sse(&mut prog, size)
+        } else if Platform::is_arm64() {
+            Self::compile_arm(&mut prog, size)
         } else {
-            prog.builder.compile(AmdFamily::SSEScalar)
+            panic!("unsupported cpu");
         };
 
-        let code = MachineCode::new("x86_64", ir.bytes(), mem);
-        let compiled: Box<dyn Compiled<f64>> = Box::new(code);
-
-        let compiled_simd: Option<Box<dyn Compiled<f64x4>>> = if Platform::has_avx() {
-            let mut ir = prog.builder.compile(AmdFamily::AvxVector);
-            let mem: Vec<f64x4> = vec![f64x4::splat(0.0); size];
-            let code = MachineCode::new("x86_64", ir.bytes(), mem);
-            Some(Box::new(code))
+        let compiled_simd: Option<Box<dyn Compiled<f64x4>>> = if use_simd && Platform::has_avx() {
+            Some(Self::compile_simd(&mut prog, size))
         } else {
             None
         };
@@ -163,6 +104,46 @@ impl Runnable {
             count_obs,
             count_diffs,
         }
+    }
+
+    fn compile_sse(prog: &mut Program, size: usize) -> Box<dyn Compiled<f64>> {
+        let mut generator = AmdGenerator::new(AmdFamily::SSEScalar);
+        let mem: Vec<f64> = vec![0.0; size];
+        let bytes = prog.builder.compile(&mut generator);
+        let code = MachineCode::new("x86_64", bytes, mem);
+        let compiled: Box<dyn Compiled<f64>> = Box::new(code);
+
+        compiled
+    }
+
+    fn compile_avx(prog: &mut Program, size: usize) -> Box<dyn Compiled<f64>> {
+        let mut generator = AmdGenerator::new(AmdFamily::AvxScalar);
+        let mem: Vec<f64> = vec![0.0; size];
+        let bytes = prog.builder.compile(&mut generator);
+        let code = MachineCode::new("x86_64", bytes, mem);
+        let compiled: Box<dyn Compiled<f64>> = Box::new(code);
+
+        compiled
+    }
+
+    fn compile_simd(prog: &mut Program, size: usize) -> Box<dyn Compiled<f64x4>> {
+        let mut generator = AmdGenerator::new(AmdFamily::AvxVector);
+        let mem: Vec<f64x4> = vec![f64x4::splat(0.0); size];
+        let bytes = prog.builder.compile(&mut generator);
+        let code = MachineCode::new("x86_64", bytes, mem);
+        let compiled: Box<dyn Compiled<f64x4>> = Box::new(code);
+
+        compiled
+    }
+
+    fn compile_arm(prog: &mut Program, size: usize) -> Box<dyn Compiled<f64>> {
+        let mut generator = ArmGenerator::new();
+        let mem: Vec<f64> = vec![0.0; size];
+        let bytes = prog.builder.compile(&mut generator);
+        let code = MachineCode::new("aarch64", bytes, mem);
+        let compiled: Box<dyn Compiled<f64>> = Box::new(code);
+
+        compiled
     }
 
     pub fn exec(&mut self, t: f64) {

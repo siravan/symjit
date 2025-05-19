@@ -99,14 +99,14 @@ macro_rules! arm {
     (ldr x($rd:expr), [x($rn:expr), #$ofs:expr]) => {
         0xf9400000 | rd!($rd) | rn!($rn) | ofs!($ofs)
     };
-    
+
     (ldr d($rd:expr), label) => {
         0x5c000000 | rd!($rd)
     };
-    
+
     (ldr x($rd:expr), label) => {
         0x58000000 | rd!($rd)
-    };    
+    };
 
     (str d($rd:expr), [x($rn:expr), #$ofs:expr]) => {
         0xfd000000 | rd!($rd) | rn!($rn) | ofs!($ofs)
@@ -199,7 +199,7 @@ macro_rules! arm {
         0x7e60e400 | rd!($rd) | rn!($rn) | rm!($rm)
     };
 
-    // compare d(..) with 0.0 and set the flags (NZCV)    
+    // compare d(..) with 0.0 and set the flags (NZCV)
     (fcmp d($rn:expr), #0.0) => {
         0x1e602008 | rn!($rn)
     };
