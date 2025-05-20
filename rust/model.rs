@@ -2,15 +2,8 @@ use anyhow::{anyhow, Result};
 
 use serde::Deserialize;
 
-use crate::code::*;
-use crate::register::*;
-
+use crate::code::VirtualTable;
 use crate::tree::*;
-
-/// Lowers Expr and its constituents into an intermediate representation
-pub trait Lower {
-    fn lower(&self, prog: &mut Program) -> Result<Word>;
-}
 
 /// Collects instructions and registers
 #[derive(Debug)]
@@ -24,8 +17,6 @@ pub struct Program {
 
 impl Program {
     pub fn new(ml: &CellModel) -> Result<Program> {
-        let mut frame = Frame::new();
-
         /*
             this section lays the memory format
             the order of different sections is important!
@@ -80,8 +71,7 @@ impl Program {
         }
 
         let _ = ml.transform(&mut builder);
-        // println!("{:#?}", builder);
-
+        
         let mut prog = Program {
             builder,
             count_states: ml.states.len(),

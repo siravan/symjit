@@ -5,7 +5,7 @@ mod code;
 mod machine;
 mod memory;
 mod model;
-mod register;
+// mod register;
 mod runnable;
 mod utils;
 
@@ -15,10 +15,6 @@ mod tree;
 
 mod amd;
 mod arm;
-// mod avx;
-// mod interpreter;
-#[cfg(feature = "wasm")]
-mod wasm;
 
 use model::{CellModel, Program};
 use runnable::{CompilerType, Runnable};
@@ -39,7 +35,7 @@ pub struct CompilerResult {
 }
 
 /// Compiles a model (a json string encoding the func model)
-/// ty is the requested arch (amd, arm, wasm, or native)
+/// ty is the requested arch (amd, arm, native, or bytecode)
 ///
 /// # Safety
 ///     both model and ty are pointers to null-terminated strings
@@ -100,8 +96,6 @@ pub unsafe extern "C" fn compile(
         "arm" => Some(Runnable::new(prog, CompilerType::Arm, use_simd)),
         "amd" => Some(Runnable::new(prog, CompilerType::Amd, use_simd)),
         "native" => Some(Runnable::new(prog, CompilerType::Native, use_simd)),
-        #[cfg(feature = "wasm")]
-        "wasm" => Some(Runnable::new(prog, CompilerType::Wasm, use_simd)),
         _ => None,
     };
 

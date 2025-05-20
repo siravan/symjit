@@ -3,11 +3,6 @@ use crate::utils::*;
 
 use crate::amd::{AmdFamily, AmdGenerator};
 use crate::arm::ArmGenerator;
-// use crate::arm::ArmCompiler;
-// use crate::avx::AmdCompilerSimd;
-// use crate::interpreter::Interpreter;
-// #[cfg(feature = "wasm")]
-//use crate::wasm::WasmCompiler;
 
 use crate::code::{BinaryFunc, VirtualTable};
 use crate::generator::Generator;
@@ -20,8 +15,6 @@ pub enum CompilerType {
     Native,
     Amd,
     Arm,
-    #[cfg(feature = "wasm")]
-    Wasm,
 }
 
 pub struct Platform;

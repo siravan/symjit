@@ -1,16 +1,13 @@
 [package]
 name = "symjit"
-version = "2.0.1"
+version = "2.1.0"
 edition = "2021"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 memmap2 = { version = "0.9", optional = true }
-rand = "0.8"
 anyhow = "1"
-wasmtime = { version = "28.0", optional = true }
-cffi = "*"
 libc = "0.2"
 windows-sys = { version = "0.59", features = ["Win32_System_Memory"] }
 region = "3.0.2"
@@ -18,7 +15,6 @@ wasmtime-jit-icache-coherence = "*"
 num-traits = "0.2"
 
 [features]
-wasm = ["dep:wasmtime"]
 selinux-fix = ['memmap2']
 default = []
 

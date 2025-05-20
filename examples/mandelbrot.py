@@ -15,7 +15,7 @@ Y = np.zeros_like(A)
 
 t0 = time.time()
 
-f = compile_func([a, b, x, y], [x**2 - y**2 + a, 2 * x * y + b], backend=backend, ty='bytecode')
+f = compile_func([a, b, x, y], [x**2 - y**2 + a, 2 * x * y + b], backend=backend)
 
 for i in range(20):
     X, Y = f(A, B, X, Y)
