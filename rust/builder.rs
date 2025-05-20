@@ -1,0 +1,210 @@
+use std::collections::HashSet;
+
+use super::utils::{Compiled, Eval};
+use crate::code::VirtualTable;
+use crate::generator::Generator;
+use crate::model::Expr;
+use crate::symbol::{Loc, SymbolTable};
+use crate::node::Node;
+use crate::statement::Statement;
+
+//****************************************************//
+
+
+#[derive(Debug, Clone)]
+pub struct Builder {
+    pub stmts: Vec<Statement>,
+    pub consts: Vec<f64>,
+    pub sym_table: SymbolTable,
+    pub num_tmp: usize,
+    pub ft: HashSet<String>, // function table (the name of functions)
+}
+
+impl Builder {
+    const first_shadow: u8 = 2;
+
+    pub fn new() -> Builder {
+        Builder {
+            stmts: Vec::new(),
+            consts: Vec::new(),
+            sym_table: SymbolTable::new(),
+            num_tmp: 0,
+            ft: HashSet::new(),
+        }
+    }
+
+    pub fn add_assign(&mut self, lhs: Node, rhs: Node) {
+        self.stmts.push(Statement::assign(lhs, rhs));
+    }
+
+    pub fn add_call(&mut self, op: &str, lhs: Node, args: Vec<Node>) {
+        let arg = match args.len() {
+            1 => self.create_unary("_call_", args[0].clone()),
+            2 => self.create_binary("_call_", args[0].clone(), args[1].clone()),
+            _ => {
+                panic!("more than two arguments are not supported yet!");
+            }
+        };
+
+        self.stmts.push(Statement::call(op, lhs, arg, args.len()));
+        self.ft.insert(op.to_string());
+    }
+
+    pub fn create_void(&mut self) -> Node {
+        Node::Void
+    }
+
+    pub fn create_const(&mut self, val: f64) -> Node {
+        for (idx, v) in self.consts.iter().enumerate() {
+            if *v == val {
+                return Node::Const {
+                    val,
+                    idx: idx as u32,
+                };
+            }
+        }
+
+        self.consts.push(val);
+        Node::Const {
+            val,
+            idx: (self.consts.len() - 1) as u32,
+        }
+    }
+
+    pub fn create_var(&mut self, name: &str) -> Node {
+        let loc = self
+            .sym_table
+            .find(name)
+            .expect(&format!("variable {} not found", name));
+        Node::Var {
+            name: name.to_string(),
+            loc,
+        }
+    }
+
+    pub fn create_unary(&mut self, op: &str, arg: Node) -> Node {
+        let ershov = arg.ershov_number();
+        Node::Unary {
+            op: op.to_string(),
+            arg: Box::new(arg),
+            ershov,
+        }
+    }
+
+    pub fn create_binary(&mut self, op: &str, left: Node, right: Node) -> Node {
+        let l = left.ershov_number();
+        let r = right.ershov_number();
+        let ershov = if l == r { l + 1 } else { l.max(r) };
+        Node::Binary {
+            op: op.to_string(),
+            left: Box::new(left),
+            right: Box::new(right),
+            ershov,
+        }
+    }
+
+    pub fn add_mem(&mut self, name: &str) {
+        self.sym_table.add_mem(name);
+    }
+
+    pub fn add_stack(&mut self, name: &str) {
+        self.sym_table.add_stack(name);
+    }
+
+    pub fn add_tmp(&mut self) -> (Node, String) {
+        let name = format!("ψ{}", self.num_tmp);
+        self.num_tmp += 1;
+        let loc = self.sym_table.add_stack(name.as_str());
+        let tmp = Node::Var {
+            name: name.to_string(),
+            loc,
+        };
+
+        (tmp, name.to_string())
+    }
+
+    pub fn compile(&mut self, ir: &mut impl Generator) {
+        // let mut ir = Box::new(AmdGenerator::new(family));
+
+        let cap = self.sym_table.num_stack;
+        let pad = cap & 1;
+        let n: u32 = (cap + pad) as u32;
+
+        ir.prologue(n);
+
+        for stmt in self.stmts.iter() {
+            stmt.compile(&self, ir);
+        }
+
+        ir.epilogue(n);
+        self.append_const_section(ir);
+        self.append_vt_section(ir);
+        ir.apply_jumps();
+        println!("{:02x?}", ir.bytes());
+    }
+
+    fn append_const_section(&self, ir: &mut impl Generator) {
+        for (idx, val) in self.consts.iter().enumerate() {
+            let label = format!("_const_{}_", idx);
+            ir.set_label(label.as_str());
+            let u: u64 = unsafe { std::mem::transmute(*val) };
+            ir.append_quad(u);
+        }
+    }
+
+    fn append_vt_section(&self, ir: &mut impl Generator) {
+        for f in self.ft.iter() {
+            let label = format!("_func_{}_", f);
+            ir.set_label(label.as_str());
+            let p = VirtualTable::<f64>::from_str(f).expect("func not found");
+            let u: u64 = unsafe { std::mem::transmute(p) };
+            ir.append_quad(u);
+        }
+    }
+}
+
+
+impl Eval for Builder {
+    fn eval(&self, mem: &mut [f64], stack: &mut [f64]) -> f64 {
+        for stmt in self.stmts.iter() {
+            stmt.eval(mem, stack);
+        };
+        f64::NAN
+    }
+}
+
+/************************************************/
+
+pub struct ByteCode {
+    pub builder: Builder,
+    pub mem: Vec<f64>,
+    pub stack: Vec<f64>,
+}
+
+impl ByteCode {
+    pub fn new(builder: Builder, mem: Vec<f64>, size: usize) -> ByteCode {
+        let stack: Vec<f64> = vec![0.0; builder.sym_table.num_stack];
+
+        ByteCode {
+            builder,
+            mem,
+            stack,
+        }
+    }
+}
+
+impl Compiled<f64> for ByteCode {
+    fn exec(&mut self) {
+        self.builder.eval(&mut self.mem[..], &mut self.stack[..]);
+    }
+
+    fn mem(&self) -> &[f64] {
+        &self.mem[..]
+    }
+
+    fn mem_mut(&mut self) -> &mut [f64] {
+        &mut self.mem[..]
+    }
+
+    fn dump(&self, name: &str) {}
+}

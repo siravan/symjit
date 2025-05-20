@@ -11,6 +11,10 @@ pub trait Compiler<C> {
     fn compile(&mut self, prog: &Program) -> C;
 }
 
+pub trait Eval {
+    fn eval(&self, mem: &mut [f64], stack: &mut [f64]) -> f64;
+}
+
 /*****************************************/
 
 #[cfg(target_arch = "x86_64")]

@@ -3,7 +3,12 @@ use anyhow::{anyhow, Result};
 use serde::Deserialize;
 
 use crate::code::VirtualTable;
-use crate::tree::*;
+use crate::node::Node;
+use crate::builder::Builder;
+
+pub trait Transformer {
+    fn transform(&self, builder: &mut Builder) -> Result<Node>;
+}
 
 /// Collects instructions and registers
 #[derive(Debug)]

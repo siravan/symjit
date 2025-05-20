@@ -11,7 +11,10 @@ mod utils;
 
 mod assembler;
 mod generator;
-mod tree;
+mod symbol;
+mod node;
+mod statement;
+mod builder;
 
 mod amd;
 mod arm;

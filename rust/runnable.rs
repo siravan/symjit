@@ -1,13 +1,11 @@
-use crate::model::Program;
 use crate::utils::*;
-
+use crate::model::Program;
 use crate::amd::{AmdFamily, AmdGenerator};
 use crate::arm::ArmGenerator;
-
 use crate::code::{BinaryFunc, VirtualTable};
 use crate::generator::Generator;
 use crate::machine::MachineCode;
-use crate::tree::ByteCode;
+use crate::builder::ByteCode;
 
 #[derive(PartialEq)]
 pub enum CompilerType {
