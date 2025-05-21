@@ -138,7 +138,7 @@ impl Builder {
         self.append_vt_section(ir);
         ir.apply_jumps();
         // println!("{:?}", &self.stmts);
-        // println!("{:02x?}", ir.bytes());
+        println!("{:02x?}", ir.bytes());
     }
 
     fn append_const_section(&self, ir: &mut impl Generator) {

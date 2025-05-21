@@ -15,12 +15,15 @@ Y = np.zeros_like(A)
 
 t0 = time.time()
 
-f = compile_func([a, b, x, y], [x**2 - y**2 + a, 2 * x * y + b], backend=backend)
+f = compile_func([a, b, x, y], [x**2 - y**2 + a, 2 * x * y + b], backend=backend, use_simd=True)
+
+t1 = time.time()
 
 for i in range(20):
     X, Y = f(A, B, X, Y)
 
-print(f"compilation + running time: {1000 * (time.time() - t0):.1f} ms")
+print(f"compilation time: {1000 * (t1 - t0):.1f} ms")
+print(f"running time: {1000 * (time.time() - t1):.1f} ms")
 
 # Z = np.hypot(X, Y)
 
