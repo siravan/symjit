@@ -4,12 +4,11 @@ use super::utils::{Compiled, Eval};
 use crate::code::VirtualTable;
 use crate::generator::Generator;
 use crate::model::Expr;
-use crate::symbol::{Loc, SymbolTable};
 use crate::node::Node;
 use crate::statement::Statement;
+use crate::symbol::{Loc, SymbolTable};
 
 //****************************************************//
-
 
 #[derive(Debug, Clone)]
 pub struct Builder {
@@ -124,8 +123,6 @@ impl Builder {
     }
 
     pub fn compile(&mut self, ir: &mut impl Generator) {
-        // let mut ir = Box::new(AmdGenerator::new(family));
-
         let cap = self.sym_table.num_stack;
         let pad = cap & 1;
         let n: u32 = (cap + pad) as u32;
@@ -133,14 +130,15 @@ impl Builder {
         ir.prologue(n);
 
         for stmt in self.stmts.iter() {
-            stmt.compile(&self, ir);
+            stmt.compile(ir);
         }
 
         ir.epilogue(n);
         self.append_const_section(ir);
         self.append_vt_section(ir);
         ir.apply_jumps();
-        println!("{:02x?}", ir.bytes());
+        // println!("{:?}", &self.stmts);
+        // println!("{:02x?}", ir.bytes());
     }
 
     fn append_const_section(&self, ir: &mut impl Generator) {
@@ -163,12 +161,11 @@ impl Builder {
     }
 }
 
-
 impl Eval for Builder {
     fn eval(&self, mem: &mut [f64], stack: &mut [f64]) -> f64 {
         for stmt in self.stmts.iter() {
             stmt.eval(mem, stack);
-        };
+        }
         f64::NAN
     }
 }

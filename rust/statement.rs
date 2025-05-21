@@ -1,8 +1,8 @@
 use super::utils::Eval;
-use crate::generator::Generator;
-use crate::symbol::Loc;
-use crate::node::Node;
 use crate::builder::Builder;
+use crate::generator::Generator;
+use crate::node::Node;
+use crate::symbol::Loc;
 
 #[derive(Debug, Clone)]
 pub enum Statement {
@@ -32,7 +32,7 @@ impl Statement {
         }
     }
 
-    pub fn compile(&self, builder: &Builder, ir: &mut dyn Generator) {
+    pub fn compile(&self, ir: &mut dyn Generator) {
         match &self {
             Statement::Assign { lhs, rhs } => {
                 let r = rhs.compile(ir, 0);
@@ -51,7 +51,8 @@ impl Statement {
             }
         }
     }
-
+    
+/*
     fn load(ir: &mut dyn Generator, r: u8, v: &Node) {
         if let Node::Var { loc, .. } = v {
             match loc {
@@ -60,6 +61,7 @@ impl Statement {
             }
         }
     }
+*/
 
     fn save(ir: &mut dyn Generator, r: u8, v: &Node) {
         if let Node::Var { loc, .. } = v {
@@ -119,6 +121,5 @@ impl Eval for Statement {
             }
         };
         f64::NAN
-    }    
+    }
 }
-

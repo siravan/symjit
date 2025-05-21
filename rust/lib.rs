@@ -10,11 +10,11 @@ mod runnable;
 mod utils;
 
 mod assembler;
+mod builder;
 mod generator;
-mod symbol;
 mod node;
 mod statement;
-mod builder;
+mod symbol;
 
 mod amd;
 mod arm;

@@ -2,9 +2,9 @@ use anyhow::{anyhow, Result};
 
 use serde::Deserialize;
 
+use crate::builder::Builder;
 use crate::code::VirtualTable;
 use crate::node::Node;
-use crate::builder::Builder;
 
 pub trait Transformer {
     fn transform(&self, builder: &mut Builder) -> Result<Node>;
@@ -76,7 +76,7 @@ impl Program {
         }
 
         let _ = ml.transform(&mut builder);
-        
+
         let mut prog = Program {
             builder,
             count_states: ml.states.len(),

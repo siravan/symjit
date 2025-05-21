@@ -2,7 +2,6 @@ use crate::generator::Generator;
 use crate::symbol::Loc;
 use crate::utils::Eval;
 
-
 #[derive(Debug, Clone)]
 pub enum Node {
     Void,
@@ -205,7 +204,6 @@ impl Node {
     }
 }
 
-
 impl Eval for Node {
     fn eval(&self, mem: &mut [f64], stack: &mut [f64]) -> f64 {
         const T: f64 = 1.0;
@@ -323,4 +321,3 @@ impl Eval for Node {
         }
     }
 }
-
