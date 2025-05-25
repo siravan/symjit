@@ -33,7 +33,7 @@ impl Statement {
     }
 
     pub fn compile(&self, ir: &mut dyn Generator) {
-        match &self {
+        match self {
             Statement::Assign { lhs, rhs } => {
                 let r = rhs.compile(ir, 0);
                 Self::save(ir, r, lhs);
@@ -51,17 +51,17 @@ impl Statement {
             }
         }
     }
-    
-/*
-    fn load(ir: &mut dyn Generator, r: u8, v: &Node) {
-        if let Node::Var { loc, .. } = v {
-            match loc {
-                Loc::Stack(idx) => ir.load_stack(r, *idx),
-                Loc::Mem(idx) => ir.load_mem(r, *idx),
+
+    /*
+        fn load(ir: &mut dyn Generator, r: u8, v: &Node) {
+            if let Node::Var { loc, .. } = v {
+                match loc {
+                    Loc::Stack(idx) => ir.load_stack(r, *idx),
+                    Loc::Mem(idx) => ir.load_mem(r, *idx),
+                }
             }
         }
-    }
-*/
+    */
 
     fn save(ir: &mut dyn Generator, r: u8, v: &Node) {
         if let Node::Var { loc, .. } = v {

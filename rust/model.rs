@@ -10,7 +10,7 @@ pub trait Transformer {
     fn transform(&self, builder: &mut Builder) -> Result<Node>;
 }
 
-/// Collects instructions and registers
+/// Collects the intermediate code (builder) and interface variables
 #[derive(Debug)]
 pub struct Program {
     pub builder: Builder,
@@ -45,9 +45,6 @@ impl Program {
 
         let mut builder = Builder::new();
 
-        for i in 0..4 {
-            builder.sym_table.add_mem(format!("_const_{}", i).as_str());
-        }
         builder.sym_table.add_mem(&ml.iv.name);
 
         for v in &ml.states {
@@ -96,6 +93,7 @@ pub struct Variable {
     pub val: f64,
 }
 
+/// Transforms the input tree to the intermediate representation (tree-like)
 impl Transformer for Variable {
     fn transform(&self, builder: &mut Builder) -> Result<Node> {
         Ok(builder.create_var(&self.name))
@@ -133,49 +131,39 @@ impl Expr {
         None
     }
 
-    //**************** Statement *****************//
+    //**************** Transformations *****************//
 
     fn transform_unary(&self, builder: &mut Builder, op: &str, args: &[Expr]) -> Result<Node> {
-        let intrinsic_ops = vec!["neq", "abs", "not", "root", "square", "cube", "recip"];
-
         let x = args[0].transform(builder)?;
 
-        if intrinsic_ops.contains(&op) {
+        if builder.intrinsic_unary.contains(&op) {
             Ok(builder.create_unary(op, x))
         } else {
-            let (dst, name) = builder.add_tmp();
-            let _ = VirtualTable::<f64>::from_str(&op)?;
-            builder.add_call(op, dst.clone(), vec![x]);
-            Ok(dst)
+            let _ = VirtualTable::<f64>::from_str(&op)?;    // check to see if op is defined
+            Ok(builder.add_call_unary(op, x))
         }
     }
 
     fn transform_binary(&self, builder: &mut Builder, op: &str, args: &[Expr]) -> Result<Node> {
-        let intrinsic_ops = vec![
-            "plus", "minus", "neg", "times", "divide", "gt", "geq", "lt", "leq", "eq", "neq",
-            "and", "or", "xor", "if_pos", "if_neg",
-        ];
-
         let l = args[0].transform(builder)?;
         let r = args[1].transform(builder)?;
 
-        if intrinsic_ops.contains(&op) {
+        if builder.intrinsic_binary.contains(&op) {
             Ok(builder.create_binary(op, l, r))
         } else {
-            let (dst, name) = builder.add_tmp();
-            let _ = VirtualTable::<f64>::from_str(&op)?;
-            builder.add_call(op, dst.clone(), vec![l, r]);
-            Ok(dst)
+            let _ = VirtualTable::<f64>::from_str(&op)?;    // check to see if op is defined
+            Ok(builder.add_call_binary(op, l, r))
         }
     }
 
+    /// Ternary operator is the conditional select operator
     fn transform_ternary(&self, builder: &mut Builder, op: &str, args: &[Expr]) -> Result<Node> {
         if op != "ifelse" {
             return self.transform_poly(builder, op, args);
         }
 
         let cond = args[0].transform(builder)?;
-        let (tmp, name) = builder.add_tmp();
+        let tmp = builder.add_tmp();
 
         builder.add_assign(tmp.clone(), cond);
 
@@ -183,10 +171,12 @@ impl Expr {
         let false_val = args[2].transform(builder)?;
 
         let st = builder.create_binary("select_if", tmp.clone(), true_val);
-        let sf = builder.create_binary("select_else", tmp.clone(), false_val);
+        let sf = builder.create_binary("select_else", tmp, false_val);
         Ok(builder.create_binary("or", st, sf))
     }
 
+    /// Addition and Multiplication can haev multiple arguments
+    /// The intermediate tree has only unary and binary nodes
     fn transform_poly(&self, builder: &mut Builder, op: &str, args: &[Expr]) -> Result<Node> {
         if !(op == "plus" || op == "times") {
             return Err(anyhow!("missing poly op: {}", op));
@@ -238,6 +228,7 @@ impl Transformer for Equation {
 
         let rhs = self.rhs.transform(builder)?;
         let lhs = builder.create_var(var.as_str());
+        
         builder.add_assign(lhs, rhs);
 
         Ok(builder.create_void())

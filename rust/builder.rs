@@ -16,7 +16,9 @@ pub struct Builder {
     pub consts: Vec<f64>,
     pub sym_table: SymbolTable,
     pub num_tmp: usize,
-    pub ft: HashSet<String>, // function table (the name of functions)
+    pub ft: HashSet<String>, // function table (the name of functions),
+    pub intrinsic_unary: Vec<&'static str>,
+    pub intrinsic_binary: Vec<&'static str>,
 }
 
 impl Builder {
@@ -29,24 +31,65 @@ impl Builder {
             sym_table: SymbolTable::new(),
             num_tmp: 0,
             ft: HashSet::new(),
+            // the list of intrinsic unary ops, i.e., operations that can be implemented directly in
+            // machine code
+            intrinsic_unary: vec!["neq", "abs", "not", "root", "square", "cube", "recip"],
+            // the list of intrinsic binary ops, i.e., operations that can be implemented directly in
+            // machine code
+            intrinsic_binary: vec![
+                "plus", "minus", "neg", "times", "divide", "gt", "geq", "lt", "leq", "eq", "neq",
+                "and", "or", "xor", "if_pos", "if_neg",
+            ],
         }
     }
 
-    pub fn add_assign(&mut self, lhs: Node, rhs: Node) {
-        self.stmts.push(Statement::assign(lhs, rhs));
+    pub fn add_assign(&mut self, lhs: Node, rhs: Node) -> Node {
+        self.stmts.push(Statement::assign(lhs.clone(), rhs));
+        lhs
+    }
+    
+    pub fn add_call_unary(&mut self, op: &str, arg: Node) -> Node {
+        let arg = self.create_unary("_call_", arg);
+        let lhs = self.add_tmp();
+        self.stmts.push(Statement::call(op, lhs.clone(), arg, 1));
+        self.ft.insert(op.to_string());
+        
+        lhs
     }
 
-    pub fn add_call(&mut self, op: &str, lhs: Node, args: Vec<Node>) {
-        let arg = match args.len() {
-            1 => self.create_unary("_call_", args[0].clone()),
-            2 => self.create_binary("_call_", args[0].clone(), args[1].clone()),
-            _ => {
-                panic!("more than two arguments are not supported yet!");
-            }
-        };
 
-        self.stmts.push(Statement::call(op, lhs, arg, args.len()));
+    pub fn add_call_binary(&mut self, op: &str, left: Node, right: Node) -> Node {
+        if op == "power" {
+            if right.is_const(0.0) {
+                return self.create_const(1.0);
+            } else if right.is_const(1.0) {
+                return left;
+            } else if right.is_const(2.0) {
+                return self.create_unary("square", left);
+            } else if right.is_const(3.0) {
+                return self.create_unary("cube", left);
+            } else if right.is_const(0.5) {
+                return self.create_unary("root", left);
+            } else if right.is_const(1.5) {
+                let arg = self.create_unary("cube", left);
+                return self.create_unary("root", arg);
+            } else if right.is_const(-1.0) {
+                return self.create_unary("recip", left);
+            } else if right.is_const(-2.0) {
+                let arg = self.create_unary("square", left);
+                return self.create_unary("recip", arg);
+            } else if right.is_const(-3.0) {
+                let arg = self.create_unary("cube", left);
+                return self.create_unary("recip", arg);
+            }
+        }
+
+        let arg = self.create_binary("_call_", left, right);
+        let lhs = self.add_tmp();
+        self.stmts.push(Statement::call(op, lhs.clone(), arg, 2));
         self.ft.insert(op.to_string());
+
+        lhs
     }
 
     pub fn create_void(&mut self) -> Node {
@@ -82,23 +125,37 @@ impl Builder {
     }
 
     pub fn create_unary(&mut self, op: &str, arg: Node) -> Node {
-        let ershov = arg.ershov_number();
         Node::Unary {
             op: op.to_string(),
             arg: Box::new(arg),
-            ershov,
         }
     }
 
-    pub fn create_binary(&mut self, op: &str, left: Node, right: Node) -> Node {
-        let l = left.ershov_number();
-        let r = right.ershov_number();
-        let ershov = if l == r { l + 1 } else { l.max(r) };
+    pub fn create_binary_op(&mut self, op: &str, mut left: Node, mut right: Node) -> Node {
         Node::Binary {
             op: op.to_string(),
             left: Box::new(left),
             right: Box::new(right),
-            ershov,
+        }
+    }
+
+    pub fn create_binary(&mut self, op: &str, mut left: Node, mut right: Node) -> Node {
+        match op {
+            "times" if left.is_const(-1.0) => self.create_unary("neg", right),
+            "times" if right.is_const(-1.0) => self.create_unary("neg", left),
+            "times" if left.is_unary("recip") => {
+                self.create_binary_op("divide", right, left.arg().unwrap())
+            },
+            "times" if right.is_unary("recip") => {
+                self.create_binary_op("divide", left, right.arg().unwrap())
+            },            
+            "plus" if left.is_unary("neg") => {
+                self.create_binary_op("minus", right, left.arg().unwrap())
+            }
+            "plus" if right.is_unary("neg") => {
+                self.create_binary_op("minus", left, right.arg().unwrap())
+            }
+            _ => self.create_binary_op(op, left, right),
         }
     }
 
@@ -110,7 +167,7 @@ impl Builder {
         self.sym_table.add_stack(name);
     }
 
-    pub fn add_tmp(&mut self) -> (Node, String) {
+    pub fn add_tmp(&mut self) -> Node {
         let name = format!("ψ{}", self.num_tmp);
         self.num_tmp += 1;
         let loc = self.sym_table.add_stack(name.as_str());
@@ -119,7 +176,7 @@ impl Builder {
             loc,
         };
 
-        (tmp, name.to_string())
+        tmp
     }
 
     pub fn compile(&mut self, ir: &mut impl Generator) {
@@ -138,7 +195,7 @@ impl Builder {
         self.append_vt_section(ir);
         ir.apply_jumps();
         // println!("{:?}", &self.stmts);
-        println!("{:02x?}", ir.bytes());
+        // println!("{:02x?}", ir.bytes());
     }
 
     fn append_const_section(&self, ir: &mut impl Generator) {

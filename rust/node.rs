@@ -16,13 +16,11 @@ pub enum Node {
     Unary {
         op: String,
         arg: Box<Node>,
-        ershov: usize,
     },
     Binary {
         op: String,
         left: Box<Node>,
         right: Box<Node>,
-        ershov: usize,
     },
 }
 
@@ -32,8 +30,16 @@ impl Node {
             Node::Void => 0,
             Node::Const { .. } => 1,
             Node::Var { .. } => 1,
-            Node::Unary { ershov, .. } => *ershov,
-            Node::Binary { ershov, .. } => *ershov,
+            Node::Unary { arg, .. } => arg.ershov_number(),
+            Node::Binary { left, right, .. } => {
+                let l = left.ershov_number();
+                let r = right.ershov_number();
+                if l == r {
+                    l + 1
+                } else {
+                    l.max(r)
+                }
+            }
         }
     }
 
@@ -72,7 +78,7 @@ impl Node {
     }
 
     fn compile_unary(&self, ir: &mut dyn Generator, base: u8) -> u8 {
-        if let Node::Unary { op, arg, ershov } = self {
+        if let Node::Unary { op, arg } = self {
             let r = arg.compile(ir, base);
 
             match op.as_str() {
@@ -98,14 +104,8 @@ impl Node {
     }
 
     fn compile_binary(&self, ir: &mut dyn Generator, base: u8) -> u8 {
-        if let Node::Binary {
-            op,
-            left,
-            right,
-            ershov,
-        } = self
-        {
-            let (dst, l, r) = self.alloc(ir, base, left, right, *ershov);
+        if let Node::Binary { op, left, right } = self {
+            let (dst, l, r) = self.alloc(ir, base, left, right);
 
             match op.as_str() {
                 "plus" => ir.plus(dst, l, r),
@@ -133,18 +133,12 @@ impl Node {
         }
     }
 
-    fn alloc(
-        &self,
-        ir: &mut dyn Generator,
-        base: u8,
-        left: &Node,
-        right: &Node,
-        ershov: usize,
-    ) -> (u8, u8, u8) {
-        let mut dst = ir.first_shadow() + base + (ershov as u8) - 1;
-
+    fn alloc(&self, ir: &mut dyn Generator, base: u8, left: &Node, right: &Node) -> (u8, u8, u8) {
         let el = left.ershov_number();
         let er = right.ershov_number();
+        let ershov = if el == er { el + 1 } else { el.max(er) };
+
+        let mut dst = ir.first_shadow() + base + (ershov as u8) - 1;
 
         let mut l = 0;
         let mut r = 0;
@@ -200,6 +194,35 @@ impl Node {
             if r != 0 {
                 ir.fmov(1, r);
             }
+        }
+    }
+
+    pub fn is_const(&self, val_: f64) -> bool {
+        if let Node::Const { val, .. } = self {
+            return *val == val_;
+        };
+        false
+    }
+
+    pub fn is_binary(&self, op_: &str) -> bool {
+        if let Node::Binary { op, .. } = self {
+            return op == op_;
+        };
+        false
+    }
+
+    pub fn is_unary(&self, op_: &str) -> bool {
+        if let Node::Unary { op, .. } = self {
+            return op == op_;
+        };
+        false
+    }
+
+    pub fn arg(self) -> Option<Node> {
+        if let Node::Unary { arg, .. } = self {
+            Some(*arg)
+        } else {
+            None
         }
     }
 }

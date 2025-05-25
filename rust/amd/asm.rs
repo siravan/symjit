@@ -53,7 +53,8 @@ impl Amd {
     }
 
     pub fn rex(&mut self, reg: u8, rm: u8) {
-        self.append_byte(0x48 + ((rm & 8) >> 3) + ((reg & 8) >> 1))
+        let b = 0x48 + ((rm & 8) >> 3) + ((reg & 8) >> 1);
+        self.append_byte(b);
     }
 
     pub fn modrm_mem(&mut self, reg: u8, rm: u8, offset: i32) {

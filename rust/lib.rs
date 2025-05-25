@@ -197,60 +197,6 @@ pub unsafe extern "C" fn count_diffs(q: *const CompilerResult) -> usize {
     }
 }
 
-/// Fills an array of doubles (u0) with the initial state
-/// u0 should have enough space for ns (== count_states) doubles
-///
-/// note that this function is mainly useful for json models
-/// genenerated by CellMLToolkit.jl; otherwise, it fills with 0.0
-///
-/// # Safety
-///     it is the responsibility of the calling function to ensure
-///     that q points to a valid CompilerResult
-///     
-#[no_mangle]
-pub unsafe extern "C" fn fill_u0(q: *const CompilerResult, u0: *mut f64, ns: usize) -> bool {
-    let q: &CompilerResult = unsafe { &*q };
-    if let Some(func) = &q.func {
-        if func.count_states != ns {
-            return false;
-        }
-
-        let src_u0 = &func.compiled.mem()[func.first_state..func.first_state + func.count_states];
-        let dst_u0: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(u0, ns) };
-        dst_u0.copy_from_slice(src_u0);
-        true
-    } else {
-        false
-    }
-}
-
-/// Fills an array of doubles (p) with the parameters
-/// p should have enough space for np (== count_params) doubles
-///
-/// note that this function is mainly useful for json models
-/// genenerated by CellMLToolkit.jl; otherwise, it fills with 0.0
-///
-/// # Safety
-///     it is the responsibility of the calling function to ensure
-///     that q points to a valid CompilerResult
-///     
-#[no_mangle]
-pub unsafe extern "C" fn fill_p(q: *const CompilerResult, p: *mut f64, np: usize) -> bool {
-    let q: &CompilerResult = unsafe { &*q };
-    if let Some(func) = &q.func {
-        if func.count_params != np {
-            return false;
-        }
-
-        let src_p = &func.compiled.mem()[func.first_param..func.first_param + func.count_params];
-        let dst_p: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(p, np) };
-        dst_p.copy_from_slice(src_p);
-        true
-    } else {
-        false
-    }
-}
-
 /// Fills du with the results of differentials after executing one step of the model
 /// This function is mainly for DifferentialEquation.jl compatibility and not for python/sympy
 ///

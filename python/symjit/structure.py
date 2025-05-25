@@ -45,33 +45,35 @@ def operation(func):
 
 def process_mul(y):
     assert y.is_Mul
-    if len(y.args) == 2 and y.args[1].is_Pow and y.args[1].args[1] == -1:
-        return tree_node("divide", [y.args[0], y.args[1].args[0]])
-    else:
-        return tree_node("times", y.args)
+    return tree_node("times", y.args)
+    # if len(y.args) == 2 and y.args[1].is_Pow and y.args[1].args[1] == -1:
+    #     return tree_node("divide", [y.args[0], y.args[1].args[0]])
+    # else:
+    #    return tree_node("times", y.args)
 
 
 def process_pow(y):
     assert y.is_Pow
-    power = y.args[1]
-    arg = y.args[0]
+    # power = y.args[1]
+    # arg = y.args[0]
+    return tree_node("power", y.args)
 
-    if power == 2:
-        return tree_node("square", [arg])
-    elif power == 3:
-        return tree_node("cube", [arg])
-    elif power == -1:
-        return tree_node("recip", [arg])
-    elif power == -2:
-        return tree_node("recip", [arg**2])
-    elif power == -3:
-        return tree_node("recip", [arg**3])
-    elif power == Rational(1, 2):
-        return tree_node("root", [arg])
-    elif power == Rational(3, 2):
-        return tree_node("root", [arg**3])
-    else:
-        return tree_node("power", y.args)
+    #if power == 2:
+    #    return tree_node("square", [arg])
+    #elif power == 3:
+    #    return tree_node("cube", [arg])
+    #elif power == -1:
+    #    return tree_node("recip", [arg])
+    #elif power == -2:
+    #    return tree_node("recip", [arg**2])
+    #elif power == -3:
+    #    return tree_node("recip", [arg**3])
+    #elif power == Rational(1, 2):
+    #    return tree_node("root", [arg])
+    #elif power == Rational(3, 2):
+    #    return tree_node("root", [arg**3])
+    #else:
+    #    return tree_node("power", y.args)
 
 
 def tree(y):

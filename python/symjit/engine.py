@@ -83,22 +83,6 @@ class Engine:
         ]
         self._execute_vectorized.restype = ctypes.c_bool
 
-        self._fill_u0 = self.dll.fill_u0
-        self._fill_u0.argtypes = [
-            ctypes.c_void_p,  # handle
-            ctypes.POINTER(ctypes.c_double),  # u0
-            ctypes.c_size_t,  # ns
-        ]
-        self._fill_u0.restype = ctypes.c_bool
-
-        self._fill_p = self.dll.fill_p
-        self._fill_p.argtypes = [
-            ctypes.c_void_p,  # handle
-            ctypes.POINTER(ctypes.c_double),  # p
-            ctypes.c_size_t,  # np
-        ]
-        self._fill_p.restype = ctypes.c_bool
-
         self._compile = self.dll.compile
         self._compile.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_bool]
         self._compile.restype = ctypes.c_void_p
@@ -156,20 +140,22 @@ class RustyCompiler:
         status = lib._check_status(self.p)
         if status != b"Success":
             raise ValueError(status.decode())
+        self.model = model
+        self.json_model = None
         self.populate()
 
     def __del__(self):
         lib._finalize(self.p)
 
     def get_u0(self):
-        u0 = np.zeros(self.count_states, dtype="double")
-        lib._fill_u0(self.p, np.ctypeslib.as_ctypes(u0), self.count_states)
-        return u0
+        if self.json_model is None:
+            self.json_model = json.loads(self.model)
+        return [x["val"] for x in self.json_model["states"]]
 
     def get_p(self):
-        p = np.zeros(self.count_params, dtype="double")
-        lib._fill_p(self.p, np.ctypeslib.as_ctypes(p), self.count_params)
-        return p
+        if self.json_model is None:
+            self.json_model = json.loads(self.model)
+        return [x["val"] for x in self.json_model["params"]]
 
     def populate(self):
         self.count_states = lib._count_states(self.p)

@@ -41,9 +41,10 @@ impl Platform {
 }
 
 pub struct Runnable {
-    // pub prog: Program,
+    pub prog: Program,
     pub compiled: Box<dyn Compiled<f64>>,
     pub compiled_simd: Option<Box<dyn Compiled<f64x4>>>,
+    pub use_simd: bool,
     pub first_state: usize,
     pub first_param: usize,
     pub first_obs: usize,
@@ -56,7 +57,7 @@ pub struct Runnable {
 
 impl Runnable {
     pub fn new(mut prog: Program, ty: CompilerType, use_simd: bool) -> Runnable {
-        let first_state = 5;
+        let first_state = 1;    // 1 is reserved for the independent variable (ODE models)
         let first_param = first_state + prog.count_states;
         let first_obs = first_param + prog.count_params;
         let first_diff = first_obs + prog.count_obs;
@@ -94,15 +95,11 @@ impl Runnable {
 
         let use_simd = use_simd && Platform::has_avx() && matches!(ty, CompilerType::Amd);
 
-        let compiled_simd: Option<Box<dyn Compiled<f64x4>>> = if use_simd {
-            Some(Self::compile_simd(&mut prog, size))
-        } else {
-            None
-        };
-
         Runnable {
+            prog,
             compiled,
-            compiled_simd,
+            compiled_simd: None,
+            use_simd,
             first_state,
             first_param,
             first_obs,
@@ -171,6 +168,14 @@ impl Runnable {
     }
 
     pub fn exec_vectorized(&mut self, buf: &mut [f64], n: usize) {
+        // SIMD compilation is lazy!
+        self.compiled_simd = if self.use_simd {
+            let size = self.first_diff + self.prog.count_diffs + 1;
+            Some(Self::compile_simd(&mut self.prog, size))
+        } else {
+            None
+        };
+
         if self.compiled_simd.is_none() {
             self.exec_vectorized_scalar(buf, n);
         } else {

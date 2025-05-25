@@ -14,7 +14,7 @@ pub enum AmdFamily {
 pub struct AmdGenerator {
     amd: Amd,
     family: AmdFamily,
-    r0: Option<u32>
+    r0: Option<u32>,
 }
 
 impl AmdGenerator {
@@ -22,7 +22,7 @@ impl AmdGenerator {
         AmdGenerator {
             amd: Amd::new(),
             family,
-            r0: None
+            r0: None,
         }
     }
 
@@ -121,20 +121,20 @@ impl AmdGenerator {
             n += 1
         }
     }
-    
+
     fn flush(&mut self, dst: u8) {
         if dst != 0 {
             return;
         }
-        
+
         if let Some(idx) = self.r0 {
             match self.family {
                 AmdFamily::AvxScalar => self.amd.vmovsd_mem_xmm(Amd::RSP, (idx * 8) as i32, 0),
                 AmdFamily::AvxVector => self.amd.vmovpd_mem_ymm(Amd::RSP, (idx * 32) as i32, 0),
-                AmdFamily::SSEScalar => {},
-            };            
+                AmdFamily::SSEScalar => {}
+            };
         };
-        
+
         self.r0 = None;
     }
 }
@@ -165,7 +165,7 @@ impl Generator for AmdGenerator {
     //***********************************
     fn fmov(&mut self, dst: u8, r: u8) {
         self.flush(dst);
-        
+
         match self.family {
             AmdFamily::AvxScalar | AmdFamily::AvxVector => self.amd.vmovapd(dst, r),
             AmdFamily::SSEScalar => self.amd.movapd(dst, r),
@@ -175,7 +175,7 @@ impl Generator for AmdGenerator {
     fn fxchg(&mut self, a: u8, b: u8) {
         self.flush(a);
         self.flush(b);
-        
+
         match self.family {
             AmdFamily::AvxScalar | AmdFamily::AvxVector => {
                 self.amd.vxorpd(a, a, b);
@@ -192,7 +192,7 @@ impl Generator for AmdGenerator {
 
     fn load_const(&mut self, dst: u8, label: &str) {
         self.flush(dst);
-        
+
         match self.family {
             AmdFamily::AvxScalar => self.amd.vmovsd_xmm_label(dst, label),
             AmdFamily::AvxVector => self.amd.vbroadcastsd_label(dst, label),
@@ -202,7 +202,7 @@ impl Generator for AmdGenerator {
 
     fn load_mem(&mut self, dst: u8, idx: u32) {
         self.flush(dst);
-        
+
         match self.family {
             AmdFamily::AvxScalar => self.amd.vmovsd_xmm_mem(dst, Amd::RBP, (idx * 8) as i32),
             AmdFamily::AvxVector => self.amd.vmovpd_ymm_mem(dst, Amd::RBP, (idx * 32) as i32),
@@ -219,17 +219,17 @@ impl Generator for AmdGenerator {
     }
 
     fn load_stack(&mut self, dst: u8, idx: u32) {
-        if let Some(k) = self.r0 { 
+        if let Some(k) = self.r0 {
             if k == idx {
                 match self.family {
                     AmdFamily::AvxScalar | AmdFamily::AvxVector => self.amd.vmovapd(dst, 0),
-                    AmdFamily::SSEScalar => {},
+                    AmdFamily::SSEScalar => {}
                 };
                 self.r0 = None;
                 return;
             }
         };
-    
+
         match self.family {
             AmdFamily::AvxScalar => self.amd.vmovsd_xmm_mem(dst, Amd::RSP, (idx * 8) as i32),
             AmdFamily::AvxVector => self.amd.vmovpd_ymm_mem(dst, Amd::RSP, (idx * 32) as i32),
@@ -242,7 +242,7 @@ impl Generator for AmdGenerator {
             self.r0 = Some(idx);
             return;
         }
-    
+
         match self.family {
             AmdFamily::AvxScalar => self.amd.vmovsd_mem_xmm(Amd::RSP, (idx * 8) as i32, src),
             AmdFamily::AvxVector => self.amd.vmovpd_mem_ymm(Amd::RSP, (idx * 32) as i32, src),
@@ -290,7 +290,7 @@ impl Generator for AmdGenerator {
 
     fn plus(&mut self, dst: u8, a: u8, b: u8) {
         self.flush(dst);
-        
+
         match self.family {
             AmdFamily::AvxScalar => self.amd.vaddsd(dst, a, b),
             AmdFamily::AvxVector => self.amd.vaddpd(dst, a, b),
@@ -303,7 +303,7 @@ impl Generator for AmdGenerator {
 
     fn minus(&mut self, dst: u8, a: u8, b: u8) {
         self.flush(dst);
-        
+
         match self.family {
             AmdFamily::AvxScalar => self.amd.vsubsd(dst, a, b),
             AmdFamily::AvxVector => self.amd.vsubpd(dst, a, b),
@@ -316,7 +316,7 @@ impl Generator for AmdGenerator {
 
     fn times(&mut self, dst: u8, a: u8, b: u8) {
         self.flush(dst);
-        
+
         match self.family {
             AmdFamily::AvxScalar => self.amd.vmulsd(dst, a, b),
             AmdFamily::AvxVector => self.amd.vmulpd(dst, a, b),
@@ -329,7 +329,7 @@ impl Generator for AmdGenerator {
 
     fn divide(&mut self, dst: u8, a: u8, b: u8) {
         self.flush(dst);
-        
+
         match self.family {
             AmdFamily::AvxScalar => self.amd.vdivsd(dst, a, b),
             AmdFamily::AvxVector => self.amd.vdivpd(dst, a, b),
@@ -342,7 +342,7 @@ impl Generator for AmdGenerator {
 
     fn gt(&mut self, dst: u8, a: u8, b: u8) {
         self.flush(dst);
-        
+
         match self.family {
             AmdFamily::AvxScalar => self.amd.vcmpnlesd(dst, a, b),
             AmdFamily::AvxVector => self.amd.vcmpnlepd(dst, a, b),
@@ -355,7 +355,7 @@ impl Generator for AmdGenerator {
 
     fn geq(&mut self, dst: u8, a: u8, b: u8) {
         self.flush(dst);
-        
+
         match self.family {
             AmdFamily::AvxScalar => self.amd.vcmpnltsd(dst, a, b),
             AmdFamily::AvxVector => self.amd.vcmpnltpd(dst, a, b),
@@ -368,7 +368,7 @@ impl Generator for AmdGenerator {
 
     fn lt(&mut self, dst: u8, a: u8, b: u8) {
         self.flush(dst);
-        
+
         match self.family {
             AmdFamily::AvxScalar => self.amd.vcmpltsd(dst, a, b),
             AmdFamily::AvxVector => self.amd.vcmpltpd(dst, a, b),
@@ -381,7 +381,7 @@ impl Generator for AmdGenerator {
 
     fn leq(&mut self, dst: u8, a: u8, b: u8) {
         self.flush(dst);
-        
+
         match self.family {
             AmdFamily::AvxScalar => self.amd.vcmplesd(dst, a, b),
             AmdFamily::AvxVector => self.amd.vcmplepd(dst, a, b),
@@ -394,7 +394,7 @@ impl Generator for AmdGenerator {
 
     fn eq(&mut self, dst: u8, a: u8, b: u8) {
         self.flush(dst);
-        
+
         match self.family {
             AmdFamily::AvxScalar => self.amd.vcmpeqsd(dst, a, b),
             AmdFamily::AvxVector => self.amd.vcmpeqpd(dst, a, b),
@@ -407,7 +407,7 @@ impl Generator for AmdGenerator {
 
     fn neq(&mut self, dst: u8, a: u8, b: u8) {
         self.flush(dst);
-        
+
         match self.family {
             AmdFamily::AvxScalar => self.amd.vcmpneqsd(dst, a, b),
             AmdFamily::AvxVector => self.amd.vcmpneqpd(dst, a, b),
@@ -420,7 +420,7 @@ impl Generator for AmdGenerator {
 
     fn and(&mut self, dst: u8, a: u8, b: u8) {
         self.flush(dst);
-        
+
         match self.family {
             AmdFamily::AvxScalar | AmdFamily::AvxVector => self.amd.vandpd(dst, a, b),
             AmdFamily::SSEScalar => {
@@ -432,7 +432,7 @@ impl Generator for AmdGenerator {
 
     fn andnot(&mut self, dst: u8, a: u8, b: u8) {
         self.flush(dst);
-        
+
         match self.family {
             AmdFamily::AvxScalar | AmdFamily::AvxVector => self.amd.vandnpd(dst, a, b),
             AmdFamily::SSEScalar => {
@@ -444,7 +444,7 @@ impl Generator for AmdGenerator {
 
     fn or(&mut self, dst: u8, a: u8, b: u8) {
         self.flush(dst);
-        
+
         match self.family {
             AmdFamily::AvxScalar | AmdFamily::AvxVector => self.amd.vorpd(dst, a, b),
             AmdFamily::SSEScalar => {
@@ -456,7 +456,7 @@ impl Generator for AmdGenerator {
 
     fn xor(&mut self, dst: u8, a: u8, b: u8) {
         self.flush(dst);
-        
+
         match self.family {
             AmdFamily::AvxScalar | AmdFamily::AvxVector => self.amd.vxorpd(dst, a, b),
             AmdFamily::SSEScalar => {
@@ -547,6 +547,7 @@ impl Generator for AmdGenerator {
 
     #[cfg(target_family = "unix")]
     fn epilogue(&mut self, n: u32) {
+        self.vzeroupper();
         match self.family {
             AmdFamily::AvxScalar | AmdFamily::SSEScalar => self.amd.add_rsp(8 * n),
             AmdFamily::AvxVector => self.amd.add_rsp(32 * n),
@@ -560,6 +561,7 @@ impl Generator for AmdGenerator {
 
     #[cfg(target_family = "windows")]
     fn epilogue(&mut self, n: u32) {
+        self.vzeroupper();
         match self.family {
             AmdFamily::AvxScalar | AmdFamily::SSEScalar => self.amd.add_rsp(8 * n),
             AmdFamily::AvxVector => self.amd.add_rsp(32 * n),

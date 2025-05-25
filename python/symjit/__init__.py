@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import numbers
 import importlib
@@ -49,6 +50,9 @@ class Func:
 
     def dump(self, name, what="scalar"):
         self.compiler.dump(name, what=what)
+        
+    def dumps(self, what="scalar"):        
+        return dumps(self.compiler, what=what)
 
 
 class OdeFunc:
@@ -74,6 +78,9 @@ class OdeFunc:
 
     def dump(self, name, what="scalar"):
         return self.compiler.dump(name, what=what)
+        
+    def dumps(self, what="scalar"):        
+        return dumps(self.compiler, what=what)
 
 
 class JacFunc:
@@ -95,7 +102,19 @@ class JacFunc:
 
     def dump(self, name, what="scalar"):
         self.compiler.dump(name, what=what)
+        
+    def dumps(self, what="scalar"):        
+        return dumps(self.compiler, what=what) 
 
+
+def dumps(compiler, what="scalar"):
+    name = "symjit_dump.bin"
+    compiler.dump(name, what=what)
+    with open(name, "rb") as fd:
+        b = fd.read()
+    os.remove(name)
+    return b.hex()
+    
 
 def can_use_rust(backend):
     if not backend in ["python", "rust"]:

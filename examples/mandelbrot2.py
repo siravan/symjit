@@ -26,9 +26,12 @@ t0 = time.time()
 
 f = compile_func([a, b], [X, Y], backend=backend)
 
+t1 = time.time()
+
 X, Y = f(A, B)
 
-print(f"compilation + running time: {1000 * (time.time() - t0):.1f} ms")
+print(f"compilation time: {1000 * (t1 - t0):.1f} ms")
+print(f"running time: {1000 * (time.time() - t1):.1f} ms")
 
 # Z = np.hypot(X, Y)
 
