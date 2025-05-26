@@ -102,12 +102,10 @@ impl AmdGenerator {
         self.align();
 
         self.set_label("_minus_zero_");
-        let u: u64 = unsafe { std::mem::transmute(-0.0f64) };
-        self.append_quad(u);
+        self.append_quad((-0.0f64).to_bits());
 
         self.set_label("_one_");
-        let u: u64 = unsafe { std::mem::transmute(1.0f64) };
-        self.append_quad(u);
+        self.append_quad(1.0f64.to_bits());
 
         self.set_label("_all_ones_");
         self.append_quad(0xffffffffffffffff);
@@ -141,14 +139,15 @@ impl AmdGenerator {
 
 impl Generator for AmdGenerator {
     fn first_shadow(&self) -> u8 {
-        return 2;
+        2
     }
 
     fn count_shadows(&self) -> u8 {
-        #[cfg(target_family = "windows")]
-        return 4;
-        #[cfg(not(target_family = "windows"))]
-        return 14;
+        if cfg!(target_family = "windows") {
+            4
+        } else {
+            14
+        }
     }
 
     fn reg_size(&self) -> u32 {

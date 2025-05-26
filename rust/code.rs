@@ -27,6 +27,10 @@ impl<T: Float> VirtualTable<T> {
         Ok(())
     }
 
+    fn transmute(f: fn(f64) -> f64) -> BinaryFunc<T> {
+        unsafe { std::mem::transmute::<fn(f64) -> f64, BinaryFunc<T>>(f) }
+    }
+
     // Finds the function reference for op
     pub fn from_str(op: &str) -> Result<BinaryFunc<T>> {
         let f = match op {
@@ -38,7 +42,9 @@ impl<T: Float> VirtualTable<T> {
             "times" => Self::times,
             "divide" => Self::divide,
             "rem" => Self::rem,
-            "power" => Self::power,
+            "power" => unsafe {
+                std::mem::transmute::<fn(f64, f64) -> f64, BinaryFunc<T>>(libm::pow)
+            },
             "gt" => Self::gt,
             "geq" => Self::geq,
             "lt" => Self::lt,
@@ -51,28 +57,28 @@ impl<T: Float> VirtualTable<T> {
             "xor" => Self::xor,
             "if_pos" => Self::if_pos,
             "if_neg" => Self::if_neg,
-            "sin" => Self::sin,
-            "cos" => Self::cos,
-            "tan" => Self::tan,
+            "sin" => Self::transmute(libm::sin),
+            "cos" => Self::transmute(libm::cos),
+            "tan" => Self::transmute(libm::tan),
             "csc" => Self::csc,
             "sec" => Self::sec,
             "cot" => Self::cot,
-            "sinh" => Self::sinh,
-            "cosh" => Self::cosh,
-            "tanh" => Self::tanh,
+            "sinh" => Self::transmute(libm::sinh),
+            "cosh" => Self::transmute(libm::cosh),
+            "tanh" => Self::transmute(libm::tanh),
             "csch" => Self::csch,
             "sech" => Self::sech,
             "coth" => Self::coth,
-            "arcsin" => Self::asin,
-            "arccos" => Self::acos,
-            "arctan" => Self::atan,
-            "arcsinh" => Self::asinh,
-            "arccosh" => Self::acosh,
-            "arctanh" => Self::atanh,
-            "exp" => Self::exp,
-            "ln" => Self::ln,
-            "log" => Self::log,
-            "root" => Self::root,
+            "arcsin" => Self::transmute(libm::asin),
+            "arccos" => Self::transmute(libm::acos),
+            "arctan" => Self::transmute(libm::atan),
+            "arcsinh" => Self::transmute(libm::asinh),
+            "arccosh" => Self::transmute(libm::acosh),
+            "arctanh" => Self::transmute(libm::atanh),
+            "exp" => Self::transmute(libm::exp),
+            "ln" => Self::transmute(libm::log),
+            "log" => Self::transmute(libm::log10),
+            "root" => Self::transmute(libm::sqrt),
             "ifelse" => Self::nop,
             "square" => Self::square,
             "cube" => Self::cube,

@@ -10,7 +10,6 @@ pub enum Loc {
 struct Symbol {
     name: String,
     loc: Loc,
-    reg: Option<u8>,
 }
 
 #[derive(Debug, Clone)]
@@ -46,7 +45,6 @@ impl SymbolTable {
                 let sym = Symbol {
                     name: name.to_string(),
                     loc,
-                    reg: None,
                 };
                 self.syms.insert(name.to_string(), sym);
                 loc
@@ -63,7 +61,6 @@ impl SymbolTable {
                 let sym = Symbol {
                     name: name.to_string(),
                     loc,
-                    reg: None,
                 };
                 self.syms.insert(name.to_string(), sym);
                 loc
@@ -72,9 +69,6 @@ impl SymbolTable {
     }
 
     pub fn find(&self, name: &str) -> Option<Loc> {
-        match self.syms.get(name) {
-            Some(sym) => Some(sym.loc),
-            None => None,
-        }
+        self.syms.get(name).map(|sym| sym.loc)
     }
 }

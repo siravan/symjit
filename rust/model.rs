@@ -72,9 +72,9 @@ impl Program {
             }
         }
 
-        let _ = ml.transform(&mut builder);
+        ml.transform(&mut builder)?;
 
-        let mut prog = Program {
+        let prog = Program {
             builder,
             count_states: ml.states.len(),
             count_params: ml.params.len(),
@@ -96,7 +96,7 @@ pub struct Variable {
 /// Transforms the input tree to the intermediate representation (tree-like)
 impl Transformer for Variable {
     fn transform(&self, builder: &mut Builder) -> Result<Node> {
-        Ok(builder.create_var(&self.name))
+        builder.create_var(&self.name)
     }
 }
 
@@ -137,10 +137,10 @@ impl Expr {
         let x = args[0].transform(builder)?;
 
         if builder.intrinsic_unary.contains(&op) {
-            Ok(builder.create_unary(op, x))
+            builder.create_unary(op, x)
         } else {
-            let _ = VirtualTable::<f64>::from_str(&op)?;    // check to see if op is defined
-            Ok(builder.add_call_unary(op, x))
+            let _ = VirtualTable::<f64>::from_str(op)?; // check to see if op is defined
+            builder.add_call_unary(op, x)
         }
     }
 
@@ -149,10 +149,10 @@ impl Expr {
         let r = args[1].transform(builder)?;
 
         if builder.intrinsic_binary.contains(&op) {
-            Ok(builder.create_binary(op, l, r))
+            builder.create_binary(op, l, r)
         } else {
-            let _ = VirtualTable::<f64>::from_str(&op)?;    // check to see if op is defined
-            Ok(builder.add_call_binary(op, l, r))
+            let _ = VirtualTable::<f64>::from_str(op)?; // check to see if op is defined
+            builder.add_call_binary(op, l, r)
         }
     }
 
@@ -164,15 +164,14 @@ impl Expr {
 
         let cond = args[0].transform(builder)?;
         let tmp = builder.add_tmp();
-
-        builder.add_assign(tmp.clone(), cond);
+        let tmp = builder.add_assign(tmp.clone(), cond)?;
 
         let true_val = args[1].transform(builder)?;
         let false_val = args[2].transform(builder)?;
 
-        let st = builder.create_binary("select_if", tmp.clone(), true_val);
-        let sf = builder.create_binary("select_else", tmp, false_val);
-        Ok(builder.create_binary("or", st, sf))
+        let st = builder.create_binary("select_if", tmp.clone(), true_val)?;
+        let sf = builder.create_binary("select_else", tmp, false_val)?;
+        builder.create_binary("or", st, sf)
     }
 
     /// Addition and Multiplication can haev multiple arguments
@@ -186,7 +185,7 @@ impl Expr {
 
         for arg in args.iter().skip(1) {
             let y = arg.transform(builder)?;
-            x = builder.create_binary(op, x, y);
+            x = builder.create_binary(op, x, y)?;
         }
 
         Ok(x)
@@ -196,13 +195,13 @@ impl Expr {
 impl Transformer for Expr {
     fn transform(&self, builder: &mut Builder) -> Result<Node> {
         let dst = match self {
-            Expr::Const { val } => builder.create_const(*val),
-            Expr::Var { name } => builder.create_var(name),
+            Expr::Const { val } => builder.create_const(*val)?,
+            Expr::Var { name } => builder.create_var(name)?,
             Expr::Tree { op, args } => match args.len() {
-                1 => self.transform_unary(builder, op.as_str(), &args)?,
-                2 => self.transform_binary(builder, op.as_str(), &args)?,
-                3 => self.transform_ternary(builder, op.as_str(), &args)?,
-                _ => self.transform_poly(builder, op.as_str(), &args)?,
+                1 => self.transform_unary(builder, op.as_str(), args)?,
+                2 => self.transform_binary(builder, op.as_str(), args)?,
+                3 => self.transform_ternary(builder, op.as_str(), args)?,
+                _ => self.transform_poly(builder, op.as_str(), args)?,
             },
         };
         Ok(dst)
@@ -227,11 +226,10 @@ impl Transformer for Equation {
         };
 
         let rhs = self.rhs.transform(builder)?;
-        let lhs = builder.create_var(var.as_str());
-        
-        builder.add_assign(lhs, rhs);
+        let lhs = builder.create_var(var.as_str())?;
+        let lhs = builder.add_assign(lhs, rhs)?;
 
-        Ok(builder.create_void())
+        builder.create_void()
     }
 }
 
@@ -264,6 +262,6 @@ impl Transformer for CellModel {
             eq.transform(builder)?;
         }
 
-        Ok(builder.create_void())
+        builder.create_void()
     }
 }

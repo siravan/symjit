@@ -140,8 +140,8 @@ impl Node {
 
         let mut dst = ir.first_shadow() + base + (ershov as u8) - 1;
 
-        let mut l = 0;
-        let mut r = 0;
+        let mut l;
+        let mut r;
 
         let last = ir.first_shadow() + ir.count_shadows();
 

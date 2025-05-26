@@ -58,7 +58,7 @@ impl Amd {
     }
 
     pub fn modrm_mem(&mut self, reg: u8, rm: u8, offset: i32) {
-        let small = offset < 128 && offset >= -128;
+        let small = (-128..128).contains(&offset);
 
         if small {
             self.append_byte(0x40 + ((reg & 7) << 3) + (rm & 7))

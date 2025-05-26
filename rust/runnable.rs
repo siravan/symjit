@@ -57,7 +57,7 @@ pub struct Runnable {
 
 impl Runnable {
     pub fn new(mut prog: Program, ty: CompilerType, use_simd: bool) -> Runnable {
-        let first_state = 1;    // 1 is reserved for the independent variable (ODE models)
+        let first_state = 1; // 1 is reserved for the independent variable (ODE models)
         let first_param = first_state + prog.count_states;
         let first_obs = first_param + prog.count_params;
         let first_diff = first_obs + prog.count_obs;
@@ -169,11 +169,9 @@ impl Runnable {
 
     pub fn exec_vectorized(&mut self, buf: &mut [f64], n: usize) {
         // SIMD compilation is lazy!
-        self.compiled_simd = if self.use_simd {
+        if self.compiled_simd.is_none() && self.use_simd {
             let size = self.first_diff + self.prog.count_diffs + 1;
-            Some(Self::compile_simd(&mut self.prog, size))
-        } else {
-            None
+            self.compiled_simd = Some(Self::compile_simd(&mut self.prog, size));
         };
 
         if self.compiled_simd.is_none() {

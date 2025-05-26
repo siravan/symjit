@@ -1,6 +1,6 @@
 [package]
 name = "symjit"
-version = "2.1.0"
+version = "2.0.0"
 edition = "2021"
 
 [dependencies]
@@ -9,6 +9,7 @@ serde_json = "1.0"
 memmap2 = { version = "0.9", optional = true }
 anyhow = "1"
 libc = "0.2"
+libm = "0.2"
 windows-sys = { version = "0.59", features = ["Win32_System_Memory"] }
 region = "3.0.2"
 wasmtime-jit-icache-coherence = "*"

@@ -23,15 +23,15 @@ impl ArmGenerator {
 
 impl Generator for ArmGenerator {
     fn first_shadow(&self) -> u8 {
-        return 2;
+        2
     }
 
     fn count_shadows(&self) -> u8 {
-        return 6;
+        6
     }
 
     fn reg_size(&self) -> u32 {
-        return 8;
+        8
     }
 
     fn a(&mut self) -> &mut Assembler {
