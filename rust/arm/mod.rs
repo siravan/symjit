@@ -51,6 +51,10 @@ impl Generator for ArmGenerator {
     fn a(&mut self) -> &mut Assembler {
         &mut self.a
     }
+    
+    fn three_address(&self) -> bool {
+        true
+    }
 
     //***********************************
     fn fmov(&mut self, dst: u8, r: u8) {

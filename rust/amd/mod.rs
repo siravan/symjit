@@ -160,6 +160,14 @@ impl Generator for AmdGenerator {
     fn a(&mut self) -> &mut Assembler {
         &mut self.amd.a
     }
+    
+    fn three_address(&self) -> bool {
+        match self.family {
+            AmdFamily::AvxScalar => true,
+            AmdFamily::AvxVector => true,
+            AmdFamily::SSEScalar => false,
+        }        
+    }
 
     //***********************************
     fn fmov(&mut self, dst: u8, r: u8) {

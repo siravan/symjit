@@ -5,6 +5,7 @@ pub trait Generator {
     fn count_shadows(&self) -> u8;
     fn reg_size(&self) -> u32;
     fn a(&mut self) -> &mut Assembler;
+    fn three_address(&self) -> bool;
 
     // assembler's methods
     fn bytes(&mut self) -> Vec<u8> {

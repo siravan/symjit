@@ -205,7 +205,11 @@ impl Node {
         let f = ir.first_shadow();
         let e = self.ershov_number() as u8;
 
-        let cache_size = if n > e { n - e } else { 0 };
+        // we check ir.three_address() because AmdGenerator::shrink may swap
+        // registers when generating code for SSE (two-address code).
+        // This check may not be actually necessary, but we need to prove its
+        // correctness first. 
+        let cache_size = if ir.three_address() && n > e { n - e } else { 0 };
         let mut pool: Vec<u8> = (f + n - cache_size..f + n).collect();
 
         // println!("{:#?}", &self);
