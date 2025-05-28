@@ -91,7 +91,7 @@ impl Builder {
     }
 
     pub fn create_void(&mut self) -> Result<Node> {
-        Ok(Node::Void)
+        Ok(Node::create_void())
     }
 
     pub fn create_const(&mut self, val: f64) -> Result<Node> {
@@ -105,11 +105,8 @@ impl Builder {
         }
 
         self.consts.push(val);
-
-        Ok(Node::Const {
-            val,
-            idx: (self.consts.len() - 1) as u32,
-        })
+        
+        Ok(Node::create_const(val, (self.consts.len() - 1) as u32))
     }
 
     pub fn create_var(&mut self, name: &str) -> Result<Node> {
@@ -118,28 +115,11 @@ impl Builder {
             .find_sym(name)
             .ok_or_else(|| anyhow!("variable {} not found", name))?;
 
-        Ok(Node::Var {
-            name: name.to_string(),
-            sym,
-            status: VarStatus::Unknown,
-        })
+        Ok(Node::create_var(name, sym))
     }
 
     pub fn create_unary(&mut self, op: &str, arg: Node) -> Result<Node> {
-        Ok(Node::Unary {
-            op: op.to_string(),
-            arg: Box::new(arg),
-            ershov: 0,
-        })
-    }
-
-    pub fn create_binary_op(&mut self, op: &str, left: Node, right: Node) -> Result<Node> {
-        Ok(Node::Binary {
-            op: op.to_string(),
-            left: Box::new(left),
-            right: Box::new(right),
-            ershov: 0,
-        })
+        Ok(Node::create_unary(op, arg))
     }
 
     pub fn create_binary(&mut self, op: &str, left: Node, right: Node) -> Result<Node> {
@@ -147,18 +127,18 @@ impl Builder {
             "times" if left.is_const(-1.0) => self.create_unary("neg", right)?,
             "times" if right.is_const(-1.0) => self.create_unary("neg", left)?,
             "times" if left.is_unary("recip") => {
-                self.create_binary_op("divide", right, left.arg().unwrap())?
+                Node::create_binary("divide", right, left.arg().unwrap())
             }
             "times" if right.is_unary("recip") => {
-                self.create_binary_op("divide", left, right.arg().unwrap())?
+                Node::create_binary("divide", left, right.arg().unwrap())
             }
             "plus" if left.is_unary("neg") => {
-                self.create_binary_op("minus", right, left.arg().unwrap())?
+                Node::create_binary("minus", right, left.arg().unwrap())
             }
             "plus" if right.is_unary("neg") => {
-                self.create_binary_op("minus", left, right.arg().unwrap())?
+                Node::create_binary("minus", left, right.arg().unwrap())
             }
-            _ => self.create_binary_op(op, left, right)?,
+            _ => Node::create_binary(op, left, right),
         };
 
         Ok(node)
@@ -181,7 +161,7 @@ impl Builder {
         Node::Var {
             name: name.to_string(),
             sym,
-            status: VarStatus::Unknown,            
+            status: VarStatus::Unknown,
         }
     }
 

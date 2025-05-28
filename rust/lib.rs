@@ -58,7 +58,8 @@ pub unsafe extern "C" fn compile(
     let model = unsafe {
         match CStr::from_ptr(model).to_str() {
             Ok(model) => model,
-            Err(_) => {
+            Err(msg) => {
+                println!("{}", msg);
                 res.status = CompilerStatus::InvalidUtf8;
                 return Box::into_raw(Box::new(res)) as *const _;
             }
@@ -68,7 +69,8 @@ pub unsafe extern "C" fn compile(
     let ty = unsafe {
         match CStr::from_ptr(ty).to_str() {
             Ok(ty) => ty,
-            Err(_) => {
+            Err(msg) => {
+                println!("{}", msg);
                 res.status = CompilerStatus::InvalidUtf8;
                 return Box::into_raw(Box::new(res)) as *const _;
             }
@@ -77,7 +79,8 @@ pub unsafe extern "C" fn compile(
 
     let ml = match CellModel::load(model) {
         Ok(ml) => ml,
-        Err(_) => {
+        Err(msg) => {
+            println!("{}", msg);
             res.status = CompilerStatus::ParseError;
             return Box::into_raw(Box::new(res)) as *const _;
         }

@@ -25,7 +25,7 @@ pub enum Node {
     Var {
         name: String,
         sym: Rc<RefCell<Symbol>>,
-        status: VarStatus,        
+        status: VarStatus,
     },
     Unary {
         op: String,
@@ -41,105 +41,165 @@ pub enum Node {
 }
 
 impl Node {
-    pub fn ershov_number(&self) -> u8 {
+    pub fn create_void() -> Node {
+        Node::Void
+    }
+
+    pub fn create_const(val: f64, idx: u32) -> Node {
+        Node::Const {
+            val,
+            idx,
+        }
+    }
+
+    pub fn create_var(name: &str, sym: Rc<RefCell<Symbol>>) -> Node {
+        Node::Var {
+            name: name.to_string(),
+            sym,
+            status: VarStatus::Unknown,
+        }
+    }
+
+    pub fn create_unary(op: &str, arg: Node) -> Node {
+        Node::Unary {
+            op: op.to_string(),
+            arg: Box::new(arg),
+            ershov: 0,
+        }
+    }
+
+    pub fn create_binary(op: &str, left: Node, right: Node) -> Node {
+        Node::Binary {
+            op: op.to_string(),
+            left: Box::new(left),
+            right: Box::new(right),
+            ershov: 0,
+        }
+    }
+
+    /// postorder_forward does a forward postorder traversal of the 
+    /// expression tree and call f at each node. 
+    /// Nodes are visited in the same order used to generate code.
+    /// Note the twist in the middle. The decision to traverse left
+    /// or right link depends on ershov number of each link.
+    fn postorder_forward(&mut self, f: fn(&mut Node)) {
         match self {
-            Node::Void => 0,
-            Node::Const {..} | Node::Var {..} => 1,
-            Node::Unary {ershov, ..} | Node::Binary {ershov, ..} => {
-                *ershov
-            },            
+            Node::Void | Node::Const {..} | Node::Var{..} => { f(self); },
+            Node::Unary {arg,..} => {
+                arg.postorder_forward(f);
+                f(self);
+            },
+            Node::Binary {left, right, ..} => {            
+                let el = left.ershov_number();
+                let er = right.ershov_number();
+
+                if el >= er {
+                    left.postorder_forward(f);
+                    right.postorder_forward(f);
+                } else {
+                    right.postorder_forward(f);
+                    left.postorder_forward(f);
+                };
+                
+                f(self);
+            }                
         }
     }
     
-    pub fn calc_ershov(&mut self) -> u8 {
+    /// postorder_backward does a backward postorder traversal of the 
+    /// expression tree and call f at each node.
+    /// Nodes are visited in the same reverse order used to generate code.
+    /// Note the twist in the middle. The decision to traverse left
+    /// or right link depends on ershov number of each link.
+    fn postorder_backward(&mut self, f: fn(&mut Node)) {
         match self {
-            Node::Void => 0,
-            Node::Const {..} | Node::Var {..} => 1,
-            Node::Unary {arg, ershov, ..} => {
-                let e = arg.calc_ershov();
-                *ershov = e;
-                e
+            Node::Void | Node::Const {..} | Node::Var{..} => { f(self); },
+            Node::Unary {arg,..} => {
+                arg.postorder_forward(f);
+                f(self);
             },
-            Node::Binary {left, right, ershov, ..} => {
-                let l = left.calc_ershov();
-                let r = right.calc_ershov();
-                    
-                let e = if l == r {
-                    l + 1
+            Node::Binary {left, right, ..} => {            
+                let el = left.ershov_number();
+                let er = right.ershov_number();
+
+                if el >= er {
+                    right.postorder_forward(f);
+                    left.postorder_forward(f);                    
                 } else {
-                    l.max(r)
+                    left.postorder_forward(f);
+                    right.postorder_forward(f);                    
                 };
                 
+                f(self);
+            }                
+        }
+    }
+
+    /// Ershov number is the number of temporary registers needed to
+    /// compile a given node
+    pub fn ershov_number(&self) -> u8 {
+        match self {
+            Node::Void => 0,
+            Node::Const { .. } | Node::Var { .. } => 1,
+            Node::Unary { ershov, .. } | Node::Binary { ershov, .. } => *ershov,
+        }
+    }
+    
+    fn ershov_func(&mut self)  {
+        match self {
+            Node::Unary {arg, ershov, ..} => {
+                *ershov = arg.ershov_number();                
+            }
+            Node::Binary {
+                left,
+                right,
+                ershov,
+                ..
+            } => {
+                let l = left.ershov_number();
+                let r = right.ershov_number();
+                let e = if l == r { l + 1 } else { l.max(r) };
                 *ershov = e;
-                e
-            }
+            },
+            _ => {}
         }
     }
 
+    /// Finds and marks the first usage of each Var    
     fn mark_first(&mut self) {
-        match self {
-            Node::Void | Node::Const {..} => {}
-            Node::Unary {arg, ..} => arg.mark_first(),
-            Node::Binary {left, right, ..} => {
-                let el = left.ershov_number();
-                let er = right.ershov_number();
+        if let Node::Var { sym, status, ..} = self {
+            let mut sym = sym.borrow_mut();
 
-                if el >= er {
-                    left.mark_first();
-                    right.mark_first();
-                } else {
-                    right.mark_first();
-                    left.mark_first();
-                }
-            }
-            Node::Var { sym, status, .. } => {
-                let mut sym = sym.borrow_mut();
-
-                if !sym.visited {
-                    sym.visited = true;
-                    *status = VarStatus::First;
-                } else {
-                    *status = VarStatus::Mid;
-                }
-            }
+            if !sym.visited {
+                sym.visited = true;
+                *status = VarStatus::First;
+            } else {
+                *status = VarStatus::Mid;
+            }            
         }
     }
 
+    /// Finds and marks the last usage of each Var
     fn mark_last(&mut self) {
-        match self {
-            Node::Void | Node::Const { .. } => {}
-            Node::Unary {arg, ..} => arg.mark_last(),
-            Node::Binary {left, right, ..} => {
-                let el = left.ershov_number();
-                let er = right.ershov_number();
-
-                if el >= er {
-                    right.mark_last();
-                    left.mark_last();
-                } else {
-                    left.mark_last();
-                    right.mark_last();
-                }
-            }
-            Node::Var {sym, status, ..} => {
-                let mut sym = sym.borrow_mut();
-
-                if sym.visited {
-                    sym.visited = false;
-                    *status = match status {
-                        VarStatus::First => VarStatus::Singular,
-                        _ => VarStatus::Last,
-                    }
-                }
+        if let Node::Var {sym, status, ..} = self {
+            let mut sym = sym.borrow_mut();
+            
+            if sym.visited {
+                sym.visited = false;
+                *status = match status {
+                    VarStatus::First => VarStatus::Singular,
+                    _ => VarStatus::Last,
+                }                
             }
         }
     }
 
+    /// The main entry point to compile an expression tree
+    /// should be called on the root of the expression tree
     pub fn compile_tree(&mut self, ir: &mut dyn Generator) -> u8 {
-        // self.reset_visit();
-        self.calc_ershov();
-        self.mark_first();
-        self.mark_last();
+        self.postorder_forward(Self::ershov_func);
+        self.postorder_forward(Self::mark_first);
+        self.postorder_backward(Self::mark_last);        
 
         let n = ir.count_shadows();
         let f = ir.first_shadow();
@@ -181,6 +241,11 @@ impl Node {
         dst
     }
 
+    /// Loaded and cache variables in Mem and Stack
+    /// The basic logic is 
+    ///     1. At the encounter with a variable, load it into a temporary (cache) register 
+    ///     2. During the subsequent encounters, use the value in the register
+    ///     3. After the last encounter, return the register to the pool of available registers 
     fn compile_var(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> u8 {
         if let Node::Var {sym, status, ..} = &self {
             let mut sym = sym.borrow_mut();
@@ -192,6 +257,7 @@ impl Node {
                     let dst = if let Some(r) = sym.reg {
                         r
                     } else {
+                        // if no pool register is available, just use the standard designated register
                         ir.first_shadow() + base
                     };
 
@@ -201,6 +267,8 @@ impl Node {
                     if let Some(r) = sym.reg {
                         r
                     } else {
+                        // if no pool register is available, just use the standard designated register
+                        // note that this means reloading the variable at each use
                         let dst = ir.first_shadow() + base;
                         Self::load_var(ir, dst, &sym.loc)
                     }
@@ -218,6 +286,8 @@ impl Node {
                     }
                 }
                 VarStatus::Singular | VarStatus::Unknown => {
+                    // if a variable is Singular, i.e., is used only once, don't 
+                    // bother with caching
                     let dst = ir.first_shadow() + base;
                     Self::load_var(ir, dst, &sym.loc)
                 }
@@ -227,10 +297,10 @@ impl Node {
         }
     }
 
-    fn compile_unary(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> u8 {        
-        if let Node::Unary {op, arg, ..} = self {
+    fn compile_unary(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> u8 {
+        if let Node::Unary { op, arg, .. } = self {
             let mut dst = ir.first_shadow() + base + self.ershov_number() - 1;
-            let r = arg.compile(ir, base, pool);            
+            let r = arg.compile(ir, base, pool);
 
             match op.as_str() {
                 "neg" => ir.neg(dst, r),
@@ -256,7 +326,10 @@ impl Node {
     }
 
     fn compile_binary(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> u8 {
-        if let Node::Binary {op, left, right, ..} = self {
+        if let Node::Binary {
+            op, left, right, ..
+        } = self
+        {
             let (dst, l, r) = self.alloc(ir, base, left, right, pool);
 
             match op.as_str() {
