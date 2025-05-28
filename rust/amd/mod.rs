@@ -249,42 +249,42 @@ impl Generator for AmdGenerator {
         }
     }
 
-    fn neg(&mut self, dst: u8) {
+    fn neg(&mut self, dst: u8, r: u8) {
         self.flush(dst);
         self.load_const(1, "_minus_zero_");
-        self.xor(dst, dst, 1);
+        self.xor(dst, r, 1);
     }
 
-    fn abs(&mut self, dst: u8) {
+    fn abs(&mut self, dst: u8, r: u8) {
         self.flush(dst);
         self.load_const(1, "_minus_zero_");
-        self.andnot(dst, 1, dst);
+        self.andnot(dst, 1, r);
     }
 
-    fn root(&mut self, dst: u8) {
+    fn root(&mut self, dst: u8, r: u8) {
         self.flush(dst);
         match self.family {
-            AmdFamily::AvxScalar => self.amd.vsqrtsd(dst, dst),
-            AmdFamily::AvxVector => self.amd.vsqrtpd(dst, dst),
-            AmdFamily::SSEScalar => self.amd.sqrtsd(dst, dst),
+            AmdFamily::AvxScalar => self.amd.vsqrtsd(dst, r),
+            AmdFamily::AvxVector => self.amd.vsqrtpd(dst, r),
+            AmdFamily::SSEScalar => self.amd.sqrtsd(dst, r),
         }
     }
 
-    fn square(&mut self, dst: u8) {
+    fn square(&mut self, dst: u8, r: u8) {
         self.flush(dst);
-        self.times(dst, dst, dst);
+        self.times(dst, r, r);
     }
 
-    fn cube(&mut self, dst: u8) {
+    fn cube(&mut self, dst: u8, r: u8) {
         self.flush(dst);
-        self.times(1, dst, dst);
-        self.times(dst, dst, 1);
+        self.times(1, r, r);
+        self.times(dst, r, 1);
     }
 
-    fn recip(&mut self, dst: u8) {
+    fn recip(&mut self, dst: u8, r: u8) {
         self.flush(dst);
         self.load_const(1, "_one_");
-        self.divide(dst, 1, dst);
+        self.divide(dst, 1, r);
     }
 
     fn plus(&mut self, dst: u8, a: u8, b: u8) {
@@ -465,10 +465,10 @@ impl Generator for AmdGenerator {
         }
     }
 
-    fn not(&mut self, dst: u8) {
+    fn not(&mut self, dst: u8, r: u8) {
         self.flush(dst);
         self.load_const(1, "_all_ones_");
-        self.xor(dst, dst, 1);
+        self.xor(dst, r, 1);
     }
 
     fn call(&mut self, label: &str, num_args: usize) {

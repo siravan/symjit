@@ -1,4 +1,6 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Loc {
@@ -7,14 +9,16 @@ pub enum Loc {
 }
 
 #[derive(Debug, Clone)]
-struct Symbol {
-    name: String,
-    loc: Loc,
+pub struct Symbol {
+    pub name: String,
+    pub loc: Loc,
+    pub visited: bool,
+    pub reg: Option<u8>,
 }
 
 #[derive(Debug, Clone)]
 pub struct SymbolTable {
-    pub syms: HashMap<String, Symbol>,
+    pub syms: HashMap<String, Rc<RefCell<Symbol>>>,
     pub num_stack: usize,
     pub num_mem: usize,
 }
@@ -36,39 +40,39 @@ impl SymbolTable {
         s
     }
 
-    pub fn add_mem(&mut self, name: &str) -> Loc {
-        match self.find(name) {
-            Some(loc) => loc,
-            None => {
-                let loc = Loc::Mem(self.num_mem as u32);
-                self.num_mem += 1;
-                let sym = Symbol {
-                    name: name.to_string(),
-                    loc,
-                };
-                self.syms.insert(name.to_string(), sym);
-                loc
-            }
+    pub fn add_mem(&mut self, name: &str) {
+        if self.find_sym(name).is_none() {
+            let loc = Loc::Mem(self.num_mem as u32);
+            self.num_mem += 1;
+            let sym = Rc::new(RefCell::new(Symbol {
+                name: name.to_string(),
+                loc,
+                visited: false,
+                reg: None,
+            }));
+            self.syms.insert(name.to_string(), sym);
         }
     }
 
-    pub fn add_stack(&mut self, name: &str) -> Loc {
-        match self.find(name) {
-            Some(loc) => loc,
-            None => {
-                let loc = Loc::Stack(self.num_stack as u32);
-                self.num_stack += 1;
-                let sym = Symbol {
-                    name: name.to_string(),
-                    loc,
-                };
-                self.syms.insert(name.to_string(), sym);
-                loc
-            }
+    pub fn add_stack(&mut self, name: &str) {
+        if self.find_sym(name).is_none() {
+            let loc = Loc::Stack(self.num_stack as u32);
+            self.num_stack += 1;
+            let sym = Rc::new(RefCell::new(Symbol {
+                name: name.to_string(),
+                loc,
+                visited: false,
+                reg: None,
+            }));
+            self.syms.insert(name.to_string(), sym);
         }
     }
 
     pub fn find(&self, name: &str) -> Option<Loc> {
-        self.syms.get(name).map(|sym| sym.loc)
+        self.syms.get(name).map(|sym| sym.borrow().loc)
+    }
+
+    pub fn find_sym(&self, name: &str) -> Option<Rc<RefCell<Symbol>>> {
+        self.syms.get(name).map(|sym| Rc::clone(sym))
     }
 }

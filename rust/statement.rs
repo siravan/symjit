@@ -32,10 +32,10 @@ impl Statement {
         }
     }
 
-    pub fn compile(&self, ir: &mut dyn Generator) {
+    pub fn compile(&mut self, ir: &mut dyn Generator) {
         match self {
             Statement::Assign { lhs, rhs } => {
-                let r = rhs.compile(ir, 0);
+                let r = rhs.compile_tree(ir);
                 Self::save(ir, r, lhs);
             }
             Statement::Call {
@@ -44,7 +44,7 @@ impl Statement {
                 arg,
                 num_args,
             } => {
-                let _ = arg.compile(ir, 0);
+                let _ = arg.compile_tree(ir);
                 let label = format!("_func_{}_", op);
                 ir.call(&label, *num_args);
                 Self::save(ir, 0, lhs);
@@ -64,10 +64,10 @@ impl Statement {
     */
 
     fn save(ir: &mut dyn Generator, r: u8, v: &Node) {
-        if let Node::Var { loc, .. } = v {
-            match loc {
-                Loc::Stack(idx) => ir.save_stack(r, *idx),
-                Loc::Mem(idx) => ir.save_mem(r, *idx),
+        if let Node::Var { sym, .. } = v {
+            match sym.borrow().loc {
+                Loc::Stack(idx) => ir.save_stack(r, idx),
+                Loc::Mem(idx) => ir.save_mem(r, idx),
             }
         }
     }
@@ -79,10 +79,10 @@ impl Eval for Statement {
             Statement::Assign { lhs, rhs } => {
                 let u = rhs.eval(mem, stack);
 
-                if let Node::Var { loc, .. } = lhs {
-                    match loc {
-                        Loc::Stack(idx) => stack[*idx as usize] = u,
-                        Loc::Mem(idx) => mem[*idx as usize] = u,
+                if let Node::Var { sym, .. } = lhs {
+                    match sym.borrow().loc {
+                        Loc::Stack(idx) => stack[idx as usize] = u,
+                        Loc::Mem(idx) => mem[idx as usize] = u,
                     }
                 }
             }
@@ -112,10 +112,10 @@ impl Eval for Statement {
                     _ => f64::NAN,
                 };
 
-                if let Node::Var { loc, .. } = lhs {
-                    match loc {
-                        Loc::Stack(idx) => stack[*idx as usize] = u,
-                        Loc::Mem(idx) => mem[*idx as usize] = u,
+                if let Node::Var { sym, .. } = lhs {
+                    match sym.borrow().loc {
+                        Loc::Stack(idx) => stack[idx as usize] = u,
+                        Loc::Mem(idx) => mem[idx as usize] = u,
                     }
                 };
             }

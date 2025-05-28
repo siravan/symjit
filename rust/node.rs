@@ -1,6 +1,19 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use crate::builder::Builder;
 use crate::generator::Generator;
-use crate::symbol::Loc;
+use crate::symbol::{Loc, Symbol};
 use crate::utils::Eval;
+
+#[derive(Debug, Clone)]
+pub enum VarStatus {
+    Unknown,
+    First,
+    Mid,
+    Last,
+    Singular,
+}
 
 #[derive(Debug, Clone)]
 pub enum Node {
@@ -11,45 +24,141 @@ pub enum Node {
     },
     Var {
         name: String,
-        loc: Loc,
+        sym: Rc<RefCell<Symbol>>,
+        status: VarStatus,        
     },
     Unary {
         op: String,
         arg: Box<Node>,
+        ershov: u8,
     },
     Binary {
         op: String,
         left: Box<Node>,
         right: Box<Node>,
+        ershov: u8,
     },
 }
 
 impl Node {
-    pub fn ershov_number(&self) -> usize {
+    pub fn ershov_number(&self) -> u8 {
         match self {
             Node::Void => 0,
-            Node::Const { .. } => 1,
-            Node::Var { .. } => 1,
-            Node::Unary { arg, .. } => arg.ershov_number(),
-            Node::Binary { left, right, .. } => {
-                let l = left.ershov_number();
-                let r = right.ershov_number();
-                if l == r {
+            Node::Const {..} | Node::Var {..} => 1,
+            Node::Unary {ershov, ..} | Node::Binary {ershov, ..} => {
+                *ershov
+            },            
+        }
+    }
+    
+    pub fn calc_ershov(&mut self) -> u8 {
+        match self {
+            Node::Void => 0,
+            Node::Const {..} | Node::Var {..} => 1,
+            Node::Unary {arg, ershov, ..} => {
+                let e = arg.calc_ershov();
+                *ershov = e;
+                e
+            },
+            Node::Binary {left, right, ershov, ..} => {
+                let l = left.calc_ershov();
+                let r = right.calc_ershov();
+                    
+                let e = if l == r {
                     l + 1
                 } else {
                     l.max(r)
+                };
+                
+                *ershov = e;
+                e
+            }
+        }
+    }
+
+    fn mark_first(&mut self) {
+        match self {
+            Node::Void | Node::Const {..} => {}
+            Node::Unary {arg, ..} => arg.mark_first(),
+            Node::Binary {left, right, ..} => {
+                let el = left.ershov_number();
+                let er = right.ershov_number();
+
+                if el >= er {
+                    left.mark_first();
+                    right.mark_first();
+                } else {
+                    right.mark_first();
+                    left.mark_first();
+                }
+            }
+            Node::Var { sym, status, .. } => {
+                let mut sym = sym.borrow_mut();
+
+                if !sym.visited {
+                    sym.visited = true;
+                    *status = VarStatus::First;
+                } else {
+                    *status = VarStatus::Mid;
                 }
             }
         }
     }
 
-    pub fn compile(&self, ir: &mut dyn Generator, base: u8) -> u8 {
+    fn mark_last(&mut self) {
+        match self {
+            Node::Void | Node::Const { .. } => {}
+            Node::Unary {arg, ..} => arg.mark_last(),
+            Node::Binary {left, right, ..} => {
+                let el = left.ershov_number();
+                let er = right.ershov_number();
+
+                if el >= er {
+                    right.mark_last();
+                    left.mark_last();
+                } else {
+                    left.mark_last();
+                    right.mark_last();
+                }
+            }
+            Node::Var {sym, status, ..} => {
+                let mut sym = sym.borrow_mut();
+
+                if sym.visited {
+                    sym.visited = false;
+                    *status = match status {
+                        VarStatus::First => VarStatus::Singular,
+                        _ => VarStatus::Last,
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn compile_tree(&mut self, ir: &mut dyn Generator) -> u8 {
+        // self.reset_visit();
+        self.calc_ershov();
+        self.mark_first();
+        self.mark_last();
+
+        let n = ir.count_shadows();
+        let f = ir.first_shadow();
+        let e = self.ershov_number() as u8;
+
+        let cache_size = if n > e { n - e } else { 0 };
+        let mut pool: Vec<u8> = (f + n - cache_size..f + n).collect();
+
+        // println!("{:#?}", &self);
+        self.compile(ir, 0, &mut pool)
+    }
+
+    pub fn compile(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> u8 {
         match self {
             Node::Void => 0,
             Node::Const { .. } => self.compile_const(ir, base),
-            Node::Var { .. } => self.compile_var(ir, base),
-            Node::Unary { .. } => self.compile_unary(ir, base),
-            Node::Binary { .. } => self.compile_binary(ir, base),
+            Node::Var { .. } => self.compile_var(ir, base, pool),
+            Node::Unary { .. } => self.compile_unary(ir, base, pool),
+            Node::Binary { .. } => self.compile_binary(ir, base, pool),
         }
     }
 
@@ -64,48 +173,91 @@ impl Node {
         }
     }
 
-    fn compile_var(&self, ir: &mut dyn Generator, base: u8) -> u8 {
-        if let Node::Var { loc, .. } = &self {
-            let r = ir.first_shadow() + base;
-            match loc {
-                Loc::Stack(idx) => ir.load_stack(r, *idx),
-                Loc::Mem(idx) => ir.load_mem(r, *idx),
-            };
-            r
+    fn load_var(ir: &mut dyn Generator, dst: u8, loc: &Loc) -> u8 {
+        match loc {
+            Loc::Stack(idx) => ir.load_stack(dst, *idx),
+            Loc::Mem(idx) => ir.load_mem(dst, *idx),
+        };
+        dst
+    }
+
+    fn compile_var(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> u8 {
+        if let Node::Var {sym, status, ..} = &self {
+            let mut sym = sym.borrow_mut();
+
+            match status {
+                VarStatus::First => {
+                    sym.reg = pool.pop();
+
+                    let dst = if let Some(r) = sym.reg {
+                        r
+                    } else {
+                        ir.first_shadow() + base
+                    };
+
+                    Self::load_var(ir, dst, &sym.loc)
+                }
+                VarStatus::Mid => {
+                    if let Some(r) = sym.reg {
+                        r
+                    } else {
+                        let dst = ir.first_shadow() + base;
+                        Self::load_var(ir, dst, &sym.loc)
+                    }
+                }
+                VarStatus::Last => {
+                    let dst = ir.first_shadow() + base;
+
+                    if let Some(r) = sym.reg {
+                        ir.fmov(dst, r);
+                        pool.push(r);
+                        sym.reg = None;
+                        dst
+                    } else {
+                        Self::load_var(ir, dst, &sym.loc)
+                    }
+                }
+                VarStatus::Singular | VarStatus::Unknown => {
+                    let dst = ir.first_shadow() + base;
+                    Self::load_var(ir, dst, &sym.loc)
+                }
+            }
         } else {
             panic!("should not get here!");
         }
     }
 
-    fn compile_unary(&self, ir: &mut dyn Generator, base: u8) -> u8 {
-        if let Node::Unary { op, arg } = self {
-            let r = arg.compile(ir, base);
+    fn compile_unary(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> u8 {        
+        if let Node::Unary {op, arg, ..} = self {
+            let mut dst = ir.first_shadow() + base + self.ershov_number() - 1;
+            let r = arg.compile(ir, base, pool);            
 
             match op.as_str() {
-                "neg" => ir.neg(r),
-                "not" => ir.not(r),
-                "abs" => ir.abs(r),
-                "root" => ir.root(r),
-                "square" => ir.square(r),
-                "cube" => ir.cube(r),
-                "recip" => ir.recip(r),
+                "neg" => ir.neg(dst, r),
+                "not" => ir.not(dst, r),
+                "abs" => ir.abs(dst, r),
+                "root" => ir.root(dst, r),
+                "square" => ir.square(dst, r),
+                "cube" => ir.cube(dst, r),
+                "recip" => ir.recip(dst, r),
                 "_call_" => {
                     if r != 0 {
                         ir.fmov(0, r);
-                    }
+                    };
+                    dst = 0;
                 }
                 _ => panic!("unary operation is not recognized"),
             };
 
-            r
+            dst
         } else {
             panic!("should not get here!");
         }
     }
 
-    fn compile_binary(&self, ir: &mut dyn Generator, base: u8) -> u8 {
-        if let Node::Binary { op, left, right } = self {
-            let (dst, l, r) = self.alloc(ir, base, left, right);
+    fn compile_binary(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> u8 {
+        if let Node::Binary {op, left, right, ..} = self {
+            let (dst, l, r) = self.alloc(ir, base, left, right, pool);
 
             match op.as_str() {
                 "plus" => ir.plus(dst, l, r),
@@ -133,12 +285,17 @@ impl Node {
         }
     }
 
-    fn alloc(&self, ir: &mut dyn Generator, base: u8, left: &Node, right: &Node) -> (u8, u8, u8) {
+    fn alloc(
+        &self,
+        ir: &mut dyn Generator,
+        base: u8,
+        left: &Node,
+        right: &Node,
+        pool: &mut Vec<u8>,
+    ) -> (u8, u8, u8) {
         let el = left.ershov_number();
         let er = right.ershov_number();
-        let ershov = if el == er { el + 1 } else { el.max(er) };
-
-        let mut dst = ir.first_shadow() + base + (ershov as u8) - 1;
+        let mut dst = ir.first_shadow() + base + self.ershov_number() - 1;
 
         let mut l;
         let mut r;
@@ -147,28 +304,28 @@ impl Node {
 
         if dst < last {
             if el == er {
-                l = left.compile(ir, base + 1);
-                r = right.compile(ir, base);
+                l = left.compile(ir, base + 1, pool);
+                r = right.compile(ir, base, pool);
             } else if el > er {
-                l = left.compile(ir, base);
-                r = right.compile(ir, base);
+                l = left.compile(ir, base, pool);
+                r = right.compile(ir, base, pool);
             } else {
-                r = right.compile(ir, base);
-                l = left.compile(ir, base);
+                r = right.compile(ir, base, pool);
+                l = left.compile(ir, base, pool);
             }
         } else {
             let spill: u32 = (dst - last) as u32;
 
             if er <= el {
-                l = left.compile(ir, 0);
+                l = left.compile(ir, 0, pool);
                 ir.save_stack(l, spill);
-                r = right.compile(ir, 0);
+                r = right.compile(ir, 0, pool);
                 l = 1;
                 ir.load_stack(l, spill);
             } else {
-                r = right.compile(ir, 0);
+                r = right.compile(ir, 0, pool);
                 ir.save_stack(r, spill);
-                l = left.compile(ir, 0);
+                l = left.compile(ir, 0, pool);
                 r = 1;
                 ir.load_stack(r, spill);
             }
@@ -235,9 +392,9 @@ impl Eval for Node {
         match self {
             Node::Void => 0.0,
             Node::Const { val, .. } => *val,
-            Node::Var { loc, .. } => match loc {
-                Loc::Stack(idx) => stack[*idx as usize],
-                Loc::Mem(idx) => mem[*idx as usize],
+            Node::Var { sym, .. } => match sym.borrow().loc {
+                Loc::Stack(idx) => stack[idx as usize],
+                Loc::Mem(idx) => mem[idx as usize],
             },
             Node::Unary { op, arg, .. } => {
                 let x = arg.eval(mem, stack);

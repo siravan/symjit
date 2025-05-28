@@ -52,12 +52,12 @@ pub trait Generator {
     fn load_stack(&mut self, dst: u8, idx: u32);
     fn save_stack(&mut self, src: u8, idx: u32);
 
-    fn neg(&mut self, dst: u8);
-    fn abs(&mut self, dst: u8);
-    fn root(&mut self, dst: u8);
-    fn square(&mut self, dst: u8);
-    fn cube(&mut self, dst: u8);
-    fn recip(&mut self, dst: u8);
+    fn neg(&mut self, dst: u8, r: u8);
+    fn abs(&mut self, dst: u8, r: u8);
+    fn root(&mut self, dst: u8, r: u8);
+    fn square(&mut self, dst: u8, r: u8);
+    fn cube(&mut self, dst: u8, r: u8);
+    fn recip(&mut self, dst: u8, r: u8);
 
     fn plus(&mut self, dst: u8, a: u8, b: u8);
     fn minus(&mut self, dst: u8, a: u8, b: u8);
@@ -75,7 +75,7 @@ pub trait Generator {
     fn andnot(&mut self, dst: u8, a: u8, b: u8);
     fn or(&mut self, dst: u8, a: u8, b: u8);
     fn xor(&mut self, dst: u8, a: u8, b: u8);
-    fn not(&mut self, dst: u8);
+    fn not(&mut self, dst: u8, r: u8);
 
     fn call(&mut self, label: &str, num_args: usize);
     fn select_if(&mut self, dst: u8, cond: u8, a: u8);

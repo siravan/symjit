@@ -69,30 +69,30 @@ impl Generator for ArmGenerator {
         self.emit(arm! {str d(src), [sp, #8*idx]});
     }
 
-    fn neg(&mut self, dst: u8) {
-        self.emit(arm! {fneg d(dst), d(dst)});
+    fn neg(&mut self, dst: u8, r: u8) {
+        self.emit(arm! {fneg d(dst), d(r)});
     }
 
-    fn abs(&mut self, dst: u8) {
-        self.emit(arm! {fabs d(dst), d(dst)});
+    fn abs(&mut self, dst: u8, r: u8) {
+        self.emit(arm! {fabs d(dst), d(r)});
     }
 
-    fn root(&mut self, dst: u8) {
-        self.emit(arm! {fsqrt d(dst), d(dst)});
+    fn root(&mut self, dst: u8, r: u8) {
+        self.emit(arm! {fsqrt d(dst), d(r)});
     }
 
-    fn square(&mut self, dst: u8) {
-        self.emit(arm! {fmul d(dst), d(dst), d(dst)});
+    fn square(&mut self, dst: u8, r: u8) {
+        self.emit(arm! {fmul d(dst), d(r), d(r)});
     }
 
-    fn cube(&mut self, dst: u8) {
-        self.emit(arm! {fmul d(1), d(dst), d(dst)});
-        self.emit(arm! {fmul d(dst), d(dst), d(1)});
+    fn cube(&mut self, dst: u8, r: u8) {
+        self.emit(arm! {fmul d(1), d(r), d(r)});
+        self.emit(arm! {fmul d(dst), d(r), d(1)});
     }
 
-    fn recip(&mut self, dst: u8) {
+    fn recip(&mut self, dst: u8, r: u8) {
         self.emit(arm! {fmov d(1), #1.0});
-        self.emit(arm! {fdiv d(dst), d(1), d(dst)});
+        self.emit(arm! {fdiv d(dst), d(1), d(r)});
     }
 
     fn plus(&mut self, dst: u8, a: u8, b: u8) {
@@ -153,8 +153,8 @@ impl Generator for ArmGenerator {
         self.emit(arm! {eor v(dst).8b, v(a).8b, v(b).8b});
     }
 
-    fn not(&mut self, dst: u8) {
-        self.emit(arm! {not v(dst).8b, v(dst).8b});
+    fn not(&mut self, dst: u8, r: u8) {
+        self.emit(arm! {not v(dst).8b, v(r).8b});
     }
 
     fn call(&mut self, label: &str, num_args: usize) {

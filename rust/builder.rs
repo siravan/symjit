@@ -5,7 +5,7 @@ use super::utils::{Compiled, Eval};
 use crate::code::VirtualTable;
 use crate::generator::Generator;
 use crate::model::Expr;
-use crate::node::Node;
+use crate::node::{Node, VarStatus};
 use crate::statement::Statement;
 use crate::symbol::{Loc, SymbolTable};
 
@@ -113,14 +113,15 @@ impl Builder {
     }
 
     pub fn create_var(&mut self, name: &str) -> Result<Node> {
-        let loc = self
+        let sym = self
             .sym_table
-            .find(name)
+            .find_sym(name)
             .ok_or_else(|| anyhow!("variable {} not found", name))?;
 
         Ok(Node::Var {
             name: name.to_string(),
-            loc,
+            sym,
+            status: VarStatus::Unknown,
         })
     }
 
@@ -128,6 +129,7 @@ impl Builder {
         Ok(Node::Unary {
             op: op.to_string(),
             arg: Box::new(arg),
+            ershov: 0,
         })
     }
 
@@ -136,6 +138,7 @@ impl Builder {
             op: op.to_string(),
             left: Box::new(left),
             right: Box::new(right),
+            ershov: 0,
         })
     }
 
@@ -172,11 +175,13 @@ impl Builder {
     pub fn add_tmp(&mut self) -> Node {
         let name = format!("ψ{}", self.num_tmp);
         self.num_tmp += 1;
-        let loc = self.sym_table.add_stack(name.as_str());
+        self.sym_table.add_stack(name.as_str());
+        let sym = self.sym_table.find_sym(name.as_str()).unwrap();
 
         Node::Var {
             name: name.to_string(),
-            loc,
+            sym,
+            status: VarStatus::Unknown,            
         }
     }
 
@@ -187,7 +192,7 @@ impl Builder {
 
         ir.prologue(n);
 
-        for stmt in self.stmts.iter() {
+        for stmt in self.stmts.iter_mut() {
             stmt.compile(ir);
         }
 
