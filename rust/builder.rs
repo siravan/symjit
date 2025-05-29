@@ -105,7 +105,7 @@ impl Builder {
         }
 
         self.consts.push(val);
-        
+
         Ok(Node::create_const(val, (self.consts.len() - 1) as u32))
     }
 
@@ -166,17 +166,14 @@ impl Builder {
     }
 
     pub fn compile(&mut self, ir: &mut impl Generator) {
-        let cap = self.sym_table.num_stack;
-        let pad = cap & 1;
-        let n: u32 = (cap + pad) as u32;
-
-        ir.prologue(n);
+        let cap = self.sym_table.num_stack as u32;
+        ir.prologue(cap);
 
         for stmt in self.stmts.iter_mut() {
             stmt.compile(ir);
         }
 
-        ir.epilogue(n);
+        ir.epilogue(cap);
         self.append_const_section(ir);
         self.append_vt_section(ir);
         ir.apply_jumps();

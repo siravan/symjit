@@ -1,6 +1,7 @@
 use crate::assembler::Assembler;
 use crate::code::BinaryFunc;
 use crate::generator::Generator;
+use crate::utils::align_stack;
 
 mod asm;
 use asm::Amd;
@@ -67,9 +68,9 @@ impl AmdGenerator {
         self.vzeroupper();
 
         for i in 0..4 {
-            self.amd.vmovsd_xmm_mem(0, Amd::RSP, 32 + i * 8);
+            self.amd.movsd_xmm_mem(0, Amd::RSP, 32 + i * 8);
             self.amd.call(Amd::RBX);
-            self.amd.vmovsd_mem_xmm(Amd::RSP, 32 + i * 8, 0);
+            self.amd.movsd_mem_xmm(Amd::RSP, 32 + i * 8, 0);
         }
 
         self.amd.vmovpd_ymm_mem(0, Amd::RSP, 32);
@@ -88,10 +89,10 @@ impl AmdGenerator {
         self.vzeroupper();
 
         for i in 0..4 {
-            self.amd.vmovsd_xmm_mem(0, Amd::RSP, 32 + i * 8);
-            self.amd.vmovsd_xmm_mem(1, Amd::RSP, 64 + i * 8);
+            self.amd.movsd_xmm_mem(0, Amd::RSP, 32 + i * 8);
+            self.amd.movsd_xmm_mem(1, Amd::RSP, 64 + i * 8);
             self.amd.call(Amd::RBX);
-            self.amd.vmovsd_mem_xmm(Amd::RSP, 32 + i * 8, 0);
+            self.amd.movsd_mem_xmm(Amd::RSP, 32 + i * 8, 0);
         }
 
         self.amd.vmovpd_ymm_mem(0, Amd::RSP, 32);
@@ -160,13 +161,13 @@ impl Generator for AmdGenerator {
     fn a(&mut self) -> &mut Assembler {
         &mut self.amd.a
     }
-    
+
     fn three_address(&self) -> bool {
         match self.family {
             AmdFamily::AvxScalar => true,
             AmdFamily::AvxVector => true,
             AmdFamily::SSEScalar => false,
-        }        
+        }
     }
 
     //***********************************
@@ -529,37 +530,25 @@ impl Generator for AmdGenerator {
     }
 
     #[cfg(target_family = "unix")]
-    fn prologue(&mut self, n: u32) {
+    fn prologue(&mut self, cap: u32) {
         self.amd.push(Amd::RBP);
         self.amd.push(Amd::RBX);
         self.amd.mov(Amd::RBP, Amd::RDI);
-
-        match self.family {
-            AmdFamily::AvxScalar | AmdFamily::SSEScalar => self.amd.sub_rsp(8 * n),
-            AmdFamily::AvxVector => self.amd.sub_rsp(32 * n),
-        }
+        self.amd.sub_rsp(align_stack(self.reg_size() * cap + 8) - 8);
     }
 
     #[cfg(target_family = "windows")]
-    fn prologue(&mut self, n: u32) {
+    fn prologue(&mut self, cap: u32) {
         self.amd.mov_mem_reg(Amd::RSP, 0x08, Amd::RBP);
         self.amd.mov_mem_reg(Amd::RSP, 0x10, Amd::RBX);
         self.amd.mov(Amd::RBP, Amd::RCX);
-
-        match self.family {
-            AmdFamily::AvxScalar | AmdFamily::SSEScalar => self.amd.sub_rsp(8 * n),
-            AmdFamily::AvxVector => self.amd.sub_rsp(32 * n),
-        }
+        self.amd.sub_rsp(align_stack(self.reg_size() * cap + 8) - 8);
     }
 
     #[cfg(target_family = "unix")]
-    fn epilogue(&mut self, n: u32) {
+    fn epilogue(&mut self, cap: u32) {
         self.vzeroupper();
-        match self.family {
-            AmdFamily::AvxScalar | AmdFamily::SSEScalar => self.amd.add_rsp(8 * n),
-            AmdFamily::AvxVector => self.amd.add_rsp(32 * n),
-        }
-
+        self.amd.add_rsp(align_stack(self.reg_size() * cap + 8) - 8);
         self.amd.pop(Amd::RBX);
         self.amd.pop(Amd::RBP);
         self.amd.ret();
@@ -567,15 +556,11 @@ impl Generator for AmdGenerator {
     }
 
     #[cfg(target_family = "windows")]
-    fn epilogue(&mut self, n: u32) {
+    fn epilogue(&mut self, cap: u32) {
         self.vzeroupper();
-        match self.family {
-            AmdFamily::AvxScalar | AmdFamily::SSEScalar => self.amd.add_rsp(8 * n),
-            AmdFamily::AvxVector => self.amd.add_rsp(32 * n),
-        }
-
-        self.amd.mov(Amd::RBX, Amd::RSP, 0x10);
-        self.amd.mov(Amd::RBP, Amd::RSP, 0x08);
+        self.amd.add_rsp(align_stack(self.reg_size() * cap + 8) - 8);
+        self.amd.mov_reg_mem(Amd::RBX, Amd::RSP, 0x10);
+        self.amd.mov_reg_mem(Amd::RBP, Amd::RSP, 0x08);
         self.amd.ret();
         self.predefined_consts();
     }

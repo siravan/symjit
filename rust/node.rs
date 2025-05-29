@@ -46,10 +46,7 @@ impl Node {
     }
 
     pub fn create_const(val: f64, idx: u32) -> Node {
-        Node::Const {
-            val,
-            idx,
-        }
+        Node::Const { val, idx }
     }
 
     pub fn create_var(name: &str, sym: Rc<RefCell<Symbol>>) -> Node {
@@ -77,19 +74,21 @@ impl Node {
         }
     }
 
-    /// postorder_forward does a forward postorder traversal of the 
-    /// expression tree and call f at each node. 
+    /// postorder_forward does a forward postorder traversal of the
+    /// expression tree and call f at each node.
     /// Nodes are visited in the same order used to generate code.
     /// Note the twist in the middle. The decision to traverse left
     /// or right link depends on ershov number of each link.
     fn postorder_forward(&mut self, f: fn(&mut Node)) {
         match self {
-            Node::Void | Node::Const {..} | Node::Var{..} => { f(self); },
-            Node::Unary {arg,..} => {
+            Node::Void | Node::Const { .. } | Node::Var { .. } => {
+                f(self);
+            }
+            Node::Unary { arg, .. } => {
                 arg.postorder_forward(f);
                 f(self);
-            },
-            Node::Binary {left, right, ..} => {            
+            }
+            Node::Binary { left, right, .. } => {
                 let el = left.ershov_number();
                 let er = right.ershov_number();
 
@@ -100,38 +99,40 @@ impl Node {
                     right.postorder_forward(f);
                     left.postorder_forward(f);
                 };
-                
+
                 f(self);
-            }                
+            }
         }
     }
-    
-    /// postorder_backward does a backward postorder traversal of the 
+
+    /// postorder_backward does a backward postorder traversal of the
     /// expression tree and call f at each node.
     /// Nodes are visited in the same reverse order used to generate code.
     /// Note the twist in the middle. The decision to traverse left
     /// or right link depends on ershov number of each link.
     fn postorder_backward(&mut self, f: fn(&mut Node)) {
         match self {
-            Node::Void | Node::Const {..} | Node::Var{..} => { f(self); },
-            Node::Unary {arg,..} => {
+            Node::Void | Node::Const { .. } | Node::Var { .. } => {
+                f(self);
+            }
+            Node::Unary { arg, .. } => {
                 arg.postorder_forward(f);
                 f(self);
-            },
-            Node::Binary {left, right, ..} => {            
+            }
+            Node::Binary { left, right, .. } => {
                 let el = left.ershov_number();
                 let er = right.ershov_number();
 
                 if el >= er {
                     right.postorder_forward(f);
-                    left.postorder_forward(f);                    
+                    left.postorder_forward(f);
                 } else {
                     left.postorder_forward(f);
-                    right.postorder_forward(f);                    
+                    right.postorder_forward(f);
                 };
-                
+
                 f(self);
-            }                
+            }
         }
     }
 
@@ -144,11 +145,11 @@ impl Node {
             Node::Unary { ershov, .. } | Node::Binary { ershov, .. } => *ershov,
         }
     }
-    
-    fn ershov_func(&mut self)  {
+
+    fn ershov_func(&mut self) {
         match self {
-            Node::Unary {arg, ershov, ..} => {
-                *ershov = arg.ershov_number();                
+            Node::Unary { arg, ershov, .. } => {
+                *ershov = arg.ershov_number();
             }
             Node::Binary {
                 left,
@@ -160,14 +161,14 @@ impl Node {
                 let r = right.ershov_number();
                 let e = if l == r { l + 1 } else { l.max(r) };
                 *ershov = e;
-            },
+            }
             _ => {}
         }
     }
 
     /// Finds and marks the first usage of each Var    
     fn mark_first(&mut self) {
-        if let Node::Var { sym, status, ..} = self {
+        if let Node::Var { sym, status, .. } = self {
             let mut sym = sym.borrow_mut();
 
             if !sym.visited {
@@ -175,21 +176,21 @@ impl Node {
                 *status = VarStatus::First;
             } else {
                 *status = VarStatus::Mid;
-            }            
+            }
         }
     }
 
     /// Finds and marks the last usage of each Var
     fn mark_last(&mut self) {
-        if let Node::Var {sym, status, ..} = self {
+        if let Node::Var { sym, status, .. } = self {
             let mut sym = sym.borrow_mut();
-            
+
             if sym.visited {
                 sym.visited = false;
                 *status = match status {
                     VarStatus::First => VarStatus::Singular,
                     _ => VarStatus::Last,
-                }                
+                }
             }
         }
     }
@@ -199,7 +200,7 @@ impl Node {
     pub fn compile_tree(&mut self, ir: &mut dyn Generator) -> u8 {
         self.postorder_forward(Self::ershov_func);
         self.postorder_forward(Self::mark_first);
-        self.postorder_backward(Self::mark_last);        
+        self.postorder_backward(Self::mark_last);
 
         let n = ir.count_shadows();
         let f = ir.first_shadow();
@@ -208,8 +209,12 @@ impl Node {
         // we check ir.three_address() because AmdGenerator::shrink may swap
         // registers when generating code for SSE (two-address code).
         // This check may not be actually necessary, but we need to prove its
-        // correctness first. 
-        let cache_size = if ir.three_address() && n > e { n - e } else { 0 };
+        // correctness first.
+        let cache_size = if ir.three_address() && n > e {
+            n - e
+        } else {
+            0
+        };
         let mut pool: Vec<u8> = (f + n - cache_size..f + n).collect();
 
         // println!("{:#?}", &self);
@@ -246,12 +251,12 @@ impl Node {
     }
 
     /// Loaded and cache variables in Mem and Stack
-    /// The basic logic is 
-    ///     1. At the encounter with a variable, load it into a temporary (cache) register 
+    /// The basic logic is
+    ///     1. At the encounter with a variable, load it into a temporary (cache) register
     ///     2. During the subsequent encounters, use the value in the register
-    ///     3. After the last encounter, return the register to the pool of available registers 
+    ///     3. After the last encounter, return the register to the pool of available registers
     fn compile_var(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> u8 {
-        if let Node::Var {sym, status, ..} = &self {
+        if let Node::Var { sym, status, .. } = &self {
             let mut sym = sym.borrow_mut();
 
             match status {
@@ -290,7 +295,7 @@ impl Node {
                     }
                 }
                 VarStatus::Singular | VarStatus::Unknown => {
-                    // if a variable is Singular, i.e., is used only once, don't 
+                    // if a variable is Singular, i.e., is used only once, don't
                     // bother with caching
                     let dst = ir.first_shadow() + base;
                     Self::load_var(ir, dst, &sym.loc)

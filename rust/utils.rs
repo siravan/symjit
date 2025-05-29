@@ -11,6 +11,11 @@ pub trait Eval {
     fn eval(&self, mem: &mut [f64], stack: &mut [f64]) -> f64;
 }
 
+/// aligns at a multiple of 32 (to cover different ABIs)
+pub fn align_stack(n: u32) -> u32 {
+    n + 16 - (n & 15)
+}
+
 /*****************************************/
 
 #[cfg(target_arch = "x86_64")]

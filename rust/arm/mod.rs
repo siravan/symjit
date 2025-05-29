@@ -4,6 +4,7 @@ mod macros;
 use crate::assembler::Assembler;
 use crate::code::BinaryFunc;
 use crate::generator::Generator;
+use crate::utils::align_stack;
 
 pub struct ArmGenerator {
     a: Assembler,
@@ -21,7 +22,7 @@ impl ArmGenerator {
     fn emit(&mut self, w: u32) {
         self.a.append_word(w);
     }
-    
+
     fn flush(&mut self, dst: u8) {
         if dst != 0 {
             return;
@@ -51,7 +52,7 @@ impl Generator for ArmGenerator {
     fn a(&mut self) -> &mut Assembler {
         &mut self.a
     }
-    
+
     fn three_address(&self) -> bool {
         true
     }
@@ -65,7 +66,7 @@ impl Generator for ArmGenerator {
     fn fxchg(&mut self, a: u8, b: u8) {
         self.flush(a);
         self.flush(b);
-        
+
         self.emit(arm! {eor v(a).8b, v(a).8b, v(b).8b});
         self.emit(arm! {eor v(b).8b, v(a).8b, v(b).8b});
         self.emit(arm! {eor v(a).8b, v(a).8b, v(b).8b});
@@ -213,7 +214,7 @@ impl Generator for ArmGenerator {
         self.emit(arm! {not v(dst).8b, v(r).8b});
     }
 
-    fn call(&mut self, label: &str, num_args: usize) {    
+    fn call(&mut self, label: &str, num_args: usize) {
         self.jump(label, arm! {ldr x(0), label});
         self.emit(arm! {blr x(0)});
     }
@@ -228,16 +229,20 @@ impl Generator for ArmGenerator {
         self.andnot(dst, cond, a);
     }
 
-    fn prologue(&mut self, n: u32) {
+    fn prologue(&mut self, cap: u32) {
+        let stack_size = align_stack(self.reg_size() * cap);
+
         self.emit(arm! {sub sp, sp, #16});
         self.emit(arm! {str lr, [sp, #0]});
         self.emit(arm! {str x(19), [sp, #8]});
-        self.emit(arm! {sub sp, sp, #8*n});
+        self.emit(arm! {sub sp, sp, #stack_size});
         self.emit(arm! {mov x(19), x(0)});
     }
 
-    fn epilogue(&mut self, n: u32) {
-        self.emit(arm! {add sp, sp, #8*n});
+    fn epilogue(&mut self, cap: u32) {
+        let stack_size = align_stack(self.reg_size() * cap);
+
+        self.emit(arm! {add sp, sp, #stack_size});
         self.emit(arm! {ldr x(19), [sp, #8]});
         self.emit(arm! {ldr lr, [sp, #0]});
         self.emit(arm! {add sp, sp, #16});
