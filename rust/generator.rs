@@ -59,6 +59,7 @@ pub trait Generator {
     fn square(&mut self, dst: u8, r: u8);
     fn cube(&mut self, dst: u8, r: u8);
     fn recip(&mut self, dst: u8, r: u8);
+    fn powi(&mut self, dst: u8, r: u8, n: i32);
 
     fn plus(&mut self, dst: u8, a: u8, b: u8);
     fn minus(&mut self, dst: u8, a: u8, b: u8);

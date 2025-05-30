@@ -31,6 +31,7 @@ pub enum Node {
         op: String,
         arg: Box<Node>,
         ershov: u8,
+        power: i32,
     },
     Binary {
         op: String,
@@ -62,6 +63,16 @@ impl Node {
             op: op.to_string(),
             arg: Box::new(arg),
             ershov: 0,
+            power: 0,
+        }
+    }
+    
+    pub fn create_powi(arg: Node, power: i32) -> Node {
+        Node::Unary {
+            op: "_powi_".to_string(),
+            arg: Box::new(arg),
+            ershov: 0,
+            power,
         }
     }
 
@@ -307,7 +318,7 @@ impl Node {
     }
 
     fn compile_unary(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> u8 {
-        if let Node::Unary { op, arg, .. } = self {
+        if let Node::Unary {op, arg, power, ..} = self {
             let mut dst = ir.first_shadow() + base + self.ershov_number() - 1;
             let r = arg.compile(ir, base, pool);
 
@@ -319,6 +330,7 @@ impl Node {
                 "square" => ir.square(dst, r),
                 "cube" => ir.cube(dst, r),
                 "recip" => ir.recip(dst, r),
+                "_powi_" => ir.powi(dst, r, *power),
                 "_call_" => {
                     if r != 0 {
                         ir.fmov(0, r);
@@ -442,6 +454,26 @@ impl Node {
         };
         false
     }
+    
+    pub fn as_const(&self) -> Option<f64> {
+        if let Node::Const {val, ..} = self {
+            Some(*val)
+        } else {
+            None
+        }
+    }
+    
+    pub fn as_int_const(&self) -> Option<i32> {
+        if let Node::Const {val, ..} = self {
+            if val.round() == *val && val.abs() < 16384.0 {
+                Some(*val as i32)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
 
     pub fn is_binary(&self, op_: &str) -> bool {
         if let Node::Binary { op, .. } = self {
@@ -478,7 +510,7 @@ impl Eval for Node {
                 Loc::Stack(idx) => stack[idx as usize],
                 Loc::Mem(idx) => mem[idx as usize],
             },
-            Node::Unary { op, arg, .. } => {
+            Node::Unary {op, arg, power, ..} => {
                 let x = arg.eval(mem, stack);
 
                 match op.as_str() {
@@ -489,6 +521,7 @@ impl Eval for Node {
                     "square" => x * x,
                     "cube" => x * x * x,
                     "recip" => 1.0 / x,
+                    "_powi_" => x.powi(*power),
                     "_call_" => {
                         stack[0] = x;
                         x

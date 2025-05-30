@@ -289,6 +289,36 @@ impl Generator for AmdGenerator {
         self.times(1, r, r);
         self.times(dst, r, 1);
     }
+    
+    fn powi(&mut self, dst: u8, r: u8, n: i32) {        
+        if n == 0 {
+            self.load_const(dst, "_one_");
+        } else if n > 0 {
+            let t = n.trailing_zeros();
+            
+            if n.count_ones() == 1 {
+                self.fmov(dst, r);                
+            } else {
+                self.fmov(1, r);        
+                let mut n = n >> (t+1);            
+            
+                while n > 0 {
+                    self.times(1, 1, 1);
+                    if n & 1 != 0 {
+                        self.times(dst, dst, 1);
+                    };
+                    n = n >> 1;
+                }
+            }
+            
+            for _ in 0..t {
+                self.times(dst, dst, dst);
+            }
+        } else {
+            self.powi(dst, r, -n);
+            self.recip(dst, dst);
+        }
+    }
 
     fn recip(&mut self, dst: u8, r: u8) {
         self.flush(dst);

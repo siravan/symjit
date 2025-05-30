@@ -58,29 +58,38 @@ impl Builder {
 
     pub fn add_call_binary(&mut self, op: &str, left: Node, right: Node) -> Result<Node> {
         if op == "power" {
-            if right.is_const(0.0) {
-                return self.create_const(1.0);
-            } else if right.is_const(1.0) {
-                return Ok(left);
-            } else if right.is_const(2.0) {
-                return self.create_unary("square", left);
-            } else if right.is_const(3.0) {
-                return self.create_unary("cube", left);
-            } else if right.is_const(0.5) {
-                return self.create_unary("root", left);
-            } else if right.is_const(1.5) {
-                let arg = self.create_unary("cube", left)?;
-                return self.create_unary("root", arg);
-            } else if right.is_const(-1.0) {
-                return self.create_unary("recip", left);
-            } else if right.is_const(-2.0) {
-                let arg = self.create_unary("square", left)?;
-                return self.create_unary("recip", arg);
-            } else if right.is_const(-3.0) {
-                let arg = self.create_unary("cube", left)?;
-                return self.create_unary("recip", arg);
+            if let Some(val) = right.as_int_const() {
+                match val {
+                    0 => return self.create_const(1.0),
+                    1 => return Ok(left),
+                    2 => return self.create_unary("square", left),
+                    3 => return self.create_unary("cube", left),
+                    -1 => return self.create_unary("recip", left),
+                    -2 => {
+                        let arg = self.create_unary("square", left)?;
+                        return self.create_unary("recip", arg);
+                    },
+                    -3 => {
+                        let arg = self.create_unary("cube", left)?;
+                        return self.create_unary("recip", arg);
+                    },
+                    _ => {
+                        return self.create_powi(left, val);
+                    }
+                }
+            };
+            
+            if let Some(val) = right.as_const() {
+                match val {
+                    0.5 => return self.create_unary("root", left),
+                    1.5 => {
+                        let arg = self.create_unary("cube", left)?;
+                        return self.create_unary("root", arg);
+                    },
+                    _ => {}
+                }
             }
-        }
+        }            
 
         let arg = self.create_binary("_call_", left, right)?;
         let lhs = self.add_tmp();
@@ -120,6 +129,10 @@ impl Builder {
 
     pub fn create_unary(&mut self, op: &str, arg: Node) -> Result<Node> {
         Ok(Node::create_unary(op, arg))
+    }
+    
+    pub fn create_powi(&mut self, arg: Node, power: i32) -> Result<Node> {
+        Ok(Node::create_powi(arg, power))
     }
 
     pub fn create_binary(&mut self, op: &str, left: Node, right: Node) -> Result<Node> {
