@@ -330,6 +330,10 @@ impl Node {
                 "square" => ir.square(dst, r),
                 "cube" => ir.cube(dst, r),
                 "recip" => ir.recip(dst, r),
+                "round" => ir.round(dst, r),
+                "floor" => ir.floor(dst, r),
+                "ceiling" => ir.ceiling(dst, r),
+                "trunc" => ir.trunc(dst, r),
                 "_powi_" => ir.powi(dst, r, *power),
                 "_call_" => {
                     if r != 0 {
@@ -358,6 +362,7 @@ impl Node {
                 "minus" => ir.minus(dst, l, r),
                 "times" => ir.times(dst, l, r),
                 "divide" => ir.divide(dst, l, r),
+                "rem" => ir.fmod(dst, l, r),
                 "gt" => ir.gt(dst, l, r),
                 "geq" => ir.geq(dst, l, r),
                 "lt" => ir.lt(dst, l, r),

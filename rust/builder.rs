@@ -32,12 +32,15 @@ impl Builder {
             ft: HashSet::new(),
             // the list of intrinsic unary ops, i.e., operations that can be implemented directly in
             // machine code
-            intrinsic_unary: vec!["neq", "abs", "not", "root", "square", "cube", "recip"],
+            intrinsic_unary: vec![
+                "neq", "abs", "not", "root", "square", "cube", "recip", "round", "floor",
+                "ceiling", "trunc",
+            ],
             // the list of intrinsic binary ops, i.e., operations that can be implemented directly in
             // machine code
             intrinsic_binary: vec![
                 "plus", "minus", "neg", "times", "divide", "gt", "geq", "lt", "leq", "eq", "neq",
-                "and", "or", "xor", "if_pos", "if_neg",
+                "and", "or", "xor", "if_pos", "if_neg", "rem",
             ],
         }
     }

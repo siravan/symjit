@@ -1,10 +1,10 @@
 use crate::assembler::Assembler;
 use crate::code::BinaryFunc;
-use crate::generator::Generator;
+use crate::generator::{fmod, powi, Generator};
 use crate::utils::align_stack;
 
 mod asm;
-use asm::Amd;
+use asm::{Amd, RoundingMode};
 
 pub enum AmdFamily {
     AvxScalar,
@@ -280,42 +280,18 @@ impl Generator for AmdGenerator {
     }
 
     fn square(&mut self, dst: u8, r: u8) {
-        self.flush(dst);
-        self.times(dst, r, r);
+        powi(self, dst, r, 2);
     }
 
     fn cube(&mut self, dst: u8, r: u8) {
-        self.flush(dst);
-        self.times(1, r, r);
-        self.times(dst, r, 1);
+        powi(self, dst, r, 3);
     }
 
     fn powi(&mut self, dst: u8, r: u8, n: i32) {
         if n == 0 {
             self.load_const(dst, "_one_");
-        } else if n > 0 {
-            let t = n.trailing_zeros();
-            let mut s = r;
-            let mut n = n >> (t + 1);
-
-            self.fmov(dst, s);
-
-            while n > 0 {
-                self.times(1, s, s);
-                s = 1;
-
-                if n & 1 != 0 {
-                    self.times(dst, dst, 1);
-                };
-                n = n >> 1;
-            }
-
-            for _ in 0..t {
-                self.times(dst, dst, dst);
-            }
         } else {
-            self.powi(dst, r, -n);
-            self.recip(dst, dst);
+            powi(self, dst, r, n);
         }
     }
 
@@ -323,6 +299,50 @@ impl Generator for AmdGenerator {
         self.flush(dst);
         self.load_const(1, "_one_");
         self.divide(dst, 1, r);
+    }
+
+    fn round(&mut self, dst: u8, r: u8) {
+        self.flush(dst);
+
+        match self.family {
+            AmdFamily::AvxScalar => self.amd.vroundsd(dst, r, RoundingMode::Round),
+            AmdFamily::AvxVector => self.amd.vroundpd(dst, r, RoundingMode::Round),
+            AmdFamily::SSEScalar => self.amd.roundsd(dst, r, RoundingMode::Round),
+        }
+    }
+
+    fn floor(&mut self, dst: u8, r: u8) {
+        self.flush(dst);
+
+        match self.family {
+            AmdFamily::AvxScalar => self.amd.vroundsd(dst, r, RoundingMode::Floor),
+            AmdFamily::AvxVector => self.amd.vroundpd(dst, r, RoundingMode::Floor),
+            AmdFamily::SSEScalar => self.amd.roundsd(dst, r, RoundingMode::Floor),
+        }
+    }
+
+    fn ceiling(&mut self, dst: u8, r: u8) {
+        self.flush(dst);
+
+        match self.family {
+            AmdFamily::AvxScalar => self.amd.vroundsd(dst, r, RoundingMode::Ceiling),
+            AmdFamily::AvxVector => self.amd.vroundpd(dst, r, RoundingMode::Ceiling),
+            AmdFamily::SSEScalar => self.amd.roundsd(dst, r, RoundingMode::Ceiling),
+        }
+    }
+
+    fn trunc(&mut self, dst: u8, r: u8) {
+        self.flush(dst);
+
+        match self.family {
+            AmdFamily::AvxScalar => self.amd.vroundsd(dst, r, RoundingMode::Trunc),
+            AmdFamily::AvxVector => self.amd.vroundpd(dst, r, RoundingMode::Trunc),
+            AmdFamily::SSEScalar => self.amd.roundsd(dst, r, RoundingMode::Trunc),
+        }
+    }
+
+    fn fmod(&mut self, dst: u8, a: u8, b: u8) {
+        fmod(self, dst, a, b);
     }
 
     fn plus(&mut self, dst: u8, a: u8, b: u8) {

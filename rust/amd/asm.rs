@@ -1,5 +1,12 @@
 use crate::assembler::Assembler;
 
+pub enum RoundingMode {
+    Round,
+    Floor,
+    Ceiling,
+    Trunc,
+}
+
 pub struct Amd {
     pub a: Assembler,
 }
@@ -205,6 +212,18 @@ impl Amd {
         self.modrm_reg(reg, rm);
     }
 
+    pub fn vroundsd(&mut self, reg: u8, rm: u8, mode: RoundingMode) {
+        self.vex3pd(reg, reg, rm, 3);
+        self.append_byte(0x0b);
+        self.modrm_reg(reg, rm);
+        self.append_byte(match mode {
+            RoundingMode::Round => 0,
+            RoundingMode::Floor => 1,
+            RoundingMode::Ceiling => 2,
+            RoundingMode::Trunc => 3,
+        });
+    }
+
     pub fn vcmpeqsd(&mut self, reg: u8, vreg: u8, rm: u8) {
         self.vex_sd(reg, vreg, rm);
         self.append_byte(0xc2);
@@ -330,6 +349,18 @@ impl Amd {
         self.vex_pd(reg, 0, rm);
         self.append_byte(0x51);
         self.modrm_reg(reg, rm);
+    }
+
+    pub fn vroundpd(&mut self, reg: u8, rm: u8, mode: RoundingMode) {
+        self.vex3pd(reg, 0, rm, 3);
+        self.append_byte(0x09);
+        self.modrm_reg(reg, rm);
+        self.append_byte(match mode {
+            RoundingMode::Round => 0,
+            RoundingMode::Floor => 1,
+            RoundingMode::Ceiling => 2,
+            RoundingMode::Trunc => 3,
+        });
     }
 
     pub fn vandpd(&mut self, reg: u8, vreg: u8, rm: u8) {
@@ -467,6 +498,18 @@ impl Amd {
         self.sse_sd(reg, rm);
         self.append_byte(0x51);
         self.modrm_reg(reg, rm);
+    }
+
+    pub fn roundsd(&mut self, reg: u8, rm: u8, mode: RoundingMode) {
+        self.sse_pd(reg, rm);
+        self.append_bytes(&[0x3a, 0x0b]);
+        self.modrm_reg(reg, rm);
+        self.append_byte(match mode {
+            RoundingMode::Round => 0,
+            RoundingMode::Floor => 1,
+            RoundingMode::Ceiling => 2,
+            RoundingMode::Trunc => 3,
+        });
     }
 
     pub fn cmpeqsd(&mut self, reg: u8, rm: u8) {
@@ -684,54 +727,3 @@ impl Amd {
         self.append_byte(0x90);
     }
 }
-
-/*
-class AmdSysVStack:
-    pub fn __init__(&mut self, mem):
-        self.mem = mem
-        # shadows are XMM/YMM registers that shadow the stack slots
-        self.first_shadow = 2
-        self.count_shadows = 14
-        self.count_simd_args = 8
-
-    pub fn offset(&mut self, idx):
-        ns = self.mem.count_states
-
-        if idx < ns:
-            if idx < 8:
-                return 8 * (-(1 + idx))
-            else:
-                return 8 * (idx - 6)
-        else:
-            return 8 * (-(1 + idx - max(0, ns - 8)))
-
-    pub fn frame_size(self):
-        # cap = self.mem.stack_size + min(self.mem.count_states, 8) + self.mem.count_obs
-        cap = min(self.mem.count_states, 8) + self.mem.count_obs + self.mem.COUNT_SPILLS
-        pad = cap & 1
-        return 8 * (cap + pad)
-
-
-class AmdWindowsStack:
-    pub fn __init__(&mut self, mem):
-        self.mem = mem
-        # shadows are XMM/YMM registers that shadow the stack slots
-        self.first_shadow = 2  # XMM2-XMM5
-        self.count_shadows = 4
-        self.count_simd_args = 4
-
-    pub fn offset(&mut self, idx):
-        ns = self.mem.count_states
-
-        if idx < ns:
-            return 8 * (idx + 2)
-        else:
-            return 8 * (-(1 + idx - ns))
-
-    pub fn frame_size(self):
-        # cap = self.mem.stack_size + self.mem.count_obs
-        cap = self.mem.count_obs + self.mem.COUNT_SPILLS
-        pad = cap & 1
-        return 8 * (cap + pad)
-
-*/

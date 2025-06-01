@@ -369,8 +369,8 @@ pub unsafe extern "C" fn dump(
     name: *const c_char,
     what: *const c_char,
 ) -> bool {
-    let q: &CompilerResult = unsafe { &*q };
-    if let Some(func) = &q.func {
+    let q: &mut CompilerResult = unsafe { &mut *q };
+    if let Some(func) = &mut q.func {
         let name = unsafe { CStr::from_ptr(name).to_str().unwrap() };
         let what = unsafe { CStr::from_ptr(what).to_str().unwrap() };
         func.dump(name, what)

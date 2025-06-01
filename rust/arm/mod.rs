@@ -3,7 +3,7 @@ mod macros;
 
 use crate::assembler::Assembler;
 use crate::code::BinaryFunc;
-use crate::generator::Generator;
+use crate::generator::{fmod, powi, Generator};
 use crate::utils::align_stack;
 
 pub struct ArmGenerator {
@@ -121,14 +121,11 @@ impl Generator for ArmGenerator {
     }
 
     fn square(&mut self, dst: u8, r: u8) {
-        self.flush(dst);
-        self.emit(arm! {fmul d(dst), d(r), d(r)});
+        powi(self, dst, r, 2);
     }
 
     fn cube(&mut self, dst: u8, r: u8) {
-        self.flush(dst);
-        self.emit(arm! {fmul d(1), d(r), d(r)});
-        self.emit(arm! {fmul d(dst), d(r), d(1)});
+        powi(self, dst, r, 3);
     }
 
     fn recip(&mut self, dst: u8, r: u8) {
@@ -140,30 +137,36 @@ impl Generator for ArmGenerator {
     fn powi(&mut self, dst: u8, r: u8, n: i32) {
         if n == 0 {
             self.emit(arm! {fmov d(dst), #1.0});
-        } else if n > 0 {
-            let t = n.trailing_zeros();
-            let mut s = r;
-            let mut n = n >> (t + 1);
-
-            self.fmov(dst, s);
-
-            while n > 0 {
-                self.times(1, s, s);
-                s = 1;
-
-                if n & 1 != 0 {
-                    self.times(dst, dst, 1);
-                };
-                n = n >> 1;
-            }
-
-            for _ in 0..t {
-                self.times(dst, dst, dst);
-            }
         } else {
-            self.powi(dst, r, -n);
-            self.recip(dst, dst);
+            powi(self, dst, r, n);
         }
+    }
+
+    fn round(&mut self, dst: u8, r: u8) {
+        self.flush(dst);
+        self.emit(arm! {frinti d(dst), d(r)});
+    }
+
+    fn floor(&mut self, dst: u8, r: u8) {
+        self.flush(dst);
+        self.emit(arm! {frintm d(dst), d(r)});
+    }
+
+    fn ceiling(&mut self, dst: u8, r: u8) {
+        self.flush(dst);
+        self.emit(arm! {frintp d(dst), d(r)});
+    }
+
+    fn trunc(&mut self, dst: u8, r: u8) {
+        self.flush(dst);
+        self.emit(arm! {frintz d(dst), d(r)});
+    }
+
+    fn fmod(&mut self, dst: u8, a: u8, b: u8) {
+        self.divide(1, a, b);
+        self.floor(1, 1);
+        self.times(1, 1, b);
+        self.minus(dst, a, 1);
     }
 
     fn plus(&mut self, dst: u8, a: u8, b: u8) {

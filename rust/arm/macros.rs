@@ -164,6 +164,27 @@ macro_rules! arm {
         0x1e60c000 | rd!($rd) | rn!($rn)
     };
 
+    // round double to integral (double-coded integer)
+    (frinti d($rd:expr), d($rn:expr)) => {
+        0x1e67c000 | rd!($rd) | rn!($rn)
+    };
+
+    // floor (round toward minus inf) double to integral (double-coded integer)
+    (frintm d($rd:expr), d($rn:expr)) => {
+        0x1e654000 | rd!($rd) | rn!($rn)
+    };
+
+    // ceiling (round toward positive inf) double to integral (double-coded integer)
+    (frintp d($rd:expr), d($rn:expr)) => {
+        0x1e64c000 | rd!($rd) | rn!($rn)
+    };
+
+    // trunc (round toward zero) double to integral (double-coded integer)
+    (frintz d($rd:expr), d($rn:expr)) => {
+        0x1e65c000 | rd!($rd) | rn!($rn)
+    };
+
+
     // logical ops
     (and v($rd:expr).8b, v($rn:expr).8b, v($rm:expr).8b) => {
         0x0e201c00 | rd!($rd) | rn!($rn) | rm!($rm)

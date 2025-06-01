@@ -61,6 +61,12 @@ pub trait Generator {
     fn recip(&mut self, dst: u8, r: u8);
     fn powi(&mut self, dst: u8, r: u8, n: i32);
 
+    fn round(&mut self, dst: u8, r: u8);
+    fn floor(&mut self, dst: u8, r: u8);
+    fn ceiling(&mut self, dst: u8, r: u8);
+    fn trunc(&mut self, dst: u8, r: u8);
+    fn fmod(&mut self, dst: u8, a: u8, b: u8);
+
     fn plus(&mut self, dst: u8, a: u8, b: u8);
     fn minus(&mut self, dst: u8, a: u8, b: u8);
     fn times(&mut self, dst: u8, a: u8, b: u8);
@@ -85,4 +91,41 @@ pub trait Generator {
 
     fn prologue(&mut self, n: u32);
     fn epilogue(&mut self, n: u32);
+}
+
+pub fn powi<T: Generator>(g: &mut T, dst: u8, r: u8, n: i32) {
+    if n == 0 {
+        g.divide(dst, dst, dst); // this is a generic way to make 1, but should be
+                                 // overrided by the calling Generator for efficiency
+    } else if n > 0 {
+        let t = n.trailing_zeros();
+        let mut s = r;
+        let mut n = n >> (t + 1);
+
+        g.fmov(dst, s);
+
+        while n > 0 {
+            g.times(1, s, s);
+            s = 1;
+
+            if n & 1 != 0 {
+                g.times(dst, dst, 1);
+            };
+            n = n >> 1;
+        }
+
+        for _ in 0..t {
+            g.times(dst, dst, dst);
+        }
+    } else {
+        powi(g, dst, r, -n);
+        g.recip(dst, dst);
+    }
+}
+
+pub fn fmod<T: Generator>(g: &mut T, dst: u8, a: u8, b: u8) {
+    g.divide(1, a, b);
+    g.floor(1, 1);
+    g.times(1, 1, b);
+    g.minus(dst, a, 1);
 }

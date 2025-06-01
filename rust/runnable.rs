@@ -173,12 +173,16 @@ impl Runnable {
         self.compiled.exec();
     }
 
-    pub fn exec_vectorized(&mut self, buf: &mut [f64], n: usize) {
+    fn prepare_simd(&mut self) {
         // SIMD compilation is lazy!
         if self.compiled_simd.is_none() && self.use_simd {
             let size = self.first_diff + self.prog.count_diffs + 1;
             self.compiled_simd = Some(Self::compile_simd(&mut self.prog, size));
         };
+    }
+
+    pub fn exec_vectorized(&mut self, buf: &mut [f64], n: usize) {
+        self.prepare_simd();
 
         if self.compiled_simd.is_none() {
             self.exec_vectorized_scalar(buf, n);
@@ -292,13 +296,15 @@ impl Runnable {
         }
     }
 
-    pub fn dump(&self, name: &str, what: &str) -> bool {
+    pub fn dump(&mut self, name: &str, what: &str) -> bool {
         match what {
             "scalar" => {
                 self.compiled.dump(name);
                 true
             }
             "simd" => {
+                self.prepare_simd();
+
                 if let Some(f) = &self.compiled_simd {
                     f.dump(name);
                     true
