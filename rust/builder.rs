@@ -68,28 +68,28 @@ impl Builder {
                     -2 => {
                         let arg = self.create_unary("square", left)?;
                         return self.create_unary("recip", arg);
-                    },
+                    }
                     -3 => {
                         let arg = self.create_unary("cube", left)?;
                         return self.create_unary("recip", arg);
-                    },
+                    }
                     _ => {
                         return self.create_powi(left, val);
                     }
                 }
             };
-            
+
             if let Some(val) = right.as_const() {
                 match val {
                     0.5 => return self.create_unary("root", left),
                     1.5 => {
                         let arg = self.create_unary("cube", left)?;
                         return self.create_unary("root", arg);
-                    },
+                    }
                     _ => {}
                 }
             }
-        }            
+        }
 
         let arg = self.create_binary("_call_", left, right)?;
         let lhs = self.add_tmp();
@@ -130,7 +130,7 @@ impl Builder {
     pub fn create_unary(&mut self, op: &str, arg: Node) -> Result<Node> {
         Ok(Node::create_unary(op, arg))
     }
-    
+
     pub fn create_powi(&mut self, arg: Node, power: i32) -> Result<Node> {
         Ok(Node::create_powi(arg, power))
     }

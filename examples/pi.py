@@ -1,10 +1,10 @@
 import math
-from sympy import symbols
+from sympy import symbols, lambdify
 from symjit import compile_func
 
 # calculating pi using Machine formula
 
-N = 25
+N = 4
 
 def arctan_series(x):
     s = x
@@ -19,6 +19,9 @@ def arctan_series(x):
 x, y = symbols('x y')
 p = 4 * (4 * arctan_series(x) - arctan_series(y))
 print(p)
-f = compile_func([x, y], p)
-print(f(1/5, 1/239)[0], '?=', math.pi)
+
+f = compile_func([x, y], p, ty='amd-avx')
+g = lambdify([x, y], p)
+
+print(f(1/5, 1/239)[0], '?=', g(1/5, 1/239), '; pi = ', math.pi)
 # print(f.dumps())

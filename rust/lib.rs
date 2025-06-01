@@ -101,6 +101,8 @@ pub unsafe extern "C" fn compile(
         "bytecode" => Some(Runnable::new(prog, CompilerType::ByteCode, use_simd)),
         "arm" => Some(Runnable::new(prog, CompilerType::Arm, use_simd)),
         "amd" => Some(Runnable::new(prog, CompilerType::Amd, use_simd)),
+        "amd-avx" => Some(Runnable::new(prog, CompilerType::AmdAVX, use_simd)),
+        "amd-sse" => Some(Runnable::new(prog, CompilerType::AmdSSE, use_simd)),
         "native" => Some(Runnable::new(prog, CompilerType::Native, use_simd)),
         _ => None,
     };

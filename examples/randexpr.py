@@ -77,12 +77,12 @@ for i in range(100):
         b = False
         for i in range(3):
             f = compile_func([x, y, z], [q], backend=backend)
-            g = lambdify([x, y, z], [q])
+            g = lambdify([x, y, z], q)
 
             F = f(X[i], Y[i], Z[i])
             G = g(X[i], Y[i], Z[i])
 
-            if float(F[0]) - float(G[0]) < 1e-10:
+            if float(F) - float(G) < 1e-10:
                 b = True
                 break
         if b:

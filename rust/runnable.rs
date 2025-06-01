@@ -12,6 +12,8 @@ pub enum CompilerType {
     ByteCode,
     Native,
     Amd,
+    AmdAVX,
+    AmdSSE,
     Arm,
 }
 
@@ -90,10 +92,14 @@ impl Runnable {
                     Self::compile_sse(&mut prog, size)
                 }
             }
+            CompilerType::AmdAVX => Self::compile_avx(&mut prog, size),
+            CompilerType::AmdSSE => Self::compile_sse(&mut prog, size),
             CompilerType::Arm => Self::compile_arm(&mut prog, size),
         };
 
-        let use_simd = use_simd && Platform::has_avx() && matches!(ty, CompilerType::Amd);
+        let use_simd = use_simd
+            && Platform::has_avx()
+            && (matches!(ty, CompilerType::Amd) | matches!(ty, CompilerType::AmdAVX));
 
         Runnable {
             prog,

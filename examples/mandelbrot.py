@@ -1,11 +1,11 @@
-import sys
+import util
+backend, ty, use_simd = util.process_argv()
+
 import time
 import numpy as np
 import matplotlib.pyplot as plt
 from sympy import symbols
 from symjit import compile_func
-
-backend = "python" if len(sys.argv) > 1 and sys.argv[1] == "py" else "rust"
 
 x, y, a, b = symbols("x y a b")
 
@@ -15,7 +15,7 @@ Y = np.zeros_like(A)
 
 t0 = time.time()
 
-f = compile_func([a, b, x, y], [x**2 - y**2 + a, 2 * x * y + b], backend=backend, use_simd=True)
+f = compile_func([a, b, x, y], [x**2 - y**2 + a, 2 * x * y + b], backend=backend, ty=ty, use_simd=use_simd)
 
 t1 = time.time()
 

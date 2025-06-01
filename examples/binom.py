@@ -1,3 +1,6 @@
+import util
+backend, ty, use_simd = util.process_argv()
+
 import math
 from sympy import symbols
 from symjit import compile_func
@@ -16,6 +19,6 @@ def binom(x, y, n, k):
         return binom(x, y, n - 1, k) * x + binom(x, y, n - 1, k - 1) * y
 
 x, y = symbols('x y')
-f = compile_func([x, y], binom(x, y, N, K))
+f = compile_func([x, y], binom(x, y, N, K), backend=backend, ty=ty)
 print(f(1, 1)[0], '?=', math.comb(N, K))
 # print(f.dumps())

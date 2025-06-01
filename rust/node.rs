@@ -66,7 +66,7 @@ impl Node {
             power: 0,
         }
     }
-    
+
     pub fn create_powi(arg: Node, power: i32) -> Node {
         Node::Unary {
             op: "_powi_".to_string(),
@@ -135,11 +135,11 @@ impl Node {
                 let er = right.ershov_number();
 
                 if el >= er {
-                    right.postorder_forward(f);
-                    left.postorder_forward(f);
+                    right.postorder_backward(f);
+                    left.postorder_backward(f);
                 } else {
-                    left.postorder_forward(f);
-                    right.postorder_forward(f);
+                    left.postorder_backward(f);
+                    right.postorder_backward(f);
                 };
 
                 f(self);
@@ -318,7 +318,7 @@ impl Node {
     }
 
     fn compile_unary(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> u8 {
-        if let Node::Unary {op, arg, power, ..} = self {
+        if let Node::Unary { op, arg, power, .. } = self {
             let mut dst = ir.first_shadow() + base + self.ershov_number() - 1;
             let r = arg.compile(ir, base, pool);
 
@@ -454,17 +454,17 @@ impl Node {
         };
         false
     }
-    
+
     pub fn as_const(&self) -> Option<f64> {
-        if let Node::Const {val, ..} = self {
+        if let Node::Const { val, .. } = self {
             Some(*val)
         } else {
             None
         }
     }
-    
+
     pub fn as_int_const(&self) -> Option<i32> {
-        if let Node::Const {val, ..} = self {
+        if let Node::Const { val, .. } = self {
             if val.round() == *val && val.abs() < 16384.0 {
                 Some(*val as i32)
             } else {
@@ -510,7 +510,7 @@ impl Eval for Node {
                 Loc::Stack(idx) => stack[idx as usize],
                 Loc::Mem(idx) => mem[idx as usize],
             },
-            Node::Unary {op, arg, power, ..} => {
+            Node::Unary { op, arg, power, .. } => {
                 let x = arg.eval(mem, stack);
 
                 match op.as_str() {

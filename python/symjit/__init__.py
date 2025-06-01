@@ -24,7 +24,8 @@ class Func:
             u = np.array(args[: self.count_states], dtype="double")
             self.compiler.states[:] = u
             self.compiler.execute()
-            return self.compiler.obs.copy()
+            res = self.compiler.obs.copy()
+            return res
         else:
             return self.call_vectorized(*args)
 

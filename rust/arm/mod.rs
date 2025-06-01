@@ -136,28 +136,27 @@ impl Generator for ArmGenerator {
         self.emit(arm! {fmov d(1), #1.0});
         self.emit(arm! {fdiv d(dst), d(1), d(r)});
     }
-    
+
     fn powi(&mut self, dst: u8, r: u8, n: i32) {
         if n == 0 {
             self.emit(arm! {fmov d(dst), #1.0});
         } else if n > 0 {
             let t = n.trailing_zeros();
-            
-            if n.count_ones() == 1 {
-                self.fmov(dst, r);        
-            } else {
-                self.fmov(1, r);        
-                let mut n = n >> (t+1);            
-            
-                while n > 0 {
-                    self.times(1, 1, 1);
-                    if n & 1 != 0 {
-                        self.times(dst, dst, 1);
-                    };
-                    n = n >> 1;
-                }
+            let mut s = r;
+            let mut n = n >> (t + 1);
+
+            self.fmov(dst, s);
+
+            while n > 0 {
+                self.times(1, s, s);
+                s = 1;
+
+                if n & 1 != 0 {
+                    self.times(dst, dst, 1);
+                };
+                n = n >> 1;
             }
-            
+
             for _ in 0..t {
                 self.times(dst, dst, dst);
             }
@@ -165,7 +164,7 @@ impl Generator for ArmGenerator {
             self.powi(dst, r, -n);
             self.recip(dst, dst);
         }
-    }    
+    }
 
     fn plus(&mut self, dst: u8, a: u8, b: u8) {
         self.flush(dst);
