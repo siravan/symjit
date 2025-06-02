@@ -1,8 +1,18 @@
 import time
 import numpy as np
 import math
+import platform
 from sympy import symbols, lambdify, sqrt, sin
 from symjit import compile_func
+
+def arch():
+    if platform.machine() in ["x86_64", "AMD64"]:
+        return "amd"
+    elif platform.machine() in ["arm64", "aarch64"]:
+        return "arm"
+    else:
+        return None
+
 
 x, y, a, b = symbols("x y a b")
 
@@ -160,20 +170,23 @@ def test_model(f, label):
     X0 = f('sympy', None, False)
     t1 = time.time()
     print(f'\tdone in {1000 * (t1 - t0):.1f} ms')
-    
+
+    ty = arch()
+
     print('\ttesting rust backend for amd without simd...', end='')
     t0 = time.time()
-    X = f('rust', 'amd', False)
+    X = f('rust', ty, False)
     t1 = time.time()
     np.testing.assert_array_almost_equal(X0, X)
     print(f'\tpass in {1000 * (t1 - t0):.1f} ms')
     
-    print('\ttesting rust backend for amd with simd...', end='')
-    t0 = time.time()
-    X = f('rust', 'amd', True)
-    t1 = time.time()
-    np.testing.assert_array_almost_equal(X0, X)
-    print(f'\tpass in {1000 * (t1 - t0):.1f} ms')
+    if ty == 'amd':
+        print('\ttesting rust backend for amd with simd...', end='')
+        t0 = time.time()
+        X = f('rust', ty, True)
+        t1 = time.time()
+        np.testing.assert_array_almost_equal(X0, X)
+        print(f'\tpass in {1000 * (t1 - t0):.1f} ms')
 
     print('\ttesting rust backend with bytecode...\t', end='')
     t0 = time.time()
@@ -184,7 +197,7 @@ def test_model(f, label):
 
     print('\ttesting python backend...\t\t', end='')
     t0 = time.time()
-    X = f('python', 'amd', False)   
+    X = f('python', ty, False)   
     t1 = time.time()
     np.testing.assert_array_almost_equal(X0, X)
     print(f'\tpass in {1000 * (t1 - t0):.1f} ms')
