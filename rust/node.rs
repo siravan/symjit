@@ -38,6 +38,7 @@ pub enum Node {
         left: Box<Node>,
         right: Box<Node>,
         ershov: u8,
+        power: i32,
     },
 }
 
@@ -63,7 +64,17 @@ impl Node {
             op: op.to_string(),
             arg: Box::new(arg),
             ershov: 0,
-            power: 0,
+            power: 1,
+        }
+    }
+
+    pub fn create_binary(op: &str, left: Node, right: Node) -> Node {
+        Node::Binary {
+            op: op.to_string(),
+            left: Box::new(left),
+            right: Box::new(right),
+            ershov: 0,
+            power: 1,
         }
     }
 
@@ -76,12 +87,13 @@ impl Node {
         }
     }
 
-    pub fn create_binary(op: &str, left: Node, right: Node) -> Node {
+    pub fn create_modular_powi(left: Node, right: Node, power: i32) -> Node {
         Node::Binary {
-            op: op.to_string(),
+            op: "_powi_mod_".to_string(),
             left: Box::new(left),
             right: Box::new(right),
             ershov: 0,
+            power,
         }
     }
 
@@ -228,7 +240,7 @@ impl Node {
         };
         let mut pool: Vec<u8> = (f + n - cache_size..f + n).collect();
 
-        // println!("{:#?}", &self);
+        println!("{:#?}", &self);
         self.compile(ir, 0, &mut pool)
     }
 
@@ -352,7 +364,11 @@ impl Node {
 
     fn compile_binary(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> u8 {
         if let Node::Binary {
-            op, left, right, ..
+            op,
+            left,
+            right,
+            power,
+            ..
         } = self
         {
             let (dst, l, r) = self.alloc(ir, base, left, right, pool);
@@ -374,6 +390,7 @@ impl Node {
                 "xor" => ir.xor(dst, l, r),
                 "select_if" => ir.select_if(dst, l, r),
                 "select_else" => ir.select_else(dst, l, r),
+                "_powi_mod_" => self.powi_mod(ir, dst, l, *power, r),
                 "_call_" => Self::call(ir, l, r),
                 _ => panic!("binary operation is not recognized"),
             };
@@ -381,6 +398,39 @@ impl Node {
             dst
         } else {
             panic!("should not get here!");
+        }
+    }
+
+    fn powi_mod(&self, ir: &mut dyn Generator, dst: u8, l: u8, power: i32, r: u8) {
+        //ir.powi(dst, l, *power);
+        //ir.fmod(dst, dst, r);
+
+        if dst != 0 {
+            ir.powi_mod(dst, l, power, r);
+        } else {
+            // powi_mod in Generator uses both registers 0 and 1 and temporaries
+            // therefore, dst == 0 would cause a conflict
+            // we find another temporaroy register and use this and then move to reg 0
+
+            let r0 = ir.first_shadow();
+            
+            // t is a non-zero register different than both l and r
+            // note that we assume ir.count_shadows() > 2
+            let t = if l != r0 && r != r0 {
+                r0
+            } else if l != r0 + 1 && r != r0 + 1 {
+                r0 + 1
+            } else {
+                r0 + 2
+            };
+
+            // slot 0 on the stack is reverved for this function            
+            ir.save_stack(t, 0);
+
+            ir.powi_mod(t, l, power, r);
+            ir.fmov(0, t);
+
+            ir.load_stack(t, 0);
         }
     }
 
@@ -413,7 +463,7 @@ impl Node {
                 l = left.compile(ir, base, pool);
             }
         } else {
-            let spill: u32 = (dst - last) as u32;
+            let spill: u32 = (1 + dst - last) as u32; // spill 0 is reserved for powi_mod
 
             if er <= el {
                 l = left.compile(ir, 0, pool);
@@ -497,6 +547,14 @@ impl Node {
     pub fn arg(self) -> Option<Node> {
         if let Node::Unary { arg, .. } = self {
             Some(*arg)
+        } else {
+            None
+        }
+    }
+
+    pub fn arg_power(self) -> Option<(Node, i32)> {
+        if let Node::Unary { arg, power, .. } = self {
+            Some((*arg, power))
         } else {
             None
         }

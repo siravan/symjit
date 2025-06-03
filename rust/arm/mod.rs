@@ -3,7 +3,7 @@ mod macros;
 
 use crate::assembler::Assembler;
 use crate::code::BinaryFunc;
-use crate::generator::{fmod, powi, Generator};
+use crate::generator::{fmod, powi, powi_mod, Generator};
 use crate::utils::align_stack;
 
 pub struct ArmGenerator {
@@ -134,11 +134,19 @@ impl Generator for ArmGenerator {
         self.emit(arm! {fdiv d(dst), d(1), d(r)});
     }
 
-    fn powi(&mut self, dst: u8, r: u8, n: i32) {
-        if n == 0 {
+    fn powi(&mut self, dst: u8, r: u8, power: i32) {
+        if power == 0 {
             self.emit(arm! {fmov d(dst), #1.0});
         } else {
-            powi(self, dst, r, n);
+            powi(self, dst, r, power);
+        }
+    }
+
+    fn powi_mod(&mut self, dst: u8, r: u8, power: i32, modulus: u8) {
+        if power == 0 {
+            self.emit(arm! {fmov d(dst), #1.0});
+        } else {
+            powi_mod(self, dst, r, power, modulus);
         }
     }
 

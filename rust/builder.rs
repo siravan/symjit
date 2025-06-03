@@ -138,6 +138,10 @@ impl Builder {
         Ok(Node::create_powi(arg, power))
     }
 
+    pub fn create_modular_powi(&mut self, left: Node, right: Node, power: i32) -> Result<Node> {
+        Ok(Node::create_modular_powi(left, right, power))
+    }
+
     pub fn create_binary(&mut self, op: &str, left: Node, right: Node) -> Result<Node> {
         let node = match op {
             "times" if left.is_const(-1.0) => self.create_unary("neg", right)?,
@@ -153,6 +157,10 @@ impl Builder {
             }
             "plus" if right.is_unary("neg") => {
                 Node::create_binary("minus", left, right.arg().unwrap())
+            }
+            "rem" if left.is_unary("_powi_") => {
+                let (arg, power) = left.arg_power().unwrap();
+                Node::create_modular_powi(arg, right, power)
             }
             _ => Node::create_binary(op, left, right),
         };

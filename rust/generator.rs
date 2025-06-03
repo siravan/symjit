@@ -59,7 +59,8 @@ pub trait Generator {
     fn square(&mut self, dst: u8, r: u8);
     fn cube(&mut self, dst: u8, r: u8);
     fn recip(&mut self, dst: u8, r: u8);
-    fn powi(&mut self, dst: u8, r: u8, n: i32);
+    fn powi(&mut self, dst: u8, r: u8, power: i32);
+    fn powi_mod(&mut self, dst: u8, r: u8, power: i32, modulus: u8);
 
     fn round(&mut self, dst: u8, r: u8);
     fn floor(&mut self, dst: u8, r: u8);
@@ -93,14 +94,14 @@ pub trait Generator {
     fn epilogue(&mut self, n: u32);
 }
 
-pub fn powi<T: Generator>(g: &mut T, dst: u8, r: u8, n: i32) {
-    if n == 0 {
+pub fn powi<T: Generator>(g: &mut T, dst: u8, r: u8, power: i32) {
+    if power == 0 {
         g.divide(dst, dst, dst); // this is a generic way to make 1, but should be
                                  // overrided by the calling Generator for efficiency
-    } else if n > 0 {
-        let t = n.trailing_zeros();
+    } else if power > 0 {
+        let t = power.trailing_zeros();
+        let mut n = power >> (t + 1);
         let mut s = r;
-        let mut n = n >> (t + 1);
 
         g.fmov(dst, s);
 
@@ -118,7 +119,42 @@ pub fn powi<T: Generator>(g: &mut T, dst: u8, r: u8, n: i32) {
             g.times(dst, dst, dst);
         }
     } else {
-        powi(g, dst, r, -n);
+        powi(g, dst, r, -power);
+        g.recip(dst, dst);
+    }
+}
+
+pub fn powi_mod<T: Generator>(g: &mut T, dst: u8, r: u8, power: i32, modulus: u8) {
+    assert!(dst != 0 && r != 0);
+
+    if power == 0 {
+        g.divide(dst, dst, dst); // this is a generic way to make 1, but should be
+                                 // overrided by the calling Generator for efficiency
+    } else if power > 0 {
+        let t = power.trailing_zeros();
+        let mut n = power >> (t + 1);
+        let mut s = r;
+
+        g.fmov(dst, s);
+
+        while n > 0 {
+            g.times(0, s, s);
+            g.fmod(0, 0, modulus);
+            s = 0;
+
+            if n & 1 != 0 {
+                g.times(dst, dst, 0);
+                g.fmod(dst, dst, modulus);
+            };
+            n = n >> 1;
+        }
+
+        for _ in 0..t {
+            g.times(dst, dst, dst);
+            g.fmod(dst, dst, modulus);
+        }
+    } else {
+        powi(g, dst, r, -power);
         g.recip(dst, dst);
     }
 }
