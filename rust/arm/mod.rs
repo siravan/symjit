@@ -2,13 +2,13 @@
 mod macros;
 
 use crate::assembler::Assembler;
-use crate::code::BinaryFunc;
 use crate::generator::{fmod, powi, powi_mod, Generator};
 use crate::utils::align_stack;
 
 pub struct ArmGenerator {
     a: Assembler,
     r0: Option<u32>,
+    mask: u32,
 }
 
 impl ArmGenerator {
@@ -16,6 +16,7 @@ impl ArmGenerator {
         ArmGenerator {
             a: Assembler::new(0, 3),
             r0: None,
+            mask: 0x00ff,
         }
     }
 
@@ -24,15 +25,33 @@ impl ArmGenerator {
     }
 
     fn flush(&mut self, dst: u8) {
-        if dst != 0 {
-            return;
+        if dst == 0 {
+            if let Some(idx) = self.r0 {
+                self.emit(arm! {str d(dst), [sp, #8*idx]});
+            };
+
+            self.r0 = None;
+        } else {
+            let m = 1 << dst;
+
+            if self.mask & m == 0 {
+                self.emit(arm! {str d(dst), [sp, #8*(dst as i32)]});
+            }
+
+            self.mask |= m;
         }
+    }
 
-        if let Some(idx) = self.r0 {
-            self.emit(arm! {str d(dst), [sp, #8*idx]});
-        };
+    fn restore_regs(&mut self) {
+        let last = self.first_shadow() + self.count_shadows();
 
-        self.r0 = None;
+        for dst in last..16 {
+            let m = 1 << dst;
+
+            if self.mask & m != 0 {
+                self.emit(arm! {ldr d(dst), [sp, #8*(dst as i32)]});
+            }
+        }
     }
 }
 
@@ -58,6 +77,8 @@ impl Generator for ArmGenerator {
     }
 
     //***********************************
+    fn nop(&mut self) {}
+
     fn fmov(&mut self, dst: u8, r: u8) {
         self.flush(dst);
         self.emit(arm! {fmov d(dst), d(r)});
@@ -171,10 +192,8 @@ impl Generator for ArmGenerator {
     }
 
     fn fmod(&mut self, dst: u8, a: u8, b: u8) {
-        self.divide(1, a, b);
-        self.floor(1, 1);
-        self.times(1, 1, b);
-        self.minus(dst, a, 1);
+        self.flush(dst);
+        fmod(self, dst, a, b);
     }
 
     fn plus(&mut self, dst: u8, a: u8, b: u8) {
@@ -280,6 +299,8 @@ impl Generator for ArmGenerator {
     }
 
     fn epilogue(&mut self, cap: u32) {
+        self.restore_regs();
+
         let stack_size = align_stack(self.reg_size() * cap);
 
         self.emit(arm! {add sp, sp, #stack_size});

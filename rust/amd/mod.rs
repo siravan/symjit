@@ -1,5 +1,4 @@
 use crate::assembler::Assembler;
-use crate::code::BinaryFunc;
 use crate::generator::{fmod, powi, powi_mod, Generator};
 use crate::utils::align_stack;
 
@@ -16,6 +15,7 @@ pub struct AmdGenerator {
     amd: Amd,
     family: AmdFamily,
     r0: Option<u32>,
+    mask: u32,
 }
 
 impl AmdGenerator {
@@ -24,6 +24,12 @@ impl AmdGenerator {
             amd: Amd::new(),
             family,
             r0: None,
+            mask: if cfg!(target_family = "windows") {
+                0x003f
+            } else {
+                // 0xffff
+                0x003f
+            },
         }
     }
 
@@ -122,19 +128,54 @@ impl AmdGenerator {
     }
 
     fn flush(&mut self, dst: u8) {
-        if dst != 0 {
-            return;
-        }
-
-        if let Some(idx) = self.r0 {
-            match self.family {
-                AmdFamily::AvxScalar => self.amd.vmovsd_mem_xmm(Amd::RSP, (idx * 8) as i32, 0),
-                AmdFamily::AvxVector => self.amd.vmovpd_mem_ymm(Amd::RSP, (idx * 32) as i32, 0),
-                AmdFamily::SSEScalar => {}
+        if dst == 0 {
+            if let Some(idx) = self.r0 {
+                match self.family {
+                    AmdFamily::AvxScalar => self.amd.vmovsd_mem_xmm(Amd::RSP, (idx * 8) as i32, 0),
+                    AmdFamily::AvxVector => self.amd.vmovpd_mem_ymm(Amd::RSP, (idx * 32) as i32, 0),
+                    AmdFamily::SSEScalar => self.amd.movsd_mem_xmm(Amd::RSP, (idx * 8) as i32, 0),
+                };
             };
-        };
 
-        self.r0 = None;
+            self.r0 = None;
+        } else {
+            let m = 1 << dst;
+
+            if self.mask & m == 0 {
+                // println!("saving reg {}", dst);
+                match self.family {
+                    AmdFamily::AvxScalar => {
+                        self.amd.vmovsd_mem_xmm(Amd::RSP, 8 * (dst as i32), dst)
+                    }
+                    AmdFamily::AvxVector => {
+                        self.amd.vmovpd_mem_ymm(Amd::RSP, 32 * (dst as i32), dst)
+                    }
+                    AmdFamily::SSEScalar => self.amd.movsd_mem_xmm(Amd::RSP, 8 * (dst as i32), dst),
+                };
+            }
+
+            self.mask |= m;
+        }
+    }
+
+    fn restore_regs(&mut self) {
+        let last = self.first_shadow() + self.count_shadows();
+
+        for dst in last..16 {
+            let m = 1 << dst;
+
+            if self.mask & m != 0 {
+                match self.family {
+                    AmdFamily::AvxScalar => {
+                        self.amd.vmovsd_xmm_mem(dst, Amd::RSP, 8 * (dst as i32))
+                    }
+                    AmdFamily::AvxVector => {
+                        self.amd.vmovpd_ymm_mem(dst, Amd::RSP, 32 * (dst as i32))
+                    }
+                    AmdFamily::SSEScalar => self.amd.movsd_xmm_mem(dst, Amd::RSP, 8 * (dst as i32)),
+                }
+            }
+        }
     }
 }
 
@@ -147,7 +188,8 @@ impl Generator for AmdGenerator {
         if cfg!(target_family = "windows") {
             4
         } else {
-            14
+            // 14
+            4
         }
     }
 
@@ -171,6 +213,10 @@ impl Generator for AmdGenerator {
     }
 
     //***********************************
+    fn nop(&mut self) {
+        self.amd.nop();
+    }
+
     fn fmov(&mut self, dst: u8, r: u8) {
         self.flush(dst);
 
@@ -350,6 +396,7 @@ impl Generator for AmdGenerator {
     }
 
     fn fmod(&mut self, dst: u8, a: u8, b: u8) {
+        self.flush(dst);
         fmod(self, dst, a, b);
     }
 
@@ -604,6 +651,7 @@ impl Generator for AmdGenerator {
 
     #[cfg(target_family = "unix")]
     fn epilogue(&mut self, cap: u32) {
+        self.restore_regs();
         self.vzeroupper();
         self.amd.add_rsp(align_stack(self.reg_size() * cap + 8) - 8);
         self.amd.pop(Amd::RBX);
@@ -614,6 +662,7 @@ impl Generator for AmdGenerator {
 
     #[cfg(target_family = "windows")]
     fn epilogue(&mut self, cap: u32) {
+        self.restore_regs();
         self.vzeroupper();
         self.amd.add_rsp(align_stack(self.reg_size() * cap + 8) - 8);
         self.amd.mov_reg_mem(Amd::RBX, Amd::RSP, 0x10);

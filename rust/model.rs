@@ -90,7 +90,6 @@ impl Program {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Variable {
     pub name: String,
-    pub val: f64,
 }
 
 /// Transforms the input tree to the intermediate representation (tree-like)
@@ -227,7 +226,7 @@ impl Transformer for Equation {
 
         let rhs = self.rhs.transform(builder)?;
         let lhs = builder.create_var(var.as_str())?;
-        let lhs = builder.add_assign(lhs, rhs)?;
+        let _ = builder.add_assign(lhs, rhs)?;
 
         builder.create_void()
     }

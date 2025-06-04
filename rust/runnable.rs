@@ -1,7 +1,6 @@
 use crate::amd::{AmdFamily, AmdGenerator};
 use crate::arm::ArmGenerator;
 use crate::builder::ByteCode;
-use crate::code::{BinaryFunc, VirtualTable};
 use crate::generator::Generator;
 use crate::machine::MachineCode;
 use crate::model::Program;
@@ -159,7 +158,7 @@ impl Runnable {
 
     fn compile_bytecode(prog: &mut Program, size: usize) -> Box<dyn Compiled<f64>> {
         let mem: Vec<f64> = vec![0.0; size];
-        let code = ByteCode::new(prog.builder.clone(), mem, size);
+        let code = ByteCode::new(prog.builder.clone(), mem);
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
 
         compiled

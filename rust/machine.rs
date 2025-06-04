@@ -1,7 +1,6 @@
 use std::fs;
 use std::io::Write;
 
-use super::code::BinaryFunc;
 use super::memory::*;
 use super::utils::*;
 

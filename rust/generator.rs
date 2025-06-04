@@ -45,6 +45,7 @@ pub trait Generator {
     }
 
     //***********************************
+    fn nop(&mut self);
     fn fmov(&mut self, dst: u8, r: u8);
     fn fxchg(&mut self, a: u8, b: u8);
     fn load_const(&mut self, dst: u8, label: &str);
@@ -94,74 +95,79 @@ pub trait Generator {
     fn epilogue(&mut self, n: u32);
 }
 
-pub fn powi<T: Generator>(g: &mut T, dst: u8, r: u8, power: i32) {
+pub fn powi<T: Generator>(ir: &mut T, dst: u8, r: u8, power: i32) {
+    // println!("powi {} {} {}", dst, r, power);
+    ir.nop();
+
     if power == 0 {
-        g.divide(dst, dst, dst); // this is a generic way to make 1, but should be
-                                 // overrided by the calling Generator for efficiency
+        ir.divide(dst, dst, dst); // this is a generic way to make 1, but should be
+                                  // overrided by the calling Generator for efficiency
     } else if power > 0 {
         let t = power.trailing_zeros();
         let mut n = power >> (t + 1);
         let mut s = r;
 
-        g.fmov(dst, s);
+        ir.fmov(dst, s);
 
         while n > 0 {
-            g.times(1, s, s);
+            ir.times(1, s, s);
             s = 1;
 
             if n & 1 != 0 {
-                g.times(dst, dst, 1);
+                ir.times(dst, dst, 1);
             };
-            n = n >> 1;
+            n >>= 1;
         }
 
         for _ in 0..t {
-            g.times(dst, dst, dst);
+            ir.times(dst, dst, dst);
         }
     } else {
-        powi(g, dst, r, -power);
-        g.recip(dst, dst);
+        powi(ir, dst, r, -power);
+        ir.recip(dst, dst);
     }
 }
 
-pub fn powi_mod<T: Generator>(g: &mut T, dst: u8, r: u8, power: i32, modulus: u8) {
+pub fn powi_mod<T: Generator>(ir: &mut T, dst: u8, r: u8, power: i32, modulus: u8) {
     assert!(dst != 0 && r != 0);
 
     if power == 0 {
-        g.divide(dst, dst, dst); // this is a generic way to make 1, but should be
-                                 // overrided by the calling Generator for efficiency
+        ir.divide(dst, dst, dst); // this is a generic way to make 1, but should be
+                                  // overrided by the calling Generator for efficiency
     } else if power > 0 {
         let t = power.trailing_zeros();
         let mut n = power >> (t + 1);
         let mut s = r;
 
-        g.fmov(dst, s);
+        ir.fmov(dst, s);
 
         while n > 0 {
-            g.times(0, s, s);
-            g.fmod(0, 0, modulus);
-            s = 0;
+            ir.times(1, s, s);
+            ir.fmod(1, 1, modulus);
+            s = 1;
 
             if n & 1 != 0 {
-                g.times(dst, dst, 0);
-                g.fmod(dst, dst, modulus);
+                ir.times(dst, dst, 1);
+                ir.fmod(dst, dst, modulus);
             };
-            n = n >> 1;
+            n >>= 1;
         }
 
         for _ in 0..t {
-            g.times(dst, dst, dst);
-            g.fmod(dst, dst, modulus);
+            ir.times(dst, dst, dst);
+            ir.fmod(dst, dst, modulus);
         }
     } else {
-        powi(g, dst, r, -power);
-        g.recip(dst, dst);
+        powi(ir, dst, r, -power);
+        ir.recip(dst, dst);
     }
 }
 
-pub fn fmod<T: Generator>(g: &mut T, dst: u8, a: u8, b: u8) {
-    g.divide(1, a, b);
-    g.floor(1, 1);
-    g.times(1, 1, b);
-    g.minus(dst, a, 1);
+pub fn fmod<T: Generator>(ir: &mut T, dst: u8, a: u8, b: u8) {
+    // println!("fmod {}, {}, {}", dst, a, b);
+    assert!(dst != 0 && a != 0 && b != 0);
+    ir.divide(0, a, b);
+    ir.floor(0, 0);
+    ir.times(0, 0, b);
+    ir.minus(dst, a, 0);
 }

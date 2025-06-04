@@ -1,5 +1,3 @@
-use crate::model::Program;
-
 pub trait Compiled<T> {
     fn exec(&mut self);
     fn mem(&self) -> &[T];

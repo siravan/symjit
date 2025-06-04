@@ -4,10 +4,9 @@ use std::collections::HashSet;
 use super::utils::{Compiled, Eval};
 use crate::code::VirtualTable;
 use crate::generator::Generator;
-use crate::model::Expr;
 use crate::node::{Node, VarStatus};
 use crate::statement::Statement;
-use crate::symbol::{Loc, SymbolTable};
+use crate::symbol::SymbolTable;
 
 //****************************************************//
 
@@ -146,6 +145,8 @@ impl Builder {
         let node = match op {
             "times" if left.is_const(-1.0) => self.create_unary("neg", right)?,
             "times" if right.is_const(-1.0) => self.create_unary("neg", left)?,
+            "times" if left.is_const(1.0) => right,
+            "times" if right.is_const(1.0) => left,
             "times" if left.is_unary("recip") => {
                 Node::create_binary("divide", right, left.arg().unwrap())
             }
@@ -241,7 +242,7 @@ pub struct ByteCode {
 }
 
 impl ByteCode {
-    pub fn new(builder: Builder, mem: Vec<f64>, size: usize) -> ByteCode {
+    pub fn new(builder: Builder, mem: Vec<f64>) -> ByteCode {
         let stack: Vec<f64> = vec![0.0; builder.sym_table.num_stack];
 
         ByteCode {
@@ -265,5 +266,5 @@ impl Compiled<f64> for ByteCode {
         &mut self.mem[..]
     }
 
-    fn dump(&self, name: &str) {}
+    fn dump(&self, _name: &str) {}
 }
