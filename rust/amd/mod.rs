@@ -28,7 +28,7 @@ impl AmdGenerator {
             mask: if cfg!(target_family = "windows") {
                 0x003f
             } else {
-                0xffff
+                0xffff                
             }
         }
     }
@@ -188,7 +188,7 @@ impl Generator for AmdGenerator {
         if cfg!(target_family = "windows") {
             4
         } else {
-            14
+            14            
         }
     }
 
@@ -213,6 +213,10 @@ impl Generator for AmdGenerator {
 
     //***********************************
     fn fmov(&mut self, dst: u8, r: u8) {
+        if dst == r {
+            return;
+        }
+        
         self.flush(dst);
 
         match self.family {
@@ -321,14 +325,18 @@ impl Generator for AmdGenerator {
     }
 
     fn square(&mut self, dst: u8, r: u8) {
-        powi(self, dst, r, 2);
+        self.flush(dst);
+        self.times(dst, r, r);        
     }
 
     fn cube(&mut self, dst: u8, r: u8) {
-        powi(self, dst, r, 3);
+        self.flush(dst);
+        self.times(1, r, r);
+        self.times(dst, r, 1);
     }
 
     fn powi(&mut self, dst: u8, r: u8, power: i32) {
+        self.flush(dst);
         if power == 0 {
             self.load_const(dst, "_one_");
         } else {
@@ -337,6 +345,7 @@ impl Generator for AmdGenerator {
     }
 
     fn powi_mod(&mut self, dst: u8, r: u8, power: i32, modulus: u8) {
+        self.flush(dst);
         if power == 0 {
             self.load_const(dst, "_one_");
         } else {

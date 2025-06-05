@@ -9,6 +9,7 @@ use crate::utils::align_stack;
 pub struct ArmGenerator {
     a: Assembler,
     r0: Option<u32>,
+    mask: u32,
 }
 
 impl ArmGenerator {
@@ -16,23 +17,44 @@ impl ArmGenerator {
         ArmGenerator {
             a: Assembler::new(0, 3),
             r0: None,
+            mask: 0x00ff,
         }
     }
 
     fn emit(&mut self, w: u32) {
         self.a.append_word(w);
     }
-
+    
     fn flush(&mut self, dst: u8) {
-        if dst != 0 {
-            return;
+        if dst == 0 {
+            if let Some(idx) = self.r0 {
+                self.emit(arm! {str d(dst), [sp, #8*idx]});
+            };
+
+            self.r0 = None;
+        } else {
+            let m = 1 << dst;
+            let idx = dst as i32;
+
+            if self.mask & m == 0 {
+                self.emit(arm! {str d(dst), [sp, #8*idx]});
+            }
+
+            self.mask |= m;
         }
+    }
 
-        if let Some(idx) = self.r0 {
-            self.emit(arm! {str d(dst), [sp, #8*idx]});
-        };
+    fn restore_regs(&mut self) {
+        let last = self.first_shadow() + self.count_shadows();
 
-        self.r0 = None;
+        for dst in last..16 {
+            let m = 1 << dst;
+            let idx = dst as i32;
+
+            if self.mask & m != 0 {
+                self.emit(arm! {ldr d(dst), [sp, #8*idx]});
+            }
+        }
     }
 }
 
@@ -59,6 +81,10 @@ impl Generator for ArmGenerator {
 
     //***********************************
     fn fmov(&mut self, dst: u8, r: u8) {
+        if dst == r {
+            return;
+        }
+
         self.flush(dst);
         self.emit(arm! {fmov d(dst), d(r)});
     }
@@ -121,11 +147,14 @@ impl Generator for ArmGenerator {
     }
 
     fn square(&mut self, dst: u8, r: u8) {
-        powi(self, dst, r, 2);
+        self.flush(dst);
+        self.times(dst, r, r);
     }
 
     fn cube(&mut self, dst: u8, r: u8) {
-        powi(self, dst, r, 3);
+        self.flush(dst);
+        self.times(1, r, r);
+        self.times(dst, r, 1);
     }
 
     fn recip(&mut self, dst: u8, r: u8) {
@@ -135,6 +164,8 @@ impl Generator for ArmGenerator {
     }
 
     fn powi(&mut self, dst: u8, r: u8, power: i32) {
+        self.flush(dst);
+        
         if power == 0 {
             self.emit(arm! {fmov d(dst), #1.0});
         } else {
@@ -143,6 +174,8 @@ impl Generator for ArmGenerator {
     }
 
     fn powi_mod(&mut self, dst: u8, r: u8, power: i32, modulus: u8) {
+        self.flush(dst);
+        
         if power == 0 {
             self.emit(arm! {fmov d(dst), #1.0});
         } else {
@@ -280,6 +313,8 @@ impl Generator for ArmGenerator {
     }
 
     fn epilogue(&mut self, cap: u32) {
+        self.restore_regs();
+        
         let stack_size = align_stack(self.reg_size() * cap);
 
         self.emit(arm! {add sp, sp, #stack_size});

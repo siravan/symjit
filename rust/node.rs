@@ -139,7 +139,7 @@ impl Node {
                 f(self);
             }
             Node::Unary { arg, .. } => {
-                arg.postorder_forward(f);
+                arg.postorder_backward(f);
                 f(self);
             }
             Node::Binary { left, right, .. } => {
@@ -224,21 +224,19 @@ impl Node {
         self.postorder_forward(Self::ershov_func);
         self.postorder_forward(Self::mark_first);
         self.postorder_backward(Self::mark_last);
-
-        let n = ir.count_shadows();
-        let f = ir.first_shadow();
-        let e = self.ershov_number() as u8;
+        
+        let last = ir.first_shadow() + self.ershov_number();
 
         // we check ir.three_address() because AmdGenerator::shrink may swap
         // registers when generating code for SSE (two-address code).
         // This check may not be actually necessary, but we need to prove its
         // correctness first.
-        let cache_size = if ir.three_address() && n > e {
-            n - e
+        
+        let mut pool: Vec<u8> = if ir.three_address() {
+            (last..16).rev().collect()
         } else {
-            0
-        };
-        let mut pool: Vec<u8> = (f + n - cache_size..f + n).collect();
+            Vec::new()
+        };            
 
         // println!("{:#?}", &self);
         self.compile(ir, 0, &mut pool)
@@ -390,7 +388,7 @@ impl Node {
                 "xor" => ir.xor(dst, l, r),
                 "select_if" => ir.select_if(dst, l, r),
                 "select_else" => ir.select_else(dst, l, r),
-                "_powi_mod_" => self.powi_mod(ir, dst, l, *power, r),
+                "_powi_mod_" => ir.powi_mod(dst, l, *power, r),
                 "_call_" => Self::call(ir, l, r),
                 _ => panic!("binary operation is not recognized"),
             };
@@ -400,40 +398,7 @@ impl Node {
             panic!("should not get here!");
         }
     }
-
-    fn powi_mod(&self, ir: &mut dyn Generator, dst: u8, l: u8, power: i32, r: u8) {
-        //ir.powi(dst, l, *power);
-        //ir.fmod(dst, dst, r);
-
-        if dst != 0 {
-            ir.powi_mod(dst, l, power, r);
-        } else {
-            // powi_mod in Generator uses both registers 0 and 1 and temporaries
-            // therefore, dst == 0 would cause a conflict
-            // we find another temporaroy register and use this and then move to reg 0
-
-            let r0 = ir.first_shadow();
-            
-            // t is a non-zero register different than both l and r
-            // note that we assume ir.count_shadows() > 2
-            let t = if l != r0 && r != r0 {
-                r0
-            } else if l != r0 + 1 && r != r0 + 1 {
-                r0 + 1
-            } else {
-                r0 + 2
-            };
-
-            // slot 0 on the stack is reverved for this function            
-            ir.save_stack(t, 0);
-
-            ir.powi_mod(t, l, power, r);
-            ir.fmov(0, t);
-
-            ir.load_stack(t, 0);
-        }
-    }
-
+    
     fn alloc(
         &self,
         ir: &mut dyn Generator,
@@ -443,15 +408,13 @@ impl Node {
         pool: &mut Vec<u8>,
     ) -> (u8, u8, u8) {
         let el = left.ershov_number();
-        let er = right.ershov_number();
+        let er = right.ershov_number();    
         let mut dst = ir.first_shadow() + base + self.ershov_number() - 1;
 
-        let mut l;
-        let mut r;
+        let l;
+        let r;
 
-        let last = ir.first_shadow() + ir.count_shadows();
-
-        if dst < last {
+        if dst < 16 {
             if el == er {
                 l = left.compile(ir, base + 1, pool);
                 r = right.compile(ir, base, pool);
