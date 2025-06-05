@@ -240,7 +240,7 @@ impl Node {
         };
         let mut pool: Vec<u8> = (f + n - cache_size..f + n).collect();
 
-        println!("{:#?}", &self);
+        // println!("{:#?}", &self);
         self.compile(ir, 0, &mut pool)
     }
 
@@ -463,25 +463,9 @@ impl Node {
                 l = left.compile(ir, base, pool);
             }
         } else {
-            let spill: u32 = (1 + dst - last) as u32; // spill 0 is reserved for powi_mod
-
-            if er <= el {
-                l = left.compile(ir, 0, pool);
-                ir.save_stack(l, spill);
-                r = right.compile(ir, 0, pool);
-                l = 1;
-                ir.load_stack(l, spill);
-            } else {
-                r = right.compile(ir, 0, pool);
-                ir.save_stack(r, spill);
-                l = left.compile(ir, 0, pool);
-                r = 1;
-                ir.load_stack(r, spill);
-            }
-
-            dst = 0;
-        };
-
+            panic!("the expression is too large (not enough scratch registers).");
+        }
+        
         (dst, l, r)
     }
 
@@ -593,7 +577,7 @@ impl Eval for Node {
                 }
             }
             Node::Binary {
-                op, left, right, ..
+                op, left, right, power, ..
             } => {
                 let x = left.eval(mem, stack);
                 let y = right.eval(mem, stack);
@@ -603,6 +587,8 @@ impl Eval for Node {
                     "minus" => x - y,
                     "times" => x * y,
                     "divide" => x / y,
+                    "rem" => x % y,
+                    "_powi_mod_" => x.powi(*power) % y,
                     "gt" => {
                         if x > y {
                             T

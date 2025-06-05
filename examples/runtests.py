@@ -158,11 +158,29 @@ def power(backend, ty, use_simd):
         f = compile_func([x], [p], backend=backend, ty=ty, use_simd=use_simd)             
         
     return f(x0)            
+    
+
+def powi_mod(backend, ty, use_simd):
+    def binom(x, y, n, k):    
+        if k == 0 or k == n:
+            return 1.0
+        else:
+            return binom(x, y, n - 1, k) * x + binom(x, y, n - 1, k - 1) * y
+
+    p = binom(x, y, 7, 4)**5 % 65537 + binom(x, y, 8, 5)**(4**x) % 65537
+    
+    if backend == 'sympy':
+        f = lambdify([x, y], [p])
+    else:        
+        f = compile_func([x, y], [p], backend=backend, ty=ty, use_simd=use_simd)             
+        
+    return f(1, 1)
+    
 
 
 #############################################################################
 
-def test_model(f, label):
+def test_model(f, label, pyback=True):
     print(f'testing {label}')
 
     print('\ttesting sympy lambdify...\t\t', end='')
@@ -195,12 +213,13 @@ def test_model(f, label):
     np.testing.assert_array_almost_equal(X0, X)
     print(f'\tpass in {1000 * (t1 - t0):.1f} ms')
 
-    print('\ttesting python backend...\t\t', end='')
-    t0 = time.time()
-    X = f('python', ty, False)   
-    t1 = time.time()
-    np.testing.assert_array_almost_equal(X0, X)
-    print(f'\tpass in {1000 * (t1 - t0):.1f} ms')
+    if pyback:
+        print('\ttesting python backend...\t\t', end='')
+        t0 = time.time()
+        X = f('python', ty, False)   
+        t1 = time.time()
+        np.testing.assert_array_almost_equal(X0, X)
+        print(f'\tpass in {1000 * (t1 - t0):.1f} ms')
     
 
 test_model(mandelbrot, 'mandelbrot')    
@@ -211,6 +230,7 @@ test_model(lemniscate, 'lemniscate')
 test_model(binom, 'binom')
 test_model(binom, 'stress')
 test_model(power, 'power')
+test_model(powi_mod, 'powi_mod', False)
     
         
         
