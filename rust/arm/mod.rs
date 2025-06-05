@@ -204,10 +204,7 @@ impl Generator for ArmGenerator {
     }
 
     fn fmod(&mut self, dst: u8, a: u8, b: u8) {
-        self.divide(1, a, b);
-        self.floor(1, 1);
-        self.times(1, 1, b);
-        self.minus(dst, a, 1);
+        fmod(self, dst, a, b);
     }
 
     fn plus(&mut self, dst: u8, a: u8, b: u8) {
