@@ -321,7 +321,7 @@ impl Generator for ArmGenerator {
         self.emit(arm! {ret});
     }
     
-    fn prologue_fast(&mut self, cap: u32, num_args: u8) {
+    fn prologue_fast(&mut self, cap: u32, num_args: u32) {
         let stack_size = align_stack(self.reg_size() * cap);
 
         self.emit(arm! {sub sp, sp, #16});
@@ -333,16 +333,15 @@ impl Generator for ArmGenerator {
         let num_args = num_args as i32;
         
         for i in 0..num_args {
-            self.emit(arm! {str d(i), [sp, #8*(i+1)]});
+            self.emit(arm! {str d(i), [sp, #8*i]});
             self.mask |= 1 << i;
         }
     }
     
-    fn epilogue_fast(&mut self, cap: u32, num_args: u8) {
-        self.restore_regs();
-        
-        let num_args = num_args as i32;
-        self.emit(arm! {ldr d(0), [sp, #8*(num_args+1)]});
+    fn epilogue_fast(&mut self, cap: u32, idx_ret: i32) {
+        self.restore_regs();        
+
+        self.emit(arm! {ldr d(0), [sp, #8*idx_ret]});
         
         let stack_size = align_stack(self.reg_size() * cap);
 

@@ -166,8 +166,8 @@ def model(states, eqs, params=None, obs=None):
 
     d = {
         "iv": var(Symbol("$_")),
-        "params": [var(x) for x in params],
-        "states": [var(x) for x in states],
+        "params": [var(x) for x in list(params)],
+        "states": [var(x) for x in list(states)],
         "algs": [],
         "odes": [],
         "obs": [equation(expr(lhs), expr(rhs)) for (lhs, rhs) in zip(obs, eqs)],
@@ -194,8 +194,8 @@ def model_ode(iv, states, odes, params=None):
 
     d = {
         "iv": var(iv),
-        "params": [var(x) for x in params],
-        "states": [var(x) for x in states],
+        "params": [var(x) for x in list(params)],
+        "states": [var(x) for x in list(states)],
         "algs": [],
         "odes": [equation(ode(lhs), expr(rhs)) for (lhs, rhs) in zip(states, odes)],
         "obs": [],
@@ -230,8 +230,8 @@ def model_jac(iv, states, odes, params=None):
 
     d = {
         "iv": var(iv),
-        "params": [var(x) for x in params],
-        "states": [var(x) for x in states],
+        "params": [var(x) for x in list(params)],
+        "states": [var(x) for x in list(states)],
         "algs": [],
         "odes": [],
         "obs": [

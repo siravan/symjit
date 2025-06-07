@@ -207,7 +207,7 @@ impl Builder {
         // println!("{:02x?}", ir.bytes());
     }
     
-    pub fn compile_fast(&mut self, ir: &mut impl Generator, num_args: u8) {
+    pub fn compile_fast(&mut self, ir: &mut impl Generator, num_args: u32, idx_ret: i32) {
         let cap = self.sym_table.num_stack as u32;
         ir.prologue_fast(cap, num_args);
 
@@ -215,7 +215,7 @@ impl Builder {
             stmt.compile(ir);
         }
 
-        ir.epilogue_fast(cap, num_args);
+        ir.epilogue_fast(cap, idx_ret);
         self.append_const_section(ir);
         self.append_vt_section(ir);
         ir.apply_jumps();

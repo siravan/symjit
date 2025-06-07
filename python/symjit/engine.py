@@ -192,7 +192,7 @@ class RustyCompiler:
     def fast_func(self, sig=None):
         f = lib._fast_func(self.p)
         
-        if f == 0:  # is null
+        if f is None:
             raise ValueError("cannot generate a fast function")
             
         if sig is None:            

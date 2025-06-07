@@ -644,14 +644,6 @@ impl Generator for AmdGenerator {
         self.amd.sub_rsp(align_stack(self.reg_size() * cap + 8) - 8);
     }
 
-    #[cfg(target_family = "windows")]
-    fn prologue(&mut self, cap: u32) {
-        self.amd.mov_mem_reg(Amd::RSP, 0x08, Amd::RBP);
-        self.amd.mov_mem_reg(Amd::RSP, 0x10, Amd::RBX);
-        self.amd.mov(Amd::RBP, Amd::RCX);
-        self.amd.sub_rsp(align_stack(self.reg_size() * cap + 8) - 8);
-    }
-
     #[cfg(target_family = "unix")]
     fn epilogue(&mut self, cap: u32) {
         self.restore_regs();
@@ -661,6 +653,39 @@ impl Generator for AmdGenerator {
         self.amd.pop(Amd::RBP);
         self.amd.ret();
         self.predefined_consts();
+    }   
+    
+    #[cfg(target_family = "unix")]
+    fn prologue_fast(&mut self, cap: u32, num_args: u32) {
+        self.amd.push(Amd::RBP);
+        self.amd.push(Amd::RBX);
+        self.amd.sub_rsp(align_stack(self.reg_size() * cap + 8) - 8);
+        self.amd.mov(Amd::RBP, Amd::RSP);
+
+        for i in 0..num_args {
+            self.amd.movsd_mem_xmm(Amd::RSP, (i * 8) as i32, i as u8);
+            self.mask |= 1 << i;
+        }
+    }
+
+    #[cfg(target_family = "unix")]
+    fn epilogue_fast(&mut self, cap: u32, idx_ret: i32) {
+        self.restore_regs();
+        self.vzeroupper();
+        self.amd.movsd_xmm_mem(0, Amd::RSP, 8 * idx_ret);
+        self.amd.add_rsp(align_stack(self.reg_size() * cap + 8) - 8);
+        self.amd.pop(Amd::RBX);
+        self.amd.pop(Amd::RBP);
+        self.amd.ret();
+        self.predefined_consts();
+    }
+    
+    #[cfg(target_family = "windows")]
+    fn prologue(&mut self, cap: u32) {
+        self.amd.mov_mem_reg(Amd::RSP, 0x08, Amd::RBP);
+        self.amd.mov_mem_reg(Amd::RSP, 0x10, Amd::RBX);
+        self.amd.mov(Amd::RBP, Amd::RCX);
+        self.amd.sub_rsp(align_stack(self.reg_size() * cap + 8) - 8);
     }
 
     #[cfg(target_family = "windows")]
@@ -672,31 +697,41 @@ impl Generator for AmdGenerator {
         self.amd.mov_reg_mem(Amd::RBP, Amd::RSP, 0x08);
         self.amd.ret();
         self.predefined_consts();
-    }
+    }    
     
-    #[cfg(target_family = "unix")]
-    fn prologue_fast(&mut self, cap: u32, num_args: u8) {
-        self.amd.push(Amd::RBP);
-        self.amd.push(Amd::RBX);
-        self.amd.sub_rsp(align_stack(self.reg_size() * cap + 8) - 8);
+    #[cfg(target_family = "windows")]
+    fn prologue_fast(&mut self, cap: u32, num_args: u32) {
+        self.amd.mov_mem_reg(Amd::RSP, 0x08, Amd::RBP);
+        self.amd.mov_mem_reg(Amd::RSP, 0x10, Amd::RBX); 
+        let s = align_stack(self.reg_size() * cap + 8) - 8;
+        self.amd.sub_rsp(s);
         self.amd.mov(Amd::RBP, Amd::RSP);
 
-        for i in 0..num_args {
-            self.amd.movsd_mem_xmm(Amd::RSP, ((i+1) * 8) as i32, i);
+        for i in 0..num_args.min(4) {
+            self.amd.movsd_mem_xmm(Amd::RSP, i * 8, i);
+            self.mask |= 1 << i;
+        }
+        
+        for i in 4..num_args {
+            // the offset of the fifth or eight arguments:
+            // +4 for the 32-byte home
+            // +1 for the return address in the stack
+            // -4 for the first four arguments passed in XMM0-XMM3
+            self.amd.movsd_xmm_mem(0, Amd::RSP, ((s + 4 + 1 - 4) * 8) as i32);
+            self.amd.movsd_mem_xmm(Amd::RSP, i * 8, 0);
             self.mask |= 1 << i;
         }
     }
 
-    #[cfg(target_family = "unix")]
-    fn epilogue_fast(&mut self, cap: u32, num_args: u8) {
+    #[cfg(target_family = "windows")]
+    fn epilogue_fast(&mut self, cap: u32, idx_ret: i32) {
         self.restore_regs();
         self.vzeroupper();
-        self.amd.movsd_xmm_mem(0, Amd::RSP, ((num_args+1) * 8) as i32);
+        self.amd.movsd_xmm_mem(0, Amd::RSP, 8 * idx_ret);
         self.amd.add_rsp(align_stack(self.reg_size() * cap + 8) - 8);
-        self.amd.pop(Amd::RBX);
-        self.amd.pop(Amd::RBP);
+        self.amd.mov_reg_mem(Amd::RBX, Amd::RSP, 0x10);
+        self.amd.mov_reg_mem(Amd::RBP, Amd::RSP, 0x08);
         self.amd.ret();
         self.predefined_consts();
-    }
-
+    }    
 }
