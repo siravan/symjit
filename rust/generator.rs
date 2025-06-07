@@ -92,6 +92,9 @@ pub trait Generator {
 
     fn prologue(&mut self, n: u32);
     fn epilogue(&mut self, n: u32);
+    
+    fn prologue_fast(&mut self, cap: u32, num_args: u8);
+    fn epilogue_fast(&mut self, cap: u32, num_args: u8);
 }
 
 pub fn powi<T: Generator>(ir: &mut T, dst: u8, r: u8, power: i32) {

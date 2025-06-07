@@ -673,4 +673,30 @@ impl Generator for AmdGenerator {
         self.amd.ret();
         self.predefined_consts();
     }
+    
+    #[cfg(target_family = "unix")]
+    fn prologue_fast(&mut self, cap: u32, num_args: u8) {
+        self.amd.push(Amd::RBP);
+        self.amd.push(Amd::RBX);
+        self.amd.sub_rsp(align_stack(self.reg_size() * cap + 8) - 8);
+        self.amd.mov(Amd::RBP, Amd::RSP);
+
+        for i in 0..num_args {
+            self.amd.movsd_mem_xmm(Amd::RSP, ((i+1) * 8) as i32, i);
+            self.mask |= 1 << i;
+        }
+    }
+
+    #[cfg(target_family = "unix")]
+    fn epilogue_fast(&mut self, cap: u32, num_args: u8) {
+        self.restore_regs();
+        self.vzeroupper();
+        self.amd.movsd_xmm_mem(0, Amd::RSP, ((num_args+1) * 8) as i32);
+        self.amd.add_rsp(align_stack(self.reg_size() * cap + 8) - 8);
+        self.amd.pop(Amd::RBX);
+        self.amd.pop(Amd::RBP);
+        self.amd.ret();
+        self.predefined_consts();
+    }
+
 }

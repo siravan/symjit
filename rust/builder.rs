@@ -206,6 +206,22 @@ impl Builder {
         // println!("{:?}", &self.stmts);
         // println!("{:02x?}", ir.bytes());
     }
+    
+    pub fn compile_fast(&mut self, ir: &mut impl Generator, num_args: u8) {
+        let cap = self.sym_table.num_stack as u32;
+        ir.prologue_fast(cap, num_args);
+
+        for stmt in self.stmts.iter_mut() {
+            stmt.compile(ir);
+        }
+
+        ir.epilogue_fast(cap, num_args);
+        self.append_const_section(ir);
+        self.append_vt_section(ir);
+        ir.apply_jumps();
+        // println!("{:?}", &self.stmts);
+        // println!("{:02x?}", ir.bytes());
+    }
 
     fn append_const_section(&self, ir: &mut impl Generator) {
         for (idx, val) in self.consts.iter().enumerate() {
@@ -268,4 +284,8 @@ impl Compiled<f64> for ByteCode {
     }
 
     fn dump(&self, name: &str) {}
+    
+    fn func(&self) -> fn(&[f64]) {
+        unreachable!()
+    }
 }

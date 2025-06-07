@@ -28,7 +28,7 @@ impl<T> MachineCode<T> {
         let size = machine_code.len();
 
         let mut code = Memory::new(BranchProtection::None);
-        let p: *mut u8 = code.allocate(size, 64).unwrap();
+        let p: *mut u8 = code.allocate(size, 64).unwrap();               
 
         let v = unsafe { std::slice::from_raw_parts_mut(p, size) };
         v.copy_from_slice(&machine_code[..]);
@@ -36,7 +36,7 @@ impl<T> MachineCode<T> {
         code.set_readable_and_executable().unwrap();
 
         let f: fn(&[T]) = unsafe { std::mem::transmute(p) };
-
+        
         MachineCode {
             machine_code,
             code,
@@ -65,5 +65,9 @@ impl<T> Compiled<T> for MachineCode<T> {
     fn dump(&self, name: &str) {
         let mut fs = fs::File::create(name).unwrap();
         let _ = fs.write(&self.machine_code[..]);
+    }
+    
+    fn func(&self) -> fn(&[T]) {
+        self.f
     }
 }

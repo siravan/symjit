@@ -54,6 +54,9 @@ class Func:
         
     def dumps(self, what="scalar"):        
         return dumps(self.compiler, what=what)
+        
+    def fast_func(self, sig=None):
+        return self.compiler.fast_func(sig=sig)
 
 
 class OdeFunc:

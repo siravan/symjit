@@ -46,7 +46,9 @@ pub struct Runnable {
     pub prog: Program,
     pub compiled: Box<dyn Compiled<f64>>,
     pub compiled_simd: Option<Box<dyn Compiled<f64x4>>>,
+    pub compiled_fast: Option<Box<dyn Compiled<f64>>>,
     pub use_simd: bool,
+    pub can_fast: bool,
     pub first_state: usize,
     pub first_param: usize,
     pub first_obs: usize,
@@ -100,12 +102,16 @@ impl Runnable {
         let use_simd = use_simd
             && Platform::has_avx()
             && (matches!(ty, CompilerType::Amd) | matches!(ty, CompilerType::AmdAVX));
+            
+        let can_fast = count_states < 8 && count_params == 0 && count_obs == 1 && count_diffs == 0;            
 
         Runnable {
             prog,
             compiled,
             compiled_simd: None,
+            compiled_fast: None,
             use_simd,
+            can_fast,
             first_state,
             first_param,
             first_obs,
@@ -164,6 +170,16 @@ impl Runnable {
 
         compiled
     }
+    
+    fn compile_avx_fast(prog: &mut Program, size: usize) -> Box<dyn Compiled<f64>> {
+        let mut generator = AmdGenerator::new(AmdFamily::AvxScalar);
+        let mem: Vec<f64> = Vec::new();
+        prog.builder.compile_fast(&mut generator, prog.count_states as u8);
+        let code = MachineCode::new("x86_64", generator.bytes(), mem);
+        let compiled: Box<dyn Compiled<f64>> = Box::new(code);
+
+        compiled
+    }
 
     pub fn exec(&mut self, t: f64) {
         {
@@ -179,6 +195,26 @@ impl Runnable {
             let size = self.first_diff + self.prog.count_diffs + 1;
             self.compiled_simd = Some(Self::compile_simd(&mut self.prog, size));
         };
+    }
+    
+    fn prepare_fast(&mut self) {
+        // fast func compilation is lazy!
+        if self.compiled_simd.is_none() && self.can_fast {            
+            let size = self.first_diff + self.prog.count_diffs + 1;
+            
+            if Platform::is_amd64() {
+                self.compiled_fast = Some(Self::compile_avx_fast(&mut self.prog, size));
+            }                       
+        };
+    }
+    
+    pub fn get_fast(&mut self) -> Option<fn(&[f64])> {
+        self.prepare_fast();
+    
+        match &self.compiled_fast {
+            Some(c) => Some(c.func()),
+            None => None
+        }
     }
 
     pub fn exec_vectorized(&mut self, buf: &mut [f64], n: usize) {
@@ -306,6 +342,16 @@ impl Runnable {
                 self.prepare_simd();
 
                 if let Some(f) = &self.compiled_simd {
+                    f.dump(name);
+                    true
+                } else {
+                    false
+                }
+            }
+            "fast" => {
+                self.prepare_fast();
+
+                if let Some(f) = &self.compiled_fast {
                     f.dump(name);
                     true
                 } else {

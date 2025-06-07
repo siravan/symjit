@@ -407,3 +407,18 @@ pub unsafe extern "C" fn info() -> *const c_char {
     let msg = CString::new(env!("CARGO_PKG_VERSION")).unwrap();
     msg.into_raw() as *const _
 }
+
+
+#[no_mangle]
+pub unsafe extern "C" fn fast_func(q: *mut CompilerResult) -> *const usize {
+    let q: &mut CompilerResult = unsafe { &mut *q };
+    if let Some(func) = &mut q.func {
+        match func.get_fast() {
+            Some(f) => f as *const usize,
+            None => std::ptr::null()
+        }
+    } else {
+        std::ptr::null()
+    }
+}
+

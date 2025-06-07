@@ -110,6 +110,10 @@ class Engine:
         self._ptr_diffs = self.dll.ptr_diffs
         self._ptr_diffs.argtypes = [ctypes.c_void_p]
         self._ptr_diffs.restype = ctypes.POINTER(ctypes.c_double)
+        
+        self._fast_func = self.dll.fast_func
+        self._fast_func.argtypes = [ctypes.c_void_p]
+        self._fast_func.restype = ctypes.c_void_p
 
     def info(self):
         return self._info()
@@ -184,3 +188,16 @@ class RustyCompiler:
         n = buf.shape[1]
         if not lib._execute_vectorized(self.p, ptr, n):
             raise ValueError("cannot execute the model")
+            
+    def fast_func(self, sig=None):
+        f = lib._fast_func(self.p)
+        
+        if f == 0:  # is null
+            raise ValueError("cannot generate a fast function")
+            
+        if sig is None:            
+            sig = [ctypes.c_double for _ in range(self.count_states + 1)]
+            
+        fac = ctypes.CFUNCTYPE(*sig)
+        return fac(f)
+        

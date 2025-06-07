@@ -5,6 +5,7 @@ pub trait Compiled<T> {
     fn mem(&self) -> &[T];
     fn mem_mut(&mut self) -> &mut [T];
     fn dump(&self, name: &str);
+    fn func(&self) -> fn(&[T]);
 }
 
 pub trait Eval {

@@ -320,4 +320,36 @@ impl Generator for ArmGenerator {
         self.emit(arm! {add sp, sp, #16});
         self.emit(arm! {ret});
     }
+    
+    fn prologue_fast(&mut self, cap: u32, num_args: u8) {
+        let stack_size = align_stack(self.reg_size() * cap);
+
+        self.emit(arm! {sub sp, sp, #16});
+        self.emit(arm! {str lr, [sp, #0]});
+        self.emit(arm! {str x(19), [sp, #8]});
+        self.emit(arm! {sub sp, sp, #stack_size});
+        self.emit(arm! {mov x(19), sp});
+        
+        let num_args = num_args as i32;
+        
+        for i in 0..num_args {
+            self.emit(arm! {str d(i), [sp, #8*(i+1)]});
+            self.mask |= 1 << i;
+        }
+    }
+    
+    fn epilogue_fast(&mut self, cap: u32, num_args: u8) {
+        self.restore_regs();
+        
+        let num_args = num_args as i32;
+        self.emit(arm! {ldr d(0), [sp, #8*(num_args+1)]});
+        
+        let stack_size = align_stack(self.reg_size() * cap);
+
+        self.emit(arm! {add sp, sp, #stack_size});
+        self.emit(arm! {ldr x(19), [sp, #8]});
+        self.emit(arm! {ldr lr, [sp, #0]});
+        self.emit(arm! {add sp, sp, #16});
+        self.emit(arm! {ret});
+    }
 }
