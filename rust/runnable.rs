@@ -181,6 +181,16 @@ impl Runnable {
         compiled
     }
 
+    fn compile_arm_fast(prog: &mut Program, size: usize) -> Box<dyn Compiled<f64>> {
+        let mut generator = ArmGenerator::new();
+        let mem: Vec<f64> = Vec::new();
+        prog.builder.compile_fast(&mut generator, prog.count_states as u8);
+        let code = MachineCode::new("aarch64", generator.bytes(), mem);
+        let compiled: Box<dyn Compiled<f64>> = Box::new(code);
+
+        compiled
+    }
+
     pub fn exec(&mut self, t: f64) {
         {
             let mem = self.compiled.mem_mut();
@@ -202,8 +212,10 @@ impl Runnable {
         if self.compiled_simd.is_none() && self.can_fast {            
             let size = self.first_diff + self.prog.count_diffs + 1;
             
-            if Platform::is_amd64() {
+            if Platform::is_amd64() && Platform::has_avx() {
                 self.compiled_fast = Some(Self::compile_avx_fast(&mut self.prog, size));
+            } else if Platform::is_arm64() {
+                self.compiled_fast = Some(Self::compile_arm_fast(&mut self.prog, size));
             }                       
         };
     }

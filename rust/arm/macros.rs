@@ -77,8 +77,8 @@ macro_rules! arm {
     ($op:ident sp, sp, #$imm:expr) => {
         arm! { $op x(31), x(31), #$imm }
     };
-    ($op:ident x($rd:expr), sp) => {
-        arm! { $op x($rd), x(31) }
+    (mov x($rd:expr), sp) => {
+        arm! { add x($rd), x(31), #0 }
     };
 
     // main rules
