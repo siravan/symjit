@@ -515,12 +515,12 @@ impl Eval for Node {
 
         match self {
             Node::Void => 0.0,
-            Node::Const { val, .. } => *val,
-            Node::Var { sym, .. } => match sym.borrow().loc {
+            Node::Const {val, ..} => *val,
+            Node::Var {sym, ..} => match sym.borrow().loc {
                 Loc::Stack(idx) => stack[idx as usize],
                 Loc::Mem(idx) => mem[idx as usize],
             },
-            Node::Unary { op, arg, power, .. } => {
+            Node::Unary {op, arg, power, ..} => {
                 let x = arg.eval(mem, stack);
 
                 match op.as_str() {
@@ -528,20 +528,18 @@ impl Eval for Node {
                     "not" => T - x,
                     "abs" => x.abs(),
                     "root" => x.sqrt(),
-                    "square" => x * x,
-                    "cube" => x * x * x,
+                    "square" => x.powi(2),
+                    "cube" => x.powi(3),
                     "recip" => 1.0 / x,
                     "_powi_" => x.powi(*power),
                     "_call_" => {
                         stack[0] = x;
                         x
                     }
-                    _ => f64::NAN,
+                    _ => f64::NAN, 
                 }
             }
-            Node::Binary {
-                op, left, right, power, ..
-            } => {
+            Node::Binary {op, left, right, power, ..} => {
                 let x = left.eval(mem, stack);
                 let y = right.eval(mem, stack);
 
@@ -622,7 +620,7 @@ impl Eval for Node {
                         stack[1] = y;
                         x
                     }
-                    _ => f64::NAN,
+                    _ => f64::NAN 
                 }
             }
         }
