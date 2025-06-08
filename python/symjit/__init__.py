@@ -14,6 +14,7 @@ class Func:
         self.count_states = self.compiler.count_states
         self.count_params = self.compiler.count_params
         self.count_obs = self.compiler.count_obs
+        self.f = self.fast_func()
 
     def __call__(self, *args):
         if len(args) > self.count_states:
@@ -21,6 +22,8 @@ class Func:
             self.compiler.params[:] = p
 
         if isinstance(args[0], numbers.Number):
+            if self.f is not None:
+                return self.f(*args)
             u = np.array(args[: self.count_states], dtype="double")
             self.compiler.states[:] = u
             self.compiler.execute()
@@ -55,8 +58,8 @@ class Func:
     def dumps(self, what="scalar"):        
         return dumps(self.compiler, what=what)
         
-    def fast_func(self, sig=None):
-        return self.compiler.fast_func(sig=sig)
+    def fast_func(self):
+        return self.compiler.fast_func()
 
 
 class OdeFunc:

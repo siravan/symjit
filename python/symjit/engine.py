@@ -189,15 +189,13 @@ class RustyCompiler:
         if not lib._execute_vectorized(self.p, ptr, n):
             raise ValueError("cannot execute the model")
             
-    def fast_func(self, sig=None):
+    def fast_func(self):
         f = lib._fast_func(self.p)
         
         if f is None:
-            raise ValueError("cannot generate a fast function")
-            
-        if sig is None:            
-            sig = [ctypes.c_double for _ in range(self.count_states + 1)]
-            
+            return None
+        
+        sig = [ctypes.c_double for _ in range(self.count_states + 1)]            
         fac = ctypes.CFUNCTYPE(*sig)
         return fac(f)
         

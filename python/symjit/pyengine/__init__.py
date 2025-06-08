@@ -363,3 +363,6 @@ class PyCompiler:
                 ctypes.c_size_t(buf.shape[1]),
                 self.code.addr,
             )
+            
+    def fast_func(self):
+        return None            

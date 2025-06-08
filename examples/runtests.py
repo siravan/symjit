@@ -147,8 +147,8 @@ def powi_mod(backend, ty, use_simd):
 
 def triple(backend, ty, use_simd):
     p = 1 / (1 - cos(x) * cos(y) * cos(z))    
-    f = func([x, y, z], [p], backend=backend, ty=ty, use_simd=use_simd)             
-    return integrate.tplquad(lambda x, y, z: f(x, y, z)[0], 0, math.pi, 0, math.pi, 0, math.pi)[0] 
+    f = func([x, y, z], p, backend=backend, ty=ty, use_simd=use_simd)             
+    return integrate.tplquad(lambda x, y, z: f(x, y, z), 0, math.pi, 0, math.pi, 0, math.pi)[0] 
     
     
 def triple_fast(backend, ty, use_simd):
