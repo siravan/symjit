@@ -9,26 +9,52 @@ from . import pyengine
 
 
 class Func:
-    def __init__(self, compiler):
+    def __init__(self, compiler, eqs):
         self.compiler = compiler
         self.count_states = self.compiler.count_states
         self.count_params = self.compiler.count_params
         self.count_obs = self.compiler.count_obs
-        self.f = self.fast_func()
+        self.f = self.compiler.fast_func()
+        self.prepare_fmt(eqs)
+        self.prepare_vecfmt(eqs)
 
-    def __call__(self, *args):
+    def prepare_fmt(self, eqs):        
+        if self.f is not None:
+            if isinstance(eqs, list):
+                self.fmt = lambda args : [self.f(*args)]
+            elif isinstance(eqs, tuple):
+                self.fmt = lambda args : (self.f(*args),)
+            else:
+                self.fmt = lambda args : self.f(*args)
+        else:
+            if isinstance(eqs, list):
+                self.fmt = lambda obs : obs.tolist()
+            elif isinstance(eqs, tuple):
+                self.fmt = lambda obs : tuple(obs.tolist())
+            else:
+                self.fmt = lambda obs : obs[0]
+                
+    def prepare_vecfmt(self, eqs):
+        if isinstance(eqs, list):
+            self.vecfmt = lambda res : res
+        elif isinstance(eqs, tuple):
+            self.vecfmt = lambda res : tuple(res)
+        else:
+            self.vecfmt = lambda res : res[0]
+
+    def __call__(self, *args):                
         if len(args) > self.count_states:
             p = np.array(args[self.count_states :], dtype="double")
             self.compiler.params[:] = p
-
-        if isinstance(args[0], numbers.Number):
+            
+        if isinstance(args[0], numbers.Number): 
             if self.f is not None:
-                return self.f(*args)
+                return self.fmt(args)
+                
             u = np.array(args[: self.count_states], dtype="double")
             self.compiler.states[:] = u
             self.compiler.execute()
-            res = self.compiler.obs.copy()
-            return res
+            return self.fmt(self.compiler.obs)
         else:
             return self.call_vectorized(*args)
 
@@ -50,7 +76,7 @@ class Func:
             y = buf[i, :].reshape(shape)
             res.append(y)
 
-        return res
+        return self.vecfmt(res)
 
     def dump(self, name, what="scalar"):
         self.compiler.dump(name, what=what)
@@ -59,7 +85,7 @@ class Func:
         return dumps(self.compiler, what=what)
         
     def fast_func(self):
-        return self.compiler.fast_func()
+        return self.f
 
 
 class OdeFunc:
@@ -177,7 +203,7 @@ def compile_func(
     else:
         raise ValueError("unsupported platform")
 
-    return Func(compiler)
+    return Func(compiler, eqs)
 
 
 def compile_ode(

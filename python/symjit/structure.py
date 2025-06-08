@@ -152,10 +152,10 @@ def ode(y):
 
 
 def model(states, eqs, params=None, obs=None):
-    if not isinstance(states, list):
+    if not hasattr(states, "__iter__"):
         states = [states]
 
-    if not isinstance(eqs, list):
+    if not hasattr(eqs, "__iter__"):
         eqs = [eqs]
 
     if params is None:
@@ -177,14 +177,10 @@ def model(states, eqs, params=None, obs=None):
 
 
 def model_ode(iv, states, odes, params=None):
-    try:
-        states = list(states)
-    except TypeError:
+    if not hasattr(states, "__iter__"):
         states = [states]
 
-    try:
-        odes = list(odes)
-    except TypeError:
+    if not hasattr(odes, "__iter__"):
         odes = [odes]
 
     assert len(states) == len(odes)
@@ -205,14 +201,10 @@ def model_ode(iv, states, odes, params=None):
 
 
 def model_jac(iv, states, odes, params=None):
-    try:
-        states = list(states)
-    except TypeError:
+    if not hasattr(states, "__iter__"):
         states = [states]
 
-    try:
-        odes = list(odes)
-    except TypeError:
+    if not hasattr(odes, "__iter__"):
         odes = [odes]
 
     assert len(states) == len(odes)
