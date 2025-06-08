@@ -663,8 +663,7 @@ impl Generator for AmdGenerator {
         self.amd.mov(Amd::RBP, Amd::RSP);
 
         for i in 0..num_args {
-            self.amd.movsd_mem_xmm(Amd::RSP, (i * 8) as i32, i as u8);
-            self.mask |= 1 << i;
+            self.amd.movsd_mem_xmm(Amd::RSP, (i * 8) as i32, i as u8);            
         }
     }
 
@@ -708,8 +707,7 @@ impl Generator for AmdGenerator {
         self.amd.mov(Amd::RBP, Amd::RSP);
 
         for i in 0..num_args.min(4) {
-            self.amd.movsd_mem_xmm(Amd::RSP, i * 8, i);
-            self.mask |= 1 << i;
+            self.amd.movsd_mem_xmm(Amd::RSP, (i * 8) as i32, i as u8);            
         }
         
         for i in 4..num_args {
@@ -717,9 +715,8 @@ impl Generator for AmdGenerator {
             // +4 for the 32-byte home
             // +1 for the return address in the stack
             // -4 for the first four arguments passed in XMM0-XMM3
-            self.amd.movsd_xmm_mem(0, Amd::RSP, ((s + 4 + 1 - 4) * 8) as i32);
-            self.amd.movsd_mem_xmm(Amd::RSP, i * 8, 0);
-            self.mask |= 1 << i;
+            self.amd.movsd_xmm_mem(0, Amd::RSP, (s + 8 * (4 + 1 + i - 4)) as i32);
+            self.amd.movsd_mem_xmm(Amd::RSP, (i * 8) as i32, 0);            
         }
     }
 
