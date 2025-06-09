@@ -1,7 +1,6 @@
 use crate::amd::{AmdFamily, AmdGenerator};
 use crate::arm::ArmGenerator;
 use crate::builder::ByteCode;
-use crate::code::{BinaryFunc, VirtualTable};
 use crate::generator::Generator;
 use crate::machine::MachineCode;
 use crate::model::Program;
@@ -53,23 +52,23 @@ pub struct Runnable {
     pub first_param: usize,
     pub first_obs: usize,
     pub first_diff: usize,
-    pub idx_iv: usize,  // independent variable index
+    pub idx_iv: usize, // independent variable index
     pub count_states: usize,
     pub count_params: usize,
     pub count_obs: usize,
-    pub count_diffs: usize,  
+    pub count_diffs: usize,
     pub size: usize,
 }
 
 impl Runnable {
     pub fn new(mut prog: Program, ty: CompilerType, use_simd: bool) -> Runnable {
-        let first_state = 0; 
+        let first_state = 0;
         let idx_iv = prog.count_states;
-        let first_param = first_state + prog.count_states + 1;  // +1 for the independent variable
+        let first_param = first_state + prog.count_states + 1; // +1 for the independent variable
         let first_obs = first_param + prog.count_params;
         let first_diff = first_obs + prog.count_obs;
-        let size = first_diff + prog.count_diffs + 1;   // +1 is here for padding, so that we can return 
-                                                        // diff vector even if count_diff is 0
+        let size = first_diff + prog.count_diffs + 1; // +1 is here for padding, so that we can return
+                                                      // diff vector even if count_diff is 0
 
         let count_states = prog.count_states;
         let count_params = prog.count_params;
@@ -106,8 +105,8 @@ impl Runnable {
         let use_simd = use_simd
             && Platform::has_avx()
             && (matches!(ty, CompilerType::Amd) | matches!(ty, CompilerType::AmdAVX));
-            
-        let can_fast = count_states < 8 && count_params == 0 && count_obs == 1 && count_diffs == 0;            
+
+        let can_fast = count_states < 8 && count_params == 0 && count_obs == 1 && count_diffs == 0;
 
         Runnable {
             prog,
@@ -171,26 +170,28 @@ impl Runnable {
 
     fn compile_bytecode(prog: &mut Program, size: usize) -> Box<dyn Compiled<f64>> {
         let mem: Vec<f64> = vec![0.0; size];
-        let code = ByteCode::new(prog.builder.clone(), mem, size);
+        let code = ByteCode::new(prog.builder.clone(), mem);
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
 
         compiled
     }
-    
-    fn compile_avx_fast(prog: &mut Program, size: usize, idx_ret: u32) -> Box<dyn Compiled<f64>> {
+
+    fn compile_avx_fast(prog: &mut Program, _size: usize, idx_ret: u32) -> Box<dyn Compiled<f64>> {
         let mut generator = AmdGenerator::new(AmdFamily::AvxScalar);
         let mem: Vec<f64> = Vec::new();
-        prog.builder.compile_fast(&mut generator, prog.count_states as u32, idx_ret as i32);
+        prog.builder
+            .compile_fast(&mut generator, prog.count_states as u32, idx_ret as i32);
         let code = MachineCode::new("x86_64", generator.bytes(), mem);
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
 
         compiled
     }
 
-    fn compile_arm_fast(prog: &mut Program, size: usize, idx_ret: u32) -> Box<dyn Compiled<f64>> {
+    fn compile_arm_fast(prog: &mut Program, _size: usize, idx_ret: u32) -> Box<dyn Compiled<f64>> {
         let mut generator = ArmGenerator::new();
         let mem: Vec<f64> = Vec::new();
-        prog.builder.compile_fast(&mut generator, prog.count_states as u32, idx_ret as i32);
+        prog.builder
+            .compile_fast(&mut generator, prog.count_states as u32, idx_ret as i32);
         let code = MachineCode::new("aarch64", generator.bytes(), mem);
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
 
@@ -207,29 +208,40 @@ impl Runnable {
 
     fn prepare_simd(&mut self) {
         // SIMD compilation is lazy!
-        if self.compiled_simd.is_none() && self.use_simd {            
+        if self.compiled_simd.is_none() && self.use_simd {
             self.compiled_simd = Some(Self::compile_simd(&mut self.prog, self.size));
         };
     }
-    
+
     fn prepare_fast(&mut self) {
         // fast func compilation is lazy!
-        if self.compiled_simd.is_none() && self.can_fast {            
+        if self.compiled_simd.is_none() && self.can_fast {
             if Platform::is_amd64() && Platform::has_avx() {
-                self.compiled_fast = Some(Self::compile_avx_fast(&mut self.prog, self.size, self.first_obs as u32));
+                self.compiled_fast = Some(Self::compile_avx_fast(
+                    &mut self.prog,
+                    self.size,
+                    self.first_obs as u32,
+                ));
             } else if Platform::is_arm64() {
-                self.compiled_fast = Some(Self::compile_arm_fast(&mut self.prog, self.size, self.first_obs as u32));
-            }                       
+                self.compiled_fast = Some(Self::compile_arm_fast(
+                    &mut self.prog,
+                    self.size,
+                    self.first_obs as u32,
+                ));
+            }
         };
     }
-    
+
     pub fn get_fast(&mut self) -> Option<fn(&[f64])> {
         self.prepare_fast();
-    
+        self.compiled_fast.as_ref().map(|c| c.func())
+
+        /*
         match &self.compiled_fast {
             Some(c) => Some(c.func()),
-            None => None
+            None => None,
         }
+        */
     }
 
     pub fn exec_vectorized(&mut self, buf: &mut [f64], n: usize) {

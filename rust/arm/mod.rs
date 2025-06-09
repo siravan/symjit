@@ -2,7 +2,6 @@
 mod macros;
 
 use crate::assembler::Assembler;
-use crate::code::BinaryFunc;
 use crate::generator::{fmod, powi, powi_mod, Generator};
 use crate::utils::align_stack;
 
@@ -24,7 +23,7 @@ impl ArmGenerator {
     fn emit(&mut self, w: u32) {
         self.a.append_word(w);
     }
-    
+
     fn flush(&mut self, dst: u8) {
         if dst == 0 {
             if let Some(idx) = self.r0 {
@@ -165,7 +164,7 @@ impl Generator for ArmGenerator {
 
     fn powi(&mut self, dst: u8, r: u8, power: i32) {
         self.flush(dst);
-        
+
         if power == 0 {
             self.emit(arm! {fmov d(dst), #1.0});
         } else {
@@ -175,7 +174,7 @@ impl Generator for ArmGenerator {
 
     fn powi_mod(&mut self, dst: u8, r: u8, power: i32, modulus: u8) {
         self.flush(dst);
-        
+
         if power == 0 {
             self.emit(arm! {fmov d(dst), #1.0});
         } else {
@@ -311,7 +310,7 @@ impl Generator for ArmGenerator {
 
     fn epilogue(&mut self, cap: u32) {
         self.restore_regs();
-        
+
         let stack_size = align_stack(self.reg_size() * cap);
 
         self.emit(arm! {add sp, sp, #stack_size});
@@ -320,7 +319,7 @@ impl Generator for ArmGenerator {
         self.emit(arm! {add sp, sp, #16});
         self.emit(arm! {ret});
     }
-    
+
     fn prologue_fast(&mut self, cap: u32, num_args: u32) {
         let stack_size = align_stack(self.reg_size() * cap);
 
@@ -329,20 +328,20 @@ impl Generator for ArmGenerator {
         self.emit(arm! {str x(19), [sp, #8]});
         self.emit(arm! {sub sp, sp, #stack_size});
         self.emit(arm! {mov x(19), sp});
-        
+
         let num_args = num_args as i32;
-        
+
         for i in 0..num_args {
             self.emit(arm! {str d(i), [sp, #8*i]});
             self.mask |= 1 << i;
         }
     }
-    
+
     fn epilogue_fast(&mut self, cap: u32, idx_ret: i32) {
-        self.restore_regs();        
+        self.restore_regs();
 
         self.emit(arm! {ldr d(0), [sp, #8*idx_ret]});
-        
+
         let stack_size = align_stack(self.reg_size() * cap);
 
         self.emit(arm! {add sp, sp, #stack_size});

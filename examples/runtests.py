@@ -165,7 +165,7 @@ def triple_fast(backend, ty, use_simd):
 
 #############################################################################
 
-def test_model(f, label, pyback=True):
+def test_model(f, label, pyback=True, bytecode=True):
     print(f'testing {label}')
 
     print('\ttesting sympy lambdify...\t\t', end='')
@@ -198,12 +198,13 @@ def test_model(f, label, pyback=True):
         np.testing.assert_array_almost_equal(X0, X)
         print(f'\tpass in {1000 * (t1 - t0):.1f} ms')
 
-    print('\ttesting rust backend with bytecode...\t', end='')
-    t0 = time.time()
-    X = f('rust', 'bytecode', False)
-    t1 = time.time()
-    np.testing.assert_array_almost_equal(X0, X)
-    print(f'\tpass in {1000 * (t1 - t0):.1f} ms')
+    if bytecode:
+        print('\ttesting rust backend with bytecode...\t', end='')
+        t0 = time.time()
+        X = f('rust', 'bytecode', False)
+        t1 = time.time()
+        np.testing.assert_array_almost_equal(X0, X)
+        print(f'\tpass in {1000 * (t1 - t0):.1f} ms')
 
     if pyback:
         print('\ttesting python backend...\t\t', end='')
@@ -222,9 +223,9 @@ test_model(lemniscate, 'lemniscate')
 test_model(binom, 'binom')
 test_model(binom, 'stress')
 test_model(power, 'power')
-test_model(powi_mod, 'powi_mod', False)
+test_model(powi_mod, 'powi_mod', pyback=False)
 test_model(triple, 'triple')
-test_model(triple_fast, 'triple_fast', False)
+test_model(triple_fast, 'triple_fast', pyback=False, bytecode=False)
     
         
         

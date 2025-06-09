@@ -92,7 +92,7 @@ pub trait Generator {
 
     fn prologue(&mut self, n: u32);
     fn epilogue(&mut self, n: u32);
-    
+
     fn prologue_fast(&mut self, cap: u32, num_args: u32);
     fn epilogue_fast(&mut self, cap: u32, idx_ret: i32);
 }
@@ -100,7 +100,7 @@ pub trait Generator {
 pub fn powi<T: Generator>(ir: &mut T, dst: u8, r: u8, power: i32) {
     if power == 0 {
         ir.divide(dst, dst, dst); // this is a generic way to make 1, but should be
-                                 // overrided by the calling Generator for efficiency
+                                  // overrided by the calling Generator for efficiency
     } else if power > 0 {
         let t = power.trailing_zeros();
         let mut n = power >> (t + 1);
@@ -115,7 +115,7 @@ pub fn powi<T: Generator>(ir: &mut T, dst: u8, r: u8, power: i32) {
             if n & 1 != 0 {
                 ir.times(dst, dst, 1);
             };
-            n = n >> 1;
+            n >>= 1;
         }
 
         for _ in 0..t {
@@ -132,7 +132,7 @@ pub fn powi_mod<T: Generator>(ir: &mut T, dst: u8, r: u8, power: i32, modulus: u
 
     if power == 0 {
         ir.divide(dst, dst, dst); // this is a generic way to make 1, but should be
-                                 // overrided by the calling Generator for efficiency
+                                  // overrided by the calling Generator for efficiency
     } else if power > 0 {
         let t = power.trailing_zeros();
         let mut n = power >> (t + 1);
@@ -149,7 +149,7 @@ pub fn powi_mod<T: Generator>(ir: &mut T, dst: u8, r: u8, power: i32, modulus: u
                 ir.times(dst, dst, 1);
                 ir.fmod(dst, dst, modulus);
             };
-            n = n >> 1;
+            n >>= 1;
         }
 
         for _ in 0..t {

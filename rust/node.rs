@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::builder::Builder;
 use crate::generator::Generator;
 use crate::symbol::{Loc, Symbol};
 use crate::utils::Eval;
@@ -224,19 +223,19 @@ impl Node {
         self.postorder_forward(Self::ershov_func);
         self.postorder_forward(Self::mark_first);
         self.postorder_backward(Self::mark_last);
-        
+
         let last = ir.first_shadow() + self.ershov_number();
 
         // we check ir.three_address() because AmdGenerator::shrink may swap
         // registers when generating code for SSE (two-address code).
         // This check may not be actually necessary, but we need to prove its
         // correctness first.
-        
+
         let mut pool: Vec<u8> = if ir.three_address() {
             (last..16).rev().collect()
         } else {
             Vec::new()
-        };            
+        };
 
         // println!("{:#?}", &self);
         self.compile(ir, 0, &mut pool)
@@ -398,7 +397,7 @@ impl Node {
             panic!("should not get here!");
         }
     }
-    
+
     fn alloc(
         &self,
         ir: &mut dyn Generator,
@@ -408,8 +407,8 @@ impl Node {
         pool: &mut Vec<u8>,
     ) -> (u8, u8, u8) {
         let el = left.ershov_number();
-        let er = right.ershov_number();    
-        let mut dst = ir.first_shadow() + base + self.ershov_number() - 1;
+        let er = right.ershov_number();
+        let dst = ir.first_shadow() + base + self.ershov_number() - 1;
 
         let l;
         let r;
@@ -428,7 +427,7 @@ impl Node {
         } else {
             panic!("the expression is too large (not enough scratch registers).");
         }
-        
+
         (dst, l, r)
     }
 
@@ -515,12 +514,12 @@ impl Eval for Node {
 
         match self {
             Node::Void => 0.0,
-            Node::Const {val, ..} => *val,
-            Node::Var {sym, ..} => match sym.borrow().loc {
+            Node::Const { val, .. } => *val,
+            Node::Var { sym, .. } => match sym.borrow().loc {
                 Loc::Stack(idx) => stack[idx as usize],
                 Loc::Mem(idx) => mem[idx as usize],
             },
-            Node::Unary {op, arg, power, ..} => {
+            Node::Unary { op, arg, power, .. } => {
                 let x = arg.eval(mem, stack);
 
                 match op.as_str() {
@@ -536,10 +535,16 @@ impl Eval for Node {
                         stack[0] = x;
                         x
                     }
-                    _ => f64::NAN, 
+                    _ => f64::NAN,
                 }
             }
-            Node::Binary {op, left, right, power, ..} => {
+            Node::Binary {
+                op,
+                left,
+                right,
+                power,
+                ..
+            } => {
                 let x = left.eval(mem, stack);
                 let y = right.eval(mem, stack);
 
@@ -620,7 +625,7 @@ impl Eval for Node {
                         stack[1] = y;
                         x
                     }
-                    _ => f64::NAN 
+                    _ => f64::NAN,
                 }
             }
         }

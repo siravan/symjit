@@ -146,6 +146,7 @@ class RustyCompiler:
             raise ValueError(status.decode())
         self.model = model
         self.json_model = None
+        self.ty = ty
         self.populate()
 
     def __del__(self):
@@ -190,6 +191,9 @@ class RustyCompiler:
             raise ValueError("cannot execute the model")
             
     def fast_func(self):
+        if self.ty == "bytecode":
+            return None
+    
         f = lib._fast_func(self.p)
         
         if f is None:

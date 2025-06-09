@@ -35,21 +35,21 @@ impl Program {
             +------------------------+
             | parameters             |
             +------------------------+
-            | observables (output)   | ** 
+            | observables (output)   | **
             +------------------------+
             | differentials (output) |
             +------------------------+
-            
+
             * => the independent variable slot is always allocated, even if not an ODE
             ** => => the first observable is the return value for fast functions
         */
 
-        let mut builder = Builder::new();        
+        let mut builder = Builder::new();
 
         for v in &ml.states {
             builder.sym_table.add_mem(&v.name);
         }
-        
+
         builder.sym_table.add_mem(&ml.iv.name);
 
         for v in &ml.params {
@@ -91,7 +91,6 @@ impl Program {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Variable {
     pub name: String,
-    pub val: f64,
 }
 
 /// Transforms the input tree to the intermediate representation (tree-like)

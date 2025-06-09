@@ -4,10 +4,9 @@ use std::collections::HashSet;
 use super::utils::{Compiled, Eval};
 use crate::code::VirtualTable;
 use crate::generator::Generator;
-use crate::model::Expr;
 use crate::node::{Node, VarStatus};
 use crate::statement::Statement;
-use crate::symbol::{Loc, SymbolTable};
+use crate::symbol::SymbolTable;
 
 //****************************************************//
 
@@ -144,8 +143,8 @@ impl Builder {
 
     pub fn create_binary(&mut self, op: &str, left: Node, right: Node) -> Result<Node> {
         let node = match op {
-            "times" if left.is_const(-1.0) => self.create_unary("neg", right)?,
-            "times" if right.is_const(-1.0) => self.create_unary("neg", left)?,
+            "times" if left.is_const(-1.0) => Node::create_unary("neg", right),
+            "times" if right.is_const(-1.0) => Node::create_unary("neg", left),
             "times" if left.is_const(1.0) => right,
             "times" if right.is_const(1.0) => left,
             "times" if left.is_unary("recip") => {
@@ -168,14 +167,6 @@ impl Builder {
         };
 
         Ok(node)
-    }
-
-    pub fn add_mem(&mut self, name: &str) {
-        self.sym_table.add_mem(name);
-    }
-
-    pub fn add_stack(&mut self, name: &str) {
-        self.sym_table.add_stack(name);
     }
 
     pub fn add_tmp(&mut self) -> Node {
@@ -206,7 +197,7 @@ impl Builder {
         // println!("{:?}", &self.stmts);
         // println!("{:02x?}", ir.bytes());
     }
-    
+
     pub fn compile_fast(&mut self, ir: &mut impl Generator, num_args: u32, idx_ret: i32) {
         let cap = self.sym_table.num_stack as u32;
         ir.prologue_fast(cap, num_args);
@@ -259,7 +250,7 @@ pub struct ByteCode {
 }
 
 impl ByteCode {
-    pub fn new(builder: Builder, mem: Vec<f64>, size: usize) -> ByteCode {
+    pub fn new(builder: Builder, mem: Vec<f64>) -> ByteCode {
         let stack: Vec<f64> = vec![0.0; builder.sym_table.num_stack];
 
         ByteCode {
@@ -284,7 +275,7 @@ impl Compiled<f64> for ByteCode {
     }
 
     fn dump(&self, name: &str) {}
-    
+
     fn func(&self) -> fn(&[f64]) {
         unreachable!()
     }

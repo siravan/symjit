@@ -1,5 +1,4 @@
 use crate::assembler::Assembler;
-use crate::code::BinaryFunc;
 use crate::generator::{fmod, powi, powi_mod, Generator};
 use crate::utils::align_stack;
 
@@ -28,8 +27,8 @@ impl AmdGenerator {
             mask: if cfg!(target_family = "windows") {
                 0x003f
             } else {
-                0xffff                
-            }
+                0xffff
+            },
         }
     }
 
@@ -188,7 +187,7 @@ impl Generator for AmdGenerator {
         if cfg!(target_family = "windows") {
             4
         } else {
-            14            
+            14
         }
     }
 
@@ -216,7 +215,7 @@ impl Generator for AmdGenerator {
         if dst == r {
             return;
         }
-        
+
         self.flush(dst);
 
         match self.family {
@@ -326,7 +325,7 @@ impl Generator for AmdGenerator {
 
     fn square(&mut self, dst: u8, r: u8) {
         self.flush(dst);
-        self.times(dst, r, r);        
+        self.times(dst, r, r);
     }
 
     fn cube(&mut self, dst: u8, r: u8) {
@@ -653,8 +652,8 @@ impl Generator for AmdGenerator {
         self.amd.pop(Amd::RBP);
         self.amd.ret();
         self.predefined_consts();
-    }   
-    
+    }
+
     #[cfg(target_family = "unix")]
     fn prologue_fast(&mut self, cap: u32, num_args: u32) {
         self.amd.push(Amd::RBP);
@@ -663,7 +662,7 @@ impl Generator for AmdGenerator {
         self.amd.mov(Amd::RBP, Amd::RSP);
 
         for i in 0..num_args {
-            self.amd.movsd_mem_xmm(Amd::RSP, (i * 8) as i32, i as u8);            
+            self.amd.movsd_mem_xmm(Amd::RSP, (i * 8) as i32, i as u8);
         }
     }
 
@@ -678,7 +677,7 @@ impl Generator for AmdGenerator {
         self.amd.ret();
         self.predefined_consts();
     }
-    
+
     #[cfg(target_family = "windows")]
     fn prologue(&mut self, cap: u32) {
         self.amd.mov_mem_reg(Amd::RSP, 0x08, Amd::RBP);
@@ -696,27 +695,28 @@ impl Generator for AmdGenerator {
         self.amd.mov_reg_mem(Amd::RBP, Amd::RSP, 0x08);
         self.amd.ret();
         self.predefined_consts();
-    }    
-    
+    }
+
     #[cfg(target_family = "windows")]
     fn prologue_fast(&mut self, cap: u32, num_args: u32) {
         self.amd.mov_mem_reg(Amd::RSP, 0x08, Amd::RBP);
-        self.amd.mov_mem_reg(Amd::RSP, 0x10, Amd::RBX); 
+        self.amd.mov_mem_reg(Amd::RSP, 0x10, Amd::RBX);
         let s = align_stack(self.reg_size() * cap + 8) - 8;
         self.amd.sub_rsp(s);
         self.amd.mov(Amd::RBP, Amd::RSP);
 
         for i in 0..num_args.min(4) {
-            self.amd.movsd_mem_xmm(Amd::RSP, (i * 8) as i32, i as u8);            
+            self.amd.movsd_mem_xmm(Amd::RSP, (i * 8) as i32, i as u8);
         }
-        
+
         for i in 4..num_args {
             // the offset of the fifth or eight arguments:
             // +4 for the 32-byte home
             // +1 for the return address in the stack
             // -4 for the first four arguments passed in XMM0-XMM3
-            self.amd.movsd_xmm_mem(0, Amd::RSP, (s + 8 * (4 + 1 + i - 4)) as i32);
-            self.amd.movsd_mem_xmm(Amd::RSP, (i * 8) as i32, 0);            
+            self.amd
+                .movsd_xmm_mem(0, Amd::RSP, (s + 8 * (4 + 1 + i - 4)) as i32);
+            self.amd.movsd_mem_xmm(Amd::RSP, (i * 8) as i32, 0);
         }
     }
 
@@ -730,5 +730,5 @@ impl Generator for AmdGenerator {
         self.amd.mov_reg_mem(Amd::RBP, Amd::RSP, 0x08);
         self.amd.ret();
         self.predefined_consts();
-    }    
+    }
 }

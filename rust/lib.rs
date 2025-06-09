@@ -408,17 +408,22 @@ pub unsafe extern "C" fn info() -> *const c_char {
     msg.into_raw() as *const _
 }
 
-
+/// Returns a pointer to the fast function if one can be compiled
+///
+/// # Safety
+///     1. If the model cannot be compiled to a fast function, NULL is returned.
+///     2. The resulting function lives as long as q does and should not be stored
+///         separately.
+///     
 #[no_mangle]
 pub unsafe extern "C" fn fast_func(q: *mut CompilerResult) -> *const usize {
     let q: &mut CompilerResult = unsafe { &mut *q };
     if let Some(func) = &mut q.func {
         match func.get_fast() {
             Some(f) => f as *const usize,
-            None => std::ptr::null()
+            None => std::ptr::null(),
         }
     } else {
         std::ptr::null()
     }
 }
-

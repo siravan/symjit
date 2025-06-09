@@ -1,5 +1,4 @@
 use super::utils::Eval;
-use crate::builder::Builder;
 use crate::generator::Generator;
 use crate::node::Node;
 use crate::symbol::Loc;
