@@ -3,7 +3,7 @@ import numpy as np
 from scipy import integrate
 import math
 import platform
-from sympy import symbols, lambdify, sqrt, sin, cos
+from sympy import symbols, lambdify, sqrt, sin, cos, Piecewise
 from symjit import compile_func
 
 def arch():
@@ -145,6 +145,18 @@ def powi_mod(backend, ty, use_simd):
     return f(1, 1)
     
 
+def fact(backend, ty, use_simd):
+    def factorial(x, n):
+        if n == 0:
+            return 1
+        else:
+            return Piecewise([n, x >= n], [1, True]) * factorial(x, n-1)
+
+    p = factorial(x, 20)
+    f = func([x], [p], backend=backend, ty=ty, use_simd=use_simd)
+    return f(18)  
+    
+
 def triple(backend, ty, use_simd):
     p = 1 / (1 - cos(x) * cos(y) * cos(z))    
     f = func([x, y, z], p, backend=backend, ty=ty, use_simd=use_simd)             
@@ -224,6 +236,7 @@ test_model(binom, 'binom')
 test_model(binom, 'stress')
 test_model(power, 'power')
 test_model(powi_mod, 'powi_mod', pyback=False)
+test_model(fact, 'fact')
 test_model(triple, 'triple')
 test_model(triple_fast, 'triple_fast', pyback=False, bytecode=False)
     

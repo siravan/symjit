@@ -389,13 +389,13 @@ def relational(y):
     op = ""
 
     if f == LessThan:
-        op = "lt"
-    elif f == StrictLessThan:
         op = "leq"
+    elif f == StrictLessThan:
+        op = "lt"
     elif f == GreaterThan:
-        op = "gt"
-    elif f == StrictGreaterThan:
         op = "geq"
+    elif f == StrictGreaterThan:
+        op = "gt"
     elif f == Equality:
         op = "eq"
     elif f == Unequality:

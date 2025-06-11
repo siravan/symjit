@@ -1,3 +1,5 @@
+use anyhow::Result;
+
 use crate::amd::{AmdFamily, AmdGenerator};
 use crate::arm::ArmGenerator;
 use crate::builder::ByteCode;
@@ -61,7 +63,7 @@ pub struct Runnable {
 }
 
 impl Runnable {
-    pub fn new(mut prog: Program, ty: CompilerType, use_simd: bool) -> Runnable {
+    pub fn new(mut prog: Program, ty: CompilerType, use_simd: bool) -> Result<Runnable> {
         let first_state = 0;
         let idx_iv = prog.count_states;
         let first_param = first_state + prog.count_states + 1; // +1 for the independent variable
@@ -89,17 +91,17 @@ impl Runnable {
         };
 
         let compiled = match ty {
-            CompilerType::ByteCode => Self::compile_bytecode(&mut prog, size),
+            CompilerType::ByteCode => Self::compile_bytecode(&mut prog, size)?,
             CompilerType::Amd | CompilerType::Native => {
                 if Platform::has_avx() {
-                    Self::compile_avx(&mut prog, size)
+                    Self::compile_avx(&mut prog, size)?
                 } else {
-                    Self::compile_sse(&mut prog, size)
+                    Self::compile_sse(&mut prog, size)?
                 }
             }
-            CompilerType::AmdAVX => Self::compile_avx(&mut prog, size),
-            CompilerType::AmdSSE => Self::compile_sse(&mut prog, size),
-            CompilerType::Arm => Self::compile_arm(&mut prog, size),
+            CompilerType::AmdAVX => Self::compile_avx(&mut prog, size)?,
+            CompilerType::AmdSSE => Self::compile_sse(&mut prog, size)?,
+            CompilerType::Arm => Self::compile_arm(&mut prog, size)?,
         };
 
         let use_simd = use_simd
@@ -108,7 +110,7 @@ impl Runnable {
 
         let can_fast = count_states < 8 && count_params == 0 && count_obs == 1 && count_diffs == 0;
 
-        Runnable {
+        Ok(Runnable {
             prog,
             compiled,
             compiled_simd: None,
@@ -125,77 +127,85 @@ impl Runnable {
             count_obs,
             count_diffs,
             size,
-        }
+        })
     }
 
-    fn compile_sse(prog: &mut Program, size: usize) -> Box<dyn Compiled<f64>> {
+    fn compile_sse(prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
         let mut generator = AmdGenerator::new(AmdFamily::SSEScalar);
         let mem: Vec<f64> = vec![0.0; size];
-        prog.builder.compile(&mut generator);
+        prog.builder.compile(&mut generator)?;
         let code = MachineCode::new("x86_64", generator.bytes(), mem);
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
 
-        compiled
+        Ok(compiled)
     }
 
-    fn compile_avx(prog: &mut Program, size: usize) -> Box<dyn Compiled<f64>> {
+    fn compile_avx(prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
         let mut generator = AmdGenerator::new(AmdFamily::AvxScalar);
         let mem: Vec<f64> = vec![0.0; size];
-        prog.builder.compile(&mut generator);
+        prog.builder.compile(&mut generator)?;
         let code = MachineCode::new("x86_64", generator.bytes(), mem);
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
 
-        compiled
+        Ok(compiled)
     }
 
-    fn compile_simd(prog: &mut Program, size: usize) -> Box<dyn Compiled<f64x4>> {
+    fn compile_simd(prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64x4>>> {
         let mut generator = AmdGenerator::new(AmdFamily::AvxVector);
         let mem: Vec<f64x4> = vec![f64x4::splat(0.0); size];
-        prog.builder.compile(&mut generator);
+        prog.builder.compile(&mut generator)?;
         let code = MachineCode::new("x86_64", generator.bytes(), mem);
         let compiled: Box<dyn Compiled<f64x4>> = Box::new(code);
 
-        compiled
+        Ok(compiled)
     }
 
-    fn compile_arm(prog: &mut Program, size: usize) -> Box<dyn Compiled<f64>> {
+    fn compile_arm(prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
         let mut generator = ArmGenerator::new();
         let mem: Vec<f64> = vec![0.0; size];
-        prog.builder.compile(&mut generator);
+        prog.builder.compile(&mut generator)?;
         let code = MachineCode::new("aarch64", generator.bytes(), mem);
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
 
-        compiled
+        Ok(compiled)
     }
 
-    fn compile_bytecode(prog: &mut Program, size: usize) -> Box<dyn Compiled<f64>> {
+    fn compile_bytecode(prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
         let mem: Vec<f64> = vec![0.0; size];
         let code = ByteCode::new(prog.builder.clone(), mem);
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
 
-        compiled
+        Ok(compiled)
     }
 
-    fn compile_avx_fast(prog: &mut Program, _size: usize, idx_ret: u32) -> Box<dyn Compiled<f64>> {
+    fn compile_avx_fast(
+        prog: &mut Program,
+        _size: usize,
+        idx_ret: u32,
+    ) -> Result<Box<dyn Compiled<f64>>> {
         let mut generator = AmdGenerator::new(AmdFamily::AvxScalar);
         let mem: Vec<f64> = Vec::new();
         prog.builder
-            .compile_fast(&mut generator, prog.count_states as u32, idx_ret as i32);
+            .compile_fast(&mut generator, prog.count_states as u32, idx_ret as i32)?;
         let code = MachineCode::new("x86_64", generator.bytes(), mem);
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
 
-        compiled
+        Ok(compiled)
     }
 
-    fn compile_arm_fast(prog: &mut Program, _size: usize, idx_ret: u32) -> Box<dyn Compiled<f64>> {
+    fn compile_arm_fast(
+        prog: &mut Program,
+        _size: usize,
+        idx_ret: u32,
+    ) -> Result<Box<dyn Compiled<f64>>> {
         let mut generator = ArmGenerator::new();
         let mem: Vec<f64> = Vec::new();
         prog.builder
-            .compile_fast(&mut generator, prog.count_states as u32, idx_ret as i32);
+            .compile_fast(&mut generator, prog.count_states as u32, idx_ret as i32)?;
         let code = MachineCode::new("aarch64", generator.bytes(), mem);
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
 
-        compiled
+        Ok(compiled)
     }
 
     pub fn exec(&mut self, t: f64) {
@@ -209,7 +219,7 @@ impl Runnable {
     fn prepare_simd(&mut self) {
         // SIMD compilation is lazy!
         if self.compiled_simd.is_none() && self.use_simd {
-            self.compiled_simd = Some(Self::compile_simd(&mut self.prog, self.size));
+            self.compiled_simd = Self::compile_simd(&mut self.prog, self.size).ok();
         };
     }
 
@@ -217,17 +227,11 @@ impl Runnable {
         // fast func compilation is lazy!
         if self.compiled_simd.is_none() && self.can_fast {
             if Platform::is_amd64() && Platform::has_avx() {
-                self.compiled_fast = Some(Self::compile_avx_fast(
-                    &mut self.prog,
-                    self.size,
-                    self.first_obs as u32,
-                ));
+                self.compiled_fast =
+                    Self::compile_avx_fast(&mut self.prog, self.size, self.first_obs as u32).ok();
             } else if Platform::is_arm64() {
-                self.compiled_fast = Some(Self::compile_arm_fast(
-                    &mut self.prog,
-                    self.size,
-                    self.first_obs as u32,
-                ));
+                self.compiled_fast =
+                    Self::compile_arm_fast(&mut self.prog, self.size, self.first_obs as u32).ok();
             }
         };
     }

@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use std::ffi::{c_char, CStr, CString};
 
 // mod analyzer;
@@ -95,23 +96,26 @@ pub unsafe extern "C" fn compile(
         }
     };
 
-    // println!("{:#?}", &prog.ft);
-
-    res.func = match ty {
-        "bytecode" => Some(Runnable::new(prog, CompilerType::ByteCode, use_simd)),
-        "arm" => Some(Runnable::new(prog, CompilerType::Arm, use_simd)),
-        "amd" => Some(Runnable::new(prog, CompilerType::Amd, use_simd)),
-        "amd-avx" => Some(Runnable::new(prog, CompilerType::AmdAVX, use_simd)),
-        "amd-sse" => Some(Runnable::new(prog, CompilerType::AmdSSE, use_simd)),
-        "native" => Some(Runnable::new(prog, CompilerType::Native, use_simd)),
-        _ => None,
+    let func = match ty {
+        "bytecode" => Runnable::new(prog, CompilerType::ByteCode, use_simd),
+        "arm" => Runnable::new(prog, CompilerType::Arm, use_simd),
+        "amd" => Runnable::new(prog, CompilerType::Amd, use_simd),
+        "amd-avx" => Runnable::new(prog, CompilerType::AmdAVX, use_simd),
+        "amd-sse" => Runnable::new(prog, CompilerType::AmdSSE, use_simd),
+        "native" => Runnable::new(prog, CompilerType::Native, use_simd),
+        _ => Err(anyhow!("invalid ty")),
     };
 
-    res.status = if res.func.is_none() {
-        CompilerStatus::InvalidCompiler
-    } else {
-        CompilerStatus::Ok
-    };
+    match func {
+        Ok(func) => {
+            res.func = Some(func);
+            res.status = CompilerStatus::Ok;
+        }
+        Err(msg) => {
+            println!("{}", msg);
+            res.status = CompilerStatus::InvalidCompiler;
+        }
+    }
 
     Box::into_raw(Box::new(res)) as *const _
 }

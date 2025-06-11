@@ -182,12 +182,12 @@ impl Builder {
         }
     }
 
-    pub fn compile(&mut self, ir: &mut impl Generator) {
+    pub fn compile(&mut self, ir: &mut impl Generator) -> Result<()> {
         let cap = self.sym_table.num_stack as u32;
         ir.prologue(cap);
 
         for stmt in self.stmts.iter_mut() {
-            stmt.compile(ir);
+            stmt.compile(ir)?;
         }
 
         ir.epilogue(cap);
@@ -196,14 +196,21 @@ impl Builder {
         ir.apply_jumps();
         // println!("{:?}", &self.stmts);
         // println!("{:02x?}", ir.bytes());
+
+        Ok(())
     }
 
-    pub fn compile_fast(&mut self, ir: &mut impl Generator, num_args: u32, idx_ret: i32) {
+    pub fn compile_fast(
+        &mut self,
+        ir: &mut impl Generator,
+        num_args: u32,
+        idx_ret: i32,
+    ) -> Result<()> {
         let cap = self.sym_table.num_stack as u32;
         ir.prologue_fast(cap, num_args);
 
         for stmt in self.stmts.iter_mut() {
-            stmt.compile(ir);
+            stmt.compile(ir)?;
         }
 
         ir.epilogue_fast(cap, idx_ret);
@@ -212,6 +219,8 @@ impl Builder {
         ir.apply_jumps();
         // println!("{:?}", &self.stmts);
         // println!("{:02x?}", ir.bytes());
+
+        Ok(())
     }
 
     fn append_const_section(&self, ir: &mut impl Generator) {
@@ -227,7 +236,7 @@ impl Builder {
             let label = format!("_func_{}_", f);
             ir.set_label(label.as_str());
             let p = VirtualTable::<f64>::from_str(f).expect("func not found");
-            ir.append_quad(p as u64);
+            ir.append_quad(p as usize as u64);
         }
     }
 }

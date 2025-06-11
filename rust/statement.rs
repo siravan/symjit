@@ -1,3 +1,5 @@
+use anyhow::{anyhow, Result};
+
 use super::utils::Eval;
 use crate::generator::Generator;
 use crate::node::Node;
@@ -31,10 +33,10 @@ impl Statement {
         }
     }
 
-    pub fn compile(&mut self, ir: &mut dyn Generator) {
+    pub fn compile(&mut self, ir: &mut dyn Generator) -> Result<()> {
         match self {
             Statement::Assign { lhs, rhs } => {
-                let r = rhs.compile_tree(ir);
+                let r = rhs.compile_tree(ir)?;
                 Self::save(ir, r, lhs);
             }
             Statement::Call {
@@ -43,24 +45,15 @@ impl Statement {
                 arg,
                 num_args,
             } => {
-                let _ = arg.compile_tree(ir);
+                let _ = arg.compile_tree(ir)?;
                 let label = format!("_func_{}_", op);
                 ir.call(&label, *num_args);
                 Self::save(ir, 0, lhs);
             }
-        }
-    }
+        };
 
-    /*
-        fn load(ir: &mut dyn Generator, r: u8, v: &Node) {
-            if let Node::Var { loc, .. } = v {
-                match loc {
-                    Loc::Stack(idx) => ir.load_stack(r, *idx),
-                    Loc::Mem(idx) => ir.load_mem(r, *idx),
-                }
-            }
-        }
-    */
+        Ok(())
+    }
 
     fn save(ir: &mut dyn Generator, r: u8, v: &Node) {
         if let Node::Var { sym, .. } = v {

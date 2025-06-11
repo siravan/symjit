@@ -1,3 +1,5 @@
+use anyhow::{anyhow, Result};
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -219,7 +221,7 @@ impl Node {
 
     /// The main entry point to compile an expression tree
     /// should be called on the root of the expression tree
-    pub fn compile_tree(&mut self, ir: &mut dyn Generator) -> u8 {
+    pub fn compile_tree(&mut self, ir: &mut dyn Generator) -> Result<u8> {
         self.postorder_forward(Self::ershov_func);
         self.postorder_forward(Self::mark_first);
         self.postorder_backward(Self::mark_last);
@@ -241,9 +243,9 @@ impl Node {
         self.compile(ir, 0, &mut pool)
     }
 
-    pub fn compile(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> u8 {
+    pub fn compile(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> Result<u8> {
         match self {
-            Node::Void => 0,
+            Node::Void => Ok(0),
             Node::Const { .. } => self.compile_const(ir, base),
             Node::Var { .. } => self.compile_var(ir, base, pool),
             Node::Unary { .. } => self.compile_unary(ir, base, pool),
@@ -251,23 +253,24 @@ impl Node {
         }
     }
 
-    fn compile_const(&self, ir: &mut dyn Generator, base: u8) -> u8 {
+    fn compile_const(&self, ir: &mut dyn Generator, base: u8) -> Result<u8> {
         if let Node::Const { idx, .. } = &self {
             let r = ir.first_shadow() + base;
             let label = format!("_const_{}_", idx);
             ir.load_const(r, &label);
-            r
+            Ok(r)
         } else {
-            panic!("should not get here!");
+            unreachable!();
         }
     }
 
-    fn load_var(ir: &mut dyn Generator, dst: u8, loc: &Loc) -> u8 {
+    fn load_var(ir: &mut dyn Generator, dst: u8, loc: &Loc) -> Result<u8> {
         match loc {
             Loc::Stack(idx) => ir.load_stack(dst, *idx),
             Loc::Mem(idx) => ir.load_mem(dst, *idx),
         };
-        dst
+
+        Ok(dst)
     }
 
     /// Loaded and cache variables in Mem and Stack
@@ -275,11 +278,11 @@ impl Node {
     ///     1. At the encounter with a variable, load it into a temporary (cache) register
     ///     2. During the subsequent encounters, use the value in the register
     ///     3. After the last encounter, return the register to the pool of available registers
-    fn compile_var(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> u8 {
+    fn compile_var(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> Result<u8> {
         if let Node::Var { sym, status, .. } = &self {
             let mut sym = sym.borrow_mut();
 
-            match status {
+            let dst = match status {
                 VarStatus::First => {
                     sym.reg = pool.pop();
 
@@ -290,7 +293,7 @@ impl Node {
                         ir.first_shadow() + base
                     };
 
-                    Self::load_var(ir, dst, &sym.loc)
+                    Self::load_var(ir, dst, &sym.loc)?
                 }
                 VarStatus::Mid => {
                     if let Some(r) = sym.reg {
@@ -299,7 +302,7 @@ impl Node {
                         // if no pool register is available, just use the standard designated register
                         // note that this means reloading the variable at each use
                         let dst = ir.first_shadow() + base;
-                        Self::load_var(ir, dst, &sym.loc)
+                        Self::load_var(ir, dst, &sym.loc)?
                     }
                 }
                 VarStatus::Last => {
@@ -311,25 +314,27 @@ impl Node {
                         sym.reg = None;
                         dst
                     } else {
-                        Self::load_var(ir, dst, &sym.loc)
+                        Self::load_var(ir, dst, &sym.loc)?
                     }
                 }
                 VarStatus::Singular | VarStatus::Unknown => {
                     // if a variable is Singular, i.e., is used only once, don't
                     // bother with caching
                     let dst = ir.first_shadow() + base;
-                    Self::load_var(ir, dst, &sym.loc)
+                    Self::load_var(ir, dst, &sym.loc)?
                 }
-            }
+            };
+
+            Ok(dst)
         } else {
-            panic!("should not get here!");
+            unreachable!();
         }
     }
 
-    fn compile_unary(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> u8 {
+    fn compile_unary(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> Result<u8> {
         if let Node::Unary { op, arg, power, .. } = self {
             let mut dst = ir.first_shadow() + base + self.ershov_number() - 1;
-            let r = arg.compile(ir, base, pool);
+            let r = arg.compile(ir, base, pool)?;
 
             match op.as_str() {
                 "neg" => ir.neg(dst, r),
@@ -350,16 +355,16 @@ impl Node {
                     };
                     dst = 0;
                 }
-                _ => panic!("unary operation is not recognized"),
+                _ => return Err(anyhow!("unary operator is not recognized")),
             };
 
-            dst
+            Ok(dst)
         } else {
-            panic!("should not get here!");
+            unreachable!();
         }
     }
 
-    fn compile_binary(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> u8 {
+    fn compile_binary(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> Result<u8> {
         if let Node::Binary {
             op,
             left,
@@ -368,7 +373,7 @@ impl Node {
             ..
         } = self
         {
-            let (dst, l, r) = self.alloc(ir, base, left, right, pool);
+            let (dst, l, r) = self.alloc(ir, base, left, right, pool)?;
 
             match op.as_str() {
                 "plus" => ir.plus(dst, l, r),
@@ -389,12 +394,12 @@ impl Node {
                 "select_else" => ir.select_else(dst, l, r),
                 "_powi_mod_" => ir.powi_mod(dst, l, *power, r),
                 "_call_" => Self::call(ir, l, r),
-                _ => panic!("binary operation is not recognized"),
+                _ => return Err(anyhow!("binary operator is not recognized")),
             };
 
-            dst
+            Ok(dst)
         } else {
-            panic!("should not get here!");
+            unreachable!();
         }
     }
 
@@ -405,7 +410,7 @@ impl Node {
         left: &Node,
         right: &Node,
         pool: &mut Vec<u8>,
-    ) -> (u8, u8, u8) {
+    ) -> Result<(u8, u8, u8)> {
         let el = left.ershov_number();
         let er = right.ershov_number();
         let dst = ir.first_shadow() + base + self.ershov_number() - 1;
@@ -415,20 +420,22 @@ impl Node {
 
         if dst < 16 {
             if el == er {
-                l = left.compile(ir, base + 1, pool);
-                r = right.compile(ir, base, pool);
+                l = left.compile(ir, base + 1, pool)?;
+                r = right.compile(ir, base, pool)?;
             } else if el > er {
-                l = left.compile(ir, base, pool);
-                r = right.compile(ir, base, pool);
+                l = left.compile(ir, base, pool)?;
+                r = right.compile(ir, base, pool)?;
             } else {
-                r = right.compile(ir, base, pool);
-                l = left.compile(ir, base, pool);
+                r = right.compile(ir, base, pool)?;
+                l = left.compile(ir, base, pool)?;
             }
         } else {
-            panic!("the expression is too large (not enough scratch registers).");
+            return Err(anyhow!(
+                "the expression is too large (not enough scratch registers)."
+            ));
         }
 
-        (dst, l, r)
+        Ok((dst, l, r))
     }
 
     fn call(ir: &mut dyn Generator, l: u8, r: u8) {
