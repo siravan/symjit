@@ -76,7 +76,7 @@ for i in range(100):
     try:
         b = False
         for i in range(3):
-            f = compile_func([x, y, z], [q], backend=backend)
+            f = compile_func([x, y, z], q, backend=backend)
             g = lambdify([x, y, z], q)
 
             F = f(X[i], Y[i], Z[i])

@@ -20,5 +20,5 @@ def binom(x, y, n, k):
 
 x, y = symbols('x y')
 f = compile_func([x, y], binom(x, y, N, K), backend=backend, ty=ty)
-print(f(1, 1)[0], '?=', math.comb(N, K))
+print(f(1, 1), '?=', math.comb(N, K))
 # print(f.dumps())

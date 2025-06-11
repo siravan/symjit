@@ -23,5 +23,5 @@ print(p)
 f = compile_func([x, y], p, ty='amd-avx')
 g = lambdify([x, y], p)
 
-print(f(1/5, 1/239)[0], '?=', g(1/5, 1/239), '; pi = ', math.pi)
+print(f(1/5, 1/239), '?=', g(1/5, 1/239), '; pi = ', math.pi)
 # print(f.dumps())

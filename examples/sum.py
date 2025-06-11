@@ -14,5 +14,5 @@ print(p)
 
 f = compile_func(list(X), p)
 
-print(f(*range(0, N))[0])
+print(f(*range(0, N)))
 
