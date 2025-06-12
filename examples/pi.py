@@ -20,7 +20,7 @@ x, y = symbols('x y')
 p = 4 * (4 * arctan_series(x) - arctan_series(y))
 print(p)
 
-f = compile_func([x, y], p, ty='amd-avx')
+f = compile_func([x, y], p)
 g = lambdify([x, y], p)
 
 print(f(1/5, 1/239), '?=', g(1/5, 1/239), '; pi = ', math.pi)
