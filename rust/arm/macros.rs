@@ -74,6 +74,9 @@ macro_rules! arm {
     ($op:ident lr, [$b:ident($y:expr), #$imm:expr]) => {
         arm! { $op x(30), [$b($y), #$imm] }
     };
+    ($op:ident sp, sp, #$imm:expr, lsl #12) => {
+        arm! { $op x(31), x(31), #$imm, lsl #12 }
+    };
     ($op:ident sp, sp, #$imm:expr) => {
         arm! { $op x(31), x(31), #$imm }
     };
@@ -136,13 +139,18 @@ macro_rules! arm {
     };
 
     // x-registers immediate ops
+    (add x($rd:expr), x($rn:expr), #$imm:expr, lsl #12) => {
+        0x91400000 | rd!($rd) | rn!($rn) | imm!($imm)
+    };
     (add x($rd:expr), x($rn:expr), #$imm:expr) => {
         0x91000000 | rd!($rd) | rn!($rn) | imm!($imm)
+    };    
+    (sub x($rd:expr), x($rn:expr), #$imm:expr, lsl #12) => {
+        0xd1400000 | rd!($rd) | rn!($rn) | imm!($imm)
     };
     (sub x($rd:expr), x($rn:expr), #$imm:expr) => {
         0xd1000000 | rd!($rd) | rn!($rn) | imm!($imm)
     };
-
     // floating point ops
     (fadd d($rd:expr), d($rn:expr), d($rm:expr)) => {
         0x1e602800 | rd!($rd) | rn!($rn) | rm!($rm)

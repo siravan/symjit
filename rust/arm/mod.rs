@@ -298,35 +298,47 @@ impl Generator for ArmGenerator {
         self.andnot(dst, cond, a);
     }
 
-    fn prologue(&mut self, cap: u32) {
-        let stack_size = align_stack(self.reg_size() * cap);
-
+    fn prologue(&mut self, cap: u32) {       
         self.emit(arm! {sub sp, sp, #16});
         self.emit(arm! {str lr, [sp, #0]});
         self.emit(arm! {str x(19), [sp, #8]});
-        self.emit(arm! {sub sp, sp, #stack_size});
+
+        let stack_size = align_stack(self.reg_size() * cap);        
+        self.emit(arm! {sub sp, sp, #(stack_size & 0x0fff)});
+        if stack_size >> 12 != 0 {
+            self.emit(arm! {sub sp, sp, #(stack_size >> 12), lsl #12});
+        }
+        
         self.emit(arm! {mov x(19), x(0)});
     }
 
     fn epilogue(&mut self, cap: u32) {
         self.restore_regs();
 
-        let stack_size = align_stack(self.reg_size() * cap);
-
-        self.emit(arm! {add sp, sp, #stack_size});
+        let stack_size = align_stack(self.reg_size() * cap);        
+        if stack_size >> 12 != 0 {
+            self.emit(arm! {add sp, sp, #(stack_size >> 12), lsl #12});
+        }
+        self.emit(arm! {add sp, sp, #(stack_size & 0x0fff)});        
+        
         self.emit(arm! {ldr x(19), [sp, #8]});
         self.emit(arm! {ldr lr, [sp, #0]});
         self.emit(arm! {add sp, sp, #16});
         self.emit(arm! {ret});
     }
 
-    fn prologue_fast(&mut self, cap: u32, num_args: u32) {
-        let stack_size = align_stack(self.reg_size() * cap);
+    fn prologue_fast(&mut self, cap: u32, num_args: u32) {        
 
         self.emit(arm! {sub sp, sp, #16});
         self.emit(arm! {str lr, [sp, #0]});
         self.emit(arm! {str x(19), [sp, #8]});
-        self.emit(arm! {sub sp, sp, #stack_size});
+        
+        let stack_size = align_stack(self.reg_size() * cap);
+        self.emit(arm! {sub sp, sp, #(stack_size & 0x0fff)});
+        if stack_size >> 12 != 0 {
+            self.emit(arm! {sub sp, sp, #(stack_size >> 12), lsl #12});
+        }
+        
         self.emit(arm! {mov x(19), sp});
 
         let num_args = num_args as i32;
@@ -343,8 +355,11 @@ impl Generator for ArmGenerator {
         self.emit(arm! {ldr d(0), [sp, #8*idx_ret]});
 
         let stack_size = align_stack(self.reg_size() * cap);
-
-        self.emit(arm! {add sp, sp, #stack_size});
+        if stack_size >> 12 != 0 {
+            self.emit(arm! {add sp, sp, #(stack_size >> 12), lsl #12});
+        }        
+        self.emit(arm! {add sp, sp, #(stack_size & 0x0fff)});        
+        
         self.emit(arm! {ldr x(19), [sp, #8]});
         self.emit(arm! {ldr lr, [sp, #0]});
         self.emit(arm! {add sp, sp, #16});
