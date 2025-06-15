@@ -516,8 +516,8 @@ impl Node {
 
 impl Eval for Node {
     fn eval(&self, mem: &mut [f64], stack: &mut [f64]) -> f64 {
-        const T: f64 = 1.0;
-        const F: f64 = 0.0;
+        const T: f64 = f64::from_bits(0xffffffffffffffff);
+        const F: f64 = f64::from_bits(0);
 
         match self {
             Node::Void => 0.0,
@@ -531,18 +531,24 @@ impl Eval for Node {
 
                 match op.as_str() {
                     "neg" => -x,
-                    "not" => T - x,
+                    "not" => f64::from_bits(!x.to_bits()),
                     "abs" => x.abs(),
                     "root" => x.sqrt(),
                     "square" => x.powi(2),
                     "cube" => x.powi(3),
                     "recip" => 1.0 / x,
+                    "round" => x.round(),
+                    "floor" => x.floor(),
+                    "ceiling" => x.ceil(),
+                    "trunc" => x.trunc(),
                     "_powi_" => x.powi(*power),
                     "_call_" => {
                         stack[0] = x;
                         x
                     }
-                    _ => f64::NAN,
+                    s => {
+                        panic!("op {} not found.", s)
+                    } //_ => f64::NAN,
                 }
             }
             Node::Binary {
@@ -604,35 +610,19 @@ impl Eval for Node {
                             F
                         }
                     }
-                    "and" => x * y,
-                    "or" => x + y,
-                    "xor" => {
-                        if x != y {
-                            T
-                        } else {
-                            F
-                        }
-                    }
-                    "select_if" => {
-                        if x != 0.0 {
-                            y
-                        } else {
-                            0.0
-                        }
-                    }
-                    "select_else" => {
-                        if x == 0.0 {
-                            y
-                        } else {
-                            0.0
-                        }
-                    }
+                    "and" => f64::from_bits(x.to_bits() & y.to_bits()),
+                    "or" => f64::from_bits(x.to_bits() | y.to_bits()),
+                    "xor" => f64::from_bits(x.to_bits() ^ y.to_bits()),
+                    "select_if" => f64::from_bits(x.to_bits() & y.to_bits()),
+                    "select_else" => f64::from_bits(!x.to_bits() & y.to_bits()),
                     "_call_" => {
                         stack[0] = x;
                         stack[1] = y;
                         x
                     }
-                    _ => f64::NAN,
+                    s => {
+                        panic!("op {} not found.", s)
+                    } //_ => f64::NAN,
                 }
             }
         }

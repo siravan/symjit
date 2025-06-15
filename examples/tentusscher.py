@@ -1,3 +1,6 @@
+import util
+backend, ty, use_simd = util.process_argv()
+
 import os
 import scipy.integrate
 import matplotlib.pyplot as plt
@@ -10,7 +13,7 @@ path = os.path.join(os.path.dirname(__file__), "cellml", "tentusscher.json")
 with open(path) as fd:
     model = fd.read()
 
-f = compile_json(model)
+f = compile_json(model, ty=ty)
 u0 = f.get_u0()
 p = f.get_p()
 

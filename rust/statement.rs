@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 
 use super::utils::Eval;
+use crate::code::VirtualTable;
 use crate::generator::Generator;
 use crate::node::Node;
 use crate::symbol::Loc;
@@ -83,7 +84,7 @@ impl Eval for Statement {
                 let x = stack[0];
                 let y = stack[1];
 
-                let u = match op.as_str() {
+                let u = match op.as_str() {                
                     "sin" => x.sin(),
                     "cos" => x.cos(),
                     "tan" => x.tan(),
@@ -100,8 +101,11 @@ impl Eval for Statement {
                     "ln" => x.ln(),
                     "log" => x.log10(),
                     "power" => x.powf(y),
-                    "rem" => x % y,
-                    _ => f64::NAN,
+                    op => {
+                        let f = VirtualTable::<f64>::from_str(op)
+                            .expect(format!("operation {} not found.", op).as_str());
+                        f(x, y)
+                    }
                 };
 
                 if let Node::Var { sym, .. } = lhs {
