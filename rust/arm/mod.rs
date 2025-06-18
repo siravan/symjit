@@ -290,12 +290,12 @@ impl Generator for ArmGenerator {
 
     fn select_if(&mut self, dst: u8, cond: u8, a: u8) {
         self.flush(dst);
-        self.emit(arm! {bit v(dst).8b, v(a).8b, v(cond).8b});        
+        self.and(dst, cond, a);
     }
 
     fn select_else(&mut self, dst: u8, cond: u8, a: u8) {
         self.flush(dst);
-        self.emit(arm! {bif v(dst).8b, v(a).8b, v(cond).8b});
+        self.andnot(dst, cond, a);
     }
 
     fn prologue(&mut self, cap: u32) {
