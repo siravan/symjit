@@ -264,8 +264,8 @@ impl Generator for ArmGenerator {
 
     fn andnot(&mut self, dst: u8, a: u8, b: u8) {
         self.flush(dst);
-        self.emit(arm! {not v(dst).8b, v(a).8b});
-        self.emit(arm! {and v(dst).8b, v(dst).8b, v(b).8b});
+        self.emit(arm! {not v(a).8b, v(a).8b});
+        self.emit(arm! {and v(dst).8b, v(a).8b, v(b).8b});
     }
 
     fn or(&mut self, dst: u8, a: u8, b: u8) {
