@@ -206,6 +206,12 @@ macro_rules! arm {
     (eor v($rd:expr).8b, v($rn:expr).8b, v($rm:expr).8b) => {
         0x2e201c00 | rd!($rd) | rn!($rn) | rm!($rm)
     };
+    (bit v($rd:expr).8b, v($rn:expr).8b, v($rm:expr).8b) => {
+        0x2ea01c00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (bif v($rd:expr).8b, v($rn:expr).8b, v($rm:expr).8b) => {
+        0x2ee01c00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
     (bsl v($rd:expr).8b, v($rn:expr).8b, v($rm:expr).8b) => {
         0x2e601c00 | rd!($rd) | rn!($rn) | rm!($rm)
     };
