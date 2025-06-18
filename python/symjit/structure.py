@@ -106,16 +106,16 @@ def boolean(y):
     return tree_node(op, y.args)
 
 
-def piecewise(y):
-    cond = y.args[0][1]
-    x1 = y.args[0][0]
+def piecewise(args):
+    cond = args[0][1]
+    x1 = args[0][0]
 
-    if len(y.args) == 1:
+    if len(args) == 1:
         return expr(x1)
-    if len(y.args) == 2:
-        x2 = y.args[1][0]
+    if len(args) == 2:
+        x2 = args[1][0]
     else:
-        x2 = piecewise(*y.args[1:])
+        x2 = piecewise(args[1:])
 
     return tree_node("ifelse", [cond, x1, x2])
 
@@ -125,19 +125,22 @@ def var(sym, val=0.0):
 
 
 def expr(y):
-    if y.is_Number or isinstance(y, numbers.Number):
-        return {"type": "Const", "val": float(y)}
-    elif y.is_Symbol:
-        return {"type": "Var", "name": y.name}
-    elif y.is_Relational:
-        return relational(y)
-    elif y.is_Boolean:
-        return boolean(y)
-    elif y.is_Piecewise:
-        return piecewise(y)
-    else:
-        return tree(y)
-
+    try:
+        if y.is_Number or isinstance(y, numbers.Number):
+            return {"type": "Const", "val": float(y)}
+        elif y.is_Symbol:
+            return {"type": "Var", "name": y.name}
+        elif y.is_Relational:
+            return relational(y)
+        elif y.is_Boolean:
+            return boolean(y)
+        elif y.is_Piecewise:
+            return piecewise(y.args)
+        else:
+            return tree(y)
+    except:
+        return y
+        
 
 def equation(lhs, rhs):
     return {"lhs": lhs, "rhs": rhs}

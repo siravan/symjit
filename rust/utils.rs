@@ -10,6 +10,12 @@ pub trait Eval {
     fn eval(&self, mem: &mut [f64], stack: &mut [f64]) -> f64;
 }
 
+pub fn bool_to_f64(b: bool) -> f64 {
+    const T: f64 = f64::from_bits(!0);
+    const F: f64 = f64::from_bits(0);    
+    if b { T } else { F }
+}
+
 /// aligns at a multiple of 32 (to cover different ABIs)
 pub fn align_stack(n: u32) -> u32 {
     n + 16 - (n & 15)

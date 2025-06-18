@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use crate::generator::Generator;
 use crate::symbol::{Loc, Symbol};
-use crate::utils::Eval;
+use crate::utils::{Eval, bool_to_f64};
 
 #[derive(Debug, Clone)]
 pub enum VarStatus {
@@ -167,6 +167,23 @@ impl Node {
             Node::Void => 0,
             Node::Const { .. } | Node::Var { .. } => 1,
             Node::Unary { ershov, .. } | Node::Binary { ershov, .. } => *ershov,
+        }
+    }
+
+    pub fn calc_ershov(&self) -> u8 {
+        match self {
+            Node::Void => 0,
+            Node::Const { .. } | Node::Var { .. } => 1,
+            Node::Unary { arg, .. } => arg.calc_ershov(),
+            Node::Binary { left, right, .. } => {
+                let l = left.calc_ershov();
+                let r = right.calc_ershov();
+                if l == r {
+                    l + 1
+                } else {
+                    l.max(r)
+                }
+            }
         }
     }
 
@@ -515,10 +532,7 @@ impl Node {
 }
 
 impl Eval for Node {
-    fn eval(&self, mem: &mut [f64], stack: &mut [f64]) -> f64 {
-        const T: f64 = f64::from_bits(0xffffffffffffffff);
-        const F: f64 = f64::from_bits(0);
-
+    fn eval(&self, mem: &mut [f64], stack: &mut [f64]) -> f64 {        
         match self {
             Node::Void => 0.0,
             Node::Const { val, .. } => *val,
@@ -534,8 +548,8 @@ impl Eval for Node {
                     "not" => f64::from_bits(!x.to_bits()),
                     "abs" => x.abs(),
                     "root" => x.sqrt(),
-                    "square" => x.powi(2),
-                    "cube" => x.powi(3),
+                    "square" => x * x,
+                    "cube" => x * x * x,
                     "recip" => 1.0 / x,
                     "round" => x.round(),
                     "floor" => x.floor(),
@@ -568,48 +582,12 @@ impl Eval for Node {
                     "divide" => x / y,
                     "rem" => x % y,
                     "_powi_mod_" => x.powi(*power) % y,
-                    "gt" => {
-                        if x > y {
-                            T
-                        } else {
-                            F
-                        }
-                    }
-                    "geq" => {
-                        if x >= y {
-                            T
-                        } else {
-                            F
-                        }
-                    }
-                    "lt" => {
-                        if x < y {
-                            T
-                        } else {
-                            F
-                        }
-                    }
-                    "leq" => {
-                        if x <= y {
-                            T
-                        } else {
-                            F
-                        }
-                    }
-                    "eq" => {
-                        if x == y {
-                            T
-                        } else {
-                            F
-                        }
-                    }
-                    "neq" => {
-                        if x != y {
-                            T
-                        } else {
-                            F
-                        }
-                    }
+                    "gt" => bool_to_f64(x > y),
+                    "geq" => bool_to_f64(x >= y),
+                    "lt" => bool_to_f64(x < y),                    
+                    "leq" => bool_to_f64(x <= y),
+                    "eq" => bool_to_f64(x == y),
+                    "neq" => bool_to_f64(x != y),
                     "and" => f64::from_bits(x.to_bits() & y.to_bits()),
                     "or" => f64::from_bits(x.to_bits() | y.to_bits()),
                     "xor" => f64::from_bits(x.to_bits() ^ y.to_bits()),

@@ -84,7 +84,7 @@ impl Eval for Statement {
                 let x = stack[0];
                 let y = stack[1];
 
-                let u = match op.as_str() {                
+                let u = match op.as_str() {
                     "sin" => x.sin(),
                     "cos" => x.cos(),
                     "tan" => x.tan(),

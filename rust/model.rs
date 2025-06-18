@@ -163,15 +163,10 @@ impl Expr {
         }
 
         let cond = args[0].transform(builder)?;
-        let tmp = builder.add_tmp();
-        let tmp = builder.add_assign(tmp.clone(), cond)?;
-
         let true_val = args[1].transform(builder)?;
         let false_val = args[2].transform(builder)?;
 
-        let st = builder.create_binary("select_if", tmp.clone(), true_val)?;
-        let sf = builder.create_binary("select_else", tmp, false_val)?;
-        builder.create_binary("or", st, sf)
+        builder.add_ifelse(cond, true_val, false_val)
     }
 
     /// Addition and Multiplication can haev multiple arguments

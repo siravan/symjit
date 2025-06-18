@@ -77,31 +77,15 @@ impl Runnable {
         let count_obs = prog.count_obs;
         let count_diffs = prog.count_diffs;
 
-        let ty = if matches!(ty, CompilerType::Native) {
-            if Platform::is_amd64() {
-                CompilerType::Amd
-            } else if Platform::is_arm64() {
-                CompilerType::Arm
-            } else {
-                println!("cpu not supported, falling back to bytecode.");
-                CompilerType::ByteCode
-            }
-        } else {
-            ty
-        };
-
         let compiled = match ty {
             CompilerType::ByteCode => Self::compile_bytecode(&mut prog, size)?,
-            CompilerType::Amd | CompilerType::Native => {
-                if Platform::has_avx() {
-                    Self::compile_avx(&mut prog, size)?
-                } else {
-                    Self::compile_sse(&mut prog, size)?
-                }
-            }
+            CompilerType::Native => Self::compile_native(&mut prog, size)?,
+            CompilerType::Amd if Platform::has_avx() => Self::compile_avx(&mut prog, size)?,
+            CompilerType::Amd if !Platform::has_avx() => Self::compile_avx(&mut prog, size)?,
             CompilerType::AmdAVX => Self::compile_avx(&mut prog, size)?,
             CompilerType::AmdSSE => Self::compile_sse(&mut prog, size)?,
             CompilerType::Arm => Self::compile_arm(&mut prog, size)?,
+            _ => { unreachable!() }
         };
 
         let use_simd = use_simd
@@ -128,6 +112,19 @@ impl Runnable {
             count_diffs,
             size,
         })
+    }
+    
+    fn compile_native(prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
+        if Platform::is_amd64() && Platform::has_avx() {
+            Self::compile_avx(prog, size)
+        } else if Platform::is_amd64() && !Platform::has_avx() {
+            Self::compile_sse(prog, size)    
+        } else if Platform::is_arm64() {
+            Self::compile_arm(prog, size)
+        } else {
+            println!("cpu not supported, falling back to bytecode.");
+            Self::compile_bytecode(prog, size)
+        }
     }
 
     fn compile_sse(prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {

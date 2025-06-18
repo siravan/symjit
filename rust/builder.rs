@@ -32,14 +32,14 @@ impl Builder {
             // the list of intrinsic unary ops, i.e., operations that can be implemented directly in
             // machine code
             intrinsic_unary: vec![
-                "neq", "abs", "not", "root", "square", "cube", "recip", "round", "floor",
-                "ceiling", "trunc",
+                "abs", "not", "root", "square", "cube", "recip", "round", "floor", "ceiling",
+                "trunc",
             ],
             // the list of intrinsic binary ops, i.e., operations that can be implemented directly in
             // machine code
             intrinsic_binary: vec![
-                "plus", "minus", "neg", "times", "divide", "gt", "geq", "lt", "leq", "eq", "neq",
-                "and", "or", "xor", "if_pos", "if_neg", "rem",
+                "plus", "minus", "times", "divide", "rem", "gt", "geq", "lt", "leq", "eq", "neq",
+                "and", "or", "xor", "if_pos", "if_neg",
             ],
         }
     }
@@ -99,6 +99,15 @@ impl Builder {
         self.ft.insert(op.to_string());
 
         Ok(lhs)
+    }
+
+    pub fn add_ifelse(&mut self, cond: Node, true_val: Node, false_val: Node) -> Result<Node> {
+        let tmp = self.add_tmp();
+        let tmp = self.add_assign(tmp, cond)?;
+        let true_val = self.create_binary("select_if", tmp.clone(), true_val)?;
+        let false_val = self.create_binary("select_else", tmp, false_val)?;
+
+        self.create_binary("or", true_val, false_val)
     }
 
     pub fn create_void(&mut self) -> Result<Node> {

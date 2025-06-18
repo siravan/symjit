@@ -144,7 +144,7 @@ macro_rules! arm {
     };
     (add x($rd:expr), x($rn:expr), #$imm:expr) => {
         0x91000000 | rd!($rd) | rn!($rn) | imm!($imm)
-    };    
+    };
     (sub x($rd:expr), x($rn:expr), #$imm:expr, lsl #12) => {
         0xd1400000 | rd!($rd) | rn!($rn) | imm!($imm)
     };
