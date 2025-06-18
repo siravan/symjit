@@ -12,8 +12,12 @@ pub trait Eval {
 
 pub fn bool_to_f64(b: bool) -> f64 {
     const T: f64 = f64::from_bits(!0);
-    const F: f64 = f64::from_bits(0);    
-    if b { T } else { F }
+    const F: f64 = f64::from_bits(0);
+    if b {
+        T
+    } else {
+        F
+    }
 }
 
 /// aligns at a multiple of 32 (to cover different ABIs)

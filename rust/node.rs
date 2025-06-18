@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use crate::generator::Generator;
 use crate::symbol::{Loc, Symbol};
-use crate::utils::{Eval, bool_to_f64};
+use crate::utils::{bool_to_f64, Eval};
 
 #[derive(Debug, Clone)]
 pub enum VarStatus {
@@ -532,7 +532,7 @@ impl Node {
 }
 
 impl Eval for Node {
-    fn eval(&self, mem: &mut [f64], stack: &mut [f64]) -> f64 {        
+    fn eval(&self, mem: &mut [f64], stack: &mut [f64]) -> f64 {
         match self {
             Node::Void => 0.0,
             Node::Const { val, .. } => *val,
@@ -584,7 +584,7 @@ impl Eval for Node {
                     "_powi_mod_" => x.powi(*power) % y,
                     "gt" => bool_to_f64(x > y),
                     "geq" => bool_to_f64(x >= y),
-                    "lt" => bool_to_f64(x < y),                    
+                    "lt" => bool_to_f64(x < y),
                     "leq" => bool_to_f64(x <= y),
                     "eq" => bool_to_f64(x == y),
                     "neq" => bool_to_f64(x != y),

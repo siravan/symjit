@@ -16,6 +16,7 @@ pub enum CompilerType {
     AmdAVX,
     AmdSSE,
     Arm,
+    Debug,
 }
 
 pub struct Platform;
@@ -85,7 +86,10 @@ impl Runnable {
             CompilerType::AmdAVX => Self::compile_avx(&mut prog, size)?,
             CompilerType::AmdSSE => Self::compile_sse(&mut prog, size)?,
             CompilerType::Arm => Self::compile_arm(&mut prog, size)?,
-            _ => { unreachable!() }
+            CompilerType::Debug => Self::compile_debugger(&mut prog, size)?,
+            _ => {
+                unreachable!()
+            }
         };
 
         let use_simd = use_simd
@@ -113,12 +117,12 @@ impl Runnable {
             size,
         })
     }
-    
+
     fn compile_native(prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
         if Platform::is_amd64() && Platform::has_avx() {
             Self::compile_avx(prog, size)
         } else if Platform::is_amd64() && !Platform::has_avx() {
-            Self::compile_sse(prog, size)    
+            Self::compile_sse(prog, size)
         } else if Platform::is_arm64() {
             Self::compile_arm(prog, size)
         } else {
@@ -203,6 +207,13 @@ impl Runnable {
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
 
         Ok(compiled)
+    }
+
+    fn compile_debugger(prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
+        let compiled = Self::compile_native(prog, size)?;
+        let bytecode = Self::compile_bytecode(prog, size)?;
+        let debugger: Box<dyn Compiled<f64>> = Box::new(Debugger::new(compiled, bytecode));
+        Ok(debugger)
     }
 
     pub fn exec(&mut self, t: f64) {
@@ -388,5 +399,56 @@ impl Runnable {
             }
             _ => false,
         }
+    }
+}
+
+/***************************************************/
+
+pub struct Debugger {
+    pub compiled: Box<dyn Compiled<f64>>,
+    pub bytecode: Box<dyn Compiled<f64>>,
+}
+
+impl Debugger {
+    pub fn new(compiled: Box<dyn Compiled<f64>>, bytecode: Box<dyn Compiled<f64>>) -> Debugger {
+        Debugger { compiled, bytecode }
+    }
+
+    fn assert_equal(&self) {
+        let p = self.compiled.mem();
+        let q = self.bytecode.mem();
+
+        if p.iter().zip(q).any(|(x, y)| f64::abs(*x - *y) > 1e-15) {
+            panic!("discrepencies detected!");
+        }
+    }
+}
+
+impl Compiled<f64> for Debugger {
+    fn exec(&mut self) {
+        let p = self.bytecode.mem_mut();
+        let q = self.compiled.mem();
+        p.copy_from_slice(q);
+
+        self.compiled.exec();
+        self.bytecode.exec();
+
+        self.assert_equal();
+    }
+
+    fn mem(&self) -> &[f64] {
+        self.compiled.mem()
+    }
+
+    fn mem_mut(&mut self) -> &mut [f64] {
+        self.compiled.mem_mut()
+    }
+
+    fn dump(&self, name: &str) {
+        self.compiled.dump(name);
+    }
+
+    fn func(&self) -> fn(&[f64]) {
+        unreachable!()
     }
 }

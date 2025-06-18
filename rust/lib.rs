@@ -103,6 +103,7 @@ pub unsafe extern "C" fn compile(
         "amd-avx" => Runnable::new(prog, CompilerType::AmdAVX, use_simd),
         "amd-sse" => Runnable::new(prog, CompilerType::AmdSSE, use_simd),
         "native" => Runnable::new(prog, CompilerType::Native, use_simd),
+        "debug" => Runnable::new(prog, CompilerType::Debug, use_simd),
         _ => Err(anyhow!("invalid ty")),
     };
 

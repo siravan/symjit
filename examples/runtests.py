@@ -217,6 +217,13 @@ def test_model(f, label, pyback=True, bytecode=True):
         t1 = time.time()
         np.testing.assert_array_almost_equal(X0, X)
         print(f'\tpass in {1000 * (t1 - t0):.1f} ms')
+        
+        print('\tdebug mode (native vs bytecode)...\t', end='')
+        t0 = time.time()
+        X = f('rust', 'debug', False)
+        t1 = time.time()
+        np.testing.assert_array_almost_equal(X0, X)
+        print(f'\tpass in {1000 * (t1 - t0):.1f} ms')
 
     if pyback:
         print('\ttesting python backend...\t\t', end='')
