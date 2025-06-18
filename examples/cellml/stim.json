@@ -1,0 +1,362 @@
+{
+    "obs": [
+        {
+            "rhs": {
+                "args": [
+                    {
+                        "args": [
+                            {
+                                "args": [
+                                    {
+                                        "args": [
+                                            {
+                                                "args": [
+                                                    {
+                                                        "args": [
+                                                            {
+                                                                "name": "membrane₊stim_duration",
+                                                                "type": "Var"
+                                                            },
+                                                            {
+                                                                "name": "membrane₊stim_start",
+                                                                "type": "Var"
+                                                            },
+                                                            {
+                                                                "args": [
+                                                                    {
+                                                                        "val": -1.0,
+                                                                        "type": "Const"
+                                                                    },
+                                                                    {
+                                                                        "name": "time",
+                                                                        "type": "Var"
+                                                                    }
+                                                                ],
+                                                                "op": "times",
+                                                                "type": "Tree"
+                                                            },
+                                                            {
+                                                                "args": [
+                                                                    {
+                                                                        "name": "membrane₊stim_period",
+                                                                        "type": "Var"
+                                                                    },
+                                                                    {
+                                                                        "args": [
+                                                                            {
+                                                                                "val": -0.5,
+                                                                                "type": "Const"
+                                                                            },
+                                                                            {
+                                                                                "args": [
+                                                                                    {
+                                                                                        "val": 0.3183098861837907,
+                                                                                        "type": "Const"
+                                                                                    },
+                                                                                    {
+                                                                                        "args": [
+                                                                                            {
+                                                                                                "args": [
+                                                                                                    {
+                                                                                                        "args": [
+                                                                                                            {
+                                                                                                                "args": [
+                                                                                                                    {
+                                                                                                                        "val": 3.141592653589793,
+                                                                                                                        "type": "Const"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "name": "time",
+                                                                                                                        "type": "Var"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                                "op": "times",
+                                                                                                                "type": "Tree"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "name": "membrane₊stim_period",
+                                                                                                                "type": "Var"
+                                                                                                            }
+                                                                                                        ],
+                                                                                                        "op": "divide",
+                                                                                                        "type": "Tree"
+                                                                                                    }
+                                                                                                ],
+                                                                                                "op": "cot",
+                                                                                                "type": "Tree"
+                                                                                            }
+                                                                                        ],
+                                                                                        "op": "arctan",
+                                                                                        "type": "Tree"
+                                                                                    }
+                                                                                ],
+                                                                                "op": "times",
+                                                                                "type": "Tree"
+                                                                            },
+                                                                            {
+                                                                                "args": [
+                                                                                    {
+                                                                                        "name": "time",
+                                                                                        "type": "Var"
+                                                                                    },
+                                                                                    {
+                                                                                        "name": "membrane₊stim_period",
+                                                                                        "type": "Var"
+                                                                                    }
+                                                                                ],
+                                                                                "op": "divide",
+                                                                                "type": "Tree"
+                                                                            }
+                                                                        ],
+                                                                        "op": "plus",
+                                                                        "type": "Tree"
+                                                                    }
+                                                                ],
+                                                                "op": "times",
+                                                                "type": "Tree"
+                                                            }
+                                                        ],
+                                                        "op": "plus",
+                                                        "type": "Tree"
+                                                    },
+                                                    {
+                                                        "val": 0.0,
+                                                        "type": "Const"
+                                                    }
+                                                ],
+                                                "op": "geq",
+                                                "type": "Tree"
+                                            },
+                                            {
+                                                "val": 1.0,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "val": 0.0,
+                                                "type": "Const"
+                                            }
+                                        ],
+                                        "op": "ifelse",
+                                        "type": "Tree"
+                                    },
+                                    {
+                                        "args": [
+                                            {
+                                                "args": [
+                                                    {
+                                                        "args": [
+                                                            {
+                                                                "args": [
+                                                                    {
+                                                                        "val": -1.0,
+                                                                        "type": "Const"
+                                                                    },
+                                                                    {
+                                                                        "name": "membrane₊stim_start",
+                                                                        "type": "Var"
+                                                                    }
+                                                                ],
+                                                                "op": "times",
+                                                                "type": "Tree"
+                                                            },
+                                                            {
+                                                                "name": "time",
+                                                                "type": "Var"
+                                                            },
+                                                            {
+                                                                "args": [
+                                                                    {
+                                                                        "val": -1.0,
+                                                                        "type": "Const"
+                                                                    },
+                                                                    {
+                                                                        "name": "membrane₊stim_period",
+                                                                        "type": "Var"
+                                                                    },
+                                                                    {
+                                                                        "args": [
+                                                                            {
+                                                                                "val": -0.5,
+                                                                                "type": "Const"
+                                                                            },
+                                                                            {
+                                                                                "args": [
+                                                                                    {
+                                                                                        "val": 0.3183098861837907,
+                                                                                        "type": "Const"
+                                                                                    },
+                                                                                    {
+                                                                                        "args": [
+                                                                                            {
+                                                                                                "args": [
+                                                                                                    {
+                                                                                                        "args": [
+                                                                                                            {
+                                                                                                                "args": [
+                                                                                                                    {
+                                                                                                                        "val": 3.141592653589793,
+                                                                                                                        "type": "Const"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "name": "time",
+                                                                                                                        "type": "Var"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                                "op": "times",
+                                                                                                                "type": "Tree"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "name": "membrane₊stim_period",
+                                                                                                                "type": "Var"
+                                                                                                            }
+                                                                                                        ],
+                                                                                                        "op": "divide",
+                                                                                                        "type": "Tree"
+                                                                                                    }
+                                                                                                ],
+                                                                                                "op": "cot",
+                                                                                                "type": "Tree"
+                                                                                            }
+                                                                                        ],
+                                                                                        "op": "arctan",
+                                                                                        "type": "Tree"
+                                                                                    }
+                                                                                ],
+                                                                                "op": "times",
+                                                                                "type": "Tree"
+                                                                            },
+                                                                            {
+                                                                                "args": [
+                                                                                    {
+                                                                                        "name": "time",
+                                                                                        "type": "Var"
+                                                                                    },
+                                                                                    {
+                                                                                        "name": "membrane₊stim_period",
+                                                                                        "type": "Var"
+                                                                                    }
+                                                                                ],
+                                                                                "op": "divide",
+                                                                                "type": "Tree"
+                                                                            }
+                                                                        ],
+                                                                        "op": "plus",
+                                                                        "type": "Tree"
+                                                                    }
+                                                                ],
+                                                                "op": "times",
+                                                                "type": "Tree"
+                                                            }
+                                                        ],
+                                                        "op": "plus",
+                                                        "type": "Tree"
+                                                    },
+                                                    {
+                                                        "val": 0.0,
+                                                        "type": "Const"
+                                                    }
+                                                ],
+                                                "op": "geq",
+                                                "type": "Tree"
+                                            },
+                                            {
+                                                "val": 1.0,
+                                                "type": "Const"
+                                            },
+                                            {
+                                                "val": 0.0,
+                                                "type": "Const"
+                                            }
+                                        ],
+                                        "op": "ifelse",
+                                        "type": "Tree"
+                                    }
+                                ],
+                                "op": "times",
+                                "type": "Tree"
+                            },
+                            {
+                                "val": 0.5,
+                                "type": "Const"
+                            }
+                        ],
+                        "op": "gt",
+                        "type": "Tree"
+                    },
+                    {
+                        "args": [
+                            {
+                                "val": -1.0,
+                                "type": "Const"
+                            },
+                            {
+                                "name": "membrane₊stim_amplitude",
+                                "type": "Var"
+                            }
+                        ],
+                        "op": "times",
+                        "type": "Tree"
+                    },
+                    {
+                        "val": 0.0,
+                        "type": "Const"
+                    }
+                ],
+                "op": "ifelse",
+                "type": "Tree"
+            },
+            "lhs": {
+                "name": "membrane₊i_Stim",
+                "type": "Var"
+            }
+        }
+    ],
+    "iv": {
+        "name": "time",
+        "val": 0.0
+    },
+    "algs": [],
+    "params": [
+        {
+            "name": "membrane₊stim_start",
+            "val": 10.0
+        },
+        {
+            "name": "membrane₊stim_amplitude",
+            "val": 52.0
+        },
+        {
+            "name": "membrane₊stim_duration",
+            "val": 1.0
+        },
+        {
+            "name": "membrane₊stim_period",
+            "val": 1000.0
+        }    
+    ],
+    "states": [
+        {
+            "name": "stim",
+            "val": 0.0
+        }
+    ],
+    "odes": [
+        {
+            "rhs": 
+                {
+                    "name": "membrane₊i_Stim",
+                    "type": "Var"
+                },            
+            "lhs": {
+                "args": [
+                    {
+                        "name": "stim",
+                        "type": "Var"
+                    }
+                ],
+                "op": "Differential",
+                "type": "Tree"
+            }
+        }
+    ]       
+}        

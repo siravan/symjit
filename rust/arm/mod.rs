@@ -304,9 +304,9 @@ impl Generator for ArmGenerator {
         self.emit(arm! {str x(19), [sp, #8]});
 
         let stack_size = align_stack(self.reg_size() * cap);
-        self.emit(arm! {sub sp, sp, #(stack_size & 0x0fff)});
+        self.emit(arm! {sub sp, sp, #stack_size & 0x0fff});
         if stack_size >> 12 != 0 {
-            self.emit(arm! {sub sp, sp, #(stack_size >> 12), lsl #12});
+            self.emit(arm! {sub sp, sp, #stack_size >> 12, lsl #12});
         }
 
         self.emit(arm! {mov x(19), x(0)});
@@ -317,9 +317,9 @@ impl Generator for ArmGenerator {
 
         let stack_size = align_stack(self.reg_size() * cap);
         if stack_size >> 12 != 0 {
-            self.emit(arm! {add sp, sp, #(stack_size >> 12), lsl #12});
+            self.emit(arm! {add sp, sp, #stack_size >> 12, lsl #12});
         }
-        self.emit(arm! {add sp, sp, #(stack_size & 0x0fff)});
+        self.emit(arm! {add sp, sp, #stack_size & 0x0fff});
 
         self.emit(arm! {ldr x(19), [sp, #8]});
         self.emit(arm! {ldr lr, [sp, #0]});
@@ -333,9 +333,9 @@ impl Generator for ArmGenerator {
         self.emit(arm! {str x(19), [sp, #8]});
 
         let stack_size = align_stack(self.reg_size() * cap);
-        self.emit(arm! {sub sp, sp, #(stack_size & 0x0fff)});
+        self.emit(arm! {sub sp, sp, #stack_size & 0x0fff});
         if stack_size >> 12 != 0 {
-            self.emit(arm! {sub sp, sp, #(stack_size >> 12), lsl #12});
+            self.emit(arm! {sub sp, sp, #stack_size >> 12, lsl #12});
         }
 
         self.emit(arm! {mov x(19), sp});
@@ -355,9 +355,9 @@ impl Generator for ArmGenerator {
 
         let stack_size = align_stack(self.reg_size() * cap);
         if stack_size >> 12 != 0 {
-            self.emit(arm! {add sp, sp, #(stack_size >> 12), lsl #12});
+            self.emit(arm! {add sp, sp, #stack_size >> 12, lsl #12});
         }
-        self.emit(arm! {add sp, sp, #(stack_size & 0x0fff)});
+        self.emit(arm! {add sp, sp, #stack_size & 0x0fff});
 
         self.emit(arm! {ldr x(19), [sp, #8]});
         self.emit(arm! {ldr lr, [sp, #0]});

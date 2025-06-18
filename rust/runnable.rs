@@ -2,10 +2,11 @@ use anyhow::Result;
 
 use crate::amd::{AmdFamily, AmdGenerator};
 use crate::arm::ArmGenerator;
-use crate::builder::ByteCode;
+use crate::builder::{Builder, ByteCode};
 use crate::generator::Generator;
 use crate::machine::MachineCode;
 use crate::model::Program;
+use crate::symbol::Loc;
 use crate::utils::*;
 
 #[derive(PartialEq)]
@@ -94,7 +95,9 @@ impl Runnable {
 
         let use_simd = use_simd
             && Platform::has_avx()
-            && (matches!(ty, CompilerType::Amd) | matches!(ty, CompilerType::AmdAVX));
+            && (matches!(ty, CompilerType::Amd)
+                | matches!(ty, CompilerType::AmdAVX)
+                | matches!(ty, CompilerType::Native));
 
         let can_fast = count_states < 8 && count_params == 0 && count_obs == 1 && count_diffs == 0;
 
@@ -117,6 +120,8 @@ impl Runnable {
             size,
         })
     }
+
+    /********************* compile_* functions *************************/
 
     fn compile_native(prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
         if Platform::is_amd64() && Platform::has_avx() {
@@ -212,9 +217,12 @@ impl Runnable {
     fn compile_debugger(prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
         let compiled = Self::compile_native(prog, size)?;
         let bytecode = Self::compile_bytecode(prog, size)?;
-        let debugger: Box<dyn Compiled<f64>> = Box::new(Debugger::new(compiled, bytecode));
+        let debugger: Box<dyn Compiled<f64>> =
+            Box::new(Debugger::new(prog.builder.clone(), compiled, bytecode));
         Ok(debugger)
     }
+
+    /**********************************************************/
 
     pub fn exec(&mut self, t: f64) {
         {
@@ -405,20 +413,40 @@ impl Runnable {
 /***************************************************/
 
 pub struct Debugger {
-    pub compiled: Box<dyn Compiled<f64>>,
-    pub bytecode: Box<dyn Compiled<f64>>,
+    builder: Builder,
+    compiled: Box<dyn Compiled<f64>>,
+    bytecode: Box<dyn Compiled<f64>>,
 }
 
 impl Debugger {
-    pub fn new(compiled: Box<dyn Compiled<f64>>, bytecode: Box<dyn Compiled<f64>>) -> Debugger {
-        Debugger { compiled, bytecode }
+    pub fn new(
+        builder: Builder,
+        compiled: Box<dyn Compiled<f64>>,
+        bytecode: Box<dyn Compiled<f64>>,
+    ) -> Debugger {
+        Debugger {
+            builder,
+            compiled,
+            bytecode,
+        }
     }
 
     fn assert_equal(&self) {
         let p = self.compiled.mem();
         let q = self.bytecode.mem();
 
-        if p.iter().zip(q).any(|(x, y)| f64::abs(*x - *y) > 1e-15) {
+        if p.iter().zip(q).any(|(x, y)| !(f64::abs(*x - *y) == 0.0)) {
+            for (key, sym) in self.builder.sym_table.syms.iter() {
+                match sym.borrow().loc {
+                    Loc::Mem(idx) => {
+                        let a = p[idx as usize];
+                        let b = q[idx as usize];
+                        let eq = if a == b { "pass" } else { "fail" };
+                        println!("{:14.8} {:14.8} {} -> \t{}", a, b, eq, key);
+                    }
+                    Loc::Stack(..) => {}
+                }
+            }
             panic!("discrepencies detected!");
         }
     }

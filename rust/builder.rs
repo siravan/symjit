@@ -262,9 +262,9 @@ impl Eval for Builder {
 /************************************************/
 
 pub struct ByteCode {
-    pub builder: Builder,
-    pub mem: Vec<f64>,
-    pub stack: Vec<f64>,
+    builder: Builder,
+    mem: Vec<f64>,
+    stack: Vec<f64>,
 }
 
 impl ByteCode {
