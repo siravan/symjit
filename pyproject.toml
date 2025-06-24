@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "symjit"
-version = "2.0.1"
+version = "2.1.0"
 
 [tool.setuptools.packages]
 # Pure Python packages/modules
@@ -15,9 +15,7 @@ find = { where = ["python"] }
 # Private Rust extension module to be nested into the Python package
 target = "symjit._lib"   # The last part of the name (e.g. "_lib") has to match lib.name in Cargo.toml,
                              # but you can add a prefix to nest it inside of a Python package.
-path = "Cargo.toml"   
-binding = "NoBinding" 
+path = "Cargo.toml"
+binding = "NoBinding"
 features = []
 debug = false
-
-

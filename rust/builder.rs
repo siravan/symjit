@@ -135,7 +135,7 @@ impl Builder {
             .find_sym(name)
             .ok_or_else(|| anyhow!("variable {} not found", name))?;
 
-        Ok(Node::create_var(name, sym))
+        Ok(Node::create_var(sym))
     }
 
     pub fn create_unary(&mut self, op: &str, arg: Node) -> Result<Node> {
@@ -144,10 +144,6 @@ impl Builder {
 
     pub fn create_powi(&mut self, arg: Node, power: i32) -> Result<Node> {
         Ok(Node::create_powi(arg, power))
-    }
-
-    pub fn create_modular_powi(&mut self, left: Node, right: Node, power: i32) -> Result<Node> {
-        Ok(Node::create_modular_powi(left, right, power))
     }
 
     pub fn create_binary(&mut self, op: &str, left: Node, right: Node) -> Result<Node> {
@@ -185,7 +181,6 @@ impl Builder {
         let sym = self.sym_table.find_sym(name.as_str()).unwrap();
 
         Node::Var {
-            name: name.to_string(),
             sym,
             status: VarStatus::Unknown,
         }
@@ -292,7 +287,7 @@ impl Compiled<f64> for ByteCode {
         &mut self.mem[..]
     }
 
-    fn dump(&self, name: &str) {}
+    fn dump(&self, _name: &str) {}
 
     fn func(&self) -> fn(&[f64]) {
         unreachable!()

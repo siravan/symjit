@@ -1,6 +1,6 @@
 [package]
 name = "symjit"
-version = "2.0.1"
+version = "2.1.0"
 edition = "2021"
 
 [dependencies]
@@ -20,7 +20,6 @@ selinux-fix = ['memmap2']
 default = []
 
 [lib]
-name = "_lib"                 
+name = "_lib"
 path = "rust/lib.rs"
 crate-type = ["cdylib"]
-

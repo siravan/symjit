@@ -222,8 +222,7 @@ impl Transformer for Equation {
 
         let rhs = self.rhs.transform(builder)?;
         let lhs = builder.create_var(var.as_str())?;
-        let lhs = builder.add_assign(lhs, rhs)?;
-
+        builder.add_assign(lhs, rhs)?;
         builder.create_void()
     }
 }

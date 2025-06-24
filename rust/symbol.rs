@@ -68,10 +68,6 @@ impl SymbolTable {
         }
     }
 
-    pub fn find(&self, name: &str) -> Option<Loc> {
-        self.syms.get(name).map(|sym| sym.borrow().loc)
-    }
-
     pub fn find_sym(&self, name: &str) -> Option<Rc<RefCell<Symbol>>> {
         self.syms.get(name).map(Rc::clone)
     }

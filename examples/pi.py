@@ -1,7 +1,6 @@
 import math
 from sympy import symbols, lambdify
 from symjit import compile_func
-
 # calculating pi using Machine formula
 
 N = 4
@@ -14,7 +13,7 @@ def arctan_series(x):
         s += x**abs(coef) / coef
 
     return s
-    
+
 
 x, y = symbols('x y')
 p = 4 * (4 * arctan_series(x) - arctan_series(y))

@@ -24,7 +24,6 @@ pub enum Node {
         idx: u32,
     },
     Var {
-        name: String,
         sym: Rc<RefCell<Symbol>>,
         status: VarStatus,
     },
@@ -52,9 +51,8 @@ impl Node {
         Node::Const { val, idx }
     }
 
-    pub fn create_var(name: &str, sym: Rc<RefCell<Symbol>>) -> Node {
+    pub fn create_var(sym: Rc<RefCell<Symbol>>) -> Node {
         Node::Var {
-            name: name.to_string(),
             sym,
             status: VarStatus::Unknown,
         }
@@ -170,23 +168,6 @@ impl Node {
         }
     }
 
-    pub fn calc_ershov(&self) -> u8 {
-        match self {
-            Node::Void => 0,
-            Node::Const { .. } | Node::Var { .. } => 1,
-            Node::Unary { arg, .. } => arg.calc_ershov(),
-            Node::Binary { left, right, .. } => {
-                let l = left.calc_ershov();
-                let r = right.calc_ershov();
-                if l == r {
-                    l + 1
-                } else {
-                    l.max(r)
-                }
-            }
-        }
-    }
-
     fn ershov_func(&mut self) {
         match self {
             Node::Unary { arg, ershov, .. } => {
@@ -207,7 +188,7 @@ impl Node {
         }
     }
 
-    /// Finds and marks the first usage of each Var    
+    /// Finds and marks the first usage of each Var
     fn mark_first(&mut self) {
         if let Node::Var { sym, status, .. } = self {
             let mut sym = sym.borrow_mut();

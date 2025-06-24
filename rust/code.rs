@@ -6,10 +6,6 @@ pub type BinaryFunc<T> = extern "C" fn(T, T) -> T;
 pub struct VirtualTable<T>(T);
 
 impl<T: Float> VirtualTable<T> {
-    fn transmute(f: fn(f64) -> f64) -> BinaryFunc<T> {
-        unsafe { std::mem::transmute::<fn(f64) -> f64, BinaryFunc<T>>(f) }
-    }
-
     // Finds the function reference for op
     pub fn from_str(op: &str) -> Result<BinaryFunc<T>> {
         let f = match op {
@@ -35,6 +31,10 @@ impl<T: Float> VirtualTable<T> {
             "exp" => Self::exp,
             "ln" => Self::ln,
             "log" => Self::log,
+            "expm1" => Self::expm1,
+            "log1p" => Self::log1p,
+            "exp2" => Self::exp2,
+            "log2" => Self::log2,
             _ => {
                 return Err(anyhow!("op_code {} not found", op));
             }
@@ -129,5 +129,21 @@ impl<T: Float> VirtualTable<T> {
 
     pub extern "C" fn log(x: T, _y: T) -> T {
         x.log10()
+    }
+
+    pub extern "C" fn expm1(x: T, _y: T) -> T {
+        x.exp_m1()
+    }
+
+    pub extern "C" fn log1p(x: T, _y: T) -> T {
+        x.ln_1p()
+    }
+
+    pub extern "C" fn exp2(x: T, _y: T) -> T {
+        x.exp2()
+    }
+
+    pub extern "C" fn log2(x: T, _y: T) -> T {
+        x.log2()
     }
 }
