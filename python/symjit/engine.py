@@ -110,7 +110,7 @@ class Engine:
         self._ptr_diffs = self.dll.ptr_diffs
         self._ptr_diffs.argtypes = [ctypes.c_void_p]
         self._ptr_diffs.restype = ctypes.POINTER(ctypes.c_double)
-        
+
         self._fast_func = self.dll.fast_func
         self._fast_func.argtypes = [ctypes.c_void_p]
         self._fast_func.restype = ctypes.c_void_p
@@ -150,7 +150,8 @@ class RustyCompiler:
         self.populate()
 
     def __del__(self):
-        lib._finalize(self.p)
+        if hasattr(self, "p"):
+            lib._finalize(self.p)
 
     def get_u0(self):
         if self.json_model is None:
@@ -189,17 +190,16 @@ class RustyCompiler:
         n = buf.shape[1]
         if not lib._execute_vectorized(self.p, ptr, n):
             raise ValueError("cannot execute the model")
-            
+
     def fast_func(self):
         if self.ty == "bytecode":
             return None
-    
+
         f = lib._fast_func(self.p)
-        
+
         if f is None:
             return None
-        
-        sig = [ctypes.c_double for _ in range(self.count_states + 1)]            
+
+        sig = [ctypes.c_double for _ in range(self.count_states + 1)]
         fac = ctypes.CFUNCTYPE(*sig)
         return fac(f)
-        

@@ -1,4 +1,6 @@
-import sys
+import util
+backend, ty, use_simd = util.process_argv()
+
 import time
 from math import sqrt
 import numpy as np
@@ -7,8 +9,6 @@ import matplotlib.pyplot as plt
 from sympy import symbols
 from symjit import compile_func, compile_ode, compile_jac
 
-backend = "python" if len(sys.argv) > 1 and sys.argv[1] == "py" else "rust"
-
 t, x, y, mu = symbols("t x y mu")
 
 # this is the rescaled Van der Pol equation (see Hairer II 1.5')
@@ -16,8 +16,8 @@ ode = [y, mu * ((1 - x * x) * y - x)]
 
 t0 = time.time()
 
-f = compile_ode(t, [x, y], ode, params=[mu])
-jac = compile_jac(t, [x, y], ode, params=[mu])
+f = compile_ode(t, [x, y], ode, params=[mu], ty=ty, backend=backend)
+jac = compile_jac(t, [x, y], ode, params=[mu], ty=ty, backend=backend)
 
 u0 = [0.0, sqrt(3.0)]
 t_eval = np.arange(0, 10.0, 0.01)

@@ -1,14 +1,14 @@
-import sys
+import util
+backend, ty, use_simd = util.process_argv()
+
 import numpy as np
 import scipy.integrate
 import matplotlib.pyplot as plt
 from sympy import symbols
 from symjit import compile_ode
 
-backend = "python" if len(sys.argv) > 1 and sys.argv[1] == "py" else "rust"
-
 t, x, y = symbols("t x y")
-f = compile_ode(t, (x, y), (y, -x), backend=backend)
+f = compile_ode(t, (x, y), (y, -x), backend=backend, ty=ty)
 t_eval = np.arange(0, 10, 0.01)
 sol = scipy.integrate.solve_ivp(f, (0, 10), (0.0, 1.0), t_eval=t_eval)
 
