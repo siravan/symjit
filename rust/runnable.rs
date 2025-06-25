@@ -435,7 +435,9 @@ impl Debugger {
         let p = self.compiled.mem();
         let q = self.bytecode.mem();
 
-        if p.iter().zip(q).any(|(x, y)| !(f64::abs(*x - *y) == 0.0)) {
+        // accept if the difference is less that 1e-15 to count for rounding error
+        // because of different operation order
+        if p.iter().zip(q).any(|(x, y)| !(f64::abs(*x - *y) < 1e-15)) {
             for (key, sym) in self.builder.sym_table.syms.iter() {
                 match sym.borrow().loc {
                     Loc::Mem(idx) => {

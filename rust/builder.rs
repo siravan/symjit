@@ -53,6 +53,7 @@ impl Builder {
         let arg = self.create_unary("_call_", arg)?;
         let lhs = self.add_tmp();
         self.stmts.push(Statement::call(op, lhs.clone(), arg, 1));
+        let _ = VirtualTable::<f64>::from_str(op)?; // check to see if op is defined
         self.ft.insert(op.to_string());
 
         Ok(lhs)
@@ -96,6 +97,7 @@ impl Builder {
         let arg = self.create_binary("_call_", left, right)?;
         let lhs = self.add_tmp();
         self.stmts.push(Statement::call(op, lhs.clone(), arg, 2));
+        let _ = VirtualTable::<f64>::from_str(op)?; // check to see if op is defined
         self.ft.insert(op.to_string());
 
         Ok(lhs)

@@ -139,7 +139,6 @@ impl Expr {
         if builder.intrinsic_unary.contains(&op) {
             builder.create_unary(op, x)
         } else {
-            let _ = VirtualTable::<f64>::from_str(op)?; // check to see if op is defined
             builder.add_call_unary(op, x)
         }
     }
@@ -151,7 +150,6 @@ impl Expr {
         if builder.intrinsic_binary.contains(&op) {
             builder.create_binary(op, l, r)
         } else {
-            let _ = VirtualTable::<f64>::from_str(op)?; // check to see if op is defined
             builder.add_call_binary(op, l, r)
         }
     }
