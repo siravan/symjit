@@ -2,7 +2,7 @@ use crate::utils::f64x4;
 
 pub struct Matrix {
     p: Vec<*mut f64>,
-    ncols: usize,
+    pub ncols: usize,
 }
 
 impl Matrix {

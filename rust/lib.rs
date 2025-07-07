@@ -20,6 +20,7 @@ mod symbol;
 mod amd;
 mod arm;
 
+use matrix::Matrix;
 use model::{CellModel, Program};
 use runnable::{CompilerType, Runnable};
 
@@ -284,7 +285,8 @@ pub unsafe extern "C" fn execute_vectorized(
     if let Some(func) = &mut q.func {
         let h = usize::max(func.count_states, func.count_obs);
         let buf: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(buf, h * n) };
-        func.exec_vectorized(buf, n);
+        let mut mat = Matrix::from_buf(buf, h, n);
+        func.exec_vectorized(&mut mat);
         true
     } else {
         false

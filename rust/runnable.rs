@@ -265,20 +265,18 @@ impl Runnable {
         */
     }
 
-    pub fn exec_vectorized(&mut self, buf: &mut [f64], n: usize) {
+    pub fn exec_vectorized(&mut self, mat: &mut Matrix) {
         self.prepare_simd();
 
         if self.compiled_simd.is_none() {
-            self.exec_vectorized_scalar(buf, n);
+            self.exec_vectorized_scalar(mat);
         } else {
-            self.exec_vectorized_simd(buf, n);
+            self.exec_vectorized_simd(mat);
         }
     }
 
-    pub fn exec_vectorized_scalar(&mut self, buf: &mut [f64], n: usize) {
-        let h = usize::max(self.count_states, self.count_obs);
-        assert!(buf.len() == n * h);
-        let mut mat = Matrix::from_buf(buf, h, n);
+    pub fn exec_vectorized_scalar(&mut self, mat: &mut Matrix) {
+        let n = mat.ncols;
 
         for t in 0..n {
             {
@@ -302,12 +300,9 @@ impl Runnable {
         }
     }
 
-    pub fn exec_vectorized_simd(&mut self, buf: &mut [f64], n: usize) {
-        let h = usize::max(self.count_states, self.count_obs);
-        assert!(buf.len() == n * h);
-        let mut mat = Matrix::from_buf(buf, h, n);
-
+    pub fn exec_vectorized_simd(&mut self, mat: &mut Matrix) {
         self.set_simd_params();
+        let n = mat.ncols;
 
         if let Some(f) = &mut self.compiled_simd {
             let n0 = 4 * (n / 4);
