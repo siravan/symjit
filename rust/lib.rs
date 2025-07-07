@@ -4,9 +4,9 @@ use std::ffi::{c_char, CStr, CString};
 // mod analyzer;
 mod code;
 mod machine;
+mod matrix;
 mod memory;
 mod model;
-// mod register;
 mod runnable;
 mod utils;
 
@@ -127,7 +127,7 @@ pub unsafe extern "C" fn compile(
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
 ///     that q points to a valid CompilerResult
-///     
+///
 #[no_mangle]
 pub unsafe extern "C" fn check_status(q: *const CompilerResult) -> *const c_char {
     let q: &CompilerResult = unsafe { &*q };
@@ -147,7 +147,7 @@ pub unsafe extern "C" fn check_status(q: *const CompilerResult) -> *const c_char
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
 ///     that q points to a valid CompilerResult
-///     
+///
 #[no_mangle]
 pub unsafe extern "C" fn count_states(q: *const CompilerResult) -> usize {
     let q: &CompilerResult = unsafe { &*q };
@@ -163,7 +163,7 @@ pub unsafe extern "C" fn count_states(q: *const CompilerResult) -> usize {
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
 ///     that q points to a valid CompilerResult
-///     
+///
 #[no_mangle]
 pub unsafe extern "C" fn count_params(q: *const CompilerResult) -> usize {
     let q: &CompilerResult = unsafe { &*q };
@@ -179,7 +179,7 @@ pub unsafe extern "C" fn count_params(q: *const CompilerResult) -> usize {
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
 ///     that q points to a valid CompilerResult
-///     
+///
 #[no_mangle]
 pub unsafe extern "C" fn count_obs(q: *const CompilerResult) -> usize {
     let q: &CompilerResult = unsafe { &*q };
@@ -196,7 +196,7 @@ pub unsafe extern "C" fn count_obs(q: *const CompilerResult) -> usize {
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
 ///     that q points to a valid CompilerResult
-///     
+///
 #[no_mangle]
 pub unsafe extern "C" fn count_diffs(q: *const CompilerResult) -> usize {
     let q: &CompilerResult = unsafe { &*q };
@@ -213,7 +213,7 @@ pub unsafe extern "C" fn count_diffs(q: *const CompilerResult) -> usize {
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
 ///     that q points to a valid CompilerResult
-///     
+///
 #[no_mangle]
 pub unsafe extern "C" fn run(
     q: *mut CompilerResult,
@@ -249,7 +249,7 @@ pub unsafe extern "C" fn run(
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
 ///     that q points to a valid CompilerResult
-///     
+///
 #[no_mangle]
 pub unsafe extern "C" fn execute(q: *mut CompilerResult, t: f64) -> bool {
     let q: &mut CompilerResult = unsafe { &mut *q };
@@ -297,7 +297,7 @@ pub unsafe extern "C" fn execute_vectorized(
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
 ///     that q points to a valid CompilerResult
-///     
+///
 #[no_mangle]
 pub unsafe extern "C" fn ptr_states(q: *mut CompilerResult) -> *mut f64 {
     let q: &mut CompilerResult = unsafe { &mut *q };
@@ -314,7 +314,7 @@ pub unsafe extern "C" fn ptr_states(q: *mut CompilerResult) -> *mut f64 {
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
 ///     that q points to a valid CompilerResult
-///     
+///
 #[no_mangle]
 pub unsafe extern "C" fn ptr_params(q: *mut CompilerResult) -> *mut f64 {
     let q: &mut CompilerResult = unsafe { &mut *q };
@@ -331,7 +331,7 @@ pub unsafe extern "C" fn ptr_params(q: *mut CompilerResult) -> *mut f64 {
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
 ///     that q points to a valid CompilerResult
-///     
+///
 #[no_mangle]
 pub unsafe extern "C" fn ptr_obs(q: *mut CompilerResult) -> *const f64 {
     let q: &CompilerResult = unsafe { &*q };
@@ -350,7 +350,7 @@ pub unsafe extern "C" fn ptr_obs(q: *mut CompilerResult) -> *const f64 {
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
 ///     that q points to a valid CompilerResult
-///     
+///
 #[no_mangle]
 pub unsafe extern "C" fn ptr_diffs(q: *mut CompilerResult) -> *const f64 {
     let q: &CompilerResult = unsafe { &*q };
@@ -367,7 +367,7 @@ pub unsafe extern "C" fn ptr_diffs(q: *mut CompilerResult) -> *const f64 {
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
 ///     that q points to a valid CompilerResult
-///     
+///
 #[no_mangle]
 pub unsafe extern "C" fn dump(
     q: *mut CompilerResult,
@@ -391,7 +391,7 @@ pub unsafe extern "C" fn dump(
 ///     that q points to a valid CompilerResult and that after
 ///     calling this function, q is invalid and should not
 ///     be used anymore
-///     
+///
 #[no_mangle]
 pub unsafe extern "C" fn finalize(q: *mut CompilerResult) {
     if !q.is_null() {
@@ -405,7 +405,7 @@ pub unsafe extern "C" fn finalize(q: *mut CompilerResult) {
 /// # Safety
 ///     the return value is a null-terminated string that should not
 ///     be freed
-///     
+///
 #[no_mangle]
 pub unsafe extern "C" fn info() -> *const c_char {
     // let msg = c"symjit 1.3.3";
@@ -419,7 +419,7 @@ pub unsafe extern "C" fn info() -> *const c_char {
 ///     1. If the model cannot be compiled to a fast function, NULL is returned.
 ///     2. The resulting function lives as long as q does and should not be stored
 ///         separately.
-///     
+///
 #[no_mangle]
 pub unsafe extern "C" fn fast_func(q: *mut CompilerResult) -> *const usize {
     let q: &mut CompilerResult = unsafe { &mut *q };

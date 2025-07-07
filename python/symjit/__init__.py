@@ -18,7 +18,7 @@ class Func:
         self.prepare_fmt(eqs)
         self.prepare_vecfmt(eqs)
 
-    def prepare_fmt(self, eqs):        
+    def prepare_fmt(self, eqs):
         if self.f is not None:
             if isinstance(eqs, list):
                 self.fmt = lambda args : [self.f(*args)]
@@ -33,7 +33,7 @@ class Func:
                 self.fmt = lambda obs : tuple(obs.tolist())
             else:
                 self.fmt = lambda obs : obs[0]
-                
+
     def prepare_vecfmt(self, eqs):
         if isinstance(eqs, list):
             self.vecfmt = lambda res : res
@@ -42,15 +42,15 @@ class Func:
         else:
             self.vecfmt = lambda res : res[0]
 
-    def __call__(self, *args):                
+    def __call__(self, *args):
         if len(args) > self.count_states:
             p = np.array(args[self.count_states :], dtype="double")
             self.compiler.params[:] = p
-            
-        if isinstance(args[0], numbers.Number): 
+
+        if isinstance(args[0], numbers.Number):
             if self.f is not None:
                 return self.fmt(args)
-                
+
             u = np.array(args[: self.count_states], dtype="double")
             self.compiler.states[:] = u
             self.compiler.execute()
@@ -80,12 +80,15 @@ class Func:
 
     def dump(self, name, what="scalar"):
         self.compiler.dump(name, what=what)
-        
-    def dumps(self, what="scalar"):        
+
+    def dumps(self, what="scalar"):
         return dumps(self.compiler, what=what)
-        
+
     def fast_func(self):
         return self.f
+
+    def execute_vectorized(self, buf):
+        self.compiler.execute_vectorized(buf)
 
 
 class OdeFunc:
@@ -111,8 +114,8 @@ class OdeFunc:
 
     def dump(self, name, what="scalar"):
         return self.compiler.dump(name, what=what)
-        
-    def dumps(self, what="scalar"):        
+
+    def dumps(self, what="scalar"):
         return dumps(self.compiler, what=what)
 
 
@@ -135,9 +138,9 @@ class JacFunc:
 
     def dump(self, name, what="scalar"):
         self.compiler.dump(name, what=what)
-        
-    def dumps(self, what="scalar"):        
-        return dumps(self.compiler, what=what) 
+
+    def dumps(self, what="scalar"):
+        return dumps(self.compiler, what=what)
 
 
 def dumps(compiler, what="scalar"):
@@ -147,7 +150,7 @@ def dumps(compiler, what="scalar"):
         b = fd.read()
     os.remove(name)
     return b.hex()
-    
+
 
 def can_use_rust(backend):
     if not backend in ["python", "rust"]:

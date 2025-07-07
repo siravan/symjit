@@ -5,6 +5,7 @@ use crate::arm::ArmGenerator;
 use crate::builder::{Builder, ByteCode};
 use crate::generator::Generator;
 use crate::machine::MachineCode;
+use crate::matrix::Matrix;
 use crate::model::Program;
 use crate::symbol::Loc;
 use crate::utils::*;
@@ -277,14 +278,15 @@ impl Runnable {
     pub fn exec_vectorized_scalar(&mut self, buf: &mut [f64], n: usize) {
         let h = usize::max(self.count_states, self.count_obs);
         assert!(buf.len() == n * h);
+        let mut mat = Matrix::from_buf(buf, h, n);
 
         for t in 0..n {
             {
                 let mem = self.compiled.mem_mut();
                 mem[self.idx_iv] = t as f64;
                 for i in 0..self.count_states {
-                    let x = buf[i * n + t];
-                    mem[self.first_state + i] = x;
+                    //let x = buf[i * n + t];
+                    mem[self.first_state + i] = mat.get(i, t);
                 }
             }
 
@@ -293,7 +295,8 @@ impl Runnable {
             {
                 let mem = self.compiled.mem_mut();
                 for i in 0..self.count_obs {
-                    buf[i * n + t] = mem[self.first_obs + i];
+                    //buf[i * n + t] = mem[self.first_obs + i];
+                    mat.set(i, t, mem[self.first_obs + i]);
                 }
             }
         }
@@ -302,6 +305,7 @@ impl Runnable {
     pub fn exec_vectorized_simd(&mut self, buf: &mut [f64], n: usize) {
         let h = usize::max(self.count_states, self.count_obs);
         assert!(buf.len() == n * h);
+        let mut mat = Matrix::from_buf(buf, h, n);
 
         self.set_simd_params();
 
@@ -313,8 +317,8 @@ impl Runnable {
                     let mem = f.mem_mut();
                     mem[self.idx_iv] = f64x4::splat(t as f64);
                     for i in 0..self.count_states {
-                        let x = f64x4::from_slice(&buf[i * n + t..i * n + t + 4]);
-                        mem[self.first_state + i] = x;
+                        //let x = f64x4::from_slice(&buf[i * n + t..i * n + t + 4]);
+                        mem[self.first_state + i] = mat.get_simd(i, t);
                     }
                 }
 
@@ -323,7 +327,8 @@ impl Runnable {
                 {
                     let mem = f.mem_mut();
                     for i in 0..self.count_obs {
-                        mem[self.first_obs + i].copy_to_slice(&mut buf[i * n + t..i * n + t + 4]);
+                        //mem[self.first_obs + i].copy_to_slice(&mut buf[i * n + t..i * n + t + 4]);
+                        mat.set_simd(i, t, mem[self.first_obs + i]);
                     }
                 }
             }
@@ -333,7 +338,8 @@ impl Runnable {
                     let mem = self.compiled.mem_mut();
                     mem[self.idx_iv] = t as f64;
                     for i in 0..self.count_states {
-                        mem[self.first_state + i] = buf[i * n + t];
+                        //mem[self.first_state + i] = buf[i * n + t];
+                        mem[self.first_state + i] = mat.get(i, t);
                     }
                 }
 
@@ -342,7 +348,8 @@ impl Runnable {
                 {
                     let mem = self.compiled.mem_mut();
                     for i in 0..self.count_obs {
-                        buf[i * n + t] = mem[self.first_obs + i];
+                        //buf[i * n + t] = mem[self.first_obs + i];
+                        mat.set(i, t, mem[self.first_obs + i]);
                     }
                 }
             }

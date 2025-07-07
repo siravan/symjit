@@ -262,13 +262,13 @@ impl Node {
         }
     }
 
-    fn load_var(ir: &mut dyn Generator, dst: u8, loc: &Loc) -> Result<u8> {
+    fn load_var(ir: &mut dyn Generator, dst: u8, loc: &Loc) -> u8 {
         match loc {
             Loc::Stack(idx) => ir.load_stack(dst, *idx),
             Loc::Mem(idx) => ir.load_mem(dst, *idx),
         };
 
-        Ok(dst)
+        dst
     }
 
     /// Loaded and cache variables in Mem and Stack
@@ -279,47 +279,34 @@ impl Node {
     fn compile_var(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> Result<u8> {
         if let Node::Var { sym, status, .. } = &self {
             let mut sym = sym.borrow_mut();
+            let home = ir.first_shadow() + base;
 
             let dst = match status {
                 VarStatus::First => {
                     sym.reg = pool.pop();
-
-                    let dst = if let Some(r) = sym.reg {
-                        r
-                    } else {
-                        // if no pool register is available, just use the standard designated register
-                        ir.first_shadow() + base
-                    };
-
-                    Self::load_var(ir, dst, &sym.loc)?
+                    // if no pool register is available, just use the standard designated register (home)
+                    Self::load_var(ir, sym.reg.unwrap_or(home), &sym.loc)
                 }
                 VarStatus::Mid => {
-                    if let Some(r) = sym.reg {
-                        r
-                    } else {
-                        // if no pool register is available, just use the standard designated register
-                        // note that this means reloading the variable at each use
-                        let dst = ir.first_shadow() + base;
-                        Self::load_var(ir, dst, &sym.loc)?
-                    }
+                    // if no pool register is available, just use the standard designated register (home)
+                    // note that this means reloading the variable at each use
+                    sym.reg
+                        .unwrap_or_else(|| Self::load_var(ir, home, &sym.loc))
                 }
                 VarStatus::Last => {
-                    let dst = ir.first_shadow() + base;
-
                     if let Some(r) = sym.reg {
-                        ir.fmov(dst, r);
+                        ir.fmov(home, r);
                         pool.push(r);
                         sym.reg = None;
-                        dst
+                        home
                     } else {
-                        Self::load_var(ir, dst, &sym.loc)?
+                        Self::load_var(ir, home, &sym.loc)
                     }
                 }
                 VarStatus::Singular | VarStatus::Unknown => {
                     // if a variable is Singular, i.e., is used only once, don't
                     // bother with caching
-                    let dst = ir.first_shadow() + base;
-                    Self::load_var(ir, dst, &sym.loc)?
+                    Self::load_var(ir, home, &sym.loc)
                 }
             };
 
