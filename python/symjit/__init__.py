@@ -1,7 +1,7 @@
+# from engine import Matrix
 import os
 import numpy as np
 import numbers
-import importlib
 
 from . import engine
 from . import structure
@@ -55,8 +55,11 @@ class Func:
             self.compiler.states[:] = u
             self.compiler.execute()
             return self.fmt(self.compiler.obs)
-        else:
+        elif isinstance(self.compiler, pyengine.PyCompiler):
             return self.call_vectorized(*args)
+        else:
+            # return self.call_vectorized(*args)
+            return self.call_matrix(*args)
 
     def call_vectorized(self, *args):
         assert len(args) >= self.count_states
@@ -75,6 +78,27 @@ class Func:
         for i in range(self.count_obs):
             y = buf[i, :].reshape(shape)
             res.append(y)
+
+        return self.vecfmt(res)
+
+    def call_matrix(self, *args):
+        assert len(args) >= self.count_states
+        shape = args[0].shape
+
+        with engine.Matrix() as states:
+            for i in range(self.count_states):
+                assert args[i].shape == shape
+                states.add_row(args[i])
+
+            res = []
+
+            with engine.Matrix() as obs:
+                for i in range(self.count_obs):
+                    X = np.zeros(shape, dtype=np.double)
+                    res.append(X)
+                    obs.add_row(X)
+
+                self.compiler.execute_matrix(states, obs)
 
         return self.vecfmt(res)
 

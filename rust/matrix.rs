@@ -6,6 +6,13 @@ pub struct Matrix {
 }
 
 impl Matrix {
+    pub fn new() -> Matrix {
+        Matrix {
+            p: Vec::new(),
+            ncols: 0,
+        }
+    }
+
     pub fn from_buf(buf: &mut [f64], nrows: usize, ncols: usize) -> Matrix {
         assert!(buf.len() >= nrows * ncols);
         let mut p: Vec<*mut f64> = Vec::with_capacity(nrows);
@@ -17,23 +24,38 @@ impl Matrix {
         Matrix { p, ncols }
     }
 
-    pub fn get(&self, row: usize, idx: usize) -> f64 {
+    pub fn add_row(&mut self, v: *mut f64, n: usize) {
+        self.ncols = if self.p.is_empty() {
+            n
+        } else {
+            self.ncols.min(n)
+        };
+        self.p.push(v);
+    }
+
+    pub fn get(&self, row: usize, col: usize) -> f64 {
         let u: &[f64] = unsafe { std::slice::from_raw_parts(self.p[row], self.ncols) };
-        u[idx]
+        u[col]
     }
 
-    pub fn get_simd(&self, row: usize, idx: usize) -> f64x4 {
+    pub fn get_simd(&self, row: usize, col: usize) -> f64x4 {
         let u: &[f64] = unsafe { std::slice::from_raw_parts(self.p[row], self.ncols) };
-        f64x4::from_slice(&u[idx..idx + 4])
+        f64x4::from_slice(&u[col..col + 4])
     }
 
-    pub fn set(&mut self, row: usize, idx: usize, val: f64) {
+    pub fn set(&mut self, row: usize, col: usize, val: f64) {
         let u: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(self.p[row], self.ncols) };
-        u[idx] = val;
+        u[col] = val;
     }
 
-    pub fn set_simd(&mut self, row: usize, idx: usize, val: f64x4) {
+    pub fn set_simd(&mut self, row: usize, col: usize, val: f64x4) {
         let u: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(self.p[row], self.ncols) };
-        val.copy_to_slice(&mut u[idx..idx + 4]);
+        val.copy_to_slice(&mut u[col..col + 4]);
+    }
+}
+
+impl Default for Matrix {
+    fn default() -> Self {
+        Self::new()
     }
 }

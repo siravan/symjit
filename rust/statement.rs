@@ -103,7 +103,7 @@ impl Eval for Statement {
                     "power" => x.powf(y),
                     op => {
                         let f = VirtualTable::<f64>::from_str(op)
-                            .expect(format!("operation {} not found.", op).as_str());
+                            .unwrap_or_else(|_| panic!("operation {} not found.", op));
                         f(x, y)
                     }
                 };

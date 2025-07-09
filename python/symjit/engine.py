@@ -115,6 +115,32 @@ class Engine:
         self._fast_func.argtypes = [ctypes.c_void_p]
         self._fast_func.restype = ctypes.c_void_p
 
+        ######################################################
+
+        self._create_matrix = self.dll.create_matrix
+        self._create_matrix.argtypes = []
+        self._create_matrix.restype = ctypes.c_void_p
+
+        self._add_row = self.dll.add_row
+        self._add_row.argtypes = [
+            ctypes.c_void_p,  # handle
+            ctypes.POINTER(ctypes.c_double),
+            ctypes.c_size_t
+        ]
+        self._add_row.restype = None
+
+        self._finalize_matrix = self.dll.finalize_matrix
+        self._finalize_matrix.argtypes = [ctypes.c_void_p]
+        self._finalize_matrix.restype = None
+
+        self._execute_matrix = self.dll.execute_matrix
+        self._execute_matrix.argtypes = [
+            ctypes.c_void_p,  # handle
+            ctypes.c_void_p,  # states
+            ctypes.c_void_p,  # obs
+        ]
+        self._execute_matrix.restype = ctypes.c_bool
+
     def info(self):
         return self._info()
 
@@ -134,6 +160,30 @@ lib = Engine()  # interface to the rust codegen engine
 
 def from_raw_parts(ptr, count):
     return np.ctypeslib.as_array(ptr, shape=(count,))
+
+
+class Matrix:
+    def __init__(self):
+        self.p = lib._create_matrix()
+        self.rows = []  # the list of new rows owned by self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        lib._finalize_matrix(self.p)
+
+    def add_row(self, row):
+        v = np.ascontiguousarray(row, dtype=np.double)
+
+        # if v is a different array than row, then it needs to be
+        # preserved for the lifetime of the Matrix
+        if v is not row:
+            self.rows.append(v)
+
+        ptr = v.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+        n = v.size
+        lib._add_row(self.p, ptr, n)
 
 
 class RustyCompiler:
@@ -189,6 +239,10 @@ class RustyCompiler:
         ptr = buf.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         n = buf.shape[1]
         if not lib._execute_vectorized(self.p, ptr, n):
+            raise ValueError("cannot execute the model")
+
+    def execute_matrix(self, states, obs):
+        if not lib._execute_matrix(self.p, states.p, obs.p):
             raise ValueError("cannot execute the model")
 
     def fast_func(self):

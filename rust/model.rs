@@ -3,7 +3,6 @@ use anyhow::{anyhow, Result};
 use serde::Deserialize;
 
 use crate::builder::Builder;
-use crate::code::VirtualTable;
 use crate::node::Node;
 
 pub trait Transformer {

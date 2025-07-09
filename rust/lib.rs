@@ -285,8 +285,9 @@ pub unsafe extern "C" fn execute_vectorized(
     if let Some(func) = &mut q.func {
         let h = usize::max(func.count_states, func.count_obs);
         let buf: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(buf, h * n) };
-        let mut mat = Matrix::from_buf(buf, h, n);
-        func.exec_vectorized(&mut mat);
+        let states = Matrix::from_buf(buf, h, n);
+        let mut obs = Matrix::from_buf(buf, h, n);
+        func.exec_vectorized(&states, &mut obs);
         true
     } else {
         false
@@ -432,5 +433,70 @@ pub unsafe extern "C" fn fast_func(q: *mut CompilerResult) -> *const usize {
         }
     } else {
         std::ptr::null()
+    }
+}
+
+/************************************************/
+
+/// Creates an empty Matrix (a 2d array)
+///
+/// # Safety
+///     It returns a pointer to the allocated Matrix, which needs to be
+///     deallocated eventually.
+///
+#[no_mangle]
+pub unsafe extern "C" fn create_matrix() -> *const Matrix {
+    let mat = Matrix::new();
+    Box::into_raw(Box::new(mat)) as *const Matrix
+}
+
+/// Finalized (deallocates) a Matrix
+///
+/// # Safety
+///     1, mat should point to a valid Matrix object created by create_matrix
+///     2. After finalize_matrix is called, mat is invalid.
+///
+#[no_mangle]
+pub unsafe extern "C" fn finalize_matrix(mat: *mut Matrix) {
+    if !mat.is_null() {
+        let _ = unsafe { Box::from_raw(mat) };
+    }
+}
+
+/// Adds a row to a Matrix
+///
+/// # Safety
+///     1, mat should point to a valid Matrix object created by create_matrix
+///     2. v should point to a valid array of doubles of length at least n
+///     3. v should remains valid for the lifespan of mat
+///
+#[no_mangle]
+pub unsafe extern "C" fn add_row(mat: *mut Matrix, v: *mut f64, n: usize) {
+    let mat: &mut Matrix = unsafe { &mut *mat };
+    mat.add_row(v, n);
+}
+
+/// Executes (runs) the model encoded by q
+///
+/// # Safety
+///     1, q should point to a valid CompilerResult object
+///     2. states should point to a valid Matrix of at least count_states rows
+///     3. obs should point to a valid Matrix of at least count_obs rows
+///
+#[no_mangle]
+pub unsafe extern "C" fn execute_matrix(
+    q: *mut CompilerResult,
+    states: *const Matrix,
+    obs: *mut Matrix,
+) -> bool {
+    let q: &mut CompilerResult = unsafe { &mut *q };
+    let states: &Matrix = unsafe { &*states };
+    let obs: &mut Matrix = unsafe { &mut *obs };
+
+    if let Some(func) = &mut q.func {
+        func.exec_vectorized(states, obs);
+        true
+    } else {
+        false
     }
 }

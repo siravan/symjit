@@ -256,27 +256,21 @@ impl Runnable {
     pub fn get_fast(&mut self) -> Option<fn(&[f64])> {
         self.prepare_fast();
         self.compiled_fast.as_ref().map(|c| c.func())
-
-        /*
-        match &self.compiled_fast {
-            Some(c) => Some(c.func()),
-            None => None,
-        }
-        */
     }
 
-    pub fn exec_vectorized(&mut self, mat: &mut Matrix) {
+    pub fn exec_vectorized(&mut self, states: &Matrix, obs: &mut Matrix) {
         self.prepare_simd();
 
         if self.compiled_simd.is_none() {
-            self.exec_vectorized_scalar(mat);
+            self.exec_vectorized_scalar(states, obs);
         } else {
-            self.exec_vectorized_simd(mat);
+            self.exec_vectorized_simd(states, obs);
         }
     }
 
-    pub fn exec_vectorized_scalar(&mut self, mat: &mut Matrix) {
-        let n = mat.ncols;
+    pub fn exec_vectorized_scalar(&mut self, states: &Matrix, obs: &mut Matrix) {
+        assert!(states.ncols == obs.ncols);
+        let n = states.ncols;
 
         for t in 0..n {
             {
@@ -284,7 +278,7 @@ impl Runnable {
                 mem[self.idx_iv] = t as f64;
                 for i in 0..self.count_states {
                     //let x = buf[i * n + t];
-                    mem[self.first_state + i] = mat.get(i, t);
+                    mem[self.first_state + i] = states.get(i, t);
                 }
             }
 
@@ -294,15 +288,16 @@ impl Runnable {
                 let mem = self.compiled.mem_mut();
                 for i in 0..self.count_obs {
                     //buf[i * n + t] = mem[self.first_obs + i];
-                    mat.set(i, t, mem[self.first_obs + i]);
+                    obs.set(i, t, mem[self.first_obs + i]);
                 }
             }
         }
     }
 
-    pub fn exec_vectorized_simd(&mut self, mat: &mut Matrix) {
+    pub fn exec_vectorized_simd(&mut self, states: &Matrix, obs: &mut Matrix) {
         self.set_simd_params();
-        let n = mat.ncols;
+        assert!(states.ncols == obs.ncols);
+        let n = states.ncols;
 
         if let Some(f) = &mut self.compiled_simd {
             let n0 = 4 * (n / 4);
@@ -313,7 +308,7 @@ impl Runnable {
                     mem[self.idx_iv] = f64x4::splat(t as f64);
                     for i in 0..self.count_states {
                         //let x = f64x4::from_slice(&buf[i * n + t..i * n + t + 4]);
-                        mem[self.first_state + i] = mat.get_simd(i, t);
+                        mem[self.first_state + i] = states.get_simd(i, t);
                     }
                 }
 
@@ -323,7 +318,7 @@ impl Runnable {
                     let mem = f.mem_mut();
                     for i in 0..self.count_obs {
                         //mem[self.first_obs + i].copy_to_slice(&mut buf[i * n + t..i * n + t + 4]);
-                        mat.set_simd(i, t, mem[self.first_obs + i]);
+                        obs.set_simd(i, t, mem[self.first_obs + i]);
                     }
                 }
             }
@@ -334,7 +329,7 @@ impl Runnable {
                     mem[self.idx_iv] = t as f64;
                     for i in 0..self.count_states {
                         //mem[self.first_state + i] = buf[i * n + t];
-                        mem[self.first_state + i] = mat.get(i, t);
+                        mem[self.first_state + i] = states.get(i, t);
                     }
                 }
 
@@ -344,7 +339,7 @@ impl Runnable {
                     let mem = self.compiled.mem_mut();
                     for i in 0..self.count_obs {
                         //buf[i * n + t] = mem[self.first_obs + i];
-                        mat.set(i, t, mem[self.first_obs + i]);
+                        obs.set(i, t, mem[self.first_obs + i]);
                     }
                 }
             }
