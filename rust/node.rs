@@ -266,6 +266,7 @@ impl Node {
         match loc {
             Loc::Stack(idx) => ir.load_stack(dst, *idx),
             Loc::Mem(idx) => ir.load_mem(dst, *idx),
+            Loc::Param(idx) => ir.load_param(dst, *idx),
         };
 
         dst
@@ -507,6 +508,7 @@ impl Eval for Node {
             Node::Var { sym, .. } => match sym.borrow().loc {
                 Loc::Stack(idx) => stack[idx as usize],
                 Loc::Mem(idx) => mem[idx as usize],
+                Loc::Param(_idx) => 0.0,
             },
             Node::Unary { op, arg, power, .. } => {
                 let x = arg.eval(mem, stack);

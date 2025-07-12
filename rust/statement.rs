@@ -61,6 +61,7 @@ impl Statement {
             match sym.borrow().loc {
                 Loc::Stack(idx) => ir.save_stack(r, idx),
                 Loc::Mem(idx) => ir.save_mem(r, idx),
+                Loc::Param(_) => unreachable!(),
             }
         }
     }
@@ -76,6 +77,7 @@ impl Eval for Statement {
                     match sym.borrow().loc {
                         Loc::Stack(idx) => stack[idx as usize] = u,
                         Loc::Mem(idx) => mem[idx as usize] = u,
+                        Loc::Param(_) => unreachable!(),
                     }
                 }
             }
@@ -112,6 +114,7 @@ impl Eval for Statement {
                     match sym.borrow().loc {
                         Loc::Stack(idx) => stack[idx as usize] = u,
                         Loc::Mem(idx) => mem[idx as usize] = u,
+                        Loc::Param(_) => unreachable!(),
                     }
                 };
             }

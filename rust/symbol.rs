@@ -6,6 +6,7 @@ use std::rc::Rc;
 pub enum Loc {
     Stack(u32),
     Mem(u32),
+    Param(u32),
 }
 
 #[derive(Debug, Clone)]
@@ -21,6 +22,7 @@ pub struct SymbolTable {
     pub syms: HashMap<String, Rc<RefCell<Symbol>>>,
     pub num_stack: usize,
     pub num_mem: usize,
+    pub num_param: usize,
 }
 
 impl SymbolTable {
@@ -31,6 +33,7 @@ impl SymbolTable {
             syms: HashMap::new(),
             num_stack: 0,
             num_mem: 0,
+            num_param: 0,
         };
 
         for i in 0..SymbolTable::SPILL_AREA {
@@ -40,17 +43,29 @@ impl SymbolTable {
         s
     }
 
+    fn add_sym(&mut self, name: &str, loc: Loc) {
+        let sym = Rc::new(RefCell::new(Symbol {
+            name: name.to_string(),
+            loc,
+            visited: false,
+            reg: None,
+        }));
+        self.syms.insert(name.to_string(), sym);
+    }
+
     pub fn add_mem(&mut self, name: &str) {
         if self.find_sym(name).is_none() {
             let loc = Loc::Mem(self.num_mem as u32);
             self.num_mem += 1;
-            let sym = Rc::new(RefCell::new(Symbol {
-                name: name.to_string(),
-                loc,
-                visited: false,
-                reg: None,
-            }));
-            self.syms.insert(name.to_string(), sym);
+            self.add_sym(name, loc);
+        }
+    }
+
+    pub fn add_param(&mut self, name: &str) {
+        if self.find_sym(name).is_none() {
+            let loc = Loc::Param(self.num_param as u32);
+            self.num_param += 1;
+            self.add_sym(name, loc);
         }
     }
 
@@ -58,13 +73,7 @@ impl SymbolTable {
         if self.find_sym(name).is_none() {
             let loc = Loc::Stack(self.num_stack as u32);
             self.num_stack += 1;
-            let sym = Rc::new(RefCell::new(Symbol {
-                name: name.to_string(),
-                loc,
-                visited: false,
-                reg: None,
-            }));
-            self.syms.insert(name.to_string(), sym);
+            self.add_sym(name, loc);
         }
     }
 
