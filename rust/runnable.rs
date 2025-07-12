@@ -231,6 +231,7 @@ impl Runnable {
             mem[self.idx_iv] = t;
         }
         self.compiled.exec();
+        // self.compiled.func()(self.compiled.mem_mut());
     }
 
     fn prepare_simd(&mut self) {

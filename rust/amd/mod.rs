@@ -182,6 +182,33 @@ impl AmdGenerator {
     }
 }
 
+macro_rules! binop {
+    ($self:ident, $sse:ident, $avx:ident, $simd:ident, $dst:expr, $a: expr, $b: expr, $com:ident) => {
+        $self.flush($dst);
+
+        match $self.family {
+            AmdFamily::AvxScalar => $self.amd.$avx($dst, $a, $b),
+            AmdFamily::AvxVector => $self.amd.$simd($dst, $a, $b),
+            AmdFamily::SSEScalar => {
+                let (x, y) = $self.shrink($dst, $a, $b, $com);
+                $self.amd.$sse(x, y);
+            }
+        }
+    };
+}
+
+macro_rules! roundop {
+    ($self:ident, $dst:expr, $r: expr, $mode: expr) => {
+        $self.flush($dst);
+
+        match $self.family {
+            AmdFamily::AvxScalar => $self.amd.vroundsd($dst, $r, $mode),
+            AmdFamily::AvxVector => $self.amd.vroundpd($dst, $r, $mode),
+            AmdFamily::SSEScalar => $self.amd.roundsd($dst, $r, $mode),
+        }
+    };
+}
+
 impl Generator for AmdGenerator {
     fn first_shadow(&self) -> u8 {
         2
@@ -363,43 +390,19 @@ impl Generator for AmdGenerator {
     }
 
     fn round(&mut self, dst: u8, r: u8) {
-        self.flush(dst);
-
-        match self.family {
-            AmdFamily::AvxScalar => self.amd.vroundsd(dst, r, RoundingMode::Round),
-            AmdFamily::AvxVector => self.amd.vroundpd(dst, r, RoundingMode::Round),
-            AmdFamily::SSEScalar => self.amd.roundsd(dst, r, RoundingMode::Round),
-        }
+        roundop!(self, dst, r, RoundingMode::Round);
     }
 
     fn floor(&mut self, dst: u8, r: u8) {
-        self.flush(dst);
-
-        match self.family {
-            AmdFamily::AvxScalar => self.amd.vroundsd(dst, r, RoundingMode::Floor),
-            AmdFamily::AvxVector => self.amd.vroundpd(dst, r, RoundingMode::Floor),
-            AmdFamily::SSEScalar => self.amd.roundsd(dst, r, RoundingMode::Floor),
-        }
+        roundop!(self, dst, r, RoundingMode::Floor);
     }
 
     fn ceiling(&mut self, dst: u8, r: u8) {
-        self.flush(dst);
-
-        match self.family {
-            AmdFamily::AvxScalar => self.amd.vroundsd(dst, r, RoundingMode::Ceiling),
-            AmdFamily::AvxVector => self.amd.vroundpd(dst, r, RoundingMode::Ceiling),
-            AmdFamily::SSEScalar => self.amd.roundsd(dst, r, RoundingMode::Ceiling),
-        }
+        roundop!(self, dst, r, RoundingMode::Ceiling);
     }
 
     fn trunc(&mut self, dst: u8, r: u8) {
-        self.flush(dst);
-
-        match self.family {
-            AmdFamily::AvxScalar => self.amd.vroundsd(dst, r, RoundingMode::Trunc),
-            AmdFamily::AvxVector => self.amd.vroundpd(dst, r, RoundingMode::Trunc),
-            AmdFamily::SSEScalar => self.amd.roundsd(dst, r, RoundingMode::Trunc),
-        }
+        roundop!(self, dst, r, RoundingMode::Trunc);
     }
 
     fn fmod(&mut self, dst: u8, a: u8, b: u8) {
@@ -407,181 +410,59 @@ impl Generator for AmdGenerator {
     }
 
     fn plus(&mut self, dst: u8, a: u8, b: u8) {
-        self.flush(dst);
-
-        match self.family {
-            AmdFamily::AvxScalar => self.amd.vaddsd(dst, a, b),
-            AmdFamily::AvxVector => self.amd.vaddpd(dst, a, b),
-            AmdFamily::SSEScalar => {
-                let (x, y) = self.shrink(dst, a, b, true);
-                self.amd.addsd(x, y);
-            }
-        }
+        binop!(self, addsd, vaddsd, vaddpd, dst, a, b, true);
     }
 
     fn minus(&mut self, dst: u8, a: u8, b: u8) {
-        self.flush(dst);
-
-        match self.family {
-            AmdFamily::AvxScalar => self.amd.vsubsd(dst, a, b),
-            AmdFamily::AvxVector => self.amd.vsubpd(dst, a, b),
-            AmdFamily::SSEScalar => {
-                let (x, y) = self.shrink(dst, a, b, false);
-                self.amd.subsd(x, y);
-            }
-        }
+        binop!(self, subsd, vsubsd, vsubpd, dst, a, b, false);
     }
 
     fn times(&mut self, dst: u8, a: u8, b: u8) {
-        self.flush(dst);
-
-        match self.family {
-            AmdFamily::AvxScalar => self.amd.vmulsd(dst, a, b),
-            AmdFamily::AvxVector => self.amd.vmulpd(dst, a, b),
-            AmdFamily::SSEScalar => {
-                let (x, y) = self.shrink(dst, a, b, true);
-                self.amd.mulsd(x, y);
-            }
-        }
+        binop!(self, mulsd, vmulsd, vmulpd, dst, a, b, true);
     }
 
     fn divide(&mut self, dst: u8, a: u8, b: u8) {
-        self.flush(dst);
-
-        match self.family {
-            AmdFamily::AvxScalar => self.amd.vdivsd(dst, a, b),
-            AmdFamily::AvxVector => self.amd.vdivpd(dst, a, b),
-            AmdFamily::SSEScalar => {
-                let (x, y) = self.shrink(dst, a, b, false);
-                self.amd.divsd(x, y);
-            }
-        }
+        binop!(self, divsd, vdivsd, vdivpd, dst, a, b, false);
     }
 
     fn gt(&mut self, dst: u8, a: u8, b: u8) {
-        self.flush(dst);
-
-        match self.family {
-            AmdFamily::AvxScalar => self.amd.vcmpnlesd(dst, a, b),
-            AmdFamily::AvxVector => self.amd.vcmpnlepd(dst, a, b),
-            AmdFamily::SSEScalar => {
-                let (x, y) = self.shrink(dst, a, b, false);
-                self.amd.cmpnlesd(x, y);
-            }
-        }
+        binop!(self, cmpnlesd, vcmpnlesd, vcmpnlepd, dst, a, b, false);
     }
 
     fn geq(&mut self, dst: u8, a: u8, b: u8) {
-        self.flush(dst);
-
-        match self.family {
-            AmdFamily::AvxScalar => self.amd.vcmpnltsd(dst, a, b),
-            AmdFamily::AvxVector => self.amd.vcmpnltpd(dst, a, b),
-            AmdFamily::SSEScalar => {
-                let (x, y) = self.shrink(dst, a, b, false);
-                self.amd.cmpnltsd(x, y);
-            }
-        }
+        binop!(self, cmpnltsd, vcmpnltsd, vcmpnltpd, dst, a, b, false);
     }
 
     fn lt(&mut self, dst: u8, a: u8, b: u8) {
-        self.flush(dst);
-
-        match self.family {
-            AmdFamily::AvxScalar => self.amd.vcmpltsd(dst, a, b),
-            AmdFamily::AvxVector => self.amd.vcmpltpd(dst, a, b),
-            AmdFamily::SSEScalar => {
-                let (x, y) = self.shrink(dst, a, b, false);
-                self.amd.cmpltsd(x, y);
-            }
-        }
+        binop!(self, cmpltsd, vcmpltsd, vcmpltpd, dst, a, b, false);
     }
 
     fn leq(&mut self, dst: u8, a: u8, b: u8) {
-        self.flush(dst);
-
-        match self.family {
-            AmdFamily::AvxScalar => self.amd.vcmplesd(dst, a, b),
-            AmdFamily::AvxVector => self.amd.vcmplepd(dst, a, b),
-            AmdFamily::SSEScalar => {
-                let (x, y) = self.shrink(dst, a, b, false);
-                self.amd.cmplesd(x, y);
-            }
-        }
+        binop!(self, cmplesd, vcmplesd, vcmplepd, dst, a, b, false);
     }
 
     fn eq(&mut self, dst: u8, a: u8, b: u8) {
-        self.flush(dst);
-
-        match self.family {
-            AmdFamily::AvxScalar => self.amd.vcmpeqsd(dst, a, b),
-            AmdFamily::AvxVector => self.amd.vcmpeqpd(dst, a, b),
-            AmdFamily::SSEScalar => {
-                let (x, y) = self.shrink(dst, a, b, false);
-                self.amd.cmpeqsd(x, y);
-            }
-        }
+        binop!(self, cmpeqsd, vcmpeqsd, vcmpeqpd, dst, a, b, true);
     }
 
     fn neq(&mut self, dst: u8, a: u8, b: u8) {
-        self.flush(dst);
-
-        match self.family {
-            AmdFamily::AvxScalar => self.amd.vcmpneqsd(dst, a, b),
-            AmdFamily::AvxVector => self.amd.vcmpneqpd(dst, a, b),
-            AmdFamily::SSEScalar => {
-                let (x, y) = self.shrink(dst, a, b, false);
-                self.amd.cmpneqsd(x, y);
-            }
-        }
+        binop!(self, cmpneqsd, vcmpneqsd, vcmpneqpd, dst, a, b, true);
     }
 
     fn and(&mut self, dst: u8, a: u8, b: u8) {
-        self.flush(dst);
-
-        match self.family {
-            AmdFamily::AvxScalar | AmdFamily::AvxVector => self.amd.vandpd(dst, a, b),
-            AmdFamily::SSEScalar => {
-                let (x, y) = self.shrink(dst, a, b, true);
-                self.amd.andpd(x, y);
-            }
-        }
+        binop!(self, andpd, vandpd, vandpd, dst, a, b, true);
     }
 
     fn andnot(&mut self, dst: u8, a: u8, b: u8) {
-        self.flush(dst);
-
-        match self.family {
-            AmdFamily::AvxScalar | AmdFamily::AvxVector => self.amd.vandnpd(dst, a, b),
-            AmdFamily::SSEScalar => {
-                let (x, y) = self.shrink(dst, a, b, false);
-                self.amd.andnpd(x, y);
-            }
-        }
+        binop!(self, andnpd, vandnpd, vandnpd, dst, a, b, false);
     }
 
     fn or(&mut self, dst: u8, a: u8, b: u8) {
-        self.flush(dst);
-
-        match self.family {
-            AmdFamily::AvxScalar | AmdFamily::AvxVector => self.amd.vorpd(dst, a, b),
-            AmdFamily::SSEScalar => {
-                let (x, y) = self.shrink(dst, a, b, true);
-                self.amd.orpd(x, y);
-            }
-        }
+        binop!(self, orpd, vorpd, vorpd, dst, a, b, true);
     }
 
     fn xor(&mut self, dst: u8, a: u8, b: u8) {
-        self.flush(dst);
-
-        match self.family {
-            AmdFamily::AvxScalar | AmdFamily::AvxVector => self.amd.vxorpd(dst, a, b),
-            AmdFamily::SSEScalar => {
-                let (x, y) = self.shrink(dst, a, b, true);
-                self.amd.xorpd(x, y);
-            }
-        }
+        binop!(self, xorpd, vxorpd, vxorpd, dst, a, b, true);
     }
 
     fn not(&mut self, dst: u8, r: u8) {
