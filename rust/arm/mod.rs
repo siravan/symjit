@@ -111,6 +111,11 @@ impl Generator for ArmGenerator {
         self.emit(arm! {str d(src), [x(19), #8*idx]});
     }
 
+    fn load_param(&mut self, dst: u8, idx: u32) {
+        self.flush(dst);
+        self.emit(arm! {ldr d(dst), [x(20), #8*idx]});
+    }
+
     fn load_stack(&mut self, dst: u8, idx: u32) {
         if let Some(k) = self.r0 {
             if k == idx {
@@ -299,9 +304,10 @@ impl Generator for ArmGenerator {
     }
 
     fn prologue(&mut self, cap: u32) {
-        self.emit(arm! {sub sp, sp, #16});
+        self.emit(arm! {sub sp, sp, #32});
         self.emit(arm! {str lr, [sp, #0]});
-        self.emit(arm! {str x(19), [sp, #8]});
+        self.emit(arm! {str x(19), [sp, #8]}); // mem
+        self.emit(arm! {str x(20), [sp, #16]}); // param
 
         let stack_size = align_stack(self.reg_size() * cap);
         self.emit(arm! {sub sp, sp, #stack_size & 0x0fff});
@@ -321,9 +327,10 @@ impl Generator for ArmGenerator {
         }
         self.emit(arm! {add sp, sp, #stack_size & 0x0fff});
 
+        self.emit(arm! {ldr x(20), [sp, #8]});
         self.emit(arm! {ldr x(19), [sp, #8]});
         self.emit(arm! {ldr lr, [sp, #0]});
-        self.emit(arm! {add sp, sp, #16});
+        self.emit(arm! {add sp, sp, #32});
         self.emit(arm! {ret});
     }
 

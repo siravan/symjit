@@ -180,6 +180,19 @@ impl AmdGenerator {
     fn frame_size(&self, cap: u32) -> u32 {
         align_stack(self.reg_size() * cap + 8) - 8
     }
+
+    fn save_nonvolatile_regs(&mut self) {
+        // Note: the next slot is 0x20 in Windows and 0x00 in Linux
+        self.amd.mov_mem_reg(Amd::RSP, 0x08, Amd::RBP);
+        self.amd.mov_mem_reg(Amd::RSP, 0x10, Amd::RBX);
+        self.amd.mov_mem_reg(Amd::RSP, 0x18, Amd::R12);
+    }
+
+    fn load_nonvolatile_regs(&mut self) {
+        self.amd.mov_reg_mem(Amd::R12, Amd::RSP, 0x18);
+        self.amd.mov_reg_mem(Amd::RBX, Amd::RSP, 0x10);
+        self.amd.mov_reg_mem(Amd::RBP, Amd::RSP, 0x08);
+    }
 }
 
 macro_rules! binop {
@@ -298,6 +311,16 @@ impl Generator for AmdGenerator {
             AmdFamily::AvxScalar => self.amd.vmovsd_mem_xmm(Amd::RBP, (idx * 8) as i32, src),
             AmdFamily::AvxVector => self.amd.vmovpd_mem_ymm(Amd::RBP, (idx * 32) as i32, src),
             AmdFamily::SSEScalar => self.amd.movsd_mem_xmm(Amd::RBP, (idx * 8) as i32, src),
+        }
+    }
+
+    fn load_param(&mut self, dst: u8, idx: u32) {
+        self.flush(dst);
+
+        match self.family {
+            AmdFamily::AvxScalar => self.amd.vmovsd_xmm_mem(dst, Amd::R12, (idx * 8) as i32),
+            AmdFamily::AvxVector => self.amd.vbroadcastsd(dst, Amd::R12, (idx * 8) as i32),
+            AmdFamily::SSEScalar => self.amd.movsd_xmm_mem(dst, Amd::R12, (idx * 8) as i32),
         }
     }
 
@@ -520,11 +543,14 @@ impl Generator for AmdGenerator {
         self.amd.vandnpd(dst, cond, a);
     }
 
+    /****************** Prologues/Epilogues ********************/
+
     #[cfg(target_family = "unix")]
     fn prologue(&mut self, cap: u32) {
-        self.amd.push(Amd::RBP);
-        self.amd.push(Amd::RBX);
+        self.amd.sub_rsp(32);
+        self.save_nonvolatile_regs();
         self.amd.mov(Amd::RBP, Amd::RDI);
+        self.amd.mov(Amd::R12, Amd::RSI);
         self.amd.sub_rsp(self.frame_size(cap));
     }
 
@@ -534,10 +560,10 @@ impl Generator for AmdGenerator {
         self.vzeroupper();
 
         self.amd.add_rsp(self.frame_size(cap));
-
-        self.amd.pop(Amd::RBX);
-        self.amd.pop(Amd::RBP);
+        self.load_nonvolatile_regs();
+        self.amd.add_rsp(32);
         self.amd.ret();
+
         self.predefined_consts();
     }
 
@@ -545,9 +571,7 @@ impl Generator for AmdGenerator {
     fn prologue_fast(&mut self, cap: u32, num_args: u32) {
         self.amd.push(Amd::RBP);
         self.amd.push(Amd::RBX);
-
         self.amd.sub_rsp(self.frame_size(cap));
-
         self.amd.mov(Amd::RBP, Amd::RSP);
 
         for i in 0..num_args {
@@ -562,7 +586,6 @@ impl Generator for AmdGenerator {
         self.amd.movsd_xmm_mem(0, Amd::RSP, 8 * idx_ret);
 
         self.amd.add_rsp(self.frame_size(cap));
-
         self.amd.pop(Amd::RBX);
         self.amd.pop(Amd::RBP);
         self.amd.ret();
@@ -571,10 +594,9 @@ impl Generator for AmdGenerator {
 
     #[cfg(target_family = "windows")]
     fn prologue(&mut self, cap: u32) {
-        self.amd.mov_mem_reg(Amd::RSP, 0x08, Amd::RBP);
-        self.amd.mov_mem_reg(Amd::RSP, 0x10, Amd::RBX);
+        self.save_nonvolatile_regs();
         self.amd.mov(Amd::RBP, Amd::RCX);
-
+        self.amd.mov(Amd::R12, Amd::RDX);
         self.amd.sub_rsp(self.frame_size(cap));
     }
 
@@ -584,9 +606,7 @@ impl Generator for AmdGenerator {
         self.vzeroupper();
 
         self.amd.add_rsp(self.frame_size(cap));
-
-        self.amd.mov_reg_mem(Amd::RBX, Amd::RSP, 0x10);
-        self.amd.mov_reg_mem(Amd::RBP, Amd::RSP, 0x08);
+        self.load_nonvolatile_regs();
         self.amd.ret();
         self.predefined_consts();
     }
@@ -598,7 +618,6 @@ impl Generator for AmdGenerator {
 
         let frame_size = self.frame_size(cap);
         self.amd.sub_rsp(frame_size);
-
         self.amd.mov(Amd::RBP, Amd::RSP);
 
         for i in 0..num_args.min(4) {
@@ -626,7 +645,6 @@ impl Generator for AmdGenerator {
         self.amd.movsd_xmm_mem(0, Amd::RSP, 8 * idx_ret);
 
         self.amd.add_rsp(self.frame_size(cap));
-
         self.amd.mov_reg_mem(Amd::RBX, Amd::RSP, 0x10);
         self.amd.mov_reg_mem(Amd::RBP, Amd::RSP, 0x08);
         self.amd.ret();

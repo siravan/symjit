@@ -50,6 +50,7 @@ pub trait Generator {
     fn load_const(&mut self, dst: u8, label: &str);
     fn load_mem(&mut self, dst: u8, idx: u32);
     fn save_mem(&mut self, src: u8, idx: u32);
+    fn load_param(&mut self, dst: u8, idx: u32);
     fn load_stack(&mut self, dst: u8, idx: u32);
     fn save_stack(&mut self, src: u8, idx: u32);
 
