@@ -1,13 +1,15 @@
+pub type CompiledFunc<T> = fn(&[T], &[f64]);
+
 pub trait Compiled<T> {
-    fn exec(&mut self);
+    fn exec(&mut self, params: &[f64]);
     fn mem(&self) -> &[T];
     fn mem_mut(&mut self) -> &mut [T];
     fn dump(&self, name: &str);
-    fn func(&self) -> fn(&[T]);
+    fn func(&self) -> CompiledFunc<T>;
 }
 
 pub trait Eval {
-    fn eval(&self, mem: &mut [f64], stack: &mut [f64]) -> f64;
+    fn eval(&self, mem: &mut [f64], stack: &mut [f64], params: &[f64]) -> f64;
 }
 
 pub fn bool_to_f64(b: bool) -> f64 {

@@ -74,7 +74,7 @@ impl AmdGenerator {
 
         for i in 0..4 {
             self.amd.movsd_xmm_mem(0, Amd::RSP, 32 + i * 8);
-            self.amd.call(Amd::RBX);
+            self.amd.call(Amd::R12);
             self.amd.movsd_mem_xmm(Amd::RSP, 32 + i * 8, 0);
         }
 
@@ -96,7 +96,7 @@ impl AmdGenerator {
         for i in 0..4 {
             self.amd.movsd_xmm_mem(0, Amd::RSP, 32 + i * 8);
             self.amd.movsd_xmm_mem(1, Amd::RSP, 64 + i * 8);
-            self.amd.call(Amd::RBX);
+            self.amd.call(Amd::R12);
             self.amd.movsd_mem_xmm(Amd::RSP, 32 + i * 8, 0);
         }
 
@@ -318,9 +318,9 @@ impl Generator for AmdGenerator {
         self.flush(dst);
 
         match self.family {
-            AmdFamily::AvxScalar => self.amd.vmovsd_xmm_mem(dst, Amd::R12, (idx * 8) as i32),
-            AmdFamily::AvxVector => self.amd.vbroadcastsd(dst, Amd::R12, (idx * 8) as i32),
-            AmdFamily::SSEScalar => self.amd.movsd_xmm_mem(dst, Amd::R12, (idx * 8) as i32),
+            AmdFamily::AvxScalar => self.amd.vmovsd_xmm_mem(dst, Amd::RBX, (idx * 8) as i32),
+            AmdFamily::AvxVector => self.amd.vbroadcastsd(dst, Amd::RBX, (idx * 8) as i32),
+            AmdFamily::SSEScalar => self.amd.movsd_xmm_mem(dst, Amd::RBX, (idx * 8) as i32),
         }
     }
 
@@ -495,7 +495,7 @@ impl Generator for AmdGenerator {
     }
 
     fn call(&mut self, label: &str, num_args: usize) {
-        self.amd.mov_reg_label(Amd::RBX, label);
+        self.amd.mov_reg_label(Amd::R12, label);
 
         match self.family {
             AmdFamily::AvxScalar | AmdFamily::SSEScalar => {
@@ -503,7 +503,7 @@ impl Generator for AmdGenerator {
                 #[cfg(target_family = "windows")]
                 self.amd.sub_rsp(32);
 
-                self.amd.call(Amd::RBX);
+                self.amd.call(Amd::R12);
 
                 #[cfg(target_family = "windows")]
                 self.amd.add_rsp(32);
@@ -550,7 +550,7 @@ impl Generator for AmdGenerator {
         self.amd.sub_rsp(32);
         self.save_nonvolatile_regs();
         self.amd.mov(Amd::RBP, Amd::RDI);
-        self.amd.mov(Amd::R12, Amd::RSI);
+        self.amd.mov(Amd::RBX, Amd::RDX);
         self.amd.sub_rsp(self.frame_size(cap));
     }
 
@@ -570,7 +570,7 @@ impl Generator for AmdGenerator {
     #[cfg(target_family = "unix")]
     fn prologue_fast(&mut self, cap: u32, num_args: u32) {
         self.amd.push(Amd::RBP);
-        self.amd.push(Amd::RBX);
+        self.amd.push(Amd::R12);
         self.amd.sub_rsp(self.frame_size(cap));
         self.amd.mov(Amd::RBP, Amd::RSP);
 
@@ -586,7 +586,7 @@ impl Generator for AmdGenerator {
         self.amd.movsd_xmm_mem(0, Amd::RSP, 8 * idx_ret);
 
         self.amd.add_rsp(self.frame_size(cap));
-        self.amd.pop(Amd::RBX);
+        self.amd.pop(Amd::R12);
         self.amd.pop(Amd::RBP);
         self.amd.ret();
         self.predefined_consts();
@@ -596,7 +596,7 @@ impl Generator for AmdGenerator {
     fn prologue(&mut self, cap: u32) {
         self.save_nonvolatile_regs();
         self.amd.mov(Amd::RBP, Amd::RCX);
-        self.amd.mov(Amd::R12, Amd::RDX);
+        self.amd.mov(Amd::RBX, Amd::R8);
         self.amd.sub_rsp(self.frame_size(cap));
     }
 
@@ -614,7 +614,7 @@ impl Generator for AmdGenerator {
     #[cfg(target_family = "windows")]
     fn prologue_fast(&mut self, cap: u32, num_args: u32) {
         self.amd.mov_mem_reg(Amd::RSP, 0x08, Amd::RBP);
-        self.amd.mov_mem_reg(Amd::RSP, 0x10, Amd::RBX);
+        self.amd.mov_mem_reg(Amd::RSP, 0x10, Amd::R12);
 
         let frame_size = self.frame_size(cap);
         self.amd.sub_rsp(frame_size);
@@ -645,7 +645,7 @@ impl Generator for AmdGenerator {
         self.amd.movsd_xmm_mem(0, Amd::RSP, 8 * idx_ret);
 
         self.amd.add_rsp(self.frame_size(cap));
-        self.amd.mov_reg_mem(Amd::RBX, Amd::RSP, 0x10);
+        self.amd.mov_reg_mem(Amd::R12, Amd::RSP, 0x10);
         self.amd.mov_reg_mem(Amd::RBP, Amd::RSP, 0x08);
         self.amd.ret();
         self.predefined_consts();

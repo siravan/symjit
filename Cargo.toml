@@ -13,6 +13,7 @@ libm = "0.2"
 region = "3.0.2"
 wasmtime-jit-icache-coherence = "*"
 num-traits = "0.2"
+rayon = "1.1"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_System_Memory"] }

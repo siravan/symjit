@@ -8,7 +8,7 @@ pub struct MachineCode<T> {
     machine_code: Vec<u8>,
     #[allow(dead_code)]
     code: Memory, // code needs to be here for f to stay valid
-    f: fn(&[T]),
+    f: CompiledFunc<T>,
     _mem: Vec<T>,
 }
 
@@ -34,7 +34,7 @@ impl<T> MachineCode<T> {
 
         code.set_readable_and_executable().unwrap();
 
-        let f: fn(&[T]) = unsafe { std::mem::transmute(p) };
+        let f: CompiledFunc<T> = unsafe { std::mem::transmute(p) };
 
         MachineCode {
             machine_code,
@@ -47,8 +47,8 @@ impl<T> MachineCode<T> {
 
 impl<T> Compiled<T> for MachineCode<T> {
     #[inline]
-    fn exec(&mut self) {
-        (self.f)(&mut self._mem);
+    fn exec(&mut self, params: &[f64]) {
+        (self.f)(&mut self._mem, params);
     }
 
     #[inline]
@@ -66,7 +66,9 @@ impl<T> Compiled<T> for MachineCode<T> {
         let _ = fs.write(&self.machine_code[..]);
     }
 
-    fn func(&self) -> fn(&[T]) {
+    fn func(&self) -> CompiledFunc<T> {
         self.f
     }
 }
+
+unsafe impl<T> Sync for MachineCode<T> {}

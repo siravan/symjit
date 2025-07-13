@@ -84,7 +84,7 @@ class Engine:
         self._execute_vectorized.restype = ctypes.c_bool
 
         self._compile = self.dll.compile
-        self._compile.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_bool]
+        self._compile.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint32]
         self._compile.restype = ctypes.c_void_p
 
         self._dump = self.dll.dump
@@ -187,10 +187,11 @@ class Matrix:
 
 
 class RustyCompiler:
-    def __init__(self, model, ty="native", use_simd=True, convert=True):
+    def __init__(self, model, ty="native", use_simd=True, use_threads=True, convert=True):
         if convert:
             model = json.dumps(model)
-        self.p = lib._compile(model.encode("utf-8"), ty.encode("utf8"), use_simd)
+        opt = (0x01 if use_simd else 0) | (0x02 if use_threads else 0)
+        self.p = lib._compile(model.encode("utf-8"), ty.encode("utf8"), opt)
         status = lib._check_status(self.p)
         if status != b"Success":
             raise ValueError(status.decode())

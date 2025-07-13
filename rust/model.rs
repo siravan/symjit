@@ -52,7 +52,7 @@ impl Program {
         builder.sym_table.add_mem(&ml.iv.name);
 
         for v in &ml.params {
-            builder.sym_table.add_mem(&v.name);
+            builder.sym_table.add_param(&v.name);
         }
 
         for eq in &ml.obs {

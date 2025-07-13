@@ -50,7 +50,7 @@ pub struct CompilerResult {
 pub unsafe extern "C" fn compile(
     model: *const c_char,
     ty: *const c_char,
-    use_simd: bool,
+    opt: u32,
 ) -> *const CompilerResult {
     let mut res = CompilerResult {
         func: None,
@@ -98,13 +98,13 @@ pub unsafe extern "C" fn compile(
     };
 
     let func = match ty {
-        "bytecode" => Runnable::new(prog, CompilerType::ByteCode, use_simd),
-        "arm" => Runnable::new(prog, CompilerType::Arm, use_simd),
-        "amd" => Runnable::new(prog, CompilerType::Amd, use_simd),
-        "amd-avx" => Runnable::new(prog, CompilerType::AmdAVX, use_simd),
-        "amd-sse" => Runnable::new(prog, CompilerType::AmdSSE, use_simd),
-        "native" => Runnable::new(prog, CompilerType::Native, use_simd),
-        "debug" => Runnable::new(prog, CompilerType::Debug, use_simd),
+        "bytecode" => Runnable::new(prog, CompilerType::ByteCode, opt),
+        "arm" => Runnable::new(prog, CompilerType::Arm, opt),
+        "amd" => Runnable::new(prog, CompilerType::Amd, opt),
+        "amd-avx" => Runnable::new(prog, CompilerType::AmdAVX, opt),
+        "amd-sse" => Runnable::new(prog, CompilerType::AmdSSE, opt),
+        "native" => Runnable::new(prog, CompilerType::Native, opt),
+        "debug" => Runnable::new(prog, CompilerType::Debug, opt),
         _ => Err(anyhow!("invalid ty")),
     };
 
@@ -322,7 +322,8 @@ pub unsafe extern "C" fn ptr_states(q: *mut CompilerResult) -> *mut f64 {
 pub unsafe extern "C" fn ptr_params(q: *mut CompilerResult) -> *mut f64 {
     let q: &mut CompilerResult = unsafe { &mut *q };
     if let Some(func) = &mut q.func {
-        &mut func.compiled.mem_mut()[func.first_param] as *mut f64
+        //&mut func.compiled.mem_mut()[func.first_param] as *mut f64
+        &mut func.params[func.first_param] as *mut f64
     } else {
         std::ptr::null_mut()
     }

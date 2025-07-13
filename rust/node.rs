@@ -501,17 +501,17 @@ impl Node {
 }
 
 impl Eval for Node {
-    fn eval(&self, mem: &mut [f64], stack: &mut [f64]) -> f64 {
+    fn eval(&self, mem: &mut [f64], stack: &mut [f64], params: &[f64]) -> f64 {
         match self {
             Node::Void => 0.0,
             Node::Const { val, .. } => *val,
             Node::Var { sym, .. } => match sym.borrow().loc {
                 Loc::Stack(idx) => stack[idx as usize],
                 Loc::Mem(idx) => mem[idx as usize],
-                Loc::Param(_idx) => 0.0,
+                Loc::Param(idx) => params[idx as usize],
             },
             Node::Unary { op, arg, power, .. } => {
-                let x = arg.eval(mem, stack);
+                let x = arg.eval(mem, stack, params);
 
                 match op.as_str() {
                     "neg" => -x,
@@ -542,8 +542,8 @@ impl Eval for Node {
                 power,
                 ..
             } => {
-                let x = left.eval(mem, stack);
-                let y = right.eval(mem, stack);
+                let x = left.eval(mem, stack, params);
+                let y = right.eval(mem, stack, params);
 
                 match op.as_str() {
                     "plus" => x + y,

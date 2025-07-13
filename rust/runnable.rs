@@ -1,3 +1,5 @@
+use std::mem;
+
 use anyhow::Result;
 
 use crate::amd::{AmdFamily, AmdGenerator};
@@ -9,6 +11,9 @@ use crate::matrix::Matrix;
 use crate::model::Program;
 use crate::symbol::Loc;
 use crate::utils::*;
+
+use rayon::prelude::*;
+use std::mem::MaybeUninit;
 
 #[derive(PartialEq)]
 pub enum CompilerType {
@@ -46,12 +51,17 @@ impl Platform {
     }
 }
 
+const USE_SIMD: u32 = 0x01;
+const USE_THREADS: u32 = 0x02;
+
 pub struct Runnable {
     pub prog: Program,
     pub compiled: Box<dyn Compiled<f64>>,
     pub compiled_simd: Option<Box<dyn Compiled<f64x4>>>,
     pub compiled_fast: Option<Box<dyn Compiled<f64>>>,
+    pub params: Vec<f64>,
     pub use_simd: bool,
+    pub use_threads: bool,
     pub can_fast: bool,
     pub first_state: usize,
     pub first_param: usize,
@@ -66,11 +76,11 @@ pub struct Runnable {
 }
 
 impl Runnable {
-    pub fn new(mut prog: Program, ty: CompilerType, use_simd: bool) -> Result<Runnable> {
+    pub fn new(mut prog: Program, ty: CompilerType, opt: u32) -> Result<Runnable> {
         let first_state = 0;
+        let first_param = 0;
         let idx_iv = prog.count_states;
-        let first_param = first_state + prog.count_states + 1; // +1 for the independent variable
-        let first_obs = first_param + prog.count_params;
+        let first_obs = first_state + prog.count_states + 1; // +1 for the independent variable
         let first_diff = first_obs + prog.count_obs;
         let size = first_diff + prog.count_diffs + 1; // +1 is here for padding, so that we can return
                                                       // diff vector even if count_diff is 0
@@ -79,6 +89,8 @@ impl Runnable {
         let count_params = prog.count_params;
         let count_obs = prog.count_obs;
         let count_diffs = prog.count_diffs;
+
+        let params = vec![0.0; count_params + 1];
 
         let compiled = match ty {
             CompilerType::ByteCode => Self::compile_bytecode(&mut prog, size)?,
@@ -94,11 +106,13 @@ impl Runnable {
             }
         };
 
-        let use_simd = use_simd
+        let use_simd = (opt & USE_SIMD != 0)
             && Platform::has_avx()
             && (matches!(ty, CompilerType::Amd)
                 | matches!(ty, CompilerType::AmdAVX)
                 | matches!(ty, CompilerType::Native));
+
+        let use_threads = opt & USE_THREADS != 0 && size < 128;
 
         let can_fast = count_states < 8 && count_params == 0 && count_obs == 1 && count_diffs == 0;
 
@@ -107,7 +121,9 @@ impl Runnable {
             compiled,
             compiled_simd: None,
             compiled_fast: None,
+            params,
             use_simd,
+            use_threads,
             can_fast,
             first_state,
             first_param,
@@ -226,12 +242,10 @@ impl Runnable {
     /**********************************************************/
 
     pub fn exec(&mut self, t: f64) {
-        {
-            let mem = self.compiled.mem_mut();
-            mem[self.idx_iv] = t;
-        }
-        self.compiled.exec();
-        // self.compiled.func()(self.compiled.mem_mut());
+        let f = self.compiled.func();
+        let mem = self.compiled.mem_mut();
+        mem[self.idx_iv] = t;
+        f(mem, &self.params[..]);
     }
 
     fn prepare_simd(&mut self) {
@@ -254,7 +268,7 @@ impl Runnable {
         };
     }
 
-    pub fn get_fast(&mut self) -> Option<fn(&[f64])> {
+    pub fn get_fast(&mut self) -> Option<CompiledFunc<f64>> {
         self.prepare_fast();
         self.compiled_fast.as_ref().map(|c| c.func())
     }
@@ -263,40 +277,143 @@ impl Runnable {
         self.prepare_simd();
 
         if self.compiled_simd.is_none() {
-            self.exec_vectorized_scalar(states, obs);
+            if self.use_threads {
+                self.exec_vectorized_scalar_threads(states, obs);
+            } else {
+                self.exec_vectorized_scalar(states, obs);
+            }
         } else {
-            self.exec_vectorized_simd(states, obs);
+            if self.use_threads {
+                self.exec_vectorized_simd_threads(states, obs);
+            } else {
+                self.exec_vectorized_simd(states, obs);
+            }
         }
+    }
+
+    fn exec_single(
+        t: usize,
+        states: &Matrix,
+        obs: &Matrix,
+        params: &[f64],
+        count_states: usize,
+        count_obs: usize,
+        f: CompiledFunc<f64>,
+    ) {
+        let size = count_states + count_obs + 1;
+        #[allow(invalid_value)]
+        let mut a: [f64; 128] = unsafe { MaybeUninit::uninit().assume_init() };
+        let mem = &mut a[0..size];
+
+        {
+            mem[count_states] = t as f64;
+            for i in 0..count_states {
+                mem[i] = states.get(i, t);
+            }
+        }
+
+        f(mem, params);
+
+        {
+            for i in 0..count_obs {
+                obs.set(i, t, mem[count_states + i + 1]);
+            }
+        };
+    }
+
+    fn exec_single_simd(
+        t: usize,
+        states: &Matrix,
+        obs: &Matrix,
+        params: &[f64],
+        count_states: usize,
+        count_obs: usize,
+        f: CompiledFunc<f64x4>,
+    ) {
+        let size = count_states + count_obs + 1;
+        #[allow(invalid_value)]
+        let mut a: [f64x4; 128] = unsafe { MaybeUninit::uninit().assume_init() };
+        let mem = &mut a[0..size];
+
+        {
+            mem[count_states] = f64x4::splat(t as f64);
+            for i in 0..count_states {
+                mem[i] = states.get_simd(i, t);
+            }
+        }
+
+        f(mem, params);
+
+        {
+            for i in 0..count_obs {
+                obs.set_simd(i, t, mem[count_states + i + 1]);
+            }
+        };
+    }
+
+    pub fn exec_vectorized_scalar_threads(&mut self, states: &Matrix, obs: &mut Matrix) {
+        assert!(states.ncols == obs.ncols);
+        let n = states.ncols;
+        let f = self.compiled.func();
+        let params = &self.params[..];
+        let count_states = self.count_states;
+        let count_obs = self.count_obs;
+
+        (0..n)
+            .into_par_iter()
+            .for_each(|t| Self::exec_single(t, states, obs, params, count_states, count_obs, f));
     }
 
     pub fn exec_vectorized_scalar(&mut self, states: &Matrix, obs: &mut Matrix) {
         assert!(states.ncols == obs.ncols);
         let n = states.ncols;
+        let f = self.compiled.func();
+        let params = &self.params[..];
 
         for t in 0..n {
             {
                 let mem = self.compiled.mem_mut();
                 mem[self.idx_iv] = t as f64;
                 for i in 0..self.count_states {
-                    //let x = buf[i * n + t];
                     mem[self.first_state + i] = states.get(i, t);
                 }
+
+                f(mem, params);
             }
 
-            self.compiled.exec();
-
             {
-                let mem = self.compiled.mem_mut();
+                let mem = self.compiled.mem();
                 for i in 0..self.count_obs {
-                    //buf[i * n + t] = mem[self.first_obs + i];
                     obs.set(i, t, mem[self.first_obs + i]);
                 }
             }
         }
     }
 
+    pub fn exec_vectorized_simd_threads(&mut self, states: &Matrix, obs: &mut Matrix) {
+        assert!(states.ncols == obs.ncols);
+        let n = states.ncols;
+        let params = &self.params[..];
+        let count_states = self.count_states;
+        let count_obs = self.count_obs;
+        let n0 = 4 * (n / 4);
+
+        if let Some(g) = &mut self.compiled_simd {
+            let f = g.func();
+            (0..n / 4).into_par_iter().for_each(|t| {
+                Self::exec_single_simd(4 * t, states, obs, params, count_states, count_obs, f)
+            });
+        }
+
+        let f = self.compiled.func();
+
+        (n0..n)
+            .into_par_iter()
+            .for_each(|t| Self::exec_single(t, states, obs, params, count_states, count_obs, f));
+    }
+
     pub fn exec_vectorized_simd(&mut self, states: &Matrix, obs: &mut Matrix) {
-        self.set_simd_params();
+        // self.set_simd_params();
         assert!(states.ncols == obs.ncols);
         let n = states.ncols;
 
@@ -308,17 +425,15 @@ impl Runnable {
                     let mem = f.mem_mut();
                     mem[self.idx_iv] = f64x4::splat(t as f64);
                     for i in 0..self.count_states {
-                        //let x = f64x4::from_slice(&buf[i * n + t..i * n + t + 4]);
                         mem[self.first_state + i] = states.get_simd(i, t);
                     }
                 }
 
-                f.exec();
+                f.exec(&self.params[..]);
 
                 {
-                    let mem = f.mem_mut();
+                    let mem = f.mem();
                     for i in 0..self.count_obs {
-                        //mem[self.first_obs + i].copy_to_slice(&mut buf[i * n + t..i * n + t + 4]);
                         obs.set_simd(i, t, mem[self.first_obs + i]);
                     }
                 }
@@ -329,17 +444,15 @@ impl Runnable {
                     let mem = self.compiled.mem_mut();
                     mem[self.idx_iv] = t as f64;
                     for i in 0..self.count_states {
-                        //mem[self.first_state + i] = buf[i * n + t];
                         mem[self.first_state + i] = states.get(i, t);
                     }
                 }
 
-                self.compiled.exec();
+                self.compiled.exec(&self.params[..]);
 
                 {
                     let mem = self.compiled.mem_mut();
                     for i in 0..self.count_obs {
-                        //buf[i * n + t] = mem[self.first_obs + i];
                         obs.set(i, t, mem[self.first_obs + i]);
                     }
                 }
@@ -369,7 +482,7 @@ impl Runnable {
                 &mut mem[self.first_param..self.first_param + self.count_params].copy_from_slice(p);
         }
 
-        self.compiled.exec();
+        self.compiled.exec(&self.params[..]);
 
         {
             let mem = self.compiled.mem();
@@ -454,13 +567,13 @@ impl Debugger {
 }
 
 impl Compiled<f64> for Debugger {
-    fn exec(&mut self) {
+    fn exec(&mut self, params: &[f64]) {
         let p = self.bytecode.mem_mut();
         let q = self.compiled.mem();
         p.copy_from_slice(q);
 
-        self.compiled.exec();
-        self.bytecode.exec();
+        self.compiled.exec(params);
+        self.bytecode.exec(params);
 
         self.assert_equal();
     }
@@ -477,7 +590,7 @@ impl Compiled<f64> for Debugger {
         self.compiled.dump(name);
     }
 
-    fn func(&self) -> fn(&[f64]) {
+    fn func(&self) -> CompiledFunc<f64> {
         unreachable!()
     }
 }

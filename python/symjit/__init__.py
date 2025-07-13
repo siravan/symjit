@@ -189,7 +189,7 @@ def can_use_python(backend):
 
 
 def compile_func(
-    states, eqs, params=None, obs=None, ty="native", use_simd=True, backend="rust"
+    states, eqs, params=None, obs=None, ty="native", use_simd=True, use_threads=True, backend="rust"
 ):
     """Compile a list of symbolic expression into an executable form.
     compile_func tries to mimic sympy lambdify, but instead of generating
@@ -223,7 +223,7 @@ def compile_func(
     """
     if can_use_rust(backend):
         model = structure.model(states, eqs, params=params, obs=obs)
-        compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd)
+        compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd, use_threads=use_threads)
     elif can_use_python(backend):
         model = pyengine.tree.model(states, eqs, params, obs)
         compiler = pyengine.PyCompiler(model, ty=ty)

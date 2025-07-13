@@ -68,10 +68,10 @@ impl Statement {
 }
 
 impl Eval for Statement {
-    fn eval(&self, mem: &mut [f64], stack: &mut [f64]) -> f64 {
+    fn eval(&self, mem: &mut [f64], stack: &mut [f64], params: &[f64]) -> f64 {
         match &self {
             Statement::Assign { lhs, rhs } => {
-                let u = rhs.eval(mem, stack);
+                let u = rhs.eval(mem, stack, params);
 
                 if let Node::Var { sym, .. } = lhs {
                     match sym.borrow().loc {
@@ -82,7 +82,7 @@ impl Eval for Statement {
                 }
             }
             Statement::Call { op, lhs, arg, .. } => {
-                let _ = arg.eval(mem, stack);
+                let _ = arg.eval(mem, stack, params);
                 let x = stack[0];
                 let y = stack[1];
 

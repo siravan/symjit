@@ -5,8 +5,10 @@ use super::utils::{Compiled, Eval};
 use crate::code::VirtualTable;
 use crate::generator::Generator;
 use crate::node::{Node, VarStatus};
+use crate::runnable::CompilerType;
 use crate::statement::Statement;
 use crate::symbol::SymbolTable;
+use crate::utils::CompiledFunc;
 
 //****************************************************//
 
@@ -248,9 +250,9 @@ impl Builder {
 }
 
 impl Eval for Builder {
-    fn eval(&self, mem: &mut [f64], stack: &mut [f64]) -> f64 {
+    fn eval(&self, mem: &mut [f64], stack: &mut [f64], params: &[f64]) -> f64 {
         for stmt in self.stmts.iter() {
-            stmt.eval(mem, stack);
+            stmt.eval(mem, stack, params);
         }
         f64::NAN
     }
@@ -277,8 +279,9 @@ impl ByteCode {
 }
 
 impl Compiled<f64> for ByteCode {
-    fn exec(&mut self) {
-        self.builder.eval(&mut self.mem[..], &mut self.stack[..]);
+    fn exec(&mut self, params: &[f64]) {
+        self.builder
+            .eval(&mut self.mem[..], &mut self.stack[..], params);
     }
 
     fn mem(&self) -> &[f64] {
@@ -291,7 +294,7 @@ impl Compiled<f64> for ByteCode {
 
     fn dump(&self, _name: &str) {}
 
-    fn func(&self) -> fn(&[f64]) {
+    fn func(&self) -> CompiledFunc<f64> {
         unreachable!()
     }
 }

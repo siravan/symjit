@@ -1,5 +1,5 @@
 import util
-backend, ty, use_simd = util.process_argv()
+backend, ty, use_simd, use_threads = util.process_argv()
 
 import time
 import numpy as np
@@ -17,6 +17,8 @@ t0 = time.time()
 
 f = compile_ode(t, (x, y, z), ode, params=(sigma, rho, beta), backend=backend, ty=ty)
 
+# print(f.dumps())
+
 u0 = (1.0, 1.0, 1.0)
 p = (10.0, 28.0, 8 / 3)
 t_eval = np.arange(0, 100, 0.01)
@@ -24,8 +26,6 @@ t_eval = np.arange(0, 100, 0.01)
 sol = solve_ivp(f, (0, 100.0), u0, t_eval=t_eval, args=p)
 
 print(f"compilation + running time: {1000 * (time.time() - t0):.1f} ms")
-
-# print(f.dumps())
 
 plt.plot(sol.y[0, :], sol.y[2, :])
 plt.show()
