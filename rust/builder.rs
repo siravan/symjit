@@ -303,4 +303,8 @@ impl Compiled<f64> for ByteCode {
     fn func(&self) -> CompiledFunc<f64> {
         unreachable!()
     }
+
+    fn support_indirect(&self) -> bool {
+        false
+    }
 }

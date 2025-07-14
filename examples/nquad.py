@@ -1,10 +1,10 @@
-import sys
+import util
+backend, ty, use_simd, use_threads = util.process_argv()
+
 import numpy as np
 from scipy.integrate import nquad
 from sympy import symbols, exp
 from symjit import compile_func
-
-backend = "python" if len(sys.argv) > 1 and sys.argv[1] == "py" else "rust"
 
 N = 5
 t, x = symbols("t x")

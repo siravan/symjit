@@ -1,11 +1,12 @@
-import sys
+import util
+backend, ty, use_simd, use_threads = util.process_argv()
+
 from math import pi
 import numpy as np
 from scipy.integrate import quad
 from sympy import symbols, atan, sqrt
 from symjit import compile_func
 
-backend = "python" if len(sys.argv) > 1 and sys.argv[1] == "py" else "rust"
 
 x = symbols("x")
 # Ahmed's Integral (Inside Interesting Integrals, 6.2)

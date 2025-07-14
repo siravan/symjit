@@ -6,6 +6,7 @@ pub trait Compiled<T> {
     fn mem_mut(&mut self) -> &mut [T];
     fn dump(&self, name: &str);
     fn func(&self) -> CompiledFunc<T>;
+    fn support_indirect(&self) -> bool;
 }
 
 pub trait Eval {

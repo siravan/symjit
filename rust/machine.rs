@@ -71,6 +71,10 @@ impl<T> Compiled<T> for MachineCode<T> {
     fn func(&self) -> CompiledFunc<T> {
         self.f
     }
+
+    fn support_indirect(&self) -> bool {
+        true
+    }
 }
 
 unsafe impl<T> Sync for MachineCode<T> {}

@@ -274,12 +274,42 @@ impl Runnable {
     }
 
     pub fn exec_vectorized(&mut self, states: &Matrix, obs: &mut Matrix) {
+        if !self.compiled.support_indirect() {
+            self.exec_vectorized_simple(states, obs);
+            return;
+        }
+
         self.prepare_simd();
 
         if self.compiled_simd.is_none() {
             self.exec_vectorized_scalar(states, obs, self.use_threads);
         } else {
             self.exec_vectorized_simd(states, obs, self.use_threads);
+        }
+    }
+
+    pub fn exec_vectorized_simple(&mut self, states: &Matrix, obs: &mut Matrix) {
+        assert!(states.ncols == obs.ncols);
+        let n = states.ncols;
+        let params = &self.params[..];
+
+        for t in 0..n {
+            {
+                let mem = self.compiled.mem_mut();
+                mem[self.idx_iv] = t as f64;
+                for i in 0..self.count_states {
+                    mem[self.first_state + i] = states.get(i, t);
+                }
+            }
+
+            self.compiled.exec(params);
+
+            {
+                let mem = self.compiled.mem_mut();
+                for i in 0..self.count_obs {
+                    obs.set(i, t, mem[self.first_obs + i]);
+                }
+            }
         }
     }
 
@@ -300,7 +330,7 @@ impl Runnable {
                 .for_each(|t| Self::exec_single(t, &v, params, f));
         } else {
             (0..n)
-                .into_iter()
+                //.into_iter()
                 .for_each(|t| Self::exec_single(t, &v, params, f));
         }
     }
@@ -320,7 +350,7 @@ impl Runnable {
                     .for_each(|t| Self::exec_single(4 * t, &v, params, f));
             } else {
                 (0..n / 4)
-                    .into_iter()
+                    //.into_iter()
                     .for_each(|t| Self::exec_single(4 * t, &v, params, f));
             }
         }
@@ -333,7 +363,7 @@ impl Runnable {
                 .for_each(|t| Self::exec_single(t, &v, params, f));
         } else {
             (n0..n)
-                .into_iter()
+                //.into_iter()
                 .for_each(|t| Self::exec_single(t, &v, params, f));
         }
     }
@@ -459,5 +489,9 @@ impl Compiled<f64> for Debugger {
 
     fn func(&self) -> CompiledFunc<f64> {
         unreachable!()
+    }
+
+    fn support_indirect(&self) -> bool {
+        false
     }
 }

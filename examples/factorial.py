@@ -1,5 +1,5 @@
 import util
-backend, ty, use_simd = util.process_argv()
+backend, ty, use_simd, use_threads = util.process_argv()
 
 import math
 from sympy import symbols, Piecewise
@@ -16,10 +16,8 @@ def factorial(x, n):
 x = symbols('x')
 
 p = factorial(x, 20)
-f = compile_func([x], p, backend=backend, ty=ty)
+f = compile_func([x], p, backend=backend, ty=ty, use_threads=use_threads)
 
 # print(f.dumps())
 
-print(f(18))
-
-
+print(f(18), ' ?= ', math.factorial(18))

@@ -1,5 +1,5 @@
 import util
-backend, ty, use_simd = util.process_argv()
+backend, ty, use_simd, use_threads = util.process_argv()
 
 import numpy as np
 import scipy.integrate

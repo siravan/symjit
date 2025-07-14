@@ -1,9 +1,9 @@
-import sys
+import util
+backend, ty, use_simd, use_threads = util.process_argv()
+
 from sympy import *
 from random import random, randint
 from symjit import compile_func
-
-backend = "python" if len(sys.argv) > 1 and sys.argv[1] == "py" else "rust"
 
 
 def generate_random_expr(d, *xs):
@@ -76,7 +76,7 @@ for i in range(100):
     try:
         b = False
         for i in range(3):
-            f = compile_func([x, y, z], q, backend=backend)
+            f = compile_func([x, y, z], q, backend=backend, ty=ty, use_threads=use_threads)
             g = lambdify([x, y, z], q)
 
             F = f(X[i], Y[i], Z[i])
