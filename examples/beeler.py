@@ -1,5 +1,5 @@
 import util
-backend, ty, use_simd = util.process_argv()
+backend, ty, use_simd, use_threads = util.process_argv()
 
 import time
 import os
@@ -13,7 +13,7 @@ path = os.path.join(os.path.dirname(__file__), "cellml", "beeler.json")
 
 with open(path) as fd:
     model = fd.read()
-    
+
 t0 = time.time()
 
 f = symjit.compile_json(model, ty=ty)

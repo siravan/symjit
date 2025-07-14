@@ -59,6 +59,20 @@ impl Amd {
         self.append_byte(0xc0 + ((reg & 7) << 3) + (rm & 7))
     }
 
+    pub fn modrm_sib(&mut self, reg: u8, base: u8, index: u8, scale: u8) {
+        self.append_byte(0x04 + ((reg & 7) << 3)); // R/M = 0b100, MOD = 0b00
+        let scale = match scale {
+            1 => 0,
+            2 => 1 << 6,
+            4 => 2 << 6,
+            8 => 3 << 6,
+            _ => {
+                panic!("scale in SIB should be 1, 2, 4, or, 8.")
+            }
+        };
+        self.append_byte((scale | (index & 7) << 3) | (base & 7));
+    }
+
     pub fn rex(&mut self, reg: u8, rm: u8) {
         let b = 0x48 + ((rm & 8) >> 3) + ((reg & 8) >> 1);
         self.append_byte(b);
@@ -168,6 +182,12 @@ impl Amd {
         self.modrm_mem(reg, rm, offset);
     }
 
+    pub fn vmovsd_xmm_indexed(&mut self, reg: u8, base: u8, index: u8, scale: u8) {
+        self.vex_sd(reg, 0, base);
+        self.append_byte(0x10);
+        self.modrm_sib(reg, base, index, scale);
+    }
+
     pub fn vmovsd_xmm_label(&mut self, reg: u8, label: &str) {
         self.vex_sd(reg, 0, 0);
         self.append_byte(0x10);
@@ -180,6 +200,12 @@ impl Amd {
         self.vex_sd(reg, 0, rm);
         self.append_byte(0x11);
         self.modrm_mem(reg, rm, offset);
+    }
+
+    pub fn vmovsd_indexed_xmm(&mut self, base: u8, index: u8, scale: u8, reg: u8) {
+        self.vex_sd(reg, 0, base);
+        self.append_byte(0x11);
+        self.modrm_sib(reg, base, index, scale);
     }
 
     pub fn vaddsd(&mut self, reg: u8, vreg: u8, rm: u8) {
@@ -307,6 +333,12 @@ impl Amd {
         self.modrm_mem(reg, rm, offset);
     }
 
+    pub fn vmovpd_ymm_indexed(&mut self, reg: u8, base: u8, index: u8, scale: u8) {
+        self.vex_pd(reg, 0, base);
+        self.append_byte(0x10);
+        self.modrm_sib(reg, base, index, scale);
+    }
+
     pub fn vmovpd_ymm_label(&mut self, reg: u8, label: &str) {
         self.vex_pd(reg, 0, 0);
         self.append_byte(0x10);
@@ -319,6 +351,12 @@ impl Amd {
         self.vex_pd(reg, 0, rm);
         self.append_byte(0x11);
         self.modrm_mem(reg, rm, offset);
+    }
+
+    pub fn vmovpd_indexed_ymm(&mut self, base: u8, index: u8, scale: u8, reg: u8) {
+        self.vex_pd(reg, 0, base);
+        self.append_byte(0x11);
+        self.modrm_sib(reg, base, index, scale);
     }
 
     pub fn vaddpd(&mut self, reg: u8, vreg: u8, rm: u8) {
@@ -456,6 +494,12 @@ impl Amd {
         self.modrm_mem(reg, rm, offset);
     }
 
+    pub fn movsd_xmm_indexed(&mut self, reg: u8, base: u8, index: u8, scale: u8) {
+        self.sse_sd(reg, base);
+        self.append_byte(0x10);
+        self.modrm_sib(reg, base, index, scale);
+    }
+
     pub fn movsd_xmm_label(&mut self, reg: u8, label: &str) {
         self.sse_sd(reg, 0);
         self.append_byte(0x10);
@@ -468,6 +512,12 @@ impl Amd {
         self.sse_sd(reg, rm);
         self.append_byte(0x11);
         self.modrm_mem(reg, rm, offset);
+    }
+
+    pub fn movsd_indexed_xmm(&mut self, base: u8, index: u8, scale: u8, reg: u8) {
+        self.sse_sd(reg, base);
+        self.append_byte(0x11);
+        self.modrm_sib(reg, base, index, scale);
     }
 
     pub fn addsd(&mut self, reg: u8, rm: u8) {
@@ -675,6 +725,12 @@ impl Amd {
         self.append_word(imm);
     }
 
+    pub fn or(&mut self, reg: u8, rm: u8) {
+        self.rex(reg, rm);
+        self.append_byte(0x0b);
+        self.modrm_reg(reg, rm);
+    }
+
     pub fn xor(&mut self, reg: u8, rm: u8) {
         self.rex(reg, rm);
         self.append_byte(0x33);
@@ -708,6 +764,11 @@ impl Amd {
 
     pub fn jmp(&mut self, label: &str) {
         self.append_byte(0xe9);
+        self.a.jump(label, 0);
+    }
+
+    pub fn jz(&mut self, label: &str) {
+        self.append_bytes(&[0x0f, 0x84]);
         self.a.jump(label, 0);
     }
 

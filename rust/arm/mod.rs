@@ -316,6 +316,7 @@ impl Generator for ArmGenerator {
         }
 
         self.emit(arm! {mov x(19), x(0)});
+        self.emit(arm! {mov x(20), x(1)});
     }
 
     fn epilogue(&mut self, cap: u32) {
@@ -371,4 +372,8 @@ impl Generator for ArmGenerator {
         self.emit(arm! {add sp, sp, #16});
         self.emit(arm! {ret});
     }
+
+    fn prologue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {}
+
+    fn epilogue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {}
 }

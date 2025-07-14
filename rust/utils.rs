@@ -1,4 +1,4 @@
-pub type CompiledFunc<T> = fn(&[T], &[f64]);
+pub type CompiledFunc<T> = fn(*const T, *const T, usize, *const f64);
 
 pub trait Compiled<T> {
     fn exec(&mut self, params: &[f64]);

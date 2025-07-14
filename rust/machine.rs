@@ -48,7 +48,9 @@ impl<T> MachineCode<T> {
 impl<T> Compiled<T> for MachineCode<T> {
     #[inline]
     fn exec(&mut self, params: &[f64]) {
-        (self.f)(&mut self._mem, params);
+        let p = self._mem.as_ptr();
+        let q = params.as_ptr();
+        (self.f)(p, std::ptr::null(), 0, q);
     }
 
     #[inline]

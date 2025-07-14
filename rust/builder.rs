@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use super::utils::{Compiled, Eval};
 use crate::code::VirtualTable;
 use crate::generator::Generator;
+use crate::model::Program;
 use crate::node::{Node, VarStatus};
 use crate::runnable::CompilerType;
 use crate::statement::Statement;
@@ -190,15 +191,20 @@ impl Builder {
         }
     }
 
-    pub fn compile(&mut self, ir: &mut impl Generator) -> Result<()> {
+    pub fn compile(
+        &mut self,
+        ir: &mut impl Generator,
+        count_states: usize,
+        count_obs: usize,
+    ) -> Result<()> {
         let cap = self.sym_table.num_stack as u32;
-        ir.prologue(cap);
+        ir.prologue_indirect(cap, count_states, count_obs);
 
         for stmt in self.stmts.iter_mut() {
             stmt.compile(ir)?;
         }
 
-        ir.epilogue(cap);
+        ir.epilogue_indirect(cap, count_states, count_obs);
         self.append_const_section(ir);
         self.append_vt_section(ir);
         ir.apply_jumps();

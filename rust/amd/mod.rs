@@ -186,9 +186,11 @@ impl AmdGenerator {
         self.amd.mov_mem_reg(Amd::RSP, 0x08, Amd::RBP);
         self.amd.mov_mem_reg(Amd::RSP, 0x10, Amd::RBX);
         self.amd.mov_mem_reg(Amd::RSP, 0x18, Amd::R12);
+        self.amd.mov_mem_reg(Amd::RSP, 0x00, Amd::R13);
     }
 
     fn load_nonvolatile_regs(&mut self) {
+        self.amd.mov_reg_mem(Amd::R13, Amd::RSP, 0x00);
         self.amd.mov_reg_mem(Amd::R12, Amd::RSP, 0x18);
         self.amd.mov_reg_mem(Amd::RBX, Amd::RSP, 0x10);
         self.amd.mov_reg_mem(Amd::RBP, Amd::RSP, 0x08);
@@ -550,7 +552,7 @@ impl Generator for AmdGenerator {
         self.amd.sub_rsp(32);
         self.save_nonvolatile_regs();
         self.amd.mov(Amd::RBP, Amd::RDI);
-        self.amd.mov(Amd::RBX, Amd::RDX);
+        self.amd.mov(Amd::RBX, Amd::RSI);
         self.amd.sub_rsp(self.frame_size(cap));
     }
 
@@ -592,11 +594,102 @@ impl Generator for AmdGenerator {
         self.predefined_consts();
     }
 
+    #[cfg(target_family = "unix")]
+    fn prologue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
+        // first arg (RDI) = states
+        // second arg (RSI) = obs
+        // third arg (RDX) = idx
+        // fourth arg (RCX) = params
+        self.amd.sub_rsp(32);
+        self.save_nonvolatile_regs();
+
+        self.amd.mov(Amd::R13, Amd::RSI);
+        self.amd.or(Amd::RSI, Amd::RSI);
+        self.amd.jz("@main");
+
+        let size = (count_states + count_obs + 1) as u32 * self.reg_size();
+        self.amd.sub_rsp(16 + size);
+        self.amd.mov(Amd::RBP, Amd::RSP);
+        self.amd.mov_mem_reg(Amd::RBP, (size + 8) as i32, Amd::RDX);
+
+        for i in 0..count_states {
+            self.amd.mov_reg_mem(Amd::RAX, Amd::RDI, 8 * i as i32);
+            let k = i as u32 * self.reg_size();
+
+            match self.family {
+                AmdFamily::AvxScalar => {
+                    self.amd.vmovsd_xmm_indexed(0, Amd::RAX, Amd::RDX, 8);
+                    self.amd.vmovsd_mem_xmm(Amd::RBP, k as i32, 0);
+                }
+                AmdFamily::AvxVector => {
+                    self.amd.vmovpd_ymm_indexed(0, Amd::RAX, Amd::RDX, 8);
+                    self.amd.vmovpd_mem_ymm(Amd::RBP, k as i32, 0);
+                }
+                AmdFamily::SSEScalar => {
+                    self.amd.movsd_xmm_indexed(0, Amd::RAX, Amd::RDX, 8);
+                    self.amd.movsd_mem_xmm(Amd::RBP, k as i32, 0);
+                }
+            }
+        }
+
+        // may save idx (RDX) as double in RBP + 8/32 * count_states
+
+        self.amd.mov(Amd::RDI, Amd::RBP);
+        self.set_label("@main");
+        self.amd.mov(Amd::RBP, Amd::RDI);
+        self.amd.mov(Amd::RBX, Amd::RCX);
+        self.amd.sub_rsp(self.frame_size(cap));
+    }
+
+    #[cfg(target_family = "unix")]
+    fn epilogue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
+        self.restore_regs();
+
+        let size = (count_states + count_obs + 1) as u32 * self.reg_size();
+        self.amd.mov(Amd::RSI, Amd::R13);
+        self.amd.or(Amd::RSI, Amd::RSI);
+        self.amd.jz("@done");
+
+        self.amd.mov_reg_mem(Amd::RDX, Amd::RBP, (size + 8) as i32);
+
+        for i in 0..count_obs {
+            self.amd.mov_reg_mem(Amd::RAX, Amd::RSI, 8 * i as i32);
+            let k = (count_states + i + 1) as u32 * self.reg_size();
+
+            match self.family {
+                AmdFamily::AvxScalar => {
+                    self.amd.vmovsd_xmm_mem(0, Amd::RBP, k as i32);
+                    self.amd.vmovsd_indexed_xmm(Amd::RAX, Amd::RDX, 8, 0);
+                }
+                AmdFamily::AvxVector => {
+                    self.amd.vmovpd_ymm_mem(0, Amd::RBP, k as i32);
+                    self.amd.vmovpd_indexed_ymm(Amd::RAX, Amd::RDX, 8, 0);
+                }
+                AmdFamily::SSEScalar => {
+                    self.amd.movsd_xmm_mem(0, Amd::RBP, k as i32);
+                    self.amd.movsd_indexed_xmm(Amd::RAX, Amd::RDX, 8, 0);
+                }
+            }
+        }
+
+        self.amd.add_rsp(16 + size);
+        self.set_label("@done");
+
+        self.vzeroupper();
+
+        self.amd.add_rsp(self.frame_size(cap));
+        self.load_nonvolatile_regs();
+        self.amd.add_rsp(32);
+        self.amd.ret();
+
+        self.predefined_consts();
+    }
+
     #[cfg(target_family = "windows")]
     fn prologue(&mut self, cap: u32) {
         self.save_nonvolatile_regs();
         self.amd.mov(Amd::RBP, Amd::RCX);
-        self.amd.mov(Amd::RBX, Amd::R8);
+        self.amd.mov(Amd::RBX, Amd::RDX);
         self.amd.sub_rsp(self.frame_size(cap));
     }
 
