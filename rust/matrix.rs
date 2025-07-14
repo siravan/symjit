@@ -54,6 +54,13 @@ impl Matrix {
     }
 }
 
+pub fn combine_matrixes(a: &Matrix, b: &Matrix) -> Matrix {
+    assert!(a.ncols == b.ncols);
+    let mut p = a.p.clone();
+    p.extend(&b.p);
+    Matrix { p, ncols: a.ncols }
+}
+
 impl Default for Matrix {
     fn default() -> Self {
         Self::new()

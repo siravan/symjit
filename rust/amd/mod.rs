@@ -613,7 +613,7 @@ impl Generator for AmdGenerator {
         self.amd.mov_mem_reg(Amd::RBP, (size + 8) as i32, Amd::RDX);
 
         for i in 0..count_states {
-            self.amd.mov_reg_mem(Amd::RAX, Amd::RDI, 8 * i as i32);
+            self.amd.mov_reg_mem(Amd::RAX, Amd::RSI, 8 * i as i32);
             let k = i as u32 * self.reg_size();
 
             match self.family {
@@ -653,7 +653,8 @@ impl Generator for AmdGenerator {
         self.amd.mov_reg_mem(Amd::RDX, Amd::RBP, (size + 8) as i32);
 
         for i in 0..count_obs {
-            self.amd.mov_reg_mem(Amd::RAX, Amd::RSI, 8 * i as i32);
+            self.amd
+                .mov_reg_mem(Amd::RAX, Amd::RSI, 8 * (count_states + i) as i32);
             let k = (count_states + i + 1) as u32 * self.reg_size();
 
             match self.family {

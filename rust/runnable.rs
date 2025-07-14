@@ -1,5 +1,3 @@
-use std::mem;
-
 use anyhow::Result;
 
 use crate::amd::{AmdFamily, AmdGenerator};
@@ -7,13 +5,12 @@ use crate::arm::ArmGenerator;
 use crate::builder::{Builder, ByteCode};
 use crate::generator::Generator;
 use crate::machine::MachineCode;
-use crate::matrix::Matrix;
+use crate::matrix::{combine_matrixes, Matrix};
 use crate::model::Program;
 use crate::symbol::Loc;
 use crate::utils::*;
 
 use rayon::prelude::*;
-use std::mem::MaybeUninit;
 
 #[derive(PartialEq)]
 pub enum CompilerType {
@@ -286,13 +283,8 @@ impl Runnable {
         }
     }
 
-    fn exec_single<T>(t: usize, states: &Matrix, obs: &Matrix, params: &[f64], f: CompiledFunc<T>) {
-        f(
-            states.p.as_ptr() as *const T,
-            obs.p.as_ptr() as *const T,
-            t,
-            params.as_ptr(),
-        );
+    fn exec_single<T>(t: usize, v: &Matrix, params: &[f64], f: CompiledFunc<T>) {
+        f(std::ptr::null(), v.p.as_ptr(), t, params.as_ptr());
     }
 
     pub fn exec_vectorized_scalar(&mut self, states: &Matrix, obs: &mut Matrix, threads: bool) {
@@ -300,15 +292,16 @@ impl Runnable {
         let n = states.ncols;
         let f = self.compiled.func();
         let params = &self.params[..];
+        let v = combine_matrixes(states, obs);
 
         if threads {
             (0..n)
                 .into_par_iter()
-                .for_each(|t| Self::exec_single(t, states, obs, params, f));
+                .for_each(|t| Self::exec_single(t, &v, params, f));
         } else {
             (0..n)
                 .into_iter()
-                .for_each(|t| Self::exec_single(t, states, obs, params, f));
+                .for_each(|t| Self::exec_single(t, &v, params, f));
         }
     }
 
@@ -317,17 +310,18 @@ impl Runnable {
         let n = states.ncols;
         let params = &self.params[..];
         let n0 = 4 * (n / 4);
+        let v = combine_matrixes(states, obs);
 
         if let Some(g) = &mut self.compiled_simd {
             let f = g.func();
             if threads {
                 (0..n / 4)
                     .into_par_iter()
-                    .for_each(|t| Self::exec_single(4 * t, states, obs, params, f));
+                    .for_each(|t| Self::exec_single(4 * t, &v, params, f));
             } else {
                 (0..n / 4)
                     .into_iter()
-                    .for_each(|t| Self::exec_single(4 * t, states, obs, params, f));
+                    .for_each(|t| Self::exec_single(4 * t, &v, params, f));
             }
         }
 
@@ -336,22 +330,11 @@ impl Runnable {
         if threads {
             (n0..n)
                 .into_par_iter()
-                .for_each(|t| Self::exec_single(t, states, obs, params, f));
+                .for_each(|t| Self::exec_single(t, &v, params, f));
         } else {
             (n0..n)
                 .into_iter()
-                .for_each(|t| Self::exec_single(t, states, obs, params, f));
-        }
-    }
-
-    fn set_simd_params(&mut self) {
-        if let Some(f) = &mut self.compiled_simd {
-            let mem = self.compiled.mem();
-            let simd_mem = f.mem_mut();
-
-            for i in 0..self.count_params {
-                simd_mem[self.first_param + i] = f64x4::splat(mem[self.first_param + i]);
-            }
+                .for_each(|t| Self::exec_single(t, &v, params, f));
         }
     }
 
