@@ -243,6 +243,15 @@ macro_rules! arm {
     };
 
     // misc
+    (b.eq label) => { 0x54000000 };
+    (b.ne label) => { 0x54000001 };
+    (b.lt label) => { 0x5400000B };
+    (b.le label) => { 0x5400000D };
+    (b.gt label) => { 0x5400000C };
+    (b.ge label) => { 0x5400000A };
+    (tst x($rn:expr), x($rm:expr)) => {
+        0xea00001f | rn!($rn) | rm!($rm)
+    };
     (blr x($rn:expr)) => { 0xd63f0000 | rn!($rn) };
     (ret) => { 0xd65f03c0 };
     (fmov d($rd:expr), #0.0) => { 0x9e6703e0 | rd!($rd) };

@@ -328,7 +328,7 @@ impl Generator for ArmGenerator {
         }
         self.emit(arm! {add sp, sp, #stack_size & 0x0fff});
 
-        self.emit(arm! {ldr x(20), [sp, #8]});
+        self.emit(arm! {ldr x(20), [sp, #16]});
         self.emit(arm! {ldr x(19), [sp, #8]});
         self.emit(arm! {ldr lr, [sp, #0]});
         self.emit(arm! {add sp, sp, #32});
@@ -373,7 +373,82 @@ impl Generator for ArmGenerator {
         self.emit(arm! {ret});
     }
 
-    fn prologue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {}
+    fn prologue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
+        self.emit(arm! {sub sp, sp, #48});
+        self.emit(arm! {str lr, [sp, #0]});
+        self.emit(arm! {str x(19), [sp, #8]}); // mem
+        self.emit(arm! {str x(20), [sp, #16]}); // param
+        self.emit(arm! {str x(21), [sp, #24]}); // states
+        self.emit(arm! {str x(22), [sp, #24]}); // idx
 
-    fn epilogue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {}
+        let mem: u8 = 19; // first arg = mem if direct mode, otherwise null
+        let states: u8 = 21; // second arg = states+obs if indirect mode, otherwise null
+        let idx: u8 = 22; // third arg = index if indirect mode
+        let params: u8 = 20; // fourth arg = params
+
+        self.emit(arm! {mov x(mem), x(0)});
+        self.emit(arm! {mov x(states), x(1)});
+        self.emit(arm! {mov x(idx), x(2)});
+        self.emit(arm! {mov x(params), x(3)});
+
+        self.emit(arm! {tst x(states), x(states)});
+        self.jump("@main", arm! {b.eq label});
+
+        let size = (count_states + count_obs + 1) as u32 * self.reg_size();
+        self.emit(arm! {sub sp, sp, #size});
+        self.emit(arm! {mov x(mem), sp});
+
+        for i in 0..count_states {
+            self.emit(arm! {ldr x(9), [x(states), #8*i]});
+            self.emit(arm! {ldr d(0), [x(9), x(idx), lsl #3]});
+            self.emit(arm! {str d(0), [x(mem), #8*i]});
+        }
+
+        // may save idx (RDX) as double in RBP + 8/32 * count_states
+
+        self.set_label("@main");
+
+        let stack_size = align_stack(self.reg_size() * cap);
+        self.emit(arm! {sub sp, sp, #stack_size & 0x0fff});
+        if stack_size >> 12 != 0 {
+            self.emit(arm! {sub sp, sp, #stack_size >> 12, lsl #12});
+        }
+    }
+
+    fn epilogue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
+        let mem: u8 = 19; // first arg = mem if direct mode, otherwise null
+        let states: u8 = 21; // second arg = states+obs if indirect mode, otherwise null
+        let idx: u8 = 22; // third arg = index if indirect mode
+
+        self.emit(arm! {tst x(states), x(states)});
+        self.jump("@done", arm! {b.eq label});
+
+        for i in 0..count_obs {
+            self.emit(arm! {ldr x(9), [x(states), #8*(count_states+i)]});
+            let k = (count_states + i + 1) as u32;
+            self.emit(arm! {ldr d(0), [x(mem), #8*k]});
+            self.emit(arm! {str d(0), [x(9), x(idx), lsl #3]});
+        }
+
+        let size = (count_states + count_obs + 1) as u32 * self.reg_size();
+        self.emit(arm! {add sp, sp, #size});
+
+        self.set_label("@done");
+
+        self.restore_regs();
+
+        let stack_size = align_stack(self.reg_size() * cap);
+        if stack_size >> 12 != 0 {
+            self.emit(arm! {add sp, sp, #stack_size >> 12, lsl #12});
+        }
+        self.emit(arm! {add sp, sp, #stack_size & 0x0fff});
+
+        self.emit(arm! {ldr x(22), [sp, #32]});
+        self.emit(arm! {ldr x(21), [sp, #24]});
+        self.emit(arm! {ldr x(20), [sp, #16]});
+        self.emit(arm! {ldr x(19), [sp, #8]});
+        self.emit(arm! {ldr lr, [sp, #0]});
+        self.emit(arm! {add sp, sp, #48});
+        self.emit(arm! {ret});
+    }
 }

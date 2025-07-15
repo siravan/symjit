@@ -216,7 +216,7 @@ impl Amd {
     }
 
     pub fn vmovsd_indexed_xmm(&mut self, base: u8, index: u8, scale: u8, reg: u8) {
-        self.vex_sd(reg, 0, base, 0);
+        self.vex_sd(reg, 0, base, index);
         self.append_byte(0x11);
         self.modrm_sib(reg, base, index, scale);
     }
