@@ -106,58 +106,60 @@ impl Amd {
     pub fn vex2pd(&mut self, reg: u8, vreg: u8) {
         // This is the two-byte VEX prefix (VEX2) for packed-double (pd)
         // and 256-bit ymm registers
-        let r = (reg & 8) << 4;
-        let vvvv = vreg << 3;
+        let r = (!reg & 8) << 4;
+        let vvvv = (!vreg & 0x0f) << 3;
         self.append_byte(0xc5);
-        self.append_byte((r | vvvv | 5) ^ 0xf8);
+        self.append_byte(r | vvvv | 5);
     }
 
     pub fn vex2sd(&mut self, reg: u8, vreg: u8) {
         // This is the two-byte VEX prefix (VEX2) for scalar-double (sd)
         // and 256-bit ymm registers
-        let r = (reg & 8) << 4;
-        let vvvv = vreg << 3;
+        let r = (!reg & 8) << 4;
+        let vvvv = (!vreg & 0x0f) << 3;
         self.append_byte(0xc5);
-        self.append_byte((r | vvvv | 3) ^ 0xf8);
+        self.append_byte(r | vvvv | 3);
     }
 
-    pub fn vex3pd(&mut self, reg: u8, vreg: u8, rm: u8, encoding: u8) {
+    pub fn vex3pd(&mut self, reg: u8, vreg: u8, rm: u8, index: u8, encoding: u8) {
         // This is the three-byte VEX prefix (VEX3) for packed-double (pd)
         // and 256-bit ymm registers
         // fnault encoding is 1
-        let r = (reg & 8) << 4;
-        let b = (rm & 8) << 2;
-        let vvvv = vreg << 3;
+        let r = (!reg & 8) << 4;
+        let x = (!index & 8) << 3;
+        let b = (!rm & 8) << 2;
+        let vvvv = (!vreg & 0x0f) << 3;
         self.append_byte(0xc4);
-        self.append_byte((r | b | encoding) ^ 0xe0);
-        self.append_byte((vvvv | 5) ^ 0x78);
+        self.append_byte(r | x | b | encoding);
+        self.append_byte(vvvv | 5);
     }
 
-    pub fn vex3sd(&mut self, reg: u8, vreg: u8, rm: u8, encoding: u8) {
+    pub fn vex3sd(&mut self, reg: u8, vreg: u8, rm: u8, index: u8, encoding: u8) {
         // This is the three-byte VEX prefix (VEX3) for scalar-double (sd)
         // and 256-bit ymm registers
         // default encoding is 1
-        let r = (reg & 8) << 4;
-        let b = (rm & 8) << 2;
-        let vvvv = vreg << 3;
+        let r = (!reg & 8) << 4;
+        let x = (!index & 8) << 3;
+        let b = (!rm & 8) << 2;
+        let vvvv = (!vreg & 0x0f) << 3;
         self.append_byte(0xc4);
-        self.append_byte((r | b | encoding) ^ 0xe0);
-        self.append_byte((vvvv | 3) ^ 0x78);
+        self.append_byte(r | x | b | encoding);
+        self.append_byte(vvvv | 3);
     }
 
-    pub fn vex_sd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        if rm < 8 {
+    pub fn vex_sd(&mut self, reg: u8, vreg: u8, rm: u8, index: u8) {
+        if rm < 8 && index < 8 {
             self.vex2sd(reg, vreg);
         } else {
-            self.vex3sd(reg, vreg, rm, 1);
+            self.vex3sd(reg, vreg, rm, index, 1);
         }
     }
 
-    pub fn vex_pd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        if rm < 8 {
+    pub fn vex_pd(&mut self, reg: u8, vreg: u8, rm: u8, index: u8) {
+        if rm < 8 && index < 8 {
             self.vex2pd(reg, vreg);
         } else {
-            self.vex3pd(reg, vreg, rm, 1);
+            self.vex3pd(reg, vreg, rm, index, 1);
         }
     }
 
@@ -181,26 +183,26 @@ impl Amd {
 
     // AVX rules!
     pub fn vmovapd(&mut self, reg: u8, rm: u8) {
-        self.vex_pd(reg, 0, rm);
+        self.vex_pd(reg, 0, rm, 0);
         self.append_byte(0x28);
         self.modrm_reg(reg, rm);
     }
 
     /******************* scalar double ******************/
     pub fn vmovsd_xmm_mem(&mut self, reg: u8, rm: u8, offset: i32) {
-        self.vex_sd(reg, 0, rm);
+        self.vex_sd(reg, 0, rm, 0);
         self.append_byte(0x10);
         self.modrm_mem(reg, rm, offset);
     }
 
     pub fn vmovsd_xmm_indexed(&mut self, reg: u8, base: u8, index: u8, scale: u8) {
-        self.vex_sd(reg, index, base);
+        self.vex_sd(reg, 0, base, index);
         self.append_byte(0x10);
         self.modrm_sib(reg, base, index, scale);
     }
 
     pub fn vmovsd_xmm_label(&mut self, reg: u8, label: &str) {
-        self.vex_sd(reg, 0, 0);
+        self.vex_sd(reg, 0, 0, 0);
         self.append_byte(0x10);
         // modr/m byte with MOD=00 and R/M=101 (RIP-relative address)
         self.append_byte(5 | ((reg & 7) << 3));
@@ -208,49 +210,49 @@ impl Amd {
     }
 
     pub fn vmovsd_mem_xmm(&mut self, rm: u8, offset: i32, reg: u8) {
-        self.vex_sd(reg, 0, rm);
+        self.vex_sd(reg, 0, rm, 0);
         self.append_byte(0x11);
         self.modrm_mem(reg, rm, offset);
     }
 
     pub fn vmovsd_indexed_xmm(&mut self, base: u8, index: u8, scale: u8, reg: u8) {
-        self.vex_sd(reg, index, base);
+        self.vex_sd(reg, 0, base, 0);
         self.append_byte(0x11);
         self.modrm_sib(reg, base, index, scale);
     }
 
     pub fn vaddsd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_sd(reg, vreg, rm);
+        self.vex_sd(reg, vreg, rm, 0);
         self.append_byte(0x58);
         self.modrm_reg(reg, rm);
     }
 
     pub fn vsubsd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_sd(reg, vreg, rm);
+        self.vex_sd(reg, vreg, rm, 0);
         self.append_byte(0x5c);
         self.modrm_reg(reg, rm);
     }
 
     pub fn vmulsd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_sd(reg, vreg, rm);
+        self.vex_sd(reg, vreg, rm, 0);
         self.append_byte(0x59);
         self.modrm_reg(reg, rm);
     }
 
     pub fn vdivsd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_sd(reg, vreg, rm);
+        self.vex_sd(reg, vreg, rm, 0);
         self.append_byte(0x5e);
         self.modrm_reg(reg, rm);
     }
 
     pub fn vsqrtsd(&mut self, reg: u8, rm: u8) {
-        self.vex_sd(reg, 0, rm);
+        self.vex_sd(reg, 0, rm, 0);
         self.append_byte(0x51);
         self.modrm_reg(reg, rm);
     }
 
     pub fn vroundsd(&mut self, reg: u8, rm: u8, mode: RoundingMode) {
-        self.vex3pd(reg, reg, rm, 3);
+        self.vex3pd(reg, reg, rm, 0, 3);
         self.append_byte(0x0b);
         self.modrm_reg(reg, rm);
         self.append_byte(match mode {
@@ -262,76 +264,76 @@ impl Amd {
     }
 
     pub fn vcmpeqsd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_sd(reg, vreg, rm);
+        self.vex_sd(reg, vreg, rm, 0);
         self.append_byte(0xc2);
         self.modrm_reg(reg, rm);
         self.append_byte(0)
     }
 
     pub fn vcmpltsd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_sd(reg, vreg, rm);
+        self.vex_sd(reg, vreg, rm, 0);
         self.append_byte(0xc2);
         self.modrm_reg(reg, rm);
         self.append_byte(1);
     }
 
     pub fn vcmplesd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_sd(reg, vreg, rm);
+        self.vex_sd(reg, vreg, rm, 0);
         self.append_byte(0xc2);
         self.modrm_reg(reg, rm);
         self.append_byte(2);
     }
 
     pub fn vcmpunordsd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_sd(reg, vreg, rm);
+        self.vex_sd(reg, vreg, rm, 0);
         self.append_byte(0xc2);
         self.modrm_reg(reg, rm);
         self.append_byte(3);
     }
 
     pub fn vcmpneqsd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_sd(reg, vreg, rm);
+        self.vex_sd(reg, vreg, rm, 0);
         self.append_byte(0xc2);
         self.modrm_reg(reg, rm);
         self.append_byte(4);
     }
 
     pub fn vcmpnltsd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_sd(reg, vreg, rm);
+        self.vex_sd(reg, vreg, rm, 0);
         self.append_byte(0xc2);
         self.modrm_reg(reg, rm);
         self.append_byte(5);
     }
 
     pub fn vcmpnlesd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_sd(reg, vreg, rm);
+        self.vex_sd(reg, vreg, rm, 0);
         self.append_byte(0xc2);
         self.modrm_reg(reg, rm);
         self.append_byte(6);
     }
 
     pub fn vcmpordsd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_sd(reg, vreg, rm);
+        self.vex_sd(reg, vreg, rm, 0);
         self.append_byte(0xC2);
         self.modrm_reg(reg, rm);
         self.append_byte(7);
     }
 
     pub fn vucomisd(&mut self, reg: u8, rm: u8) {
-        self.vex_pd(reg, 0, rm);
+        self.vex_pd(reg, 0, rm, 0);
         self.append_byte(0x2e);
         self.modrm_reg(reg, rm);
     }
 
     /******************* packed double ******************/
     pub fn vbroadcastsd(&mut self, reg: u8, rm: u8, offset: i32) {
-        self.vex3pd(reg, 0, rm, 2);
+        self.vex3pd(reg, 0, rm, 0, 2);
         self.append_byte(0x19);
         self.modrm_mem(reg, rm, offset);
     }
 
     pub fn vbroadcastsd_label(&mut self, reg: u8, label: &str) {
-        self.vex3pd(reg, 0, 0, 2);
+        self.vex3pd(reg, 0, 0, 0, 2);
         self.append_byte(0x19);
         // modr/m byte with MOD=00 and R/M=101 (RIP-relative address)
         self.append_byte(5 | ((reg & 7) << 3));
@@ -339,19 +341,19 @@ impl Amd {
     }
 
     pub fn vmovpd_ymm_mem(&mut self, reg: u8, rm: u8, offset: i32) {
-        self.vex_pd(reg, 0, rm);
+        self.vex_pd(reg, 0, rm, 0);
         self.append_byte(0x10);
         self.modrm_mem(reg, rm, offset);
     }
 
     pub fn vmovpd_ymm_indexed(&mut self, reg: u8, base: u8, index: u8, scale: u8) {
-        self.vex_pd(reg, index, base);
+        self.vex_pd(reg, 0, base, index);
         self.append_byte(0x10);
         self.modrm_sib(reg, base, index, scale);
     }
 
     pub fn vmovpd_ymm_label(&mut self, reg: u8, label: &str) {
-        self.vex_pd(reg, 0, 0);
+        self.vex_pd(reg, 0, 0, 0);
         self.append_byte(0x10);
         // modr/m byte with MOD=00 and R/M=101 (RIP-relative address)
         self.append_byte(5 | ((reg & 7) << 3));
@@ -359,49 +361,49 @@ impl Amd {
     }
 
     pub fn vmovpd_mem_ymm(&mut self, rm: u8, offset: i32, reg: u8) {
-        self.vex_pd(reg, 0, rm);
+        self.vex_pd(reg, 0, rm, 0);
         self.append_byte(0x11);
         self.modrm_mem(reg, rm, offset);
     }
 
     pub fn vmovpd_indexed_ymm(&mut self, base: u8, index: u8, scale: u8, reg: u8) {
-        self.vex_pd(reg, index, base);
+        self.vex_pd(reg, 0, base, index);
         self.append_byte(0x11);
         self.modrm_sib(reg, base, index, scale);
     }
 
     pub fn vaddpd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_pd(reg, vreg, rm);
+        self.vex_pd(reg, vreg, rm, 0);
         self.append_byte(0x58);
         self.modrm_reg(reg, rm);
     }
 
     pub fn vsubpd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_pd(reg, vreg, rm);
+        self.vex_pd(reg, vreg, rm, 0);
         self.append_byte(0x5c);
         self.modrm_reg(reg, rm);
     }
 
     pub fn vmulpd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_pd(reg, vreg, rm);
+        self.vex_pd(reg, vreg, rm, 0);
         self.append_byte(0x59);
         self.modrm_reg(reg, rm);
     }
 
     pub fn vdivpd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_pd(reg, vreg, rm);
+        self.vex_pd(reg, vreg, rm, 0);
         self.append_byte(0x5e);
         self.modrm_reg(reg, rm);
     }
 
     pub fn vsqrtpd(&mut self, reg: u8, rm: u8) {
-        self.vex_pd(reg, 0, rm);
+        self.vex_pd(reg, 0, rm, 0);
         self.append_byte(0x51);
         self.modrm_reg(reg, rm);
     }
 
     pub fn vroundpd(&mut self, reg: u8, rm: u8, mode: RoundingMode) {
-        self.vex3pd(reg, 0, rm, 3);
+        self.vex3pd(reg, 0, rm, 0, 3);
         self.append_byte(0x09);
         self.modrm_reg(reg, rm);
         self.append_byte(match mode {
@@ -413,80 +415,80 @@ impl Amd {
     }
 
     pub fn vandpd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_pd(reg, vreg, rm);
+        self.vex_pd(reg, vreg, rm, 0);
         self.append_byte(0x54);
         self.modrm_reg(reg, rm);
     }
 
     pub fn vandnpd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_pd(reg, vreg, rm);
+        self.vex_pd(reg, vreg, rm, 0);
         self.append_byte(0x55);
         self.modrm_reg(reg, rm);
     }
 
     pub fn vorpd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_pd(reg, vreg, rm);
+        self.vex_pd(reg, vreg, rm, 0);
         self.append_byte(0x56);
         self.modrm_reg(reg, rm);
     }
 
     pub fn vxorpd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_pd(reg, vreg, rm);
+        self.vex_pd(reg, vreg, rm, 0);
         self.append_byte(0x57);
         self.modrm_reg(reg, rm);
     }
 
     pub fn vcmpeqpd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_pd(reg, vreg, rm);
+        self.vex_pd(reg, vreg, rm, 0);
         self.append_byte(0xc2);
         self.modrm_reg(reg, rm);
         self.append_byte(0)
     }
 
     pub fn vcmpltpd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_pd(reg, vreg, rm);
+        self.vex_pd(reg, vreg, rm, 0);
         self.append_byte(0xc2);
         self.modrm_reg(reg, rm);
         self.append_byte(1);
     }
 
     pub fn vcmplepd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_pd(reg, vreg, rm);
+        self.vex_pd(reg, vreg, rm, 0);
         self.append_byte(0xc2);
         self.modrm_reg(reg, rm);
         self.append_byte(2);
     }
 
     pub fn vcmpunordpd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_pd(reg, vreg, rm);
+        self.vex_pd(reg, vreg, rm, 0);
         self.append_byte(0xc2);
         self.modrm_reg(reg, rm);
         self.append_byte(3);
     }
 
     pub fn vcmpneqpd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_pd(reg, vreg, rm);
+        self.vex_pd(reg, vreg, rm, 0);
         self.append_byte(0xc2);
         self.modrm_reg(reg, rm);
         self.append_byte(4);
     }
 
     pub fn vcmpnltpd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_pd(reg, vreg, rm);
+        self.vex_pd(reg, vreg, rm, 0);
         self.append_byte(0xc2);
         self.modrm_reg(reg, rm);
         self.append_byte(5);
     }
 
     pub fn vcmpnlepd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_pd(reg, vreg, rm);
+        self.vex_pd(reg, vreg, rm, 0);
         self.append_byte(0xc2);
         self.modrm_reg(reg, rm);
         self.append_byte(6);
     }
 
     pub fn vcmpordpd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_pd(reg, vreg, rm);
+        self.vex_pd(reg, vreg, rm, 0);
         self.append_byte(0xC2);
         self.modrm_reg(reg, rm);
         self.append_byte(7);
