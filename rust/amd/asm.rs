@@ -78,6 +78,11 @@ impl Amd {
         self.append_byte(b);
     }
 
+    pub fn rex_index(&mut self, reg: u8, rm: u8, index: u8) {
+        let b = 0x48 + ((rm & 8) >> 3) + ((index & 8) >> 2) + ((reg & 8) >> 1);
+        self.append_byte(b);
+    }
+
     pub fn modrm_mem(&mut self, reg: u8, rm: u8, offset: i32) {
         let small = (-128..128).contains(&offset);
 
@@ -162,6 +167,12 @@ impl Amd {
         self.append_byte(0x0f);
     }
 
+    pub fn sse_sd_index(&mut self, reg: u8, rm: u8, index: u8) {
+        self.append_byte(0xf2);
+        self.rex_index(reg, rm, index);
+        self.append_byte(0x0f);
+    }
+
     pub fn sse_pd(&mut self, reg: u8, rm: u8) {
         self.append_byte(0x66);
         self.rex(reg, rm);
@@ -183,7 +194,7 @@ impl Amd {
     }
 
     pub fn vmovsd_xmm_indexed(&mut self, reg: u8, base: u8, index: u8, scale: u8) {
-        self.vex_sd(reg, 0, base);
+        self.vex_sd(reg, index, base);
         self.append_byte(0x10);
         self.modrm_sib(reg, base, index, scale);
     }
@@ -203,7 +214,7 @@ impl Amd {
     }
 
     pub fn vmovsd_indexed_xmm(&mut self, base: u8, index: u8, scale: u8, reg: u8) {
-        self.vex_sd(reg, 0, base);
+        self.vex_sd(reg, index, base);
         self.append_byte(0x11);
         self.modrm_sib(reg, base, index, scale);
     }
@@ -334,7 +345,7 @@ impl Amd {
     }
 
     pub fn vmovpd_ymm_indexed(&mut self, reg: u8, base: u8, index: u8, scale: u8) {
-        self.vex_pd(reg, 0, base);
+        self.vex_pd(reg, index, base);
         self.append_byte(0x10);
         self.modrm_sib(reg, base, index, scale);
     }
@@ -354,7 +365,7 @@ impl Amd {
     }
 
     pub fn vmovpd_indexed_ymm(&mut self, base: u8, index: u8, scale: u8, reg: u8) {
-        self.vex_pd(reg, 0, base);
+        self.vex_pd(reg, index, base);
         self.append_byte(0x11);
         self.modrm_sib(reg, base, index, scale);
     }
@@ -495,7 +506,7 @@ impl Amd {
     }
 
     pub fn movsd_xmm_indexed(&mut self, reg: u8, base: u8, index: u8, scale: u8) {
-        self.sse_sd(reg, base);
+        self.sse_sd_index(reg, base, index);
         self.append_byte(0x10);
         self.modrm_sib(reg, base, index, scale);
     }
@@ -515,7 +526,7 @@ impl Amd {
     }
 
     pub fn movsd_indexed_xmm(&mut self, base: u8, index: u8, scale: u8, reg: u8) {
-        self.sse_sd(reg, base);
+        self.sse_sd_index(reg, base, index);
         self.append_byte(0x11);
         self.modrm_sib(reg, base, index, scale);
     }
