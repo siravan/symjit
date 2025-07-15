@@ -379,7 +379,7 @@ impl Generator for ArmGenerator {
         self.emit(arm! {str x(19), [sp, #8]}); // mem
         self.emit(arm! {str x(20), [sp, #16]}); // param
         self.emit(arm! {str x(21), [sp, #24]}); // states
-        self.emit(arm! {str x(22), [sp, #24]}); // idx
+        self.emit(arm! {str x(22), [sp, #32]}); // idx
 
         let mem: u8 = 19; // first arg = mem if direct mode, otherwise null
         let states: u8 = 21; // second arg = states+obs if indirect mode, otherwise null
@@ -394,7 +394,7 @@ impl Generator for ArmGenerator {
         self.emit(arm! {tst x(states), x(states)});
         self.jump("@main", arm! {b.eq label});
 
-        let size = (count_states + count_obs + 1) as u32 * self.reg_size();
+        let size = align_stack((count_states + count_obs + 1) as u32 * self.reg_size());
         self.emit(arm! {sub sp, sp, #size});
         self.emit(arm! {mov x(mem), sp});
 
@@ -420,6 +420,12 @@ impl Generator for ArmGenerator {
         let states: u8 = 21; // second arg = states+obs if indirect mode, otherwise null
         let idx: u8 = 22; // third arg = index if indirect mode
 
+        let stack_size = align_stack(self.reg_size() * cap);
+        if stack_size >> 12 != 0 {
+            self.emit(arm! {add sp, sp, #stack_size >> 12, lsl #12});
+        }
+        self.emit(arm! {add sp, sp, #stack_size & 0x0fff});
+
         self.emit(arm! {tst x(states), x(states)});
         self.jump("@done", arm! {b.eq label});
 
@@ -430,18 +436,12 @@ impl Generator for ArmGenerator {
             self.emit(arm! {str d(0), [x(9), x(idx), lsl #3]});
         }
 
-        let size = (count_states + count_obs + 1) as u32 * self.reg_size();
+        let size = align_stack((count_states + count_obs + 1) as u32 * self.reg_size());
         self.emit(arm! {add sp, sp, #size});
 
         self.set_label("@done");
 
         self.restore_regs();
-
-        let stack_size = align_stack(self.reg_size() * cap);
-        if stack_size >> 12 != 0 {
-            self.emit(arm! {add sp, sp, #stack_size >> 12, lsl #12});
-        }
-        self.emit(arm! {add sp, sp, #stack_size & 0x0fff});
 
         self.emit(arm! {ldr x(22), [sp, #32]});
         self.emit(arm! {ldr x(21), [sp, #24]});
