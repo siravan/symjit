@@ -11,6 +11,7 @@ pub struct Amd {
     pub a: Assembler,
 }
 
+#[allow(dead_code)]
 impl Amd {
     pub fn new() -> Amd {
         Amd {
@@ -706,6 +707,11 @@ impl Amd {
         } else {
             self.append_bytes(&[0x41, 0xff, 0xd0 | (reg & 7)]);
         }
+    }
+
+    pub fn call_indirect(&mut self, label: &str) {
+        self.append_bytes(&[0xff, 0x15]);
+        self.a.jump(label, 0);
     }
 
     pub fn push(&mut self, reg: u8) {

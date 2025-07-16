@@ -11,7 +11,7 @@ pub enum Loc {
 
 #[derive(Debug, Clone)]
 pub struct Symbol {
-    pub name: String,
+    pub _name: String,
     pub loc: Loc,
     pub visited: bool,
     pub reg: Option<u8>,
@@ -45,7 +45,7 @@ impl SymbolTable {
 
     fn add_sym(&mut self, name: &str, loc: Loc) {
         let sym = Rc::new(RefCell::new(Symbol {
-            name: name.to_string(),
+            _name: name.to_string(),
             loc,
             visited: false,
             reg: None,

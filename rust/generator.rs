@@ -1,5 +1,6 @@
 use crate::assembler::Assembler;
 
+#[allow(dead_code)]
 pub trait Generator {
     fn first_shadow(&self) -> u8;
     fn count_shadows(&self) -> u8;

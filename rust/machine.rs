@@ -14,7 +14,6 @@ pub struct MachineCode<T> {
 
 impl<T> MachineCode<T> {
     pub fn new(arch: &str, machine_code: Vec<u8>, _mem: Vec<T>) -> MachineCode<T> {
-        /*
         #[cfg(target_arch = "x86_64")]
         if arch != "x86_64" {
             panic!("cannot run {:?} code", arch);
@@ -24,7 +23,6 @@ impl<T> MachineCode<T> {
         if arch != "aarch64" {
             panic!("cannot run {:?} code", arch);
         }
-        */
 
         let size = machine_code.len();
 
