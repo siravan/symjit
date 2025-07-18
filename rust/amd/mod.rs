@@ -624,8 +624,7 @@ impl Generator for AmdGenerator {
      *      is the index into these arrays. MEM is allocated on the stack and filled based on the second and thirds args.
      *
      * Noth that the second argument determines whether it is the direct (args[1] == null) or indirect mode.
-     *
-     *  In both modes, the fourth argument points to an array of params.
+     * In both modes, the fourth argument points to an array of params.
      */
     fn prologue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
         let win = cfg!(target_family = "windows");
