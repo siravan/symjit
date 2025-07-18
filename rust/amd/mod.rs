@@ -617,12 +617,22 @@ impl Generator for AmdGenerator {
         self.predefined_consts();
     }
 
+    /*
+     * prologue_indirect generates the stack frame. It works in two modes:
+     *  Direct mode: MEM (state variables + obs) is passed directly as the first argument. The second argument is null.
+     *  Indirect mode: the second argument is a pointer to an array of pointers to states and obs. The third argument
+     *      is the index into these arrays. MEM is allocated on the stack and filled based on the second and thirds args.
+     *
+     * Noth that the second argument determines whether it is the direct (args[1] == null) or indirect mode.
+     *
+     *  In both modes, the fourth argument points to an array of params.
+     */
     fn prologue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
         let win = cfg!(target_family = "windows");
         self.save_nonvolatile_regs();
 
-        self.amd.mov(STATES, if win { Amd::RDX } else { Amd::RSI }); // second arg = states+obs if indirect mode, otherwise null
         self.amd.mov(MEM, if win { Amd::RCX } else { Amd::RDI }); // first arg = mem if direct mode, otherwise null
+        self.amd.mov(STATES, if win { Amd::RDX } else { Amd::RSI }); // second arg = states+obs if indirect mode, otherwise null
         self.amd.mov(IDX, if win { Amd::R8 } else { Amd::RDX }); // third arg = index if indirect mode
         self.amd.mov(PARAMS, if win { Amd::R9 } else { Amd::RCX }); // fourth arg = params
 
@@ -631,7 +641,7 @@ impl Generator for AmdGenerator {
 
         let size = (count_states + count_obs + 1) as u32 * self.reg_size();
         self.amd.sub_rsp(size);
-        self.amd.mov(MEM, Amd::RSP);
+        self.amd.mov(MEM, Amd::RSP); // in indirect mode, MEM is allocated on the stack
 
         for i in 0..count_states {
             self.amd.mov_reg_mem(Amd::RAX, STATES, 8 * i as i32);
@@ -661,6 +671,8 @@ impl Generator for AmdGenerator {
 
     fn epilogue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
         self.restore_regs();
+
+        self.amd.add_rsp(self.frame_size(cap));
 
         self.amd.or(STATES, STATES);
         self.amd.jz("@done");
@@ -693,7 +705,6 @@ impl Generator for AmdGenerator {
 
         self.vzeroupper();
 
-        self.amd.add_rsp(self.frame_size(cap));
         self.load_nonvolatile_regs();
         self.amd.ret();
 
