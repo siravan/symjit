@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use super::utils::Eval;
+use super::utils::{reg, Eval};
 use crate::code::VirtualTable;
 use crate::generator::Generator;
 use crate::node::Node;
@@ -59,8 +59,8 @@ impl Statement {
     fn save(ir: &mut dyn Generator, r: u8, v: &Node) {
         if let Node::Var { sym, .. } = v {
             match sym.borrow().loc {
-                Loc::Stack(idx) => ir.save_stack(r, idx),
-                Loc::Mem(idx) => ir.save_mem(r, idx),
+                Loc::Stack(idx) => ir.save_stack(reg(r), idx),
+                Loc::Mem(idx) => ir.save_mem(reg(r), idx),
                 Loc::Param(_) => unreachable!(),
             }
         }

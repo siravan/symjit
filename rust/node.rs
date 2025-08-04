@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use crate::generator::Generator;
 use crate::symbol::{Loc, Symbol};
-use crate::utils::{bool_to_f64, Eval};
+use crate::utils::{bool_to_f64, reg, Eval, Reg};
 
 #[derive(Debug, Clone)]
 pub enum VarStatus {
@@ -224,7 +224,7 @@ impl Node {
         self.postorder_forward(Self::mark_first);
         self.postorder_backward(Self::mark_last);
 
-        let last = ir.first_shadow() + self.ershov_number();
+        let last = self.ershov_number();
 
         // we check ir.three_address() because AmdGenerator::shrink may swap
         // registers when generating code for SSE (two-address code).
@@ -232,7 +232,7 @@ impl Node {
         // correctness first.
 
         let mut pool: Vec<u8> = if ir.three_address() {
-            (last..16).rev().collect()
+            (last..14).rev().collect()
         } else {
             Vec::new()
         };
@@ -253,10 +253,9 @@ impl Node {
 
     fn compile_const(&self, ir: &mut dyn Generator, base: u8) -> Result<u8> {
         if let Node::Const { idx, .. } = &self {
-            let r = ir.first_shadow() + base;
             let label = format!("_const_{}_", idx);
-            ir.load_const(r, &label);
-            Ok(r)
+            ir.load_const(reg(base), &label);
+            Ok(base)
         } else {
             unreachable!();
         }
@@ -264,9 +263,9 @@ impl Node {
 
     fn load_var(ir: &mut dyn Generator, dst: u8, loc: &Loc) -> u8 {
         match loc {
-            Loc::Stack(idx) => ir.load_stack(dst, *idx),
-            Loc::Mem(idx) => ir.load_mem(dst, *idx),
-            Loc::Param(idx) => ir.load_param(dst, *idx),
+            Loc::Stack(idx) => ir.load_stack(reg(dst), *idx),
+            Loc::Mem(idx) => ir.load_mem(reg(dst), *idx),
+            Loc::Param(idx) => ir.load_param(reg(dst), *idx),
         };
 
         dst
@@ -280,34 +279,33 @@ impl Node {
     fn compile_var(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> Result<u8> {
         if let Node::Var { sym, status, .. } = &self {
             let mut sym = sym.borrow_mut();
-            let home = ir.first_shadow() + base;
 
             let dst = match status {
                 VarStatus::First => {
                     sym.reg = pool.pop();
                     // if no pool register is available, just use the standard designated register (home)
-                    Self::load_var(ir, sym.reg.unwrap_or(home), &sym.loc)
+                    Self::load_var(ir, sym.reg.unwrap_or(base), &sym.loc)
                 }
                 VarStatus::Mid => {
                     // if no pool register is available, just use the standard designated register (home)
                     // note that this means reloading the variable at each use
                     sym.reg
-                        .unwrap_or_else(|| Self::load_var(ir, home, &sym.loc))
+                        .unwrap_or_else(|| Self::load_var(ir, base, &sym.loc))
                 }
                 VarStatus::Last => {
                     if let Some(r) = sym.reg {
-                        ir.fmov(home, r);
+                        ir.fmov(reg(base), reg(r));
                         pool.push(r);
                         sym.reg = None;
-                        home
+                        base
                     } else {
-                        Self::load_var(ir, home, &sym.loc)
+                        Self::load_var(ir, base, &sym.loc)
                     }
                 }
                 VarStatus::Singular | VarStatus::Unknown => {
                     // if a variable is Singular, i.e., is used only once, don't
                     // bother with caching
-                    Self::load_var(ir, home, &sym.loc)
+                    Self::load_var(ir, base, &sym.loc)
                 }
             };
 
@@ -319,23 +317,23 @@ impl Node {
 
     fn compile_unary(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> Result<u8> {
         if let Node::Unary { op, arg, power, .. } = self {
-            let dst = ir.first_shadow() + base + self.ershov_number() - 1;
+            let dst = base + self.ershov_number() - 1;
             let r = arg.compile(ir, base, pool)?;
 
             match op.as_str() {
-                "neg" => ir.neg(dst, r),
-                "not" => ir.not(dst, r),
-                "abs" => ir.abs(dst, r),
-                "root" => ir.root(dst, r),
-                "square" => ir.square(dst, r),
-                "cube" => ir.cube(dst, r),
-                "recip" => ir.recip(dst, r),
-                "round" => ir.round(dst, r),
-                "floor" => ir.floor(dst, r),
-                "ceiling" => ir.ceiling(dst, r),
-                "trunc" => ir.trunc(dst, r),
-                "_powi_" => ir.powi(dst, r, *power),
-                "_call_" => ir.setup_call_unary(r),
+                "neg" => ir.neg(reg(dst), reg(r)),
+                "not" => ir.not(reg(dst), reg(r)),
+                "abs" => ir.abs(reg(dst), reg(r)),
+                "root" => ir.root(reg(dst), reg(r)),
+                "square" => ir.square(reg(dst), reg(r)),
+                "cube" => ir.cube(reg(dst), reg(r)),
+                "recip" => ir.recip(reg(dst), reg(r)),
+                "round" => ir.round(reg(dst), reg(r)),
+                "floor" => ir.floor(reg(dst), reg(r)),
+                "ceiling" => ir.ceiling(reg(dst), reg(r)),
+                "trunc" => ir.trunc(reg(dst), reg(r)),
+                "_powi_" => ir.powi(reg(dst), reg(r), *power),
+                "_call_" => ir.setup_call_unary(reg(r)),
                 _ => return Err(anyhow!("unary operator is not recognized")),
             };
 
@@ -357,24 +355,24 @@ impl Node {
             let (dst, l, r) = self.alloc(ir, base, left, right, pool)?;
 
             match op.as_str() {
-                "plus" => ir.plus(dst, l, r),
-                "minus" => ir.minus(dst, l, r),
-                "times" => ir.times(dst, l, r),
-                "divide" => ir.divide(dst, l, r),
-                "rem" => ir.fmod(dst, l, r),
-                "gt" => ir.gt(dst, l, r),
-                "geq" => ir.geq(dst, l, r),
-                "lt" => ir.lt(dst, l, r),
-                "leq" => ir.leq(dst, l, r),
-                "eq" => ir.eq(dst, l, r),
-                "neq" => ir.neq(dst, l, r),
-                "and" => ir.and(dst, l, r),
-                "or" => ir.or(dst, l, r),
-                "xor" => ir.xor(dst, l, r),
-                "select_if" => ir.select_if(dst, l, r),
-                "select_else" => ir.select_else(dst, l, r),
-                "_powi_mod_" => ir.powi_mod(dst, l, *power, r),
-                "_call_" => ir.setup_call_binary(l, r),
+                "plus" => ir.plus(reg(dst), reg(l), reg(r)),
+                "minus" => ir.minus(reg(dst), reg(l), reg(r)),
+                "times" => ir.times(reg(dst), reg(l), reg(r)),
+                "divide" => ir.divide(reg(dst), reg(l), reg(r)),
+                "rem" => ir.fmod(reg(dst), reg(l), reg(r)),
+                "gt" => ir.gt(reg(dst), reg(l), reg(r)),
+                "geq" => ir.geq(reg(dst), reg(l), reg(r)),
+                "lt" => ir.lt(reg(dst), reg(l), reg(r)),
+                "leq" => ir.leq(reg(dst), reg(l), reg(r)),
+                "eq" => ir.eq(reg(dst), reg(l), reg(r)),
+                "neq" => ir.neq(reg(dst), reg(l), reg(r)),
+                "and" => ir.and(reg(dst), reg(l), reg(r)),
+                "or" => ir.or(reg(dst), reg(l), reg(r)),
+                "xor" => ir.xor(reg(dst), reg(l), reg(r)),
+                "select_if" => ir.select_if(reg(dst), reg(l), reg(r)),
+                "select_else" => ir.select_else(reg(dst), reg(l), reg(r)),
+                "_powi_mod_" => ir.powi_mod(reg(dst), reg(l), *power, reg(r)),
+                "_call_" => ir.setup_call_binary(reg(l), reg(r)),
                 _ => return Err(anyhow!("binary operator is not recognized")),
             };
 
@@ -394,7 +392,7 @@ impl Node {
     ) -> Result<(u8, u8, u8)> {
         let el = left.ershov_number();
         let er = right.ershov_number();
-        let dst = ir.first_shadow() + base + self.ershov_number() - 1;
+        let dst = base + self.ershov_number() - 1;
 
         let l;
         let r;

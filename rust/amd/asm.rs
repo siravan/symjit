@@ -1,4 +1,5 @@
 use crate::assembler::Assembler;
+use crate::utils::DataType;
 
 pub enum RoundingMode {
     Round,
@@ -9,13 +10,15 @@ pub enum RoundingMode {
 
 pub struct Amd {
     pub a: Assembler,
+    pub dtype: DataType,
 }
 
 #[allow(dead_code)]
 impl Amd {
-    pub fn new() -> Amd {
+    pub fn new(dtype: DataType) -> Amd {
         Amd {
             a: Assembler::new(-4, 0),
+            dtype,
         }
     }
 
@@ -109,8 +112,14 @@ impl Amd {
         // and 256-bit ymm registers
         let r = (!reg & 8) << 4;
         let vvvv = (!vreg & 0x0f) << 3;
+
+        let pp = match self.dtype {
+            DataType::F32 => 0, // ps
+            DataType::F64 => 1, // pd
+        };
+
         self.append_byte(0xc5);
-        self.append_byte(r | vvvv | 5);
+        self.append_byte(r | vvvv | 4 | pp);
     }
 
     pub fn vex2sd(&mut self, reg: u8, vreg: u8) {
@@ -118,8 +127,14 @@ impl Amd {
         // and 256-bit ymm registers
         let r = (!reg & 8) << 4;
         let vvvv = (!vreg & 0x0f) << 3;
+
+        let pp = match self.dtype {
+            DataType::F32 => 2, // ss
+            DataType::F64 => 3, // sd
+        };
+
         self.append_byte(0xc5);
-        self.append_byte(r | vvvv | 3);
+        self.append_byte(r | vvvv | pp);
     }
 
     pub fn vex3pd(&mut self, reg: u8, vreg: u8, rm: u8, index: u8, encoding: u8) {
@@ -130,9 +145,15 @@ impl Amd {
         let x = (!index & 8) << 3;
         let b = (!rm & 8) << 2;
         let vvvv = (!vreg & 0x0f) << 3;
+
+        let pp = match self.dtype {
+            DataType::F32 => 0, // ps
+            DataType::F64 => 1, // pd
+        };
+
         self.append_byte(0xc4);
         self.append_byte(r | x | b | encoding);
-        self.append_byte(vvvv | 5);
+        self.append_byte(vvvv | 4 | pp);
     }
 
     pub fn vex3sd(&mut self, reg: u8, vreg: u8, rm: u8, index: u8, encoding: u8) {
@@ -143,9 +164,15 @@ impl Amd {
         let x = (!index & 8) << 3;
         let b = (!rm & 8) << 2;
         let vvvv = (!vreg & 0x0f) << 3;
+
+        let pp = match self.dtype {
+            DataType::F32 => 2, // ss
+            DataType::F64 => 3, // sd
+        };
+
         self.append_byte(0xc4);
         self.append_byte(r | x | b | encoding);
-        self.append_byte(vvvv | 3);
+        self.append_byte(vvvv | pp);
     }
 
     pub fn vex_sd(&mut self, reg: u8, vreg: u8, rm: u8, index: u8) {
@@ -165,19 +192,31 @@ impl Amd {
     }
 
     pub fn sse_sd(&mut self, reg: u8, rm: u8) {
-        self.append_byte(0xf2);
+        match self.dtype {
+            DataType::F32 => self.append_byte(0xf3), // ss
+            DataType::F64 => self.append_byte(0xf2), // sd
+        };
+
         self.rex(reg, rm);
         self.append_byte(0x0f);
     }
 
     pub fn sse_sd_index(&mut self, reg: u8, rm: u8, index: u8) {
-        self.append_byte(0xf2);
+        match self.dtype {
+            DataType::F32 => self.append_byte(0xf3), // ss
+            DataType::F64 => self.append_byte(0xf2), // sd
+        };
+
         self.rex_index(reg, rm, index);
         self.append_byte(0x0f);
     }
 
     pub fn sse_pd(&mut self, reg: u8, rm: u8) {
-        self.append_byte(0x66);
+        match self.dtype {
+            DataType::F32 => {}                      // ps
+            DataType::F64 => self.append_byte(0x66), // pd
+        };
+
         self.rex(reg, rm);
         self.append_byte(0x0f);
     }

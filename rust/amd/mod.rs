@@ -1,8 +1,7 @@
 use crate::assembler::Assembler;
-use crate::generator::{
-    fmod, powi, powi_mod, setup_call_binary, setup_call_unary, Generator, RET, TEMP,
-};
+use crate::generator::{fmod, powi, powi_mod, setup_call_binary, setup_call_unary, Generator};
 use crate::utils::align_stack;
+use crate::utils::{DataType, Reg};
 
 mod asm;
 use asm::{Amd, RoundingMode};
@@ -25,10 +24,22 @@ const STATES: u8 = Amd::R13;
 const IDX: u8 = Amd::R12;
 const PARAMS: u8 = Amd::RBX;
 
+fn ϕ(r: Reg) -> u8 {
+    match r {
+        Reg::Ret => 0,
+        Reg::Temp => 1,
+        Reg::Left => 0,
+        Reg::Right => 1,
+        Reg::Gen(dst) => dst + 2,
+    }
+}
+
+const RET: u8 = 0;
+
 impl AmdGenerator {
     pub fn new(family: AmdFamily) -> AmdGenerator {
         AmdGenerator {
-            amd: Amd::new(),
+            amd: Amd::new(DataType::F64),
             family,
             r0: None,
             mask: if cfg!(target_family = "windows") {
@@ -47,7 +58,7 @@ impl AmdGenerator {
         a and/or b. Therefore, cannot assume a and b are intact
         after calling this function.
     */
-    fn shrink(&mut self, dst: u8, s1: u8, s2: u8, commutative: bool) -> (u8, u8) {
+    fn shrink(&mut self, dst: Reg, s1: Reg, s2: Reg, commutative: bool) -> (Reg, Reg) {
         if dst == s1 {
             (dst, s2)
         } else if dst == s2 {
@@ -135,8 +146,10 @@ impl AmdGenerator {
         }
     }
 
-    fn flush(&mut self, dst: u8) {
-        if dst == RET {
+    fn flush(&mut self, dst: Reg) {
+        let reg = ϕ(dst);
+
+        if reg == RET {
             if let Some(idx) = self.r0 {
                 match self.family {
                     AmdFamily::AvxScalar => {
@@ -151,18 +164,18 @@ impl AmdGenerator {
 
             self.r0 = None;
         } else {
-            let m = 1 << dst;
+            let m = 1 << reg;
 
             if self.mask & m == 0 {
                 // println!("saving reg {}", dst);
                 match self.family {
                     AmdFamily::AvxScalar => {
-                        self.amd.vmovsd_mem_xmm(Amd::RSP, 8 * (dst as i32), dst)
+                        self.amd.vmovsd_mem_xmm(Amd::RSP, 8 * (reg as i32), reg)
                     }
                     AmdFamily::AvxVector => {
-                        self.amd.vmovpd_mem_ymm(Amd::RSP, 32 * (dst as i32), dst)
+                        self.amd.vmovpd_mem_ymm(Amd::RSP, 32 * (reg as i32), reg)
                     }
-                    AmdFamily::SSEScalar => self.amd.movsd_mem_xmm(Amd::RSP, 8 * (dst as i32), dst),
+                    AmdFamily::SSEScalar => self.amd.movsd_mem_xmm(Amd::RSP, 8 * (reg as i32), reg),
                 };
             }
 
@@ -171,20 +184,21 @@ impl AmdGenerator {
     }
 
     fn restore_regs(&mut self) {
-        let last = self.first_shadow() + self.count_shadows();
+        // let last = self.first_shadow() + self.count_shadows();
+        let last = ϕ(Reg::Gen(self.count_shadows()));
 
-        for dst in last..16 {
-            let m = 1 << dst;
+        for reg in last..16 {
+            let m = 1 << reg;
 
             if self.mask & m != 0 {
                 match self.family {
                     AmdFamily::AvxScalar => {
-                        self.amd.vmovsd_xmm_mem(dst, Amd::RSP, 8 * (dst as i32))
+                        self.amd.vmovsd_xmm_mem(reg, Amd::RSP, 8 * (reg as i32))
                     }
                     AmdFamily::AvxVector => {
-                        self.amd.vmovpd_ymm_mem(dst, Amd::RSP, 32 * (dst as i32))
+                        self.amd.vmovpd_ymm_mem(reg, Amd::RSP, 32 * (reg as i32))
                     }
-                    AmdFamily::SSEScalar => self.amd.movsd_xmm_mem(dst, Amd::RSP, 8 * (dst as i32)),
+                    AmdFamily::SSEScalar => self.amd.movsd_xmm_mem(reg, Amd::RSP, 8 * (reg as i32)),
                 }
             }
         }
@@ -230,11 +244,11 @@ macro_rules! binop {
         $self.flush($dst);
 
         match $self.family {
-            AmdFamily::AvxScalar => $self.amd.$avx($dst, $s1, $s2),
-            AmdFamily::AvxVector => $self.amd.$simd($dst, $s1, $s2),
+            AmdFamily::AvxScalar => $self.amd.$avx(ϕ($dst), ϕ($s1), ϕ($s2)),
+            AmdFamily::AvxVector => $self.amd.$simd(ϕ($dst), ϕ($s1), ϕ($s2)),
             AmdFamily::SSEScalar => {
                 let (x, y) = $self.shrink($dst, $s1, $s2, $com);
-                $self.amd.$sse(x, y);
+                $self.amd.$sse(ϕ(x), ϕ(y));
             }
         }
     };
@@ -245,18 +259,14 @@ macro_rules! roundop {
         $self.flush($dst);
 
         match $self.family {
-            AmdFamily::AvxScalar => $self.amd.vroundsd($dst, $s1, $mode),
-            AmdFamily::AvxVector => $self.amd.vroundpd($dst, $s1, $mode),
-            AmdFamily::SSEScalar => $self.amd.roundsd($dst, $s1, $mode),
+            AmdFamily::AvxScalar => $self.amd.vroundsd(ϕ($dst), ϕ($s1), $mode),
+            AmdFamily::AvxVector => $self.amd.vroundpd(ϕ($dst), ϕ($s1), $mode),
+            AmdFamily::SSEScalar => $self.amd.roundsd(ϕ($dst), ϕ($s1), $mode),
         }
     };
 }
 
 impl Generator for AmdGenerator {
-    fn first_shadow(&self) -> u8 {
-        2
-    }
-
     fn count_shadows(&self) -> u8 {
         if cfg!(target_family = "windows") {
             4
@@ -285,7 +295,8 @@ impl Generator for AmdGenerator {
     }
 
     //***********************************
-    fn fmov(&mut self, dst: u8, s1: u8) {
+
+    fn fmov(&mut self, dst: Reg, s1: Reg) {
         if dst == s1 {
             return;
         }
@@ -293,76 +304,76 @@ impl Generator for AmdGenerator {
         self.flush(dst);
 
         match self.family {
-            AmdFamily::AvxScalar | AmdFamily::AvxVector => self.amd.vmovapd(dst, s1),
-            AmdFamily::SSEScalar => self.amd.movapd(dst, s1),
+            AmdFamily::AvxScalar | AmdFamily::AvxVector => self.amd.vmovapd(ϕ(dst), ϕ(s1)),
+            AmdFamily::SSEScalar => self.amd.movapd(ϕ(dst), ϕ(s1)),
         }
     }
 
-    fn fxchg(&mut self, s1: u8, s2: u8) {
+    fn fxchg(&mut self, s1: Reg, s2: Reg) {
         self.flush(s1);
         self.flush(s2);
 
         match self.family {
             AmdFamily::AvxScalar | AmdFamily::AvxVector => {
-                self.amd.vxorpd(s1, s1, s2);
-                self.amd.vxorpd(s2, s1, s2);
-                self.amd.vxorpd(s1, s1, s2);
+                self.amd.vxorpd(ϕ(s1), ϕ(s1), ϕ(s2));
+                self.amd.vxorpd(ϕ(s2), ϕ(s1), ϕ(s2));
+                self.amd.vxorpd(ϕ(s1), ϕ(s1), ϕ(s2));
             }
             AmdFamily::SSEScalar => {
-                self.amd.xorpd(s1, s2);
-                self.amd.xorpd(s2, s1);
-                self.amd.xorpd(s1, s2);
+                self.amd.xorpd(ϕ(s1), ϕ(s2));
+                self.amd.xorpd(ϕ(s2), ϕ(s1));
+                self.amd.xorpd(ϕ(s1), ϕ(s2));
             }
         }
     }
 
-    fn load_const(&mut self, dst: u8, label: &str) {
+    fn load_const(&mut self, dst: Reg, label: &str) {
         self.flush(dst);
 
         match self.family {
-            AmdFamily::AvxScalar => self.amd.vmovsd_xmm_label(dst, label),
-            AmdFamily::AvxVector => self.amd.vbroadcastsd_label(dst, label),
-            AmdFamily::SSEScalar => self.amd.movsd_xmm_label(dst, label),
+            AmdFamily::AvxScalar => self.amd.vmovsd_xmm_label(ϕ(dst), label),
+            AmdFamily::AvxVector => self.amd.vbroadcastsd_label(ϕ(dst), label),
+            AmdFamily::SSEScalar => self.amd.movsd_xmm_label(ϕ(dst), label),
         }
     }
 
-    fn load_mem(&mut self, dst: u8, idx: u32) {
+    fn load_mem(&mut self, dst: Reg, idx: u32) {
         self.flush(dst);
 
         match self.family {
-            AmdFamily::AvxScalar => self.amd.vmovsd_xmm_mem(dst, MEM, (idx * 8) as i32),
-            AmdFamily::AvxVector => self.amd.vmovpd_ymm_mem(dst, MEM, (idx * 32) as i32),
-            AmdFamily::SSEScalar => self.amd.movsd_xmm_mem(dst, MEM, (idx * 8) as i32),
+            AmdFamily::AvxScalar => self.amd.vmovsd_xmm_mem(ϕ(dst), MEM, (idx * 8) as i32),
+            AmdFamily::AvxVector => self.amd.vmovpd_ymm_mem(ϕ(dst), MEM, (idx * 32) as i32),
+            AmdFamily::SSEScalar => self.amd.movsd_xmm_mem(ϕ(dst), MEM, (idx * 8) as i32),
         }
     }
 
-    fn save_mem(&mut self, dst: u8, idx: u32) {
+    fn save_mem(&mut self, dst: Reg, idx: u32) {
         match self.family {
-            AmdFamily::AvxScalar => self.amd.vmovsd_mem_xmm(MEM, (idx * 8) as i32, dst),
-            AmdFamily::AvxVector => self.amd.vmovpd_mem_ymm(MEM, (idx * 32) as i32, dst),
-            AmdFamily::SSEScalar => self.amd.movsd_mem_xmm(MEM, (idx * 8) as i32, dst),
+            AmdFamily::AvxScalar => self.amd.vmovsd_mem_xmm(MEM, (idx * 8) as i32, ϕ(dst)),
+            AmdFamily::AvxVector => self.amd.vmovpd_mem_ymm(MEM, (idx * 32) as i32, ϕ(dst)),
+            AmdFamily::SSEScalar => self.amd.movsd_mem_xmm(MEM, (idx * 8) as i32, ϕ(dst)),
         }
     }
 
     fn save_mem_result(&mut self, idx: u32) {
-        self.save_mem(RET, idx);
+        self.save_mem(Reg::Ret, idx);
     }
 
-    fn load_param(&mut self, dst: u8, idx: u32) {
+    fn load_param(&mut self, dst: Reg, idx: u32) {
         self.flush(dst);
 
         match self.family {
-            AmdFamily::AvxScalar => self.amd.vmovsd_xmm_mem(dst, PARAMS, (idx * 8) as i32),
-            AmdFamily::AvxVector => self.amd.vbroadcastsd(dst, PARAMS, (idx * 8) as i32),
-            AmdFamily::SSEScalar => self.amd.movsd_xmm_mem(dst, PARAMS, (idx * 8) as i32),
+            AmdFamily::AvxScalar => self.amd.vmovsd_xmm_mem(ϕ(dst), PARAMS, (idx * 8) as i32),
+            AmdFamily::AvxVector => self.amd.vbroadcastsd(ϕ(dst), PARAMS, (idx * 8) as i32),
+            AmdFamily::SSEScalar => self.amd.movsd_xmm_mem(ϕ(dst), PARAMS, (idx * 8) as i32),
         }
     }
 
-    fn load_stack(&mut self, dst: u8, idx: u32) {
+    fn load_stack(&mut self, dst: Reg, idx: u32) {
         if let Some(k) = self.r0 {
             if k == idx {
                 match self.family {
-                    AmdFamily::AvxScalar | AmdFamily::AvxVector => self.amd.vmovapd(dst, RET),
+                    AmdFamily::AvxScalar | AmdFamily::AvxVector => self.amd.vmovapd(ϕ(dst), RET),
                     AmdFamily::SSEScalar => {}
                 };
                 self.r0 = None;
@@ -371,17 +382,17 @@ impl Generator for AmdGenerator {
         };
 
         match self.family {
-            AmdFamily::AvxScalar => self.amd.vmovsd_xmm_mem(dst, Amd::RSP, (idx * 8) as i32),
-            AmdFamily::AvxVector => self.amd.vmovpd_ymm_mem(dst, Amd::RSP, (idx * 32) as i32),
-            AmdFamily::SSEScalar => self.amd.movsd_xmm_mem(dst, Amd::RSP, (idx * 8) as i32),
+            AmdFamily::AvxScalar => self.amd.vmovsd_xmm_mem(ϕ(dst), Amd::RSP, (idx * 8) as i32),
+            AmdFamily::AvxVector => self.amd.vmovpd_ymm_mem(ϕ(dst), Amd::RSP, (idx * 32) as i32),
+            AmdFamily::SSEScalar => self.amd.movsd_xmm_mem(ϕ(dst), Amd::RSP, (idx * 8) as i32),
         }
     }
 
-    fn save_stack(&mut self, dst: u8, idx: u32) {
+    fn save_stack(&mut self, dst: Reg, idx: u32) {
         match self.family {
-            AmdFamily::AvxScalar => self.amd.vmovsd_mem_xmm(Amd::RSP, (idx * 8) as i32, dst),
-            AmdFamily::AvxVector => self.amd.vmovpd_mem_ymm(Amd::RSP, (idx * 32) as i32, dst),
-            AmdFamily::SSEScalar => self.amd.movsd_mem_xmm(Amd::RSP, (idx * 8) as i32, dst),
+            AmdFamily::AvxScalar => self.amd.vmovsd_mem_xmm(Amd::RSP, (idx * 8) as i32, ϕ(dst)),
+            AmdFamily::AvxVector => self.amd.vmovpd_mem_ymm(Amd::RSP, (idx * 32) as i32, ϕ(dst)),
+            AmdFamily::SSEScalar => self.amd.movsd_mem_xmm(Amd::RSP, (idx * 8) as i32, ϕ(dst)),
         }
     }
 
@@ -392,42 +403,42 @@ impl Generator for AmdGenerator {
             return;
         }
 
-        self.save_stack(RET, idx);
+        self.save_stack(Reg::Ret, idx);
     }
 
-    fn neg(&mut self, dst: u8, s1: u8) {
+    fn neg(&mut self, dst: Reg, s1: Reg) {
         self.flush(dst);
-        self.load_const(TEMP, "_minus_zero_");
-        self.xor(dst, s1, TEMP);
+        self.load_const(Reg::Temp, "_minus_zero_");
+        self.xor(dst, s1, Reg::Temp);
     }
 
-    fn abs(&mut self, dst: u8, s1: u8) {
+    fn abs(&mut self, dst: Reg, s1: Reg) {
         self.flush(dst);
-        self.load_const(TEMP, "_minus_zero_");
-        self.andnot(dst, TEMP, s1);
+        self.load_const(Reg::Temp, "_minus_zero_");
+        self.andnot(dst, Reg::Temp, s1);
     }
 
-    fn root(&mut self, dst: u8, s1: u8) {
+    fn root(&mut self, dst: Reg, s1: Reg) {
         self.flush(dst);
         match self.family {
-            AmdFamily::AvxScalar => self.amd.vsqrtsd(dst, s1),
-            AmdFamily::AvxVector => self.amd.vsqrtpd(dst, s1),
-            AmdFamily::SSEScalar => self.amd.sqrtsd(dst, s1),
+            AmdFamily::AvxScalar => self.amd.vsqrtsd(ϕ(dst), ϕ(s1)),
+            AmdFamily::AvxVector => self.amd.vsqrtpd(ϕ(dst), ϕ(s1)),
+            AmdFamily::SSEScalar => self.amd.sqrtsd(ϕ(dst), ϕ(s1)),
         }
     }
 
-    fn square(&mut self, dst: u8, s1: u8) {
+    fn square(&mut self, dst: Reg, s1: Reg) {
         self.flush(dst);
         self.times(dst, s1, s1);
     }
 
-    fn cube(&mut self, dst: u8, s1: u8) {
+    fn cube(&mut self, dst: Reg, s1: Reg) {
         self.flush(dst);
-        self.times(TEMP, s1, s1);
-        self.times(dst, s1, TEMP);
+        self.times(Reg::Temp, s1, s1);
+        self.times(dst, s1, Reg::Temp);
     }
 
-    fn powi(&mut self, dst: u8, s1: u8, power: i32) {
+    fn powi(&mut self, dst: Reg, s1: Reg, power: i32) {
         self.flush(dst);
         if power == 0 {
             self.load_const(dst, "_one_");
@@ -436,7 +447,7 @@ impl Generator for AmdGenerator {
         }
     }
 
-    fn powi_mod(&mut self, dst: u8, s1: u8, power: i32, modulus: u8) {
+    fn powi_mod(&mut self, dst: Reg, s1: Reg, power: i32, modulus: Reg) {
         self.flush(dst);
         if power == 0 {
             self.load_const(dst, "_one_");
@@ -445,99 +456,99 @@ impl Generator for AmdGenerator {
         }
     }
 
-    fn recip(&mut self, dst: u8, s1: u8) {
+    fn recip(&mut self, dst: Reg, s1: Reg) {
         self.flush(dst);
-        self.load_const(TEMP, "_one_");
-        self.divide(dst, TEMP, s1);
+        self.load_const(Reg::Temp, "_one_");
+        self.divide(dst, Reg::Temp, s1);
     }
 
-    fn round(&mut self, dst: u8, s1: u8) {
+    fn round(&mut self, dst: Reg, s1: Reg) {
         roundop!(self, dst, s1, RoundingMode::Round);
     }
 
-    fn floor(&mut self, dst: u8, s1: u8) {
+    fn floor(&mut self, dst: Reg, s1: Reg) {
         roundop!(self, dst, s1, RoundingMode::Floor);
     }
 
-    fn ceiling(&mut self, dst: u8, s1: u8) {
+    fn ceiling(&mut self, dst: Reg, s1: Reg) {
         roundop!(self, dst, s1, RoundingMode::Ceiling);
     }
 
-    fn trunc(&mut self, dst: u8, s1: u8) {
+    fn trunc(&mut self, dst: Reg, s1: Reg) {
         roundop!(self, dst, s1, RoundingMode::Trunc);
     }
 
-    fn fmod(&mut self, dst: u8, s1: u8, s2: u8) {
+    fn fmod(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         fmod(self, dst, s1, s2);
     }
 
-    fn plus(&mut self, dst: u8, s1: u8, s2: u8) {
+    fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, addsd, vaddsd, vaddpd, dst, s1, s2, true);
     }
 
-    fn minus(&mut self, dst: u8, s1: u8, s2: u8) {
+    fn minus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, subsd, vsubsd, vsubpd, dst, s1, s2, false);
     }
 
-    fn times(&mut self, dst: u8, s1: u8, s2: u8) {
+    fn times(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, mulsd, vmulsd, vmulpd, dst, s1, s2, true);
     }
 
-    fn divide(&mut self, dst: u8, s1: u8, s2: u8) {
+    fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, divsd, vdivsd, vdivpd, dst, s1, s2, false);
     }
 
-    fn gt(&mut self, dst: u8, s1: u8, s2: u8) {
+    fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, cmpnlesd, vcmpnlesd, vcmpnlepd, dst, s1, s2, false);
     }
 
-    fn geq(&mut self, dst: u8, s1: u8, s2: u8) {
+    fn geq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, cmpnltsd, vcmpnltsd, vcmpnltpd, dst, s1, s2, false);
     }
 
-    fn lt(&mut self, dst: u8, s1: u8, s2: u8) {
+    fn lt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, cmpltsd, vcmpltsd, vcmpltpd, dst, s1, s2, false);
     }
 
-    fn leq(&mut self, dst: u8, s1: u8, s2: u8) {
+    fn leq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, cmplesd, vcmplesd, vcmplepd, dst, s1, s2, false);
     }
 
-    fn eq(&mut self, dst: u8, s1: u8, s2: u8) {
+    fn eq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, cmpeqsd, vcmpeqsd, vcmpeqpd, dst, s1, s2, true);
     }
 
-    fn neq(&mut self, dst: u8, s1: u8, s2: u8) {
+    fn neq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, cmpneqsd, vcmpneqsd, vcmpneqpd, dst, s1, s2, true);
     }
 
-    fn and(&mut self, dst: u8, s1: u8, s2: u8) {
+    fn and(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, andpd, vandpd, vandpd, dst, s1, s2, true);
     }
 
-    fn andnot(&mut self, dst: u8, s1: u8, s2: u8) {
+    fn andnot(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, andnpd, vandnpd, vandnpd, dst, s1, s2, false);
     }
 
-    fn or(&mut self, dst: u8, s1: u8, s2: u8) {
+    fn or(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, orpd, vorpd, vorpd, dst, s1, s2, true);
     }
 
-    fn xor(&mut self, dst: u8, s1: u8, s2: u8) {
+    fn xor(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, xorpd, vxorpd, vxorpd, dst, s1, s2, true);
     }
 
-    fn not(&mut self, dst: u8, s1: u8) {
+    fn not(&mut self, dst: Reg, s1: Reg) {
         self.flush(dst);
-        self.load_const(TEMP, "_all_ones_");
-        self.xor(dst, s1, TEMP);
+        self.load_const(Reg::Temp, "_all_ones_");
+        self.xor(dst, s1, Reg::Temp);
     }
 
-    fn setup_call_unary(&mut self, s1: u8) {
+    fn setup_call_unary(&mut self, s1: Reg) {
         setup_call_unary(self, s1);
     }
 
-    fn setup_call_binary(&mut self, s1: u8, s2: u8) {
+    fn setup_call_binary(&mut self, s1: Reg, s2: Reg) {
         setup_call_binary(self, s1, s2);
     }
 
@@ -581,14 +592,14 @@ impl Generator for AmdGenerator {
             self.amd.jmp(false_label);
         }
     */
-    fn select_if(&mut self, dst: u8, cond: u8, s1: u8) {
+    fn select_if(&mut self, dst: Reg, cond: Reg, s1: Reg) {
         self.flush(dst);
-        self.amd.vandpd(dst, cond, s1);
+        self.amd.vandpd(ϕ(dst), ϕ(cond), ϕ(s1));
     }
 
-    fn select_else(&mut self, dst: u8, cond: u8, s1: u8) {
+    fn select_else(&mut self, dst: Reg, cond: Reg, s1: Reg) {
         self.flush(dst);
-        self.amd.vandnpd(dst, cond, s1);
+        self.amd.vandnpd(ϕ(dst), ϕ(cond), ϕ(s1));
     }
 
     /****************** Prologues/Epilogues ********************/

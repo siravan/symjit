@@ -30,6 +30,28 @@ pub fn align_stack(n: u32) -> u32 {
 
 /*****************************************/
 
+#[derive(Copy, Clone, PartialEq)]
+pub enum DataType {
+    F32,
+    F64,
+}
+
+#[derive(Copy, Clone, PartialEq)]
+pub enum Reg {
+    Ret,
+    Temp,
+    Gen(u8),
+    Left,
+    Right,
+}
+
+pub fn reg(r: u8) -> Reg {
+    assert!(r < 14);
+    Reg::Gen(r)
+}
+
+/*****************************************/
+
 #[cfg(target_arch = "x86_64")]
 mod simd {
     use std::ops::{Add, Div, Mul, Sub};
