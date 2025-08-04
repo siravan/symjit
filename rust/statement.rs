@@ -49,7 +49,7 @@ impl Statement {
                 let _ = arg.compile_tree(ir)?;
                 let label = format!("_func_{}_", op);
                 ir.call(&label, *num_args);
-                Self::save(ir, 0, lhs);
+                Self::save_result(ir, lhs);
             }
         };
 
@@ -61,6 +61,16 @@ impl Statement {
             match sym.borrow().loc {
                 Loc::Stack(idx) => ir.save_stack(r, idx),
                 Loc::Mem(idx) => ir.save_mem(r, idx),
+                Loc::Param(_) => unreachable!(),
+            }
+        }
+    }
+
+    fn save_result(ir: &mut dyn Generator, v: &Node) {
+        if let Node::Var { sym, .. } = v {
+            match sym.borrow().loc {
+                Loc::Stack(idx) => ir.save_stack_result(idx),
+                Loc::Mem(idx) => ir.save_mem_result(idx),
                 Loc::Param(_) => unreachable!(),
             }
         }

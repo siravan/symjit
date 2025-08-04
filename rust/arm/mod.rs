@@ -2,7 +2,9 @@
 mod macros;
 
 use crate::assembler::Assembler;
-use crate::generator::{fmod, powi, powi_mod, Generator};
+use crate::generator::{
+    fmod, powi, powi_mod, setup_call_binary, setup_call_unary, Generator, RET, TEMP,
+};
 use crate::utils::align_stack;
 
 pub struct ArmGenerator {
@@ -25,9 +27,9 @@ impl ArmGenerator {
     }
 
     fn flush(&mut self, dst: u8) {
-        if dst == 0 {
+        if dst == RET {
             if let Some(idx) = self.r0 {
-                self.emit(arm! {str d(dst), [sp, #8*idx]});
+                self.emit(arm! {str d(RET), [sp, #8*idx]});
             };
 
             self.r0 = None;
@@ -79,22 +81,22 @@ impl Generator for ArmGenerator {
     }
 
     //***********************************
-    fn fmov(&mut self, dst: u8, r: u8) {
-        if dst == r {
+    fn fmov(&mut self, dst: u8, s1: u8) {
+        if dst == s1 {
             return;
         }
 
         self.flush(dst);
-        self.emit(arm! {fmov d(dst), d(r)});
+        self.emit(arm! {fmov d(dst), d(s1)});
     }
 
-    fn fxchg(&mut self, a: u8, b: u8) {
-        self.flush(a);
-        self.flush(b);
+    fn fxchg(&mut self, s1: u8, s2: u8) {
+        self.flush(s1);
+        self.flush(s2);
 
-        self.emit(arm! {eor v(a).8b, v(a).8b, v(b).8b});
-        self.emit(arm! {eor v(b).8b, v(a).8b, v(b).8b});
-        self.emit(arm! {eor v(a).8b, v(a).8b, v(b).8b});
+        self.emit(arm! {eor v(s1).8b, v(s1).8b, v(s2).8b});
+        self.emit(arm! {eor v(s2).8b, v(s1).8b, v(s2).8b});
+        self.emit(arm! {eor v(s1).8b, v(s1).8b, v(s2).8b});
     }
 
     fn load_const(&mut self, dst: u8, label: &str) {
@@ -107,8 +109,12 @@ impl Generator for ArmGenerator {
         self.emit(arm! {ldr d(dst), [x(19), #8*idx]});
     }
 
-    fn save_mem(&mut self, src: u8, idx: u32) {
-        self.emit(arm! {str d(src), [x(19), #8*idx]});
+    fn save_mem(&mut self, dst: u8, idx: u32) {
+        self.emit(arm! {str d(dst), [x(19), #8*idx]});
+    }
+
+    fn save_mem_result(&mut self, idx: u32) {
+        self.save_mem(RET, idx);
     }
 
     fn load_param(&mut self, dst: u8, idx: u32) {
@@ -119,7 +125,7 @@ impl Generator for ArmGenerator {
     fn load_stack(&mut self, dst: u8, idx: u32) {
         if let Some(k) = self.r0 {
             if k == idx {
-                self.emit(arm! {fmov d(dst), d(0)});
+                self.emit(arm! {fmov d(dst), d(RET)});
                 self.r0 = None;
                 return;
             }
@@ -127,165 +133,174 @@ impl Generator for ArmGenerator {
         self.emit(arm! {ldr d(dst), [sp, #8*idx]});
     }
 
-    fn save_stack(&mut self, src: u8, idx: u32) {
-        if src == 0 {
-            self.r0 = Some(idx);
-            return;
-        };
-        self.emit(arm! {str d(src), [sp, #8*idx]});
+    fn save_stack(&mut self, dst: u8, idx: u32) {
+        self.emit(arm! {str d(dst), [sp, #8*idx]});
     }
 
-    fn neg(&mut self, dst: u8, r: u8) {
+    fn save_stack_result(&mut self, idx: u32) {
+        assert!(self.r0.is_none());
+        self.r0 = Some(idx);
+    }
+
+    fn neg(&mut self, dst: u8, s1: u8) {
         self.flush(dst);
-        self.emit(arm! {fneg d(dst), d(r)});
+        self.emit(arm! {fneg d(dst), d(s1)});
     }
 
-    fn abs(&mut self, dst: u8, r: u8) {
+    fn abs(&mut self, dst: u8, s1: u8) {
         self.flush(dst);
-        self.emit(arm! {fabs d(dst), d(r)});
+        self.emit(arm! {fabs d(dst), d(s1)});
     }
 
-    fn root(&mut self, dst: u8, r: u8) {
+    fn root(&mut self, dst: u8, s1: u8) {
         self.flush(dst);
-        self.emit(arm! {fsqrt d(dst), d(r)});
+        self.emit(arm! {fsqrt d(dst), d(s1)});
     }
 
-    fn square(&mut self, dst: u8, r: u8) {
+    fn square(&mut self, dst: u8, s1: u8) {
         self.flush(dst);
-        self.times(dst, r, r);
+        self.times(dst, s1, s1);
     }
 
-    fn cube(&mut self, dst: u8, r: u8) {
+    fn cube(&mut self, dst: u8, s1: u8) {
         self.flush(dst);
-        self.times(1, r, r);
-        self.times(dst, r, 1);
+        self.times(TEMP, s1, s1);
+        self.times(dst, s1, TEMP);
     }
 
-    fn recip(&mut self, dst: u8, r: u8) {
+    fn recip(&mut self, dst: u8, s1: u8) {
         self.flush(dst);
-        self.emit(arm! {fmov d(1), #1.0});
-        self.emit(arm! {fdiv d(dst), d(1), d(r)});
+        self.emit(arm! {fmov d(TEMP), #1.0});
+        self.emit(arm! {fdiv d(dst), d(TEMP), d(s1)});
     }
 
-    fn powi(&mut self, dst: u8, r: u8, power: i32) {
-        self.flush(dst);
-
-        if power == 0 {
-            self.emit(arm! {fmov d(dst), #1.0});
-        } else {
-            powi(self, dst, r, power);
-        }
-    }
-
-    fn powi_mod(&mut self, dst: u8, r: u8, power: i32, modulus: u8) {
+    fn powi(&mut self, dst: u8, s1: u8, power: i32) {
         self.flush(dst);
 
         if power == 0 {
             self.emit(arm! {fmov d(dst), #1.0});
         } else {
-            powi_mod(self, dst, r, power, modulus);
+            powi(self, dst, s1, power);
         }
     }
 
-    fn round(&mut self, dst: u8, r: u8) {
+    fn powi_mod(&mut self, dst: u8, s1: u8, power: i32, modulus: u8) {
         self.flush(dst);
-        self.emit(arm! {frinti d(dst), d(r)});
+
+        if power == 0 {
+            self.emit(arm! {fmov d(dst), #1.0});
+        } else {
+            powi_mod(self, dst, s1, power, modulus);
+        }
     }
 
-    fn floor(&mut self, dst: u8, r: u8) {
+    fn round(&mut self, dst: u8, s1: u8) {
         self.flush(dst);
-        self.emit(arm! {frintm d(dst), d(r)});
+        self.emit(arm! {frinti d(dst), d(s1)});
     }
 
-    fn ceiling(&mut self, dst: u8, r: u8) {
+    fn floor(&mut self, dst: u8, s1: u8) {
         self.flush(dst);
-        self.emit(arm! {frintp d(dst), d(r)});
+        self.emit(arm! {frintm d(dst), d(s1)});
     }
 
-    fn trunc(&mut self, dst: u8, r: u8) {
+    fn ceiling(&mut self, dst: u8, s1: u8) {
         self.flush(dst);
-        self.emit(arm! {frintz d(dst), d(r)});
+        self.emit(arm! {frintp d(dst), d(s1)});
     }
 
-    fn fmod(&mut self, dst: u8, a: u8, b: u8) {
-        fmod(self, dst, a, b);
+    fn trunc(&mut self, dst: u8, s1: u8) {
+        self.flush(dst);
+        self.emit(arm! {frintz d(dst), d(s1)});
     }
 
-    fn plus(&mut self, dst: u8, a: u8, b: u8) {
-        self.flush(dst);
-        self.emit(arm! {fadd d(dst), d(a), d(b)});
+    fn fmod(&mut self, dst: u8, s1: u8, s2: u8) {
+        fmod(self, dst, s1, s2);
     }
 
-    fn minus(&mut self, dst: u8, a: u8, b: u8) {
+    fn plus(&mut self, dst: u8, s1: u8, s2: u8) {
         self.flush(dst);
-        self.emit(arm! {fsub d(dst), d(a), d(b)});
+        self.emit(arm! {fadd d(dst), d(s1), d(s2)});
     }
 
-    fn times(&mut self, dst: u8, a: u8, b: u8) {
+    fn minus(&mut self, dst: u8, s1: u8, s2: u8) {
         self.flush(dst);
-        self.emit(arm! {fmul d(dst), d(a), d(b)});
+        self.emit(arm! {fsub d(dst), d(s1), d(s2)});
     }
 
-    fn divide(&mut self, dst: u8, a: u8, b: u8) {
+    fn times(&mut self, dst: u8, s1: u8, s2: u8) {
         self.flush(dst);
-        self.emit(arm! {fdiv d(dst), d(a), d(b)});
+        self.emit(arm! {fmul d(dst), d(s1), d(s2)});
     }
 
-    fn gt(&mut self, dst: u8, a: u8, b: u8) {
+    fn divide(&mut self, dst: u8, s1: u8, s2: u8) {
         self.flush(dst);
-        self.emit(arm! {fcmgt d(dst), d(a), d(b)});
+        self.emit(arm! {fdiv d(dst), d(s1), d(s2)});
     }
 
-    fn geq(&mut self, dst: u8, a: u8, b: u8) {
+    fn gt(&mut self, dst: u8, s1: u8, s2: u8) {
         self.flush(dst);
-        self.emit(arm! {fcmge d(dst), d(a), d(b)});
+        self.emit(arm! {fcmgt d(dst), d(s1), d(s2)});
     }
 
-    fn lt(&mut self, dst: u8, a: u8, b: u8) {
+    fn geq(&mut self, dst: u8, s1: u8, s2: u8) {
         self.flush(dst);
-        self.emit(arm! {fcmlt d(dst), d(a), d(b)});
+        self.emit(arm! {fcmge d(dst), d(s1), d(s2)});
     }
 
-    fn leq(&mut self, dst: u8, a: u8, b: u8) {
+    fn lt(&mut self, dst: u8, s1: u8, s2: u8) {
         self.flush(dst);
-        self.emit(arm! {fcmle d(dst), d(a), d(b)});
+        self.emit(arm! {fcmlt d(dst), d(s1), d(s2)});
     }
 
-    fn eq(&mut self, dst: u8, a: u8, b: u8) {
+    fn leq(&mut self, dst: u8, s1: u8, s2: u8) {
         self.flush(dst);
-        self.emit(arm! {fcmeq d(dst), d(a), d(b)});
+        self.emit(arm! {fcmle d(dst), d(s1), d(s2)});
     }
 
-    fn neq(&mut self, dst: u8, a: u8, b: u8) {
+    fn eq(&mut self, dst: u8, s1: u8, s2: u8) {
         self.flush(dst);
-        self.emit(arm! {fcmeq d(dst), d(a), d(b)});
+        self.emit(arm! {fcmeq d(dst), d(s1), d(s2)});
+    }
+
+    fn neq(&mut self, dst: u8, s1: u8, s2: u8) {
+        self.flush(dst);
+        self.emit(arm! {fcmeq d(dst), d(s1), d(s2)});
         self.emit(arm! {not v(dst).8b, v(dst).8b});
     }
 
-    fn and(&mut self, dst: u8, a: u8, b: u8) {
+    fn and(&mut self, dst: u8, s1: u8, s2: u8) {
         self.flush(dst);
-        self.emit(arm! {and v(dst).8b, v(a).8b, v(b).8b});
+        self.emit(arm! {and v(dst).8b, v(s1).8b, v(s2).8b});
     }
 
-    fn andnot(&mut self, dst: u8, a: u8, b: u8) {
+    fn andnot(&mut self, dst: u8, s1: u8, s2: u8) {
         self.flush(dst);
-        self.emit(arm! {not v(a).8b, v(a).8b});
-        self.emit(arm! {and v(dst).8b, v(a).8b, v(b).8b});
+        self.emit(arm! {not v(s1).8b, v(s1).8b});
+        self.emit(arm! {and v(dst).8b, v(s1).8b, v(s2).8b});
     }
 
-    fn or(&mut self, dst: u8, a: u8, b: u8) {
+    fn or(&mut self, dst: u8, s1: u8, s2: u8) {
         self.flush(dst);
-        self.emit(arm! {orr v(dst).8b, v(a).8b, v(b).8b});
+        self.emit(arm! {orr v(dst).8b, v(s1).8b, v(s2).8b});
     }
 
-    fn xor(&mut self, dst: u8, a: u8, b: u8) {
+    fn xor(&mut self, dst: u8, s1: u8, s2: u8) {
         self.flush(dst);
-        self.emit(arm! {eor v(dst).8b, v(a).8b, v(b).8b});
+        self.emit(arm! {eor v(dst).8b, v(s1).8b, v(s2).8b});
     }
 
-    fn not(&mut self, dst: u8, r: u8) {
+    fn not(&mut self, dst: u8, s1: u8) {
         self.flush(dst);
-        self.emit(arm! {not v(dst).8b, v(r).8b});
+        self.emit(arm! {not v(dst).8b, v(s1).8b});
+    }
+
+    fn setup_call_unary(&mut self, s1: u8) {
+        setup_call_unary(self, s1);
+    }
+
+    fn setup_call_binary(&mut self, s1: u8, s2: u8) {
+        setup_call_binary(self, s1, s2);
     }
 
     fn call(&mut self, label: &str, num_args: usize) {
@@ -293,14 +308,14 @@ impl Generator for ArmGenerator {
         self.emit(arm! {blr x(0)});
     }
 
-    fn select_if(&mut self, dst: u8, cond: u8, a: u8) {
+    fn select_if(&mut self, dst: u8, cond: u8, s1: u8) {
         self.flush(dst);
-        self.and(dst, cond, a);
+        self.and(dst, cond, s1);
     }
 
-    fn select_else(&mut self, dst: u8, cond: u8, a: u8) {
+    fn select_else(&mut self, dst: u8, cond: u8, s1: u8) {
         self.flush(dst);
-        self.andnot(dst, cond, a);
+        self.andnot(dst, cond, s1);
     }
 
     fn prologue(&mut self, cap: u32) {

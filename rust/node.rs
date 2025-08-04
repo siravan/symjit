@@ -319,7 +319,7 @@ impl Node {
 
     fn compile_unary(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> Result<u8> {
         if let Node::Unary { op, arg, power, .. } = self {
-            let mut dst = ir.first_shadow() + base + self.ershov_number() - 1;
+            let dst = ir.first_shadow() + base + self.ershov_number() - 1;
             let r = arg.compile(ir, base, pool)?;
 
             match op.as_str() {
@@ -335,12 +335,7 @@ impl Node {
                 "ceiling" => ir.ceiling(dst, r),
                 "trunc" => ir.trunc(dst, r),
                 "_powi_" => ir.powi(dst, r, *power),
-                "_call_" => {
-                    if r != 0 {
-                        ir.fmov(0, r);
-                    };
-                    dst = 0;
-                }
+                "_call_" => ir.setup_call_unary(r),
                 _ => return Err(anyhow!("unary operator is not recognized")),
             };
 
@@ -379,7 +374,7 @@ impl Node {
                 "select_if" => ir.select_if(dst, l, r),
                 "select_else" => ir.select_else(dst, l, r),
                 "_powi_mod_" => ir.powi_mod(dst, l, *power, r),
-                "_call_" => Self::call(ir, l, r),
+                "_call_" => ir.setup_call_binary(l, r),
                 _ => return Err(anyhow!("binary operator is not recognized")),
             };
 
@@ -422,24 +417,6 @@ impl Node {
         }
 
         Ok((dst, l, r))
-    }
-
-    fn call(ir: &mut dyn Generator, l: u8, r: u8) {
-        if l == 1 && r == 0 {
-            ir.fxchg(1, 0);
-        } else if r == 0 {
-            ir.fmov(1, 0);
-            if l != 0 {
-                ir.fmov(0, l);
-            }
-        } else {
-            if l != 0 {
-                ir.fmov(0, l);
-            }
-            if r != 0 {
-                ir.fmov(1, r);
-            }
-        }
     }
 
     pub fn is_const(&self, val_: f64) -> bool {
