@@ -2,10 +2,10 @@ use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 
 use super::utils::{Compiled, Eval};
+use crate::block::Block;
 use crate::code::VirtualTable;
 use crate::generator::Generator;
 use crate::node::{Node, VarStatus};
-use crate::statement::Statement;
 use crate::symbol::SymbolTable;
 use crate::utils::CompiledFunc;
 
@@ -13,7 +13,8 @@ use crate::utils::CompiledFunc;
 
 #[derive(Debug, Clone)]
 pub struct Builder {
-    pub stmts: Vec<Statement>,
+    //pub stmts: Vec<Statement>,
+    pub block: Block,
     pub consts: Vec<f64>,
     pub sym_table: SymbolTable,
     pub num_tmp: usize,
@@ -25,7 +26,8 @@ pub struct Builder {
 impl Builder {
     pub fn new() -> Builder {
         Builder {
-            stmts: Vec::new(),
+            // stmts: Vec::new(),
+            block: Block::new(),
             consts: Vec::new(),
             sym_table: SymbolTable::new(),
             num_tmp: 0,
@@ -46,14 +48,16 @@ impl Builder {
     }
 
     pub fn add_assign(&mut self, lhs: Node, rhs: Node) -> Result<Node> {
-        self.stmts.push(Statement::assign(lhs.clone(), rhs));
+        //self.stmts.push(Statement::assign(lhs.clone(), rhs));
+        self.block.add_assign(lhs.clone(), rhs);
         Ok(lhs)
     }
 
     pub fn add_call_unary(&mut self, op: &str, arg: Node) -> Result<Node> {
         let arg = self.create_unary("_call_", arg)?;
         let lhs = self.add_tmp();
-        self.stmts.push(Statement::call(op, lhs.clone(), arg, 1));
+        //self.stmts.push(Statement::call(op, lhs.clone(), arg, 1));
+        self.block.add_call_unary(op, lhs.clone(), arg);
         let _ = VirtualTable::<f64>::from_str(op)?; // check to see if op is defined
         self.ft.insert(op.to_string());
 
@@ -97,7 +101,8 @@ impl Builder {
 
         let arg = self.create_binary("_call_", left, right)?;
         let lhs = self.add_tmp();
-        self.stmts.push(Statement::call(op, lhs.clone(), arg, 2));
+        // self.stmts.push(Statement::call(op, lhs.clone(), arg, 2));
+        self.block.add_call_binary(op, lhs.clone(), arg);
         let _ = VirtualTable::<f64>::from_str(op)?; // check to see if op is defined
         self.ft.insert(op.to_string());
 
@@ -114,7 +119,7 @@ impl Builder {
     }
 
     pub fn create_void(&mut self) -> Result<Node> {
-        Ok(Node::create_void())
+        Ok(self.block.create_void())
     }
 
     pub fn create_const(&mut self, val: f64) -> Result<Node> {
@@ -129,7 +134,7 @@ impl Builder {
 
         self.consts.push(val);
 
-        Ok(Node::create_const(val, (self.consts.len() - 1) as u32))
+        Ok(self.block.create_const(val, (self.consts.len() - 1) as u32))
     }
 
     pub fn create_var(&mut self, name: &str) -> Result<Node> {
@@ -138,40 +143,44 @@ impl Builder {
             .find_sym(name)
             .ok_or_else(|| anyhow!("variable {} not found", name))?;
 
-        Ok(Node::create_var(sym))
+        Ok(self.block.create_var(sym))
     }
 
     pub fn create_unary(&mut self, op: &str, arg: Node) -> Result<Node> {
-        Ok(Node::create_unary(op, arg))
+        Ok(self.block.create_unary(op, arg))
     }
 
     pub fn create_powi(&mut self, arg: Node, power: i32) -> Result<Node> {
-        Ok(Node::create_powi(arg, power))
+        Ok(self.block.create_powi(arg, power))
     }
 
     pub fn create_binary(&mut self, op: &str, left: Node, right: Node) -> Result<Node> {
         let node = match op {
-            "times" if left.is_const(-1.0) => Node::create_unary("neg", right),
-            "times" if right.is_const(-1.0) => Node::create_unary("neg", left),
+            "times" if left.is_const(-1.0) => self.block.create_unary("neg", right),
+            "times" if right.is_const(-1.0) => self.block.create_unary("neg", left),
             "times" if left.is_const(1.0) => right,
             "times" if right.is_const(1.0) => left,
             "times" if left.is_unary("recip") => {
-                Node::create_binary("divide", right, left.arg().unwrap())
+                self.block
+                    .create_binary("divide", right, left.arg().unwrap())
             }
             "times" if right.is_unary("recip") => {
-                Node::create_binary("divide", left, right.arg().unwrap())
+                self.block
+                    .create_binary("divide", left, right.arg().unwrap())
             }
             "plus" if left.is_unary("neg") => {
-                Node::create_binary("minus", right, left.arg().unwrap())
+                self.block
+                    .create_binary("minus", right, left.arg().unwrap())
             }
             "plus" if right.is_unary("neg") => {
-                Node::create_binary("minus", left, right.arg().unwrap())
+                self.block
+                    .create_binary("minus", left, right.arg().unwrap())
             }
             "rem" if left.is_unary("_powi_") => {
                 let (arg, power) = left.arg_power().unwrap();
-                Node::create_modular_powi(arg, right, power)
+                self.block.create_modular_powi(arg, right, power)
             }
-            _ => Node::create_binary(op, left, right),
+            _ => self.block.create_binary(op, left, right),
         };
 
         Ok(node)
@@ -198,9 +207,12 @@ impl Builder {
         let cap = self.sym_table.num_stack as u32;
         ir.prologue_indirect(cap, count_states, count_obs);
 
+        /*
         for stmt in self.stmts.iter_mut() {
             stmt.compile(ir)?;
         }
+        */
+        self.block.compile(ir)?;
 
         ir.epilogue_indirect(cap, count_states, count_obs);
         self.append_const_section(ir);
@@ -221,9 +233,12 @@ impl Builder {
         let cap = self.sym_table.num_stack as u32;
         ir.prologue_fast(cap, num_args);
 
+        /*
         for stmt in self.stmts.iter_mut() {
             stmt.compile(ir)?;
         }
+        */
+        self.block.compile(ir)?;
 
         ir.epilogue_fast(cap, idx_ret);
         self.append_const_section(ir);
@@ -255,10 +270,13 @@ impl Builder {
 
 impl Eval for Builder {
     fn eval(&self, mem: &mut [f64], stack: &mut [f64], params: &[f64]) -> f64 {
+        /*
         for stmt in self.stmts.iter() {
             stmt.eval(mem, stack, params);
         }
         f64::NAN
+        */
+        self.block.eval(mem, stack, params)
     }
 }
 

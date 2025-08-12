@@ -1,7 +1,10 @@
+#![allow(uncommon_codepoints)]
+
 use anyhow::anyhow;
 use std::ffi::{c_char, CStr, CString};
 
 // mod analyzer;
+mod block;
 mod code;
 mod machine;
 mod matrix;

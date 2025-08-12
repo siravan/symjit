@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use crate::generator::Generator;
 use crate::symbol::{Loc, Symbol};
-use crate::utils::{bool_to_f64, reg, Eval, Reg};
+use crate::utils::{bool_to_f64, reg, Eval};
 
 #[derive(Debug, Clone)]
 pub enum VarStatus {
@@ -59,39 +59,47 @@ impl Node {
     }
 
     pub fn create_unary(op: &str, arg: Node) -> Node {
+        let e = arg.ershov_number();
+
         Node::Unary {
             op: op.to_string(),
             arg: Box::new(arg),
-            ershov: 0,
+            ershov: e,
             power: 1,
         }
     }
 
     pub fn create_binary(op: &str, left: Node, right: Node) -> Node {
+        let e = Self::calc_ershov(&left, &right);
+
         Node::Binary {
             op: op.to_string(),
             left: Box::new(left),
             right: Box::new(right),
-            ershov: 0,
+            ershov: e,
             power: 1,
         }
     }
 
     pub fn create_powi(arg: Node, power: i32) -> Node {
+        let e = arg.ershov_number();
+
         Node::Unary {
             op: "_powi_".to_string(),
             arg: Box::new(arg),
-            ershov: 0,
+            ershov: e,
             power,
         }
     }
 
     pub fn create_modular_powi(left: Node, right: Node, power: i32) -> Node {
+        let e = Self::calc_ershov(&left, &right);
+
         Node::Binary {
             op: "_powi_mod_".to_string(),
             left: Box::new(left),
             right: Box::new(right),
-            ershov: 0,
+            ershov: e,
             power,
         }
     }
@@ -168,6 +176,17 @@ impl Node {
         }
     }
 
+    pub fn calc_ershov(left: &Node, right: &Node) -> u8 {
+        let l = left.ershov_number();
+        let r = right.ershov_number();
+
+        if l == r {
+            l + 1
+        } else {
+            l.max(r)
+        }
+    }
+
     fn ershov_func(&mut self) {
         match self {
             Node::Unary { arg, ershov, .. } => {
@@ -179,10 +198,7 @@ impl Node {
                 ershov,
                 ..
             } => {
-                let l = left.ershov_number();
-                let r = right.ershov_number();
-                let e = if l == r { l + 1 } else { l.max(r) };
-                *ershov = e;
+                *ershov = Self::calc_ershov(left, right);
             }
             _ => {}
         }
@@ -220,7 +236,7 @@ impl Node {
     /// The main entry point to compile an expression tree
     /// should be called on the root of the expression tree
     pub fn compile_tree(&mut self, ir: &mut dyn Generator) -> Result<u8> {
-        self.postorder_forward(Self::ershov_func);
+        // self.postorder_forward(Self::ershov_func);
         self.postorder_forward(Self::mark_first);
         self.postorder_backward(Self::mark_last);
 
@@ -397,7 +413,7 @@ impl Node {
         let l;
         let r;
 
-        if dst < 16 {
+        if dst < 14 {
             if el == er {
                 l = left.compile(ir, base + 1, pool)?;
                 r = right.compile(ir, base, pool)?;

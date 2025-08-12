@@ -6,6 +6,59 @@ use crate::utils::{DataType, Reg};
 mod asm;
 use asm::{Amd, RoundingMode};
 
+macro_rules! binop {
+    ($self:ident, $sse:ident, $avx:ident, $simd:ident, $dst:expr, $s1: expr, $s2: expr, $com:ident) => {
+        $self.flush($dst);
+
+        match $self.family {
+            AmdFamily::AvxScalar => $self.amd.$avx(ϕ($dst), ϕ($s1), ϕ($s2)),
+            AmdFamily::AvxVector => $self.amd.$simd(ϕ($dst), ϕ($s1), ϕ($s2)),
+            AmdFamily::SSEScalar => {
+                let (x, y) = $self.shrink($dst, $s1, $s2, $com);
+                $self.amd.$sse(ϕ(x), ϕ(y));
+            }
+        }
+    };
+}
+
+macro_rules! select {
+    ($self:ident, $sse:ident, $avx:ident, $simd:ident, $x:expr, $y: expr, $z: expr, $w: expr) => {
+        match $self.family {
+            AmdFamily::AvxScalar => $self.amd.$avx($x, $y, $z, $w),
+            AmdFamily::AvxVector => $self.amd.$simd($x, $y, $z, $w),
+            AmdFamily::SSEScalar => $self.amd.$sse($x, $y, $z, $w),
+        }
+    };
+    ($self:ident, $sse:ident, $avx:ident, $simd:ident, $x:expr, $y: expr, $z: expr) => {
+        match $self.family {
+            AmdFamily::AvxScalar => $self.amd.$avx($x, $y, $z),
+            AmdFamily::AvxVector => $self.amd.$simd($x, $y, $z),
+            AmdFamily::SSEScalar => $self.amd.$sse($x, $y, $z),
+        }
+    };
+    ($self:ident, $sse:ident, $avx:ident, $simd:ident, $x:expr, $y: expr) => {
+        match $self.family {
+            AmdFamily::AvxScalar => $self.amd.$avx($x, $y),
+            AmdFamily::AvxVector => $self.amd.$simd($x, $y),
+            AmdFamily::SSEScalar => $self.amd.$sse($x, $y),
+        }
+    };
+}
+
+macro_rules! uniop {
+    ($self:ident, $sse:ident, $avx:ident, $simd:ident, $dst:expr, $s1: expr) => {
+        $self.flush($dst);
+        select!($self, $sse, $avx, $simd, ϕ($dst), ϕ($s1));
+    };
+}
+
+macro_rules! roundop {
+    ($self:ident, $dst:expr, $s1: expr, $mode: expr) => {
+        $self.flush($dst);
+        select!($self, roundsd, vroundsd, vroundpd, ϕ($dst), ϕ($s1), $mode);
+    };
+}
+
 pub enum AmdFamily {
     AvxScalar,
     AvxVector,
@@ -24,6 +77,10 @@ const STATES: u8 = Amd::R13;
 const IDX: u8 = Amd::R12;
 const PARAMS: u8 = Amd::RBX;
 
+/*
+ *  ϕ translates a logical register number (in Reg) to a physical
+ *  register number, according to the ABI.
+ */
 fn ϕ(r: Reg) -> u8 {
     match r {
         Reg::Ret => 0,
@@ -151,15 +208,15 @@ impl AmdGenerator {
 
         if reg == RET {
             if let Some(idx) = self.r0 {
-                match self.family {
-                    AmdFamily::AvxScalar => {
-                        self.amd.vmovsd_mem_xmm(Amd::RSP, (idx * 8) as i32, RET)
-                    }
-                    AmdFamily::AvxVector => {
-                        self.amd.vmovpd_mem_ymm(Amd::RSP, (idx * 32) as i32, RET)
-                    }
-                    AmdFamily::SSEScalar => self.amd.movsd_mem_xmm(Amd::RSP, (idx * 8) as i32, RET),
-                };
+                select!(
+                    self,
+                    movsd_mem_xmm,
+                    vmovsd_mem_xmm,
+                    vmovpd_mem_ymm,
+                    Amd::RSP,
+                    (idx * self.reg_size()) as i32,
+                    RET
+                );
             };
 
             self.r0 = None;
@@ -167,16 +224,15 @@ impl AmdGenerator {
             let m = 1 << reg;
 
             if self.mask & m == 0 {
-                // println!("saving reg {}", dst);
-                match self.family {
-                    AmdFamily::AvxScalar => {
-                        self.amd.vmovsd_mem_xmm(Amd::RSP, 8 * (reg as i32), reg)
-                    }
-                    AmdFamily::AvxVector => {
-                        self.amd.vmovpd_mem_ymm(Amd::RSP, 32 * (reg as i32), reg)
-                    }
-                    AmdFamily::SSEScalar => self.amd.movsd_mem_xmm(Amd::RSP, 8 * (reg as i32), reg),
-                };
+                select!(
+                    self,
+                    movsd_mem_xmm,
+                    vmovsd_mem_xmm,
+                    vmovpd_mem_ymm,
+                    Amd::RSP,
+                    (self.reg_size() as i32) * (reg as i32),
+                    reg
+                );
             }
 
             self.mask |= m;
@@ -191,15 +247,15 @@ impl AmdGenerator {
             let m = 1 << reg;
 
             if self.mask & m != 0 {
-                match self.family {
-                    AmdFamily::AvxScalar => {
-                        self.amd.vmovsd_xmm_mem(reg, Amd::RSP, 8 * (reg as i32))
-                    }
-                    AmdFamily::AvxVector => {
-                        self.amd.vmovpd_ymm_mem(reg, Amd::RSP, 32 * (reg as i32))
-                    }
-                    AmdFamily::SSEScalar => self.amd.movsd_xmm_mem(reg, Amd::RSP, 8 * (reg as i32)),
-                }
+                select!(
+                    self,
+                    movsd_xmm_mem,
+                    vmovsd_xmm_mem,
+                    vmovpd_ymm_mem,
+                    reg,
+                    Amd::RSP,
+                    (self.reg_size() as i32) * (reg as i32)
+                );
             }
         }
     }
@@ -239,39 +295,12 @@ impl AmdGenerator {
     }
 }
 
-macro_rules! binop {
-    ($self:ident, $sse:ident, $avx:ident, $simd:ident, $dst:expr, $s1: expr, $s2: expr, $com:ident) => {
-        $self.flush($dst);
-
-        match $self.family {
-            AmdFamily::AvxScalar => $self.amd.$avx(ϕ($dst), ϕ($s1), ϕ($s2)),
-            AmdFamily::AvxVector => $self.amd.$simd(ϕ($dst), ϕ($s1), ϕ($s2)),
-            AmdFamily::SSEScalar => {
-                let (x, y) = $self.shrink($dst, $s1, $s2, $com);
-                $self.amd.$sse(ϕ(x), ϕ(y));
-            }
-        }
-    };
-}
-
-macro_rules! roundop {
-    ($self:ident, $dst:expr, $s1: expr, $mode: expr) => {
-        $self.flush($dst);
-
-        match $self.family {
-            AmdFamily::AvxScalar => $self.amd.vroundsd(ϕ($dst), ϕ($s1), $mode),
-            AmdFamily::AvxVector => $self.amd.vroundpd(ϕ($dst), ϕ($s1), $mode),
-            AmdFamily::SSEScalar => $self.amd.roundsd(ϕ($dst), ϕ($s1), $mode),
-        }
-    };
-}
-
 impl Generator for AmdGenerator {
     fn count_shadows(&self) -> u8 {
         if cfg!(target_family = "windows") {
-            4
+            4 // xmm2-xmm5
         } else {
-            14
+            14 // xmm2-xmm15
         }
     }
 
@@ -287,25 +316,15 @@ impl Generator for AmdGenerator {
     }
 
     fn three_address(&self) -> bool {
-        match self.family {
-            AmdFamily::AvxScalar => true,
-            AmdFamily::AvxVector => true,
-            AmdFamily::SSEScalar => false,
-        }
+        !matches!(self.family, AmdFamily::SSEScalar)
     }
 
     //***********************************
 
     fn fmov(&mut self, dst: Reg, s1: Reg) {
-        if dst == s1 {
-            return;
-        }
-
-        self.flush(dst);
-
-        match self.family {
-            AmdFamily::AvxScalar | AmdFamily::AvxVector => self.amd.vmovapd(ϕ(dst), ϕ(s1)),
-            AmdFamily::SSEScalar => self.amd.movapd(ϕ(dst), ϕ(s1)),
+        if dst != s1 {
+            self.flush(dst);
+            select!(self, movapd, vmovapd, vmovapd, ϕ(dst), ϕ(s1));
         }
     }
 
@@ -329,30 +348,39 @@ impl Generator for AmdGenerator {
 
     fn load_const(&mut self, dst: Reg, label: &str) {
         self.flush(dst);
-
-        match self.family {
-            AmdFamily::AvxScalar => self.amd.vmovsd_xmm_label(ϕ(dst), label),
-            AmdFamily::AvxVector => self.amd.vbroadcastsd_label(ϕ(dst), label),
-            AmdFamily::SSEScalar => self.amd.movsd_xmm_label(ϕ(dst), label),
-        }
+        select!(
+            self,
+            movsd_xmm_label,
+            vmovsd_xmm_label,
+            vbroadcastsd_label,
+            ϕ(dst),
+            label
+        );
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
         self.flush(dst);
-
-        match self.family {
-            AmdFamily::AvxScalar => self.amd.vmovsd_xmm_mem(ϕ(dst), MEM, (idx * 8) as i32),
-            AmdFamily::AvxVector => self.amd.vmovpd_ymm_mem(ϕ(dst), MEM, (idx * 32) as i32),
-            AmdFamily::SSEScalar => self.amd.movsd_xmm_mem(ϕ(dst), MEM, (idx * 8) as i32),
-        }
+        select!(
+            self,
+            movsd_xmm_mem,
+            vmovsd_xmm_mem,
+            vmovpd_ymm_mem,
+            ϕ(dst),
+            MEM,
+            (idx * self.reg_size()) as i32
+        );
     }
 
     fn save_mem(&mut self, dst: Reg, idx: u32) {
-        match self.family {
-            AmdFamily::AvxScalar => self.amd.vmovsd_mem_xmm(MEM, (idx * 8) as i32, ϕ(dst)),
-            AmdFamily::AvxVector => self.amd.vmovpd_mem_ymm(MEM, (idx * 32) as i32, ϕ(dst)),
-            AmdFamily::SSEScalar => self.amd.movsd_mem_xmm(MEM, (idx * 8) as i32, ϕ(dst)),
-        }
+        select!(
+            self,
+            movsd_mem_xmm,
+            vmovsd_mem_xmm,
+            vmovpd_mem_ymm,
+            MEM,
+            (idx * self.reg_size()) as i32,
+            ϕ(dst)
+        );
     }
 
     fn save_mem_result(&mut self, idx: u32) {
@@ -361,39 +389,47 @@ impl Generator for AmdGenerator {
 
     fn load_param(&mut self, dst: Reg, idx: u32) {
         self.flush(dst);
-
-        match self.family {
-            AmdFamily::AvxScalar => self.amd.vmovsd_xmm_mem(ϕ(dst), PARAMS, (idx * 8) as i32),
-            AmdFamily::AvxVector => self.amd.vbroadcastsd(ϕ(dst), PARAMS, (idx * 8) as i32),
-            AmdFamily::SSEScalar => self.amd.movsd_xmm_mem(ϕ(dst), PARAMS, (idx * 8) as i32),
-        }
+        select!(
+            self,
+            movsd_xmm_mem,
+            vmovsd_xmm_mem,
+            vbroadcastsd,
+            ϕ(dst),
+            PARAMS,
+            8 * idx as i32
+        );
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
         if let Some(k) = self.r0 {
             if k == idx {
-                match self.family {
-                    AmdFamily::AvxScalar | AmdFamily::AvxVector => self.amd.vmovapd(ϕ(dst), RET),
-                    AmdFamily::SSEScalar => {}
-                };
+                select!(self, movapd, vmovapd, vmovapd, ϕ(dst), RET);
                 self.r0 = None;
                 return;
             }
         };
 
-        match self.family {
-            AmdFamily::AvxScalar => self.amd.vmovsd_xmm_mem(ϕ(dst), Amd::RSP, (idx * 8) as i32),
-            AmdFamily::AvxVector => self.amd.vmovpd_ymm_mem(ϕ(dst), Amd::RSP, (idx * 32) as i32),
-            AmdFamily::SSEScalar => self.amd.movsd_xmm_mem(ϕ(dst), Amd::RSP, (idx * 8) as i32),
-        }
+        select!(
+            self,
+            movsd_xmm_mem,
+            vmovsd_xmm_mem,
+            vmovpd_ymm_mem,
+            ϕ(dst),
+            Amd::RSP,
+            (idx * self.reg_size()) as i32
+        );
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        match self.family {
-            AmdFamily::AvxScalar => self.amd.vmovsd_mem_xmm(Amd::RSP, (idx * 8) as i32, ϕ(dst)),
-            AmdFamily::AvxVector => self.amd.vmovpd_mem_ymm(Amd::RSP, (idx * 32) as i32, ϕ(dst)),
-            AmdFamily::SSEScalar => self.amd.movsd_mem_xmm(Amd::RSP, (idx * 8) as i32, ϕ(dst)),
-        }
+        select!(
+            self,
+            movsd_mem_xmm,
+            vmovsd_mem_xmm,
+            vmovpd_mem_ymm,
+            Amd::RSP,
+            (idx * self.reg_size()) as i32,
+            ϕ(dst)
+        );
     }
 
     fn save_stack_result(&mut self, idx: u32) {
@@ -419,12 +455,7 @@ impl Generator for AmdGenerator {
     }
 
     fn root(&mut self, dst: Reg, s1: Reg) {
-        self.flush(dst);
-        match self.family {
-            AmdFamily::AvxScalar => self.amd.vsqrtsd(ϕ(dst), ϕ(s1)),
-            AmdFamily::AvxVector => self.amd.vsqrtpd(ϕ(dst), ϕ(s1)),
-            AmdFamily::SSEScalar => self.amd.sqrtsd(ϕ(dst), ϕ(s1)),
-        }
+        uniop!(self, sqrtsd, vsqrtsd, vsqrtpd, dst, s1);
     }
 
     fn square(&mut self, dst: Reg, s1: Reg) {
@@ -679,21 +710,25 @@ impl Generator for AmdGenerator {
         for i in 0..count_states {
             self.amd.mov_reg_mem(Amd::RAX, STATES, 8 * i as i32);
             let k = i as u32 * self.reg_size();
-
-            match self.family {
-                AmdFamily::AvxScalar => {
-                    self.amd.vmovsd_xmm_indexed(0, Amd::RAX, IDX, 8);
-                    self.amd.vmovsd_mem_xmm(MEM, k as i32, 0);
-                }
-                AmdFamily::AvxVector => {
-                    self.amd.vmovpd_ymm_indexed(0, Amd::RAX, IDX, 8);
-                    self.amd.vmovpd_mem_ymm(MEM, k as i32, 0);
-                }
-                AmdFamily::SSEScalar => {
-                    self.amd.movsd_xmm_indexed(0, Amd::RAX, IDX, 8);
-                    self.amd.movsd_mem_xmm(MEM, k as i32, 0);
-                }
-            }
+            select!(
+                self,
+                movsd_xmm_indexed,
+                vmovsd_xmm_indexed,
+                vmovpd_ymm_indexed,
+                RET,
+                Amd::RAX,
+                IDX,
+                8
+            );
+            select!(
+                self,
+                movsd_mem_xmm,
+                vmovsd_mem_xmm,
+                vmovpd_mem_ymm,
+                MEM,
+                k as i32,
+                RET
+            );
         }
 
         // may save idx (RDX) as double in RBP + 8/32 * count_states
@@ -716,21 +751,25 @@ impl Generator for AmdGenerator {
             self.amd
                 .mov_reg_mem(Amd::RAX, STATES, 8 * (count_states + i) as i32);
             let k = (count_states + i + 1) as u32 * self.reg_size();
-
-            match self.family {
-                AmdFamily::AvxScalar => {
-                    self.amd.vmovsd_xmm_mem(0, MEM, k as i32);
-                    self.amd.vmovsd_indexed_xmm(Amd::RAX, IDX, 8, 0);
-                }
-                AmdFamily::AvxVector => {
-                    self.amd.vmovpd_ymm_mem(0, MEM, k as i32);
-                    self.amd.vmovpd_indexed_ymm(Amd::RAX, IDX, 8, 0);
-                }
-                AmdFamily::SSEScalar => {
-                    self.amd.movsd_xmm_mem(0, MEM, k as i32);
-                    self.amd.movsd_indexed_xmm(Amd::RAX, IDX, 8, 0);
-                }
-            }
+            select!(
+                self,
+                movsd_xmm_mem,
+                vmovsd_xmm_mem,
+                vmovpd_ymm_mem,
+                RET,
+                MEM,
+                k as i32
+            );
+            select!(
+                self,
+                movsd_indexed_xmm,
+                vmovsd_indexed_xmm,
+                vmovpd_indexed_ymm,
+                Amd::RAX,
+                IDX,
+                8,
+                RET
+            );
         }
 
         self.amd.add_rsp(size);
