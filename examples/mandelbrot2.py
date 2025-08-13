@@ -23,7 +23,7 @@ for i in range(12):
 
 t0 = time.time()
 
-f = compile_func([a, b], [X, Y], use_simd=use_simd, use_threads=use_threads, backend=backend)
+f = compile_func([a, b], [X, Y], use_simd=use_simd, use_threads=use_threads, cse=False, backend=backend)
 
 t1 = time.time()
 

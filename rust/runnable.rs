@@ -9,6 +9,7 @@ use crate::matrix::{combine_matrixes, Matrix};
 use crate::model::Program;
 use crate::symbol::Loc;
 use crate::utils::*;
+use crate::{USE_SIMD, USE_THREADS};
 
 use rayon::prelude::*;
 
@@ -47,9 +48,6 @@ impl Platform {
         return false;
     }
 }
-
-const USE_SIMD: u32 = 0x01;
-const USE_THREADS: u32 = 0x02;
 
 pub struct Runnable {
     pub prog: Program,
@@ -446,7 +444,7 @@ impl Debugger {
         // accept if the difference is less that 1e-15 to count for rounding error
         // because of different operation order
         if p.iter().zip(q).any(|(x, y)| !(f64::abs(*x - *y) < 1e-15)) {
-            for (key, sym) in self.builder.sym_table.syms.iter() {
+            for (key, sym) in self.builder.block.sym_table.syms.iter() {
                 match sym.borrow().loc {
                     Loc::Mem(idx) => {
                         let a = p[idx as usize];

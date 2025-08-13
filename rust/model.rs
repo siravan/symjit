@@ -9,6 +9,18 @@ pub trait Transformer {
     fn transform(&self, builder: &mut Builder) -> Result<Node>;
 }
 
+// the list of intrinsic unary ops, i.e., operations that can be implemented directly in
+// machine code
+const UNARY: &[&str] = &[
+    "abs", "not", "root", "square", "cube", "recip", "round", "floor", "ceiling", "trunc",
+];
+// the list of intrinsic binary ops, i.e., operations that can be implemented directly in
+// machine code
+const BINARY: &[&str] = &[
+    "plus", "minus", "times", "divide", "rem", "gt", "geq", "lt", "leq", "eq", "neq", "and", "or",
+    "xor", "if_pos", "if_neg",
+];
+
 /// Collects the intermediate code (builder) and interface variables
 #[derive(Debug)]
 pub struct Program {
@@ -20,7 +32,7 @@ pub struct Program {
 }
 
 impl Program {
-    pub fn new(ml: &CellModel) -> Result<Program> {
+    pub fn new(ml: &CellModel, cse: bool) -> Result<Program> {
         /*
             this section lays the memory format
             the order of different sections is important!
@@ -43,21 +55,21 @@ impl Program {
             ** => => the first observable is the return value for fast functions
         */
 
-        let mut builder = Builder::new();
+        let mut builder = Builder::new(cse);
 
         for v in &ml.states {
-            builder.sym_table.add_mem(&v.name);
+            builder.block.sym_table.add_mem(&v.name);
         }
 
-        builder.sym_table.add_mem(&ml.iv.name);
+        builder.block.sym_table.add_mem(&ml.iv.name);
 
         for v in &ml.params {
-            builder.sym_table.add_param(&v.name);
+            builder.block.sym_table.add_param(&v.name);
         }
 
         for eq in &ml.obs {
             if let Some(name) = eq.lhs.var() {
-                builder.sym_table.add_mem(&name);
+                builder.block.sym_table.add_mem(&name);
             } else {
                 return Err(anyhow!("lhs var not found"));
             }
@@ -66,7 +78,7 @@ impl Program {
         for eq in &ml.odes {
             if let Some(name) = eq.lhs.diff_var() {
                 let name = format!("δ{}", name);
-                builder.sym_table.add_mem(&name);
+                builder.block.sym_table.add_mem(&name);
             } else {
                 return Err(anyhow!("lhs diff var not found"));
             }
@@ -135,7 +147,7 @@ impl Expr {
     fn transform_unary(&self, builder: &mut Builder, op: &str, args: &[Expr]) -> Result<Node> {
         let x = args[0].transform(builder)?;
 
-        if builder.intrinsic_unary.contains(&op) {
+        if UNARY.contains(&op) {
             builder.create_unary(op, x)
         } else {
             builder.add_call_unary(op, x)
@@ -146,7 +158,7 @@ impl Expr {
         let l = args[0].transform(builder)?;
         let r = args[1].transform(builder)?;
 
-        if builder.intrinsic_binary.contains(&op) {
+        if BINARY.contains(&op) {
             builder.create_binary(op, l, r)
         } else {
             builder.add_call_binary(op, l, r)

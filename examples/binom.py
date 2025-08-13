@@ -9,8 +9,8 @@ from symjit import compile_func
 # The point is to stress the compiler by generating large expression
 # trees with easily verifiable results.
 
-N = 12
-K = 7
+N = 7
+K = 4
 
 def binom(x, y, n, k):
     if k == 0 or k == n:
@@ -21,4 +21,4 @@ def binom(x, y, n, k):
 x, y = symbols('x y')
 f = compile_func([x, y], binom(x, y, N, K), backend=backend, ty=ty, use_threads=use_threads)
 print(f(1, 1), '?=', math.comb(N, K))
-# print(f.dumps())
+print(f.dumps())

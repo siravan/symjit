@@ -1,11 +1,13 @@
 use anyhow::{anyhow, Result};
 
 use std::cell::RefCell;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
 
 use crate::generator::Generator;
 use crate::symbol::{Loc, Symbol};
 use crate::utils::{bool_to_f64, reg, Eval};
+use crate::COUNT_SCRATCH;
 
 #[derive(Debug, Clone)]
 pub enum VarStatus {
@@ -15,6 +17,8 @@ pub enum VarStatus {
     Last,
     Singular,
 }
+
+const COMMUTATIVE: &[&str] = &["plus", "times", "eq", "neq", "and", "or", "xor"];
 
 #[derive(Debug, Clone)]
 pub enum Node {
@@ -30,19 +34,56 @@ pub enum Node {
     Unary {
         op: String,
         arg: Box<Node>,
-        ershov: u8,
         power: i32,
+        ershov: u8,
+        h: u64,
+        w: u32,
     },
     Binary {
         op: String,
         left: Box<Node>,
         right: Box<Node>,
-        ershov: u8,
         power: i32,
+        ershov: u8,
+        h: u64,
+        w: u32,
     },
 }
 
 impl Node {
+    pub fn hashof(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+
+        match self {
+            Node::Void => b"void".hash(&mut hasher),
+            Node::Const { idx, .. } => {
+                b"const".hash(&mut hasher);
+                idx.hash(&mut hasher);
+            }
+            Node::Var { sym, .. } => {
+                b"var".hash(&mut hasher);
+                sym.borrow().hash(&mut hasher);
+            }
+            Node::Unary { h, .. } => {
+                return *h;
+            }
+            Node::Binary { h, .. } => {
+                return *h;
+            }
+        };
+
+        hasher.finish()
+    }
+
+    pub fn weightof(&self) -> u32 {
+        match self {
+            Node::Void => 0,
+            Node::Const { .. } | Node::Var { .. } => 1,
+            Node::Unary { w, .. } => *w,
+            Node::Binary { w, .. } => *w,
+        }
+    }
+
     pub fn create_void() -> Node {
         Node::Void
     }
@@ -58,49 +99,93 @@ impl Node {
         }
     }
 
-    pub fn create_unary(op: &str, arg: Node) -> Node {
+    pub fn create_unary(op: &str, arg: Node, power: i32) -> Node {
         let e = arg.ershov_number();
+
+        let mut hasher = DefaultHasher::new();
+        op.hash(&mut hasher);
+        arg.hashof().hash(&mut hasher);
+
+        let w = 1 + arg.weightof();
 
         Node::Unary {
             op: op.to_string(),
             arg: Box::new(arg),
             ershov: e,
-            power: 1,
+            power,
+            h: hasher.finish(),
+            w,
         }
     }
 
-    pub fn create_binary(op: &str, left: Node, right: Node) -> Node {
+    pub fn create_binary(op: &str, left: Node, right: Node, power: i32) -> Node {
         let e = Self::calc_ershov(&left, &right);
+
+        let mut hasher = DefaultHasher::new();
+        op.hash(&mut hasher);
+
+        let mut l = left.hashof();
+        let mut r = right.hashof();
+
+        (l, r) = if COMMUTATIVE.contains(&op) && l > r {
+            (r, l)
+        } else {
+            (l, r)
+        };
+
+        l.hash(&mut hasher);
+        r.hash(&mut hasher);
+
+        let w = 1 + left.weightof() + right.weightof();
 
         Node::Binary {
             op: op.to_string(),
             left: Box::new(left),
             right: Box::new(right),
             ershov: e,
-            power: 1,
+            power,
+            h: hasher.finish(),
+            w,
         }
     }
 
     pub fn create_powi(arg: Node, power: i32) -> Node {
-        let e = arg.ershov_number();
-
-        Node::Unary {
-            op: "_powi_".to_string(),
-            arg: Box::new(arg),
-            ershov: e,
-            power,
-        }
+        Self::create_unary("_powi_", arg, power)
     }
 
     pub fn create_modular_powi(left: Node, right: Node, power: i32) -> Node {
-        let e = Self::calc_ershov(&left, &right);
+        Self::create_binary("_powi_mod_", left, right, power)
+    }
 
-        Node::Binary {
-            op: "_powi_mod_".to_string(),
-            left: Box::new(left),
-            right: Box::new(right),
-            ershov: e,
-            power,
+    pub fn first(&mut self) -> Option<&mut Node> {
+        match self {
+            Node::Unary { arg, .. } => Some(arg),
+            Node::Binary { left, right, .. } => {
+                let el = left.ershov_number();
+                let er = right.ershov_number();
+                if el >= er {
+                    Some(left)
+                } else {
+                    Some(right)
+                }
+            }
+            _ => None,
+        }
+    }
+
+    pub fn second(&mut self) -> Option<&mut Node> {
+        match self {
+            Node::Unary { .. } => None,
+            Node::Binary { left, right, .. } => {
+                let el = left.ershov_number();
+                let er = right.ershov_number();
+                if el >= er {
+                    Some(right)
+                } else {
+                    Some(left)
+                }
+            }
+            _ => None,
         }
     }
 
@@ -110,29 +195,9 @@ impl Node {
     /// Note the twist in the middle. The decision to traverse left
     /// or right link depends on ershov number of each link.
     fn postorder_forward(&mut self, f: fn(&mut Node)) {
-        match self {
-            Node::Void | Node::Const { .. } | Node::Var { .. } => {
-                f(self);
-            }
-            Node::Unary { arg, .. } => {
-                arg.postorder_forward(f);
-                f(self);
-            }
-            Node::Binary { left, right, .. } => {
-                let el = left.ershov_number();
-                let er = right.ershov_number();
-
-                if el >= er {
-                    left.postorder_forward(f);
-                    right.postorder_forward(f);
-                } else {
-                    right.postorder_forward(f);
-                    left.postorder_forward(f);
-                };
-
-                f(self);
-            }
-        }
+        self.first().map(|n| n.postorder_forward(f));
+        self.second().map(|n| n.postorder_forward(f));
+        f(self);
     }
 
     /// postorder_backward does a backward postorder traversal of the
@@ -141,29 +206,9 @@ impl Node {
     /// Note the twist in the middle. The decision to traverse left
     /// or right link depends on ershov number of each link.
     fn postorder_backward(&mut self, f: fn(&mut Node)) {
-        match self {
-            Node::Void | Node::Const { .. } | Node::Var { .. } => {
-                f(self);
-            }
-            Node::Unary { arg, .. } => {
-                arg.postorder_backward(f);
-                f(self);
-            }
-            Node::Binary { left, right, .. } => {
-                let el = left.ershov_number();
-                let er = right.ershov_number();
-
-                if el >= er {
-                    right.postorder_backward(f);
-                    left.postorder_backward(f);
-                } else {
-                    left.postorder_backward(f);
-                    right.postorder_backward(f);
-                };
-
-                f(self);
-            }
-        }
+        self.second().map(|n| n.postorder_backward(f));
+        self.first().map(|n| n.postorder_backward(f));
+        f(self);
     }
 
     /// Ershov number is the number of temporary registers needed to
@@ -187,7 +232,7 @@ impl Node {
         }
     }
 
-    fn ershov_func(&mut self) {
+    pub fn update_ershov(&mut self) {
         match self {
             Node::Unary { arg, ershov, .. } => {
                 *ershov = arg.ershov_number();
@@ -236,7 +281,7 @@ impl Node {
     /// The main entry point to compile an expression tree
     /// should be called on the root of the expression tree
     pub fn compile_tree(&mut self, ir: &mut dyn Generator) -> Result<u8> {
-        // self.postorder_forward(Self::ershov_func);
+        // self.postorder_forward(Self::update_ershov);
         self.postorder_forward(Self::mark_first);
         self.postorder_backward(Self::mark_last);
 
@@ -248,7 +293,7 @@ impl Node {
         // correctness first.
 
         let mut pool: Vec<u8> = if ir.three_address() {
-            (last..14).rev().collect()
+            (last..COUNT_SCRATCH).rev().collect()
         } else {
             Vec::new()
         };
@@ -413,7 +458,7 @@ impl Node {
         let l;
         let r;
 
-        if dst < 14 {
+        if dst < COUNT_SCRATCH {
             if el == er {
                 l = left.compile(ir, base + 1, pool)?;
                 r = right.compile(ir, base, pool)?;

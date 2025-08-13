@@ -5,62 +5,36 @@ use super::utils::{Compiled, Eval};
 use crate::block::Block;
 use crate::code::VirtualTable;
 use crate::generator::Generator;
-use crate::node::{Node, VarStatus};
-use crate::symbol::SymbolTable;
+use crate::node::Node;
 use crate::utils::CompiledFunc;
 
 //****************************************************//
 
 #[derive(Debug, Clone)]
 pub struct Builder {
-    //pub stmts: Vec<Statement>,
     pub block: Block,
     pub consts: Vec<f64>,
-    pub sym_table: SymbolTable,
-    pub num_tmp: usize,
     pub ft: HashSet<String>, // function table (the name of functions),
-    pub intrinsic_unary: Vec<&'static str>,
-    pub intrinsic_binary: Vec<&'static str>,
 }
 
 impl Builder {
-    pub fn new() -> Builder {
+    pub fn new(cse: bool) -> Builder {
         Builder {
-            // stmts: Vec::new(),
-            block: Block::new(),
+            block: Block::new(cse),
             consts: Vec::new(),
-            sym_table: SymbolTable::new(),
-            num_tmp: 0,
             ft: HashSet::new(),
-            // the list of intrinsic unary ops, i.e., operations that can be implemented directly in
-            // machine code
-            intrinsic_unary: vec![
-                "abs", "not", "root", "square", "cube", "recip", "round", "floor", "ceiling",
-                "trunc",
-            ],
-            // the list of intrinsic binary ops, i.e., operations that can be implemented directly in
-            // machine code
-            intrinsic_binary: vec![
-                "plus", "minus", "times", "divide", "rem", "gt", "geq", "lt", "leq", "eq", "neq",
-                "and", "or", "xor", "if_pos", "if_neg",
-            ],
         }
     }
 
     pub fn add_assign(&mut self, lhs: Node, rhs: Node) -> Result<Node> {
-        //self.stmts.push(Statement::assign(lhs.clone(), rhs));
         self.block.add_assign(lhs.clone(), rhs);
         Ok(lhs)
     }
 
     pub fn add_call_unary(&mut self, op: &str, arg: Node) -> Result<Node> {
-        let arg = self.create_unary("_call_", arg)?;
-        let lhs = self.add_tmp();
-        //self.stmts.push(Statement::call(op, lhs.clone(), arg, 1));
-        self.block.add_call_unary(op, lhs.clone(), arg);
+        let lhs = self.block.add_call_unary(op, arg);
         let _ = VirtualTable::<f64>::from_str(op)?; // check to see if op is defined
         self.ft.insert(op.to_string());
-
         Ok(lhs)
     }
 
@@ -99,18 +73,14 @@ impl Builder {
             }
         }
 
-        let arg = self.create_binary("_call_", left, right)?;
-        let lhs = self.add_tmp();
-        // self.stmts.push(Statement::call(op, lhs.clone(), arg, 2));
-        self.block.add_call_binary(op, lhs.clone(), arg);
+        let lhs = self.block.add_call_binary(op, left, right);
         let _ = VirtualTable::<f64>::from_str(op)?; // check to see if op is defined
         self.ft.insert(op.to_string());
-
         Ok(lhs)
     }
 
     pub fn add_ifelse(&mut self, cond: Node, true_val: Node, false_val: Node) -> Result<Node> {
-        let tmp = self.add_tmp();
+        let tmp = self.block.add_tmp();
         let tmp = self.add_assign(tmp, cond)?;
         let true_val = self.create_binary("select_if", tmp.clone(), true_val)?;
         let false_val = self.create_binary("select_else", tmp, false_val)?;
@@ -139,6 +109,7 @@ impl Builder {
 
     pub fn create_var(&mut self, name: &str) -> Result<Node> {
         let sym = self
+            .block
             .sym_table
             .find_sym(name)
             .ok_or_else(|| anyhow!("variable {} not found", name))?;
@@ -186,39 +157,22 @@ impl Builder {
         Ok(node)
     }
 
-    pub fn add_tmp(&mut self) -> Node {
-        let name = format!("ψ{}", self.num_tmp);
-        self.num_tmp += 1;
-        self.sym_table.add_stack(name.as_str());
-        let sym = self.sym_table.find_sym(name.as_str()).unwrap();
-
-        Node::Var {
-            sym,
-            status: VarStatus::Unknown,
-        }
-    }
-
     pub fn compile(
         &mut self,
         ir: &mut impl Generator,
         count_states: usize,
         count_obs: usize,
     ) -> Result<()> {
-        let cap = self.sym_table.num_stack as u32;
+        let cap = self.block.sym_table.num_stack as u32;
         ir.prologue_indirect(cap, count_states, count_obs);
 
-        /*
-        for stmt in self.stmts.iter_mut() {
-            stmt.compile(ir)?;
-        }
-        */
         self.block.compile(ir)?;
 
         ir.epilogue_indirect(cap, count_states, count_obs);
         self.append_const_section(ir);
         self.append_vt_section(ir);
         ir.apply_jumps();
-        // println!("{:?}", &self.stmts);
+        // println!("{:#?}", &self.block.stmts);
         // println!("{:02x?}", ir.bytes());
 
         Ok(())
@@ -230,21 +184,16 @@ impl Builder {
         num_args: u32,
         idx_ret: i32,
     ) -> Result<()> {
-        let cap = self.sym_table.num_stack as u32;
+        let cap = self.block.sym_table.num_stack as u32;
         ir.prologue_fast(cap, num_args);
 
-        /*
-        for stmt in self.stmts.iter_mut() {
-            stmt.compile(ir)?;
-        }
-        */
         self.block.compile(ir)?;
 
         ir.epilogue_fast(cap, idx_ret);
         self.append_const_section(ir);
         self.append_vt_section(ir);
         ir.apply_jumps();
-        // println!("{:?}", &self.stmts);
+        // println!("{:#?}", &self.block.stmts);
         // println!("{:02x?}", ir.bytes());
 
         Ok(())
@@ -270,12 +219,6 @@ impl Builder {
 
 impl Eval for Builder {
     fn eval(&self, mem: &mut [f64], stack: &mut [f64], params: &[f64]) -> f64 {
-        /*
-        for stmt in self.stmts.iter() {
-            stmt.eval(mem, stack, params);
-        }
-        f64::NAN
-        */
         self.block.eval(mem, stack, params)
     }
 }
@@ -290,7 +233,7 @@ pub struct ByteCode {
 
 impl ByteCode {
     pub fn new(builder: Builder, mem: Vec<f64>) -> ByteCode {
-        let stack: Vec<f64> = vec![0.0; builder.sym_table.num_stack];
+        let stack: Vec<f64> = vec![0.0; builder.block.sym_table.num_stack];
 
         ByteCode {
             builder,

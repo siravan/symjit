@@ -27,6 +27,12 @@ use matrix::Matrix;
 use model::{CellModel, Program};
 use runnable::{CompilerType, Runnable};
 
+pub const COUNT_SCRATCH: u8 = 14;
+
+pub const USE_SIMD: u32 = 0x01;
+pub const USE_THREADS: u32 = 0x02;
+pub const CSE: u32 = 0x04;
+
 #[derive(Debug, Clone, Copy)]
 pub enum CompilerStatus {
     Ok,
@@ -91,7 +97,7 @@ pub unsafe extern "C" fn compile(
         }
     };
 
-    let prog = match Program::new(&ml) {
+    let prog = match Program::new(&ml, opt & CSE != 0) {
         Ok(prog) => prog,
         Err(msg) => {
             println!("{}", msg);

@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
 #[derive(Debug, Clone, Copy)]
@@ -15,6 +16,12 @@ pub struct Symbol {
     pub loc: Loc,
     pub visited: bool,
     pub reg: Option<u8>,
+}
+
+impl Hash for Symbol {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self._name.hash(state);
+    }
 }
 
 #[derive(Debug, Clone)]
