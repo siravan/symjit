@@ -163,6 +163,7 @@ impl Builder {
         count_states: usize,
         count_obs: usize,
     ) -> Result<()> {
+        self.block.eliminate();
         let cap = self.block.sym_table.num_stack as u32;
         ir.prologue_indirect(cap, count_states, count_obs);
 
@@ -184,6 +185,7 @@ impl Builder {
         num_args: u32,
         idx_ret: i32,
     ) -> Result<()> {
+        self.block.eliminate();
         let cap = self.block.sym_table.num_stack as u32;
         ir.prologue_fast(cap, num_args);
 

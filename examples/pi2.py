@@ -16,11 +16,11 @@ def viete(x):
         t = x
         for j in range(i):
             t = x + x * sqrt(t)
-        p *= sqrt(t) 
-        
-    return p        
+        p *= sqrt(t)
 
-    
+    return p
+
+
 def lemniscate(x):
     p = 1
 
@@ -28,12 +28,13 @@ def lemniscate(x):
         t = x
         for j in range(i):
             t = x + x / sqrt(t)
-        p *= sqrt(t) 
-        
-    return p        
-  
-    
-f = compile_func([x], [2 / viete(x), 2 / lemniscate(x)])
+        p *= sqrt(t)
+
+    return p
+
+
+f = compile_func([x], [2 / viete(x), 2 / lemniscate(x)], cse=True)
+
 p, q = f(1/2)
 print(p, '?= ', math.pi, '(pi)')
 print(q, '?= ', 2.622057554292119, '(lemniscate constant)')

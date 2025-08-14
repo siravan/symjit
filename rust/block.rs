@@ -100,8 +100,7 @@ impl Block {
     }
 
     fn process(&mut self, node: Node) -> Node {
-        let node = self.trim(node);
-        self.eliminate(node)
+        self.trim(node)
     }
 
     fn trim(&mut self, node: Node) -> Node {
@@ -139,7 +138,6 @@ impl Block {
             && right.ershov_number() == COUNT_SCRATCH - 1
         {
             let lhs = self.add_tmp();
-            let right = self.eliminate(right);
             self.stmts.push(Statement::assign(lhs.clone(), right));
             lhs
         } else {
@@ -149,27 +147,110 @@ impl Block {
         Node::create_binary(op.as_str(), left, right, power)
     }
 
-    fn eliminate(&mut self, mut node: Node) -> Node {
+    /*
+    pub fn eliminate(&mut self) {
         if !self.cse {
-            return node;
+            return;
         }
 
+        let stmts: Vec<Statement> = self.stmts.drain(..).collect();
+
+        for s in stmts {
+            let mut hs: HashSet<u64> = HashSet::new();
+            let mut cs: HashMap<u64, Node> = HashMap::new();
+
+            match s {
+                Statement::Assign { rhs, lhs } => {
+                    let mut rhs = rhs;
+                    self.find_common_subexpr(&mut hs, &mut cs, &mut rhs);
+                    let rhs = if cs.is_empty() {
+                        rhs
+                    } else {
+                        self.subs_common(&cs, rhs)
+                    };
+                    self.stmts.push(Statement::Assign { lhs, rhs });
+                }
+                Statement::Call {
+                    op,
+                    lhs,
+                    arg,
+                    num_args,
+                } => {
+                    let mut arg = arg;
+                    self.find_common_subexpr(&mut hs, &mut cs, &mut arg);
+                    let arg = self.subs_common(&cs, arg);
+                    self.stmts.push(Statement::Call {
+                        op,
+                        lhs,
+                        arg,
+                        num_args,
+                    });
+                }
+            }
+        }
+    }
+    */
+
+    pub fn eliminate(&mut self) {
+        if !self.cse {
+            return;
+        }
+
+        let mut stmts: Vec<Statement> = self.stmts.drain(..).collect();
+
         let mut hs: HashSet<u64> = HashSet::new();
-        let mut cs: HashMap<u64, Node> = HashMap::new();
-        self.find_common_subexpr(&mut hs, &mut cs, &mut node);
+        let mut cs: HashMap<u64, (Node, Node)> = HashMap::new();
+
+        for s in stmts.iter_mut() {
+            match s {
+                Statement::Assign { rhs, .. } => {
+                    self.find_common_subexpr(&mut hs, &mut cs, rhs);
+                }
+                Statement::Call { arg, .. } => {
+                    self.find_common_subexpr(&mut hs, &mut cs, arg);
+                }
+            }
+        }
 
         if cs.is_empty() {
-            node
-        } else {
-            println!("common sub-expression elimination");
-            self.subs_common(&cs, node)
+            self.stmts = stmts.drain(..).collect();
+            return;
+        }
+
+        println!("{} sub-expressions found.", cs.len());
+
+        let mut ls: HashSet<u64> = HashSet::new();
+
+        for s in stmts {
+            match s {
+                Statement::Assign { lhs, rhs } => {
+                    // println!(":= {:?}", lhs);
+                    let rhs = self.subs_common(&cs, &mut ls, rhs);
+                    self.stmts.push(Statement::Assign { lhs, rhs });
+                }
+                Statement::Call {
+                    op,
+                    lhs,
+                    arg,
+                    num_args,
+                } => {
+                    // println!("f= {:?}", lhs);
+                    let arg = self.subs_common(&cs, &mut ls, arg);
+                    self.stmts.push(Statement::Call {
+                        op,
+                        lhs,
+                        arg,
+                        num_args,
+                    });
+                }
+            }
         }
     }
 
     fn find_common_subexpr(
         &mut self,
         hs: &mut HashSet<u64>,
-        cs: &mut HashMap<u64, Node>,
+        cs: &mut HashMap<u64, (Node, Node)>,
         node: &mut Node,
     ) {
         if node.weightof() > 2 {
@@ -178,9 +259,11 @@ impl Block {
             if hs.contains(&h) {
                 if !cs.contains_key(&h) {
                     let lhs = self.add_tmp();
+                    /*
                     self.stmts
                         .push(Statement::assign(lhs.clone(), node.clone()));
-                    cs.insert(h, lhs);
+                    */
+                    cs.insert(h, (lhs, node.clone()));
                 }
             } else {
                 hs.insert(h);
@@ -191,8 +274,13 @@ impl Block {
         node.second().map(|n| self.find_common_subexpr(hs, cs, n));
     }
 
-    fn subs_common(&mut self, cs: &HashMap<u64, Node>, node: Node) -> Node {
-        if node.weightof() < 3 {
+    fn subs_common(
+        &mut self,
+        cs: &HashMap<u64, (Node, Node)>,
+        ls: &mut HashSet<u64>,
+        node: Node,
+    ) -> Node {
+        if node.weightof() < 5 {
             return node;
         }
 
@@ -202,7 +290,7 @@ impl Block {
             Node::Var { sym, status } => Node::Var { sym, status },
             Node::Unary {
                 op, arg, power, h, ..
-            } => self.subs_common_unary(cs, op, arg, power, h),
+            } => self.subs_common_unary(cs, ls, op, arg, power, h),
             Node::Binary {
                 op,
                 left,
@@ -210,49 +298,65 @@ impl Block {
                 power,
                 h,
                 ..
-            } => self.subs_common_binary(cs, op, left, right, power, h),
+            } => self.subs_common_binary(cs, ls, op, left, right, power, h),
         }
     }
 
     fn subs_common_unary(
         &mut self,
-        cs: &HashMap<u64, Node>,
+        cs: &HashMap<u64, (Node, Node)>,
+        ls: &mut HashSet<u64>,
         op: String,
         arg: Box<Node>,
         power: i32,
         h: u64,
     ) -> Node {
-        if let Some(tmp) = cs.get(&h) {
-            return tmp.clone();
+        if let Some((lhs, rhs)) = cs.get(&h) {
+            let h = &lhs.hashof();
+
+            if !ls.contains(h) {
+                self.stmts.push(Statement::assign(lhs.clone(), rhs.clone()));
+                return lhs.clone();
+            } else {
+                ls.insert(*h);
+            }
         }
 
-        let arg = self.subs_common(cs, *arg);
+        let arg = self.subs_common(cs, ls, *arg);
         Node::create_unary(op.as_str(), arg, power)
     }
 
     fn subs_common_binary(
         &mut self,
-        cs: &HashMap<u64, Node>,
+        cs: &HashMap<u64, (Node, Node)>,
+        ls: &mut HashSet<u64>,
         op: String,
         left: Box<Node>,
         right: Box<Node>,
         power: i32,
         h: u64,
     ) -> Node {
-        if let Some(tmp) = cs.get(&h) {
-            return tmp.clone();
+        if let Some((lhs, rhs)) = cs.get(&h) {
+            let h = &lhs.hashof();
+
+            if !ls.contains(h) {
+                self.stmts.push(Statement::assign(lhs.clone(), rhs.clone()));
+                return lhs.clone();
+            } else {
+                ls.insert(*h);
+            }
         }
 
         let el = left.ershov_number();
         let er = right.ershov_number();
 
         if el >= er {
-            let left = self.subs_common(cs, *left);
-            let right = self.subs_common(cs, *right);
+            let left = self.subs_common(cs, ls, *left);
+            let right = self.subs_common(cs, ls, *right);
             Node::create_binary(op.as_str(), left, right, power)
         } else {
-            let right = self.subs_common(cs, *right);
-            let left = self.subs_common(cs, *left);
+            let right = self.subs_common(cs, ls, *right);
+            let left = self.subs_common(cs, ls, *left);
             Node::create_binary(op.as_str(), left, right, power)
         }
     }

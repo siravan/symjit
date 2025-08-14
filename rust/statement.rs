@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use super::utils::{reg, Eval};
+use super::utils::{reg, Eval, Reg};
 use crate::code::VirtualTable;
 use crate::generator::Generator;
 use crate::node::Node;
