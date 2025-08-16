@@ -21,16 +21,18 @@ Y = 0
 for i in range(12):
     X, Y = quad_map(X, Y, a, b)
 
-t0 = time.time()
+t0 = time.perf_counter_ns()
 
 f = compile_func([a, b], [X, Y], **args)
 
-t1 = time.time()
+t1 = time.perf_counter_ns()
 
 X, Y = f(A, B)
 
-print(f"compilation time: {1000 * (t1 - t0):.1f} ms")
-print(f"running time: {1000 * (time.time() - t1):.1f} ms")
+t2 = time.perf_counter_ns()
+
+print(f"compilation time: {1e-6 * (t1 - t0):.1f} ms")
+print(f"running time: {1e-6 * (t2 - t1):.1f} ms")
 
 # Z = np.hypot(X, Y)
 

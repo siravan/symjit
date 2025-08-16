@@ -19,13 +19,13 @@ p = f.get_p()
 
 t_eval = np.arange(0, 2000, 1.0)
 
-t0 = time.time()
+t0 = time.perf_counter_ns()
 sol = scipy.integrate.solve_ivp(
     f, (0, 2000), u0, t_eval=t_eval, args=p, method="BDF", max_step=0.1
 )
-t1 = time.time()
+t1 = time.perf_counter_ns()
 
-print(f"done in {(t1-t0)*1000:.1f} ms")
+print(f"done in {(t1-t0)*1e-6:.1f} ms")
 
 plt.plot(t_eval, sol.y[11, :])
 plt.show()

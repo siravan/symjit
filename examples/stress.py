@@ -22,12 +22,12 @@ for i in range(14):
     fr = compile_func([x], ed, **args)
     fl = lambdify([x], ed)
 
-    t0 = time.time()
+    t0 = time.perf_counter_ns()
     for _ in range(1000):
         r = fr(x0)
-    t1 = time.time()
+    t1 = time.perf_counter_ns()
 
     for _ in range(1000):
         l = fl(x0)
 
-    print(f"{i}\t{l:.12f}\t{r:.12f}\t{1000*(t1-t0)}")
+    print(f"{i}\t{l:.12f}\t{r:.12f}\t{1e-6*(t1-t0):.3f}")
