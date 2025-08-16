@@ -5,6 +5,9 @@ import math
 import platform
 from sympy import symbols, lambdify, sqrt, sin, cos, Piecewise
 from symjit import compile_func
+from random import randint
+
+L = 1000
 
 def arch():
     if platform.machine() in ["x86_64", "AMD64"]:
@@ -17,26 +20,39 @@ def arch():
 x, y, z, a, b = symbols("x y z a b")
 
 
-def func(states, p, backend, ty, use_simd):
-    if backend == 'sympy':
-        return lambdify(states, p)
+def func(states, p, args):
+    t0 = time.time()
+
+    if args['backend'] == 'sympy':
+        f = lambdify(states, p)
+    elif args['backend'] == 'python':
+        f = compile_func(states, p, backend='python')
     else:
-        return compile_func(states, p, backend=backend, ty=ty, use_simd=use_simd)
+        f = compile_func(states, p, **args)
+
+    t1 = time.time()
+
+    print(f'compile in {(t1-t0)*1000:.1f} ms\t', end='')
+    return f
 
 
-def mandelbrot(backend, ty, use_simd):
+def mandelbrot(args):
     A, B = np.meshgrid(np.arange(-2, 1, 0.002), np.arange(-1.5, 1.5, 0.002))
-    f = func([a, b, x, y], [x**2 - y**2 + a, 2 * x * y + b], backend=backend, ty=ty, use_simd=use_simd)
+    f = func([a, b, x, y], [x**2 - y**2 + a, 2 * x * y + b], args)
     X = np.zeros_like(A)
     Y = np.zeros_like(A)
+
+    t0 = time.time()
 
     for i in range(5):
         X, Y = f(A, B, X, Y)
 
-    return X + Y
+    t1 = time.time()
+
+    return X + Y, t1 - t0
 
 
-def mandelbrot2(backend, ty, use_simd):
+def mandelbrot2(args):
     A, B = np.meshgrid(np.arange(-2, 1, 0.002), np.arange(-1.5, 1.5, 0.002))
 
     def quad_map(x, y, a, b):
@@ -48,16 +64,22 @@ def mandelbrot2(backend, ty, use_simd):
     for i in range(5):
         X, Y = quad_map(X, Y, a, b)
 
-    f = func([a, b], [X, Y], backend=backend, ty=ty, use_simd=use_simd)
+    f = func([a, b], [X, Y], args)
+
+    t0 = time.time()
     X, Y = f(A, B)
-    return X + Y
+    t1 = time.time()
+
+    return X + Y, t1 - t0
 
 
-def mandelbrot3(backend, ty, use_simd):
+def mandelbrot3(args):
     A, B = np.meshgrid(np.arange(-2, 1, 0.002), np.arange(-1.5, 1.5, 0.002))
-    f = func([x, y, a, b], [x**2 - y**2 + a, 2 * x * y + b], backend=backend, ty=ty, use_simd=use_simd)
+    f = func([x, y, a, b], [x**2 - y**2 + a, 2 * x * y + b], args)
 
-    if backend == 'sympy':
+    t0 = time.time()
+
+    if args['backend'] == 'sympy':
         X = np.zeros_like(A)
         Y = np.zeros_like(A)
         for i in range(5):
@@ -72,10 +94,12 @@ def mandelbrot3(backend, ty, use_simd):
         X = np.reshape(buf[0,:], A.shape)
         Y = np.reshape(buf[1,:], A.shape)
 
-    return X + Y
+    t1 = time.time()
+
+    return X + Y, t1 - t0
 
 
-def pi(backend, ty, use_simd):
+def pi(args):
     N = 25
 
     def arctan_series(x):
@@ -86,11 +110,16 @@ def pi(backend, ty, use_simd):
         return s
 
     p = 4 * (4 * arctan_series(x) - arctan_series(y))
-    f = func([x, y], p, backend=backend, ty=ty, use_simd=use_simd)
-    return f(1/5, 1/239)
+    f = func([x, y], p, args)
+
+    t0 = time.time()
+    u = [f(1/5, 1/239) for _ in range(L)]
+    t1 = time.time()
+
+    return u[randint(0, L-1)], t1 - t0
 
 
-def viete(backend, ty, use_simd):
+def viete(args):
     p = 1
 
     for i in range(21):
@@ -99,11 +128,16 @@ def viete(backend, ty, use_simd):
             t = x + x * sqrt(t)
         p *= sqrt(t)
 
-    f = func([x], [2 / p], backend=backend, ty=ty, use_simd=use_simd)
-    return f(1 / 2)
+    f = func([x], [2 / p], args)
+
+    t0 = time.time()
+    u = [f(1 / 2) for _ in range(L)]
+    t1 = time.time()
+
+    return u[randint(0, L-1)], t1 - t0
 
 
-def lemniscate(backend, ty, use_simd):
+def lemniscate(args):
     p = 1
 
     for i in range(21):
@@ -112,13 +146,18 @@ def lemniscate(backend, ty, use_simd):
             t = x + x / sqrt(t)
         p *= sqrt(t)
 
-    f = func([x], [2 / p], backend=backend, ty=ty, use_simd=use_simd)
-    return f(1 / 2)
+    f = func([x], [2 / p], args)
+
+    t0 = time.time()
+    u = [f(1 / 2) for _ in range(L)]
+    t1 = time.time()
+
+    return u[randint(0, L-1)], t1 - t0
 
 
-def binom(backend, ty, use_simd):
-    N = 12
-    K = 7
+def binom(args):
+    N = 15
+    K = 8
 
     def binom(x, y, n, k):
         if k == 0 or k == n:
@@ -126,22 +165,32 @@ def binom(backend, ty, use_simd):
         else:
             return binom(x, y, n - 1, k) * x + binom(x, y, n - 1, k - 1) * y
 
-    f = func([x, y], binom(x, y, N, K), backend=backend, ty=ty, use_simd=use_simd)
-    return f(1, 1)
+    f = func([x, y], binom(x, y, N, K), args)
+
+    t0 = time.time()
+    u = [f(1, 1) for _ in range(L)]
+    t1 = time.time()
+
+    return u[randint(0, L-1)], t1 - t0
 
 
-def stress(backend, ty, use_simd):
+def stress(args):
     e = x**2 + x
 
-    for _ in range(i):
+    for _ in range(15):
         e = e**2 + e
         ed = e.diff(x)
 
-    f = func([x], [ed], backend=backend, ty=ty, use_simd=use_simd)
-    return f(0.001)
+    f = func([x], [ed], args)
+
+    t0 = time.time()
+    u = [f(0.001) for _ in range(L)]
+    t1 = time.time()
+
+    return u[randint(0, L-1)], t1 - t0
 
 
-def power(backend, ty, use_simd):
+def power(args):
     N = 150
 
     p = 0
@@ -150,11 +199,16 @@ def power(backend, ty, use_simd):
     for i in range(-N, N+1):
         p += sin(1 + x**i)**2
 
-    f = func([x], [p], backend=backend, ty=ty, use_simd=use_simd)
-    return f(x0)
+    f = func([x], [p], args)
+
+    t0 = time.time()
+    u = [f(x0) for _ in range(L)]
+    t1 = time.time()
+
+    return u[randint(0, L-1)], t1 - t0
 
 
-def powi_mod(backend, ty, use_simd):
+def powi_mod(args):
     def binom(x, y, n, k):
         if k == 0 or k == n:
             return 1.0
@@ -163,11 +217,16 @@ def powi_mod(backend, ty, use_simd):
 
     p = binom(x, y, 7, 4)**5 % 65537 + binom(x, y, 8, 5)**(4**x) % 65537
 
-    f = func([x, y], [p], backend=backend, ty=ty, use_simd=use_simd)
-    return f(1, 1)
+    f = func([x, y], [p], args)
+
+    t0 = time.time()
+    u = [f(1, 1) for _ in range(L)]
+    t1 = time.time()
+
+    return u[randint(0, L-1)], t1 - t0
 
 
-def fact(backend, ty, use_simd):
+def fact(args):
     def factorial(x, n):
         if n == 0:
             return 1
@@ -175,26 +234,39 @@ def fact(backend, ty, use_simd):
             return Piecewise([n, x >= n], [1, True]) * factorial(x, n-1)
 
     p = factorial(x, 20)
-    f = func([x], [p], backend=backend, ty=ty, use_simd=use_simd)
-    return f(18)
+    f = func([x], [p], args)
+
+    t0 = time.time()
+    u = [f(18) for _ in range(L)]
+    t1 = time.time()
+
+    return u[randint(0, L-1)], t1 - t0
 
 
-def triple(backend, ty, use_simd):
+def triple(args):
     p = 1 / (1 - cos(x) * cos(y) * cos(z))
-    f = func([x, y, z], p, backend=backend, ty=ty, use_simd=use_simd)
-    return integrate.tplquad(lambda x, y, z: f(x, y, z), 0, math.pi, 0, math.pi, 0, math.pi)[0]
+    f = func([x, y, z], p, args)
+
+    t0 = time.time()
+    u = integrate.tplquad(lambda x, y, z: f(x, y, z), 0, math.pi, 0, math.pi, 0, math.pi)[0]
+    t1 = time.time()
+
+    return u, t1 - t0
 
 
-def triple_fast(backend, ty, use_simd):
+def triple_fast(args):
     p = 1 / (1 - cos(x) * cos(y) * cos(z))
 
-    if backend == 'sympy':
-        f = lambdify([x, y, z], p)
-    else:
-        func = compile_func([x, y, z], p, backend=backend, ty=ty, use_simd=use_simd)
-        f = func.fast_func()
+    f = func([x, y, z], p, args)
 
-    return integrate.tplquad(lambda x, y, z: f(x, y, z), 0, math.pi, 0, math.pi, 0, math.pi)[0]
+    if hasattr(f, 'fast_func'):
+        f = f.fast_func()
+
+    t0 = time.time()
+    u = integrate.tplquad(lambda x, y, z: f(x, y, z), 0, math.pi, 0, math.pi, 0, math.pi)[0]
+    t1 = time.time()
+
+    return u, t1 - t0
 
 
 #############################################################################
@@ -202,58 +274,69 @@ def triple_fast(backend, ty, use_simd):
 def test_model(f, label, pyback=True, bytecode=True):
     print(f'testing {label}')
 
-    print('\ttesting sympy lambdify...\t\t', end='')
-    t0 = time.time()
-    X0 = f('sympy', None, False)
-    t1 = time.time()
-    print(f'\tdone in {1000 * (t1 - t0):.1f} ms')
+    args = {'backend': 'rust', 'ty': 'native', 'use_simd': True, 'use_threads': True, 'cse': True}
 
-    ty = arch()
+    print('\tlambdify...\t', end='')
+    args['backend'] = 'sympy'
+    X0, dt = f(args)
+    print(f'\tdone in {1000 * dt:.3f} ms')
 
-    print('\ttesting rust backend for amd without simd...', end='')
-    t0 = time.time()
-    X = f('rust', ty, False)
-    t1 = time.time()
+    args['backend'] = 'rust'
+    args['ty'] = arch()
+
+    print('\trust backend...\t', end='')
+    X, dt = f(args)
     np.testing.assert_array_almost_equal(X0, X)
-    print(f'\tpass in {1000 * (t1 - t0):.1f} ms')
+    print(f'\tpass in {1000 * dt:.3f} ms')
 
-    if ty == 'amd':
-        print('\ttesting rust backend for amd-avx with simd...', end='')
-        t0 = time.time()
-        X = f('rust', 'amd-avx', True)
-        t1 = time.time()
-        np.testing.assert_array_almost_equal(X0, X)
-        print(f'\tpass in {1000 * (t1 - t0):.1f} ms')
+    print('\tno CSE...\t', end='')
+    args['cse'] = False
+    X, dt = f(args)
+    args['cse'] = True
+    np.testing.assert_array_almost_equal(X0, X)
+    print(f'\tpass in {1000 * dt:.3f} ms')
 
-        print('\ttesting rust backend for amd-sse...\t', end='')
-        t0 = time.time()
-        X = f('rust', 'amd-sse', False)
-        t1 = time.time()
+    print('\tno threads...\t', end='')
+    args['use_threads'] = False
+    X, dt = f(args)
+    args['use_threads'] = True
+    np.testing.assert_array_almost_equal(X0, X)
+    print(f'\tpass in {1000 * dt:.3f} ms')
+
+    if args['ty'] == 'amd':
+        print('\tno simd...\t', end='')
+        args['use_simd'] = False
+        X, dt = f(args)
+        args['use_simd'] = True
         np.testing.assert_array_almost_equal(X0, X)
-        print(f'\tpass in {1000 * (t1 - t0):.1f} ms')
+        print(f'\tpass in {1000 * dt:.3f} ms')
+
+        print('\tamd-sse...\t', end='')
+        args['ty'] = 'amd-sse'
+        X, dt = f(args)
+        args['ty'] = 'amd'
+        np.testing.assert_array_almost_equal(X0, X)
+        print(f'\tpass in {1000 * dt:.3f} ms')
 
     if bytecode:
-        print('\ttesting rust backend with bytecode...\t', end='')
-        t0 = time.time()
-        X = f('rust', 'bytecode', False)
-        t1 = time.time()
+        print('\tbytecode...\t', end='')
+        args['ty'] = 'bytecode'
+        X, dt = f(args)
         np.testing.assert_array_almost_equal(X0, X)
-        print(f'\tpass in {1000 * (t1 - t0):.1f} ms')
+        print(f'\tpass in {1000 * dt:.3f} ms')
 
-        print('\tdebug mode (native vs bytecode)...\t', end='')
-        t0 = time.time()
-        X = f('rust', 'debug', False)
-        t1 = time.time()
+        print('\tdebug mode...\t', end='')
+        args['ty'] = 'debug'
+        X, dt = f(args)
         np.testing.assert_array_almost_equal(X0, X)
-        print(f'\tpass in {1000 * (t1 - t0):.1f} ms')
+        print(f'\tpass in {1000 * dt:.3f} ms')
 
     if pyback:
-        print('\ttesting python backend...\t\t', end='')
-        t0 = time.time()
-        X = f('python', ty, False)
-        t1 = time.time()
+        print('\tpython backend...', end='')
+        args['backend'] = 'python'
+        X, dt = f(args)
         np.testing.assert_array_almost_equal(X0, X)
-        print(f'\tpass in {1000 * (t1 - t0):.1f} ms')
+        print(f'\tpass in {1000 * dt:.3f} ms')
 
 
 test_model(mandelbrot, 'mandelbrot')

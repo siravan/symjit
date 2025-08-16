@@ -19,6 +19,7 @@ pub struct Block {
     pub sym_table: SymbolTable,
     pub num_tmp: usize,
     pub cse: bool,
+    pub calls: HashMap<(String, u64), Node>,
 }
 
 impl Block {
@@ -28,6 +29,7 @@ impl Block {
             sym_table: SymbolTable::new(),
             num_tmp: 0,
             cse,
+            calls: HashMap::new(),
         }
     }
 
@@ -49,18 +51,36 @@ impl Block {
     }
 
     pub fn add_call_unary(&mut self, op: &str, arg: Node) -> Node {
+        let n = (op.to_string(), arg.hashof());
+
+        if self.cse {
+            if let Some(lhs) = self.calls.get(&n) {
+                return lhs.clone();
+            }
+        }
+
         let arg = self.create_unary("_call_", arg);
         let arg = self.process(arg);
         let lhs = self.add_tmp();
         self.stmts.push(Statement::call(op, lhs.clone(), arg, 1));
+        self.calls.insert(n, lhs.clone());
         lhs
     }
 
     pub fn add_call_binary(&mut self, op: &str, left: Node, right: Node) -> Node {
+        let n = (op.to_string(), left.hashof() ^ (right.hashof() + 1));
+
+        if self.cse {
+            if let Some(lhs) = self.calls.get(&n) {
+                return lhs.clone();
+            }
+        }
+
         let arg = self.create_binary("_call_", left, right);
         let arg = self.process(arg);
         let lhs = self.add_tmp();
         self.stmts.push(Statement::call(op, lhs.clone(), arg, 2));
+        self.calls.insert(n, lhs.clone());
         lhs
     }
 
@@ -103,6 +123,12 @@ impl Block {
         self.trim(node)
     }
 
+    /*
+     * trim breaks expressions to assure the ershov_number of the root does not
+     * exceed the limit set by COUNT_SCRATCH
+     * By default, COUNT_SCRATCH is 14, which is set because of 16 XMM/YMM registers
+     * Note that two registers (XMM0 and XMM1) are needed as temporary and for function calls
+     */
     fn trim(&mut self, node: Node) -> Node {
         if node.ershov_number() < COUNT_SCRATCH {
             return node;
@@ -148,84 +174,55 @@ impl Block {
     }
 
     /*
+     * eliminate performs common-subexpression-eliminaton
+     * the actual CSE work is done in elimination_pass, which uses
+     * a two-pass algorithm.
+     * In the first pass, common subexpressions are identified.
+     * In the second pass, the right side of statements are rewritten.
+     */
     pub fn eliminate(&mut self) {
-        if !self.cse {
-            return;
-        }
-
-        let stmts: Vec<Statement> = self.stmts.drain(..).collect();
-
-        for s in stmts {
-            let mut hs: HashSet<u64> = HashSet::new();
-            let mut cs: HashMap<u64, Node> = HashMap::new();
-
-            match s {
-                Statement::Assign { rhs, lhs } => {
-                    let mut rhs = rhs;
-                    self.find_common_subexpr(&mut hs, &mut cs, &mut rhs);
-                    let rhs = if cs.is_empty() {
-                        rhs
-                    } else {
-                        self.subs_common(&cs, rhs)
-                    };
-                    self.stmts.push(Statement::Assign { lhs, rhs });
-                }
-                Statement::Call {
-                    op,
-                    lhs,
-                    arg,
-                    num_args,
-                } => {
-                    let mut arg = arg;
-                    self.find_common_subexpr(&mut hs, &mut cs, &mut arg);
-                    let arg = self.subs_common(&cs, arg);
-                    self.stmts.push(Statement::Call {
-                        op,
-                        lhs,
-                        arg,
-                        num_args,
-                    });
-                }
+        for _ in 0..5 {
+            if !self.elimination_pass() {
+                return;
             }
         }
     }
-    */
 
-    pub fn eliminate(&mut self) {
+    pub fn elimination_pass(&mut self) -> bool {
         if !self.cse {
-            return;
+            return false;
         }
 
+        // first-pass
         let mut stmts: Vec<Statement> = self.stmts.drain(..).collect();
 
-        let mut hs: HashSet<u64> = HashSet::new();
-        let mut cs: HashMap<u64, (Node, Node)> = HashMap::new();
+        let mut hs: HashSet<u64> = HashSet::new(); // hash-value-set to find collision
+        let mut cs: HashMap<u64, (Node, Node)> = HashMap::new(); // collision set as (lhs, rhs)
 
         for s in stmts.iter_mut() {
             match s {
                 Statement::Assign { rhs, .. } => {
-                    self.find_common_subexpr(&mut hs, &mut cs, rhs);
+                    self.find_cse(&mut hs, &mut cs, rhs);
                 }
                 Statement::Call { arg, .. } => {
-                    self.find_common_subexpr(&mut hs, &mut cs, arg);
+                    self.find_cse(&mut hs, &mut cs, arg);
                 }
             }
         }
 
         if cs.is_empty() {
             self.stmts = stmts.drain(..).collect();
-            return;
+            return false;
         }
 
-        println!("{} sub-expressions found.", cs.len());
+        // println!("{} sub-expressions found.", cs.len());
 
-        let mut ls: HashSet<u64> = HashSet::new();
+        let mut ls: HashSet<u64> = HashSet::new(); // a set of common subexpression lhs which are added to self.stmts
 
         for s in stmts {
             match s {
                 Statement::Assign { lhs, rhs } => {
-                    // println!(":= {:?}", lhs);
-                    let rhs = self.subs_common(&cs, &mut ls, rhs);
+                    let rhs = self.rewrite_cse(&cs, &mut ls, rhs);
                     self.stmts.push(Statement::Assign { lhs, rhs });
                 }
                 Statement::Call {
@@ -234,8 +231,7 @@ impl Block {
                     arg,
                     num_args,
                 } => {
-                    // println!("f= {:?}", lhs);
-                    let arg = self.subs_common(&cs, &mut ls, arg);
+                    let arg = self.rewrite_cse(&cs, &mut ls, arg);
                     self.stmts.push(Statement::Call {
                         op,
                         lhs,
@@ -245,24 +241,23 @@ impl Block {
                 }
             }
         }
+
+        true
     }
 
-    fn find_common_subexpr(
+    fn find_cse(
         &mut self,
         hs: &mut HashSet<u64>,
         cs: &mut HashMap<u64, (Node, Node)>,
         node: &mut Node,
     ) {
-        if node.weightof() > 2 {
+        if node.weightof() >= 5 && !node.is_unary("_call_") && !node.is_binary("_call_") {
             let h = node.hashof();
 
             if hs.contains(&h) {
+                // collision detected!
                 if !cs.contains_key(&h) {
                     let lhs = self.add_tmp();
-                    /*
-                    self.stmts
-                        .push(Statement::assign(lhs.clone(), node.clone()));
-                    */
                     cs.insert(h, (lhs, node.clone()));
                 }
             } else {
@@ -270,11 +265,11 @@ impl Block {
             };
         }
 
-        node.first().map(|n| self.find_common_subexpr(hs, cs, n));
-        node.second().map(|n| self.find_common_subexpr(hs, cs, n));
+        node.first().map(|n| self.find_cse(hs, cs, n));
+        node.second().map(|n| self.find_cse(hs, cs, n));
     }
 
-    fn subs_common(
+    fn rewrite_cse(
         &mut self,
         cs: &HashMap<u64, (Node, Node)>,
         ls: &mut HashSet<u64>,
@@ -290,7 +285,10 @@ impl Block {
             Node::Var { sym, status } => Node::Var { sym, status },
             Node::Unary {
                 op, arg, power, h, ..
-            } => self.subs_common_unary(cs, ls, op, arg, power, h),
+            } => self.common_subexpr(cs, ls, h).unwrap_or_else(|| {
+                let arg = self.rewrite_cse(cs, ls, *arg);
+                Node::create_unary(op.as_str(), arg, power)
+            }),
             Node::Binary {
                 op,
                 left,
@@ -298,67 +296,32 @@ impl Block {
                 power,
                 h,
                 ..
-            } => self.subs_common_binary(cs, ls, op, left, right, power, h),
+            } => self.common_subexpr(cs, ls, h).unwrap_or_else(|| {
+                let left = self.rewrite_cse(cs, ls, *left);
+                let right = self.rewrite_cse(cs, ls, *right);
+                Node::create_binary(op.as_str(), left, right, power)
+            }),
         }
     }
 
-    fn subs_common_unary(
+    fn common_subexpr(
         &mut self,
         cs: &HashMap<u64, (Node, Node)>,
         ls: &mut HashSet<u64>,
-        op: String,
-        arg: Box<Node>,
-        power: i32,
         h: u64,
-    ) -> Node {
+    ) -> Option<Node> {
         if let Some((lhs, rhs)) = cs.get(&h) {
-            let h = &lhs.hashof();
+            let k = &lhs.hashof();
 
-            if !ls.contains(h) {
+            if !ls.contains(k) {
                 self.stmts.push(Statement::assign(lhs.clone(), rhs.clone()));
-                return lhs.clone();
-            } else {
-                ls.insert(*h);
+                ls.insert(*k);
             }
+
+            return Some(lhs.clone());
         }
 
-        let arg = self.subs_common(cs, ls, *arg);
-        Node::create_unary(op.as_str(), arg, power)
-    }
-
-    fn subs_common_binary(
-        &mut self,
-        cs: &HashMap<u64, (Node, Node)>,
-        ls: &mut HashSet<u64>,
-        op: String,
-        left: Box<Node>,
-        right: Box<Node>,
-        power: i32,
-        h: u64,
-    ) -> Node {
-        if let Some((lhs, rhs)) = cs.get(&h) {
-            let h = &lhs.hashof();
-
-            if !ls.contains(h) {
-                self.stmts.push(Statement::assign(lhs.clone(), rhs.clone()));
-                return lhs.clone();
-            } else {
-                ls.insert(*h);
-            }
-        }
-
-        let el = left.ershov_number();
-        let er = right.ershov_number();
-
-        if el >= er {
-            let left = self.subs_common(cs, ls, *left);
-            let right = self.subs_common(cs, ls, *right);
-            Node::create_binary(op.as_str(), left, right, power)
-        } else {
-            let right = self.subs_common(cs, ls, *right);
-            let left = self.subs_common(cs, ls, *left);
-            Node::create_binary(op.as_str(), left, right, power)
-        }
+        None
     }
 }
 

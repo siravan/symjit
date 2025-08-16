@@ -1,3 +1,6 @@
+import util
+args = util.process_argv()
+
 import os
 import scipy.integrate
 import matplotlib.pyplot as plt
@@ -11,8 +14,9 @@ path = os.path.join(os.path.dirname(__file__), "cellml", "tentusscher.json")
 with open(path) as fd:
     model = fd.read()
 
-f = compile_json(model, ty='bytecode')
-g = compile_json(model)
+g = compile_json(model, **args)
+args['ty'] = 'bytecode'
+f = compile_json(model, **args)
 
 u0 = f.get_u0()
 p = f.get_p()
@@ -40,25 +44,23 @@ for (t, u) in U:
 
     obs_f = f.compiler.obs
     obs_g = g.compiler.obs
-    
-    err = np.abs(du_f - du_g) 
-    err2 = np.abs(obs_f - obs_g) 
-    
+
+    err = np.abs(du_f - du_g)
+    err2 = np.abs(obs_f - obs_g)
+
     if max(err) > 1e-10 or max(err2) > 1e-10:
         print(t, ' fails')
         print('u:')
         print(u)
-        
-        
+
+
         print(err)
         print(err2)
-        
+
         print('bytecode')
         print(du_f)
-        
+
         print('compiled')
         print(du_g)
-        
+
         break
-
-

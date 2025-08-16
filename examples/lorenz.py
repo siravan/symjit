@@ -1,5 +1,5 @@
 import util
-backend, ty, use_simd, use_threads = util.process_argv()
+args = util.process_argv()
 
 import time
 import numpy as np
@@ -15,7 +15,7 @@ ode = (sigma * (y - x), x * (rho - z) - y, x * y - beta * z)
 
 t0 = time.time()
 
-f = compile_ode(t, (x, y, z), ode, params=(sigma, rho, beta), backend=backend, ty=ty)
+f = compile_ode(t, (x, y, z), ode, params=(sigma, rho, beta), **args)
 
 # print(f.dumps())
 

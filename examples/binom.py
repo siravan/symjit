@@ -1,5 +1,5 @@
 import util
-backend, ty, use_simd, use_threads = util.process_argv()
+args = util.process_argv()
 
 import math
 from sympy import symbols
@@ -19,6 +19,6 @@ def binom(x, y, n, k):
         return binom(x, y, n - 1, k) * x + binom(x, y, n - 1, k - 1) * y
 
 x, y = symbols('x y')
-f = compile_func([x, y], binom(x, y, N, K), backend=backend, ty=ty, use_threads=use_threads)
+f = compile_func([x, y], binom(x, y, N, K), **args)
 print(f(1, 1), '?=', math.comb(N, K))
-print(f.dumps())
+# print(f.dumps())

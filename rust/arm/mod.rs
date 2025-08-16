@@ -7,7 +7,6 @@ use crate::utils::{align_stack, Reg};
 
 pub struct ArmGenerator {
     a: Assembler,
-    r0: Option<u32>,
     mask: u32,
 }
 
@@ -28,7 +27,6 @@ impl ArmGenerator {
     pub fn new() -> ArmGenerator {
         ArmGenerator {
             a: Assembler::new(0, 3),
-            r0: None,
             mask: 0x00ff,
         }
     }
@@ -40,22 +38,14 @@ impl ArmGenerator {
     fn flush(&mut self, dst: Reg) {
         let reg = ϕ(dst);
 
-        if reg == RET {
-            if let Some(idx) = self.r0 {
-                self.emit(arm! {str d(RET), [sp, #8*idx]});
-            };
+        let m = 1 << reg;
+        let idx = reg as i32;
 
-            self.r0 = None;
-        } else {
-            let m = 1 << reg;
-            let idx = reg as i32;
-
-            if self.mask & m == 0 {
-                self.emit(arm! {str d(reg), [sp, #8*idx]});
-            }
-
-            self.mask |= m;
+        if self.mask & m == 0 {
+            self.emit(arm! {str d(reg), [sp, #8*idx]});
         }
+
+        self.mask |= m;
     }
 
     fn restore_regs(&mut self) {
@@ -133,13 +123,6 @@ impl Generator for ArmGenerator {
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
-        if let Some(k) = self.r0 {
-            if k == idx {
-                self.emit(arm! {fmov d(ϕ(dst)), d(RET)});
-                self.r0 = None;
-                return;
-            }
-        };
         self.emit(arm! {ldr d(ϕ(dst)), [sp, #8*idx]});
     }
 
@@ -148,8 +131,7 @@ impl Generator for ArmGenerator {
     }
 
     fn save_stack_result(&mut self, idx: u32) {
-        assert!(self.r0.is_none());
-        self.r0 = Some(idx);
+        self.save_stack(Reg::Ret, idx);
     }
 
     fn neg(&mut self, dst: Reg, s1: Reg) {

@@ -1,5 +1,5 @@
 import util
-backend, ty, use_simd, use_threads = util.process_argv()
+args = util.process_argv()
 
 import numpy as np
 from sympy import symbols, lambdify, sin, cos
@@ -8,7 +8,7 @@ from symjit import compile_func
 x, y = symbols("x y")
 
 def test(p):
-    f = compile_func([x, y], p, backend=backend, ty=ty, use_simd=use_simd, use_threads=use_threads)
+    f = compile_func([x, y], p, **args)
     g = lambdify([x, y], p)
     assert(f(1, 2) == g(1, 2))
     assert(f(1.0, 2.0) == g(1.0, 2.0))

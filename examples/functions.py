@@ -1,5 +1,5 @@
 import util
-backend, ty, use_simd, use_threads = util.process_argv()
+args = util.process_argv()
 
 from sympy import *
 from symjit import *
@@ -66,7 +66,7 @@ Y = np.random.rand(15) * 0.9 + 0.1
 
 for eq in eqs:
     print("testing ", eq)
-    f = compile_func([x, y], eq, use_simd=True, backend=backend, ty=ty, use_threads=use_threads)
+    f = compile_func([x, y], eq, **args)
     g = lambdify([x, y], eq)
     np.testing.assert_array_almost_equal(f(X[0], Y[0]), g(X[0], Y[0]))
     np.testing.assert_array_almost_equal(f(X, Y), g(X, Y))

@@ -1,3 +1,6 @@
+import util
+args = util.process_argv()
+
 from sympy import *
 from symjit import compile_func
 import time
@@ -6,7 +9,7 @@ x = symbols('x')
 
 x0 = 0.0001
 
-print(f"depth\trust\t\tpython\t\tlambdify")
+print("depth\tlambdify\trust\t\tdt")
 
 for i in range(14):
     e = x**2 + x
@@ -16,12 +19,15 @@ for i in range(14):
 
     ed = e.diff(x)
 
-    fr = compile_func([x], [ed], backend='rust', cse=True)
-    fp = compile_func([x], [ed], backend='python')
+    fr = compile_func([x], ed, **args)
     fl = lambdify([x], ed)
 
     t0 = time.time()
-    y = fr(x0)[0]
+    for _ in range(1000):
+        r = fr(x0)
     t1 = time.time()
 
-    print(f"{i}\t{y:.12f}\t{fp(x0)[0]:.12f}\t{fl(x0):.12f}\t{1000*(t1-t0)}")
+    for _ in range(1000):
+        l = fl(x0)
+
+    print(f"{i}\t{l:.12f}\t{r:.12f}\t{1000*(t1-t0)}")

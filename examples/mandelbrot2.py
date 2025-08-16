@@ -1,5 +1,5 @@
 import util
-backend, ty, use_simd, use_threads = util.process_argv()
+args = util.process_argv()
 
 import time
 import numpy as np
@@ -23,7 +23,7 @@ for i in range(12):
 
 t0 = time.time()
 
-f = compile_func([a, b], [X, Y], use_simd=use_simd, use_threads=use_threads, cse=False, backend=backend)
+f = compile_func([a, b], [X, Y], **args)
 
 t1 = time.time()
 

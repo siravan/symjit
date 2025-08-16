@@ -1,5 +1,5 @@
 import util
-backend, ty, use_simd, use_threads = util.process_argv()
+args = util.process_argv()
 
 import time
 import numpy as np
@@ -13,7 +13,7 @@ A, B = np.meshgrid(np.arange(-2, 1, 0.002), np.arange(-1.5, 1.5, 0.002))
 
 t0 = time.time()
 
-f = compile_func([x, y, a, b], [x**2 - y**2 + a, 2 * x * y + b], backend=backend, ty=ty, use_simd=use_simd, use_threads=use_threads)
+f = compile_func([x, y, a, b], [x**2 - y**2 + a, 2 * x * y + b], **args)
 
 n = A.shape[0] * A.shape[1]
 buf = np.zeros((4, n), dtype="double")

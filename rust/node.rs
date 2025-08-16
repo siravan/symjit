@@ -1,6 +1,8 @@
 use anyhow::{anyhow, Result};
 
 use std::cell::RefCell;
+use std::fmt;
+use std::fmt::Debug;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
 
@@ -20,7 +22,7 @@ pub enum VarStatus {
 
 const COMMUTATIVE: &[&str] = &["plus", "times", "eq", "neq", "and", "or", "xor"];
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Node {
     Void,
     Const {
@@ -105,6 +107,7 @@ impl Node {
         let mut hasher = DefaultHasher::new();
         op.hash(&mut hasher);
         arg.hashof().hash(&mut hasher);
+        power.hash(&mut hasher);
 
         let w = 1 + arg.weightof();
 
@@ -123,6 +126,7 @@ impl Node {
 
         let mut hasher = DefaultHasher::new();
         op.hash(&mut hasher);
+        power.hash(&mut hasher);
 
         let mut l = left.hashof();
         let mut r = right.hashof();
@@ -609,6 +613,20 @@ impl Eval for Node {
                     } //_ => f64::NAN,
                 }
             }
+        }
+    }
+}
+
+impl fmt::Debug for Node {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Node::Void => write!(f, "void"),
+            Node::Const { val, .. } => write!(f, "const {}", val),
+            Node::Var { sym, .. } => write!(f, "var {:?}", sym.borrow()),
+            Node::Unary { op, arg, .. } => write!(f, "{}({:?})", op, arg),
+            Node::Binary {
+                op, left, right, ..
+            } => write!(f, "{}({:?}, {:?})", op, left, right),
         }
     }
 }

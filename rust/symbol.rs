@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
@@ -10,12 +11,22 @@ pub enum Loc {
     Param(u32),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Symbol {
     pub _name: String,
     pub loc: Loc,
     pub visited: bool,
     pub reg: Option<u8>,
+}
+
+impl fmt::Debug for Symbol {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.loc {
+            Loc::Stack(idx) => write!(f, "{} in Stack[{}]", self._name, idx),
+            Loc::Param(idx) => write!(f, "{} in Param[{}]", self._name, idx),
+            Loc::Mem(idx) => write!(f, "{} in Mem[{}]", self._name, idx),
+        }
+    }
 }
 
 impl Hash for Symbol {

@@ -234,7 +234,7 @@ def compile_func(
 
 
 def compile_ode(
-    iv, states, odes, params=None, ty="native", use_simd=False, cse=True, backend="rust"
+    iv, states, odes, params=None, ty="native", use_simd=True, use_threads=True, cse=True, backend="rust"
 ):
     """Compile a symbolic ODE model into an executable form suitable for
     passung to scipy.integrate.solve_ivp.
@@ -284,7 +284,7 @@ def compile_ode(
 
 
 def compile_jac(
-    iv, states, odes, params=None, ty="native", use_simd=False, cse=True, backend="rust"
+    iv, states, odes, params=None, ty="native", use_simd=True, use_threads=True, cse=True, backend="rust"
 ):
     """Genenrates and compiles Jacobian for an ODE system.
         iv: a single symbol, the independent variable.
@@ -315,7 +315,7 @@ def compile_jac(
     return JacFunc(compiler)
 
 
-def compile_json(model, ty="native", use_simd=True):
+def compile_json(model, ty="native", use_simd=True, use_threads=True, cse=True, backend="rust"):
     """Compiles CellML models
     CellML json files are extracted using CellMLToolkit.jl
     model is already in Json format; hence, `convert = False`

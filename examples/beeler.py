@@ -1,5 +1,5 @@
 import util
-backend, ty, use_simd, use_threads = util.process_argv()
+args = util.process_argv()
 
 import time
 import os
@@ -16,7 +16,7 @@ with open(path) as fd:
 
 t0 = time.time()
 
-f = symjit.compile_json(model, ty=ty)
+f = symjit.compile_json(model, **args)
 u0 = f.get_u0()
 p = f.get_p()
 

@@ -68,7 +68,6 @@ pub enum AmdFamily {
 pub struct AmdGenerator {
     amd: Amd,
     family: AmdFamily,
-    r0: Option<u32>,
     mask: u32,
 }
 
@@ -98,7 +97,6 @@ impl AmdGenerator {
         AmdGenerator {
             amd: Amd::new(DataType::F64),
             family,
-            r0: None,
             mask: if cfg!(target_family = "windows") {
                 0x003f
             } else {
@@ -205,38 +203,21 @@ impl AmdGenerator {
 
     fn flush(&mut self, dst: Reg) {
         let reg = ϕ(dst);
+        let m = 1 << reg;
 
-        if reg == RET {
-            if let Some(idx) = self.r0 {
-                select!(
-                    self,
-                    movsd_mem_xmm,
-                    vmovsd_mem_xmm,
-                    vmovpd_mem_ymm,
-                    Amd::RSP,
-                    (idx * self.reg_size()) as i32,
-                    RET
-                );
-            };
-
-            self.r0 = None;
-        } else {
-            let m = 1 << reg;
-
-            if self.mask & m == 0 {
-                select!(
-                    self,
-                    movsd_mem_xmm,
-                    vmovsd_mem_xmm,
-                    vmovpd_mem_ymm,
-                    Amd::RSP,
-                    (self.reg_size() as i32) * (reg as i32),
-                    reg
-                );
-            }
-
-            self.mask |= m;
+        if self.mask & m == 0 {
+            select!(
+                self,
+                movsd_mem_xmm,
+                vmovsd_mem_xmm,
+                vmovpd_mem_ymm,
+                Amd::RSP,
+                (self.reg_size() as i32) * (reg as i32),
+                reg
+            );
         }
+
+        self.mask |= m;
     }
 
     fn restore_regs(&mut self) {
@@ -401,14 +382,6 @@ impl Generator for AmdGenerator {
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
-        if let Some(k) = self.r0 {
-            if k == idx {
-                select!(self, movapd, vmovapd, vmovapd, ϕ(dst), RET);
-                self.r0 = None;
-                return;
-            }
-        };
-
         select!(
             self,
             movsd_xmm_mem,
@@ -433,12 +406,6 @@ impl Generator for AmdGenerator {
     }
 
     fn save_stack_result(&mut self, idx: u32) {
-        if !matches!(self.family, AmdFamily::SSEScalar) {
-            assert!(self.r0.is_none());
-            self.r0 = Some(idx);
-            return;
-        }
-
         self.save_stack(Reg::Ret, idx);
     }
 

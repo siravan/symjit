@@ -1,5 +1,5 @@
 import util
-backend, ty, use_simd, use_threads = util.process_argv()
+args = util.process_argv()
 
 import time
 from math import sqrt
@@ -16,8 +16,8 @@ ode = [y, mu * ((1 - x * x) * y - x)]
 
 t0 = time.time()
 
-f = compile_ode(t, [x, y], ode, params=[mu], ty=ty, backend=backend)
-jac = compile_jac(t, [x, y], ode, params=[mu], ty=ty, backend=backend)
+f = compile_ode(t, [x, y], ode, params=[mu], **args)
+jac = compile_jac(t, [x, y], ode, params=[mu], **args)
 
 u0 = [0.0, sqrt(3.0)]
 t_eval = np.arange(0, 10.0, 0.01)

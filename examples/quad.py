@@ -1,5 +1,5 @@
 import util
-backend, ty, use_simd, use_threads = util.process_argv()
+args = util.process_argv()
 
 from math import pi
 import numpy as np
@@ -11,8 +11,7 @@ from symjit import compile_func
 x = symbols("x")
 # Ahmed's Integral (Inside Interesting Integrals, 6.2)
 f = compile_func(
-    [x], atan(sqrt(2 + x**2)) / ((1 + x**2) * sqrt(2 + x**2)), backend=backend
-)
+    [x], atan(sqrt(2 + x**2)) / ((1 + x**2) * sqrt(2 + x**2)), **args)
 
 sol = quad(f, 0.0, 1.0)
 
