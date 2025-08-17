@@ -40,7 +40,7 @@ from symjit import compile_func
 #==================
 # n = number of links. The larger n the larger the mass matrix and the
 # force vector
-n = 18
+n = 10
 term_info = True
 plot_energies = True  # if True the energies are plotted
 #==================
