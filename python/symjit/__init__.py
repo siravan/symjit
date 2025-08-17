@@ -202,13 +202,23 @@ def compile_func(
     states: a single symbol or a list/tuple of symbols.
     eqs: a single symbolic expression or a list/tuple of symbolic expressions.
     params (optional): a list/tuple of additional symbols as parameters to the model.
-    ty: target architecture ("amd", "arm", "bytecode", or "native").
+    ty: target architecture. Options are:
+        * "amd": generates x64 instructions (amd-sse or amd-avx) depending on the processor
+        * "amd-sse": generates x64 SSE2 instructions
+        * "amd-avx": generates x64 AVX instrcutions
+        * "arm": generates arm aarch64 instructions
+        * "bytecode": bytecode interpreter for testing and running on unsupported hardware
+        * "native" (default): selects the correct mode based on the processor
+        * "debug": runs "native" and "bytecode" codes and throws an exception if different
     obs (optional): a list of symbols to name equations. If obs is not None, its length should
         be the same as eqs.
-    use_simd (default True): generates SIMD code for vectorized operations.
-        Currently only AVX on x86-64 systems is supported.
     backend (default `rust`): the code-generator backend (`rust`: dynamic library coded
         in rust. `python`: pyengine library coded in plain Python.
+    use_simd (default True): generates SIMD code for vectorized operations.
+        Currently only AVX on x86-64 systems is supported.
+    use_threads (default True): use multi-threading to speed up parallel operations when called
+        on numpy arrays.
+    cse (default True): performs common-subexpression elimination.
 
     ==> returns a Func object, is a callable object `f` with signature `f(x_1,...,x_n,p_1,...,p_m)`,
         where `x`s are the state variables and `p`s are the parameters.
@@ -247,11 +257,17 @@ def compile_ode(
     odes: a single symbolic expression or a list/tuple of symbolic expressions,
         representing the derivative of the state with respect to iv.
     params (optional): a list/tuple of additional symbols as parameters to the model
-    ty (default `native`): target architecture ("amd", "arm", "bytecode", or "native").
-    use_simd (default False): generates SIMD code for vectorized operations.
-        Currently only AVX on x86-64 systems is supported.
+    ty (default `native`): see compile_func options for details.
     backend (default `rust`): the code-generator backend (`rust`: dynamic library coded
         in rust. `python`: pyengine library coded in plain Python.
+    use_simd (default True): generates SIMD code for vectorized operations.
+        Currently only AVX on x86-64 systems is supported.
+    use_threads (default True): use multi-threading to speed up parallel operations when called
+        on numpy arrays.
+    cse (default True): performs common-subexpression elimination.
+
+    Note that compile_ode accepts use_simd and use_threads but in practice ingores them,
+        because compile_ode is usually called on scalars only.
 
     invariant => len(states) == len(odes)
 
@@ -292,11 +308,17 @@ def compile_jac(
         odes: a single symbolic expression or a list/tuple of symbolic expressions,
             representing the derivative of the state with respect to iv.
         params (optional): a list/tuple of additional symbols as parameters to the model
-        ty (default `native`): target architecture ("amd", "arm", "bytecode", or "native").
-        use_simd (default False): generates SIMD code for vectorized operations.
-        Currently only AVX on X64 systems is supported.
+        ty (default `native`): see compile_func options for details.
         backend (default `rust`): the code-generator backend (`rust`: dynamic library coded
             in rust. `python`: pyengine library coded in plain Python.
+        use_simd (default True): generates SIMD code for vectorized operations.
+            Currently only AVX on x86-64 systems is supported.
+        use_threads (default True): use multi-threading to speed up parallel operations when called
+            on numpy arrays.
+        cse (default True): performs common-subexpression elimination.
+
+        Note that similar to compile_ode, compile_jac accepts use_simd and use_threads but in
+            practice ingores them, because compile_ode is usually called on scalars only.
 
     ===> returns an OdeFunc object that has the same signature as
         the results of `compile_ode`, i.e., `f(t,y,p0,p1,...)`.

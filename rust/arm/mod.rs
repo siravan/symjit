@@ -20,7 +20,6 @@ fn ϕ(r: Reg) -> u8 {
     }
 }
 
-const RET: u8 = 0;
 const TEMP: u8 = 1;
 
 impl ArmGenerator {
@@ -295,7 +294,7 @@ impl Generator for ArmGenerator {
         setup_call_binary(self, s1, s2);
     }
 
-    fn call(&mut self, label: &str, num_args: usize) {
+    fn call(&mut self, label: &str, _num_args: usize) {
         self.jump(label, arm! {ldr x(0), label});
         self.emit(arm! {blr x(0)});
     }

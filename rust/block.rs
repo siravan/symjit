@@ -140,25 +140,25 @@ impl Block {
             Node::Void => Node::Void,
             Node::Const { val, idx } => Node::Const { val, idx },
             Node::Var { sym, status } => Node::Var { sym, status },
-            Node::Unary { op, arg, power, .. } => self.trim_unary(op, arg, power),
+            Node::Unary { op, arg, power, .. } => self.trim_unary(op, *arg, power),
             Node::Binary {
                 op,
                 left,
                 right,
                 power,
                 ..
-            } => self.trim_binary(op, left, right, power),
+            } => self.trim_binary(op, *left, *right, power),
         }
     }
 
-    fn trim_unary(&mut self, op: String, arg: Box<Node>, power: i32) -> Node {
-        let arg = self.trim(*arg);
+    fn trim_unary(&mut self, op: String, arg: Node, power: i32) -> Node {
+        let arg = self.trim(arg);
         Node::create_unary(op.as_str(), arg, power)
     }
 
-    fn trim_binary(&mut self, op: String, left: Box<Node>, right: Box<Node>, power: i32) -> Node {
-        let left = self.trim(*left);
-        let right = self.trim(*right);
+    fn trim_binary(&mut self, op: String, left: Node, right: Node, power: i32) -> Node {
+        let left = self.trim(left);
+        let right = self.trim(right);
 
         let right = if left.ershov_number() == COUNT_SCRATCH - 1
             && right.ershov_number() == COUNT_SCRATCH - 1
@@ -194,7 +194,7 @@ impl Block {
         }
 
         // first-pass
-        let mut stmts: Vec<Statement> = self.stmts.drain(..).collect();
+        let mut stmts = std::mem::take(&mut self.stmts);
 
         let mut hs: HashSet<u64> = HashSet::new(); // hash-value-set to find collision
         let mut cs: HashMap<u64, (Node, Node)> = HashMap::new(); // collision set as (lhs, rhs)
@@ -211,7 +211,8 @@ impl Block {
         }
 
         if cs.is_empty() {
-            self.stmts = stmts.drain(..).collect();
+            // self.stmts = stmts.drain(..).collect();
+            self.stmts = std::mem::take(&mut stmts);
             return false;
         }
 
@@ -256,17 +257,22 @@ impl Block {
 
             if hs.contains(&h) {
                 // collision detected!
-                if !cs.contains_key(&h) {
+                cs.entry(h).or_insert_with(|| {
                     let lhs = self.add_tmp();
-                    cs.insert(h, (lhs, node.clone()));
-                }
+                    (lhs, node.clone())
+                });
             } else {
                 hs.insert(h);
             };
         }
 
-        node.first().map(|n| self.find_cse(hs, cs, n));
-        node.second().map(|n| self.find_cse(hs, cs, n));
+        if let Some(n) = node.first() {
+            self.find_cse(hs, cs, n)
+        };
+
+        if let Some(n) = node.second() {
+            self.find_cse(hs, cs, n)
+        };
     }
 
     fn rewrite_cse(

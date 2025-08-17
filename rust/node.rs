@@ -199,8 +199,14 @@ impl Node {
     /// Note the twist in the middle. The decision to traverse left
     /// or right link depends on ershov number of each link.
     fn postorder_forward(&mut self, f: fn(&mut Node)) {
-        self.first().map(|n| n.postorder_forward(f));
-        self.second().map(|n| n.postorder_forward(f));
+        if let Some(n) = self.first() {
+            n.postorder_forward(f)
+        };
+
+        if let Some(n) = self.second() {
+            n.postorder_forward(f)
+        };
+
         f(self);
     }
 
@@ -210,8 +216,14 @@ impl Node {
     /// Note the twist in the middle. The decision to traverse left
     /// or right link depends on ershov number of each link.
     fn postorder_backward(&mut self, f: fn(&mut Node)) {
-        self.second().map(|n| n.postorder_backward(f));
-        self.first().map(|n| n.postorder_backward(f));
+        if let Some(n) = self.second() {
+            n.postorder_forward(f)
+        };
+
+        if let Some(n) = self.first() {
+            n.postorder_forward(f)
+        };
+
         f(self);
     }
 
@@ -233,23 +245,6 @@ impl Node {
             l + 1
         } else {
             l.max(r)
-        }
-    }
-
-    pub fn update_ershov(&mut self) {
-        match self {
-            Node::Unary { arg, ershov, .. } => {
-                *ershov = arg.ershov_number();
-            }
-            Node::Binary {
-                left,
-                right,
-                ershov,
-                ..
-            } => {
-                *ershov = Self::calc_ershov(left, right);
-            }
-            _ => {}
         }
     }
 
@@ -285,7 +280,6 @@ impl Node {
     /// The main entry point to compile an expression tree
     /// should be called on the root of the expression tree
     pub fn compile_tree(&mut self, ir: &mut dyn Generator) -> Result<u8> {
-        // self.postorder_forward(Self::update_ershov);
         self.postorder_forward(Self::mark_first);
         self.postorder_backward(Self::mark_last);
 
