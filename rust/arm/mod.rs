@@ -105,11 +105,22 @@ impl Generator for ArmGenerator {
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
         self.flush(dst);
-        self.emit(arm! {ldr d(ϕ(dst)), [x(19), #8*idx]});
+
+        if idx < 4096 {
+            self.emit(arm! {ldr d(ϕ(dst)), [x(19), #8*idx]});
+        } else {
+            self.emit(arm! {movz x(9), #idx});
+            self.emit(arm! {ldr d(ϕ(dst)), [x(19), x(9), lsl #3]});
+        }
     }
 
     fn save_mem(&mut self, dst: Reg, idx: u32) {
-        self.emit(arm! {str d(ϕ(dst)), [x(19), #8*idx]});
+        if idx < 4096 {
+            self.emit(arm! {str d(ϕ(dst)), [x(19), #8*idx]});
+        } else {
+            self.emit(arm! {movz x(9), #idx});
+            self.emit(arm! {str d(ϕ(dst)), [x(19), x(9), lsl #3]});
+        }
     }
 
     fn save_mem_result(&mut self, idx: u32) {
@@ -118,15 +129,30 @@ impl Generator for ArmGenerator {
 
     fn load_param(&mut self, dst: Reg, idx: u32) {
         self.flush(dst);
-        self.emit(arm! {ldr d(ϕ(dst)), [x(20), #8*idx]});
+        if idx < 4096 {
+            self.emit(arm! {ldr d(ϕ(dst)), [x(20), #8*idx]});
+        } else {
+            self.emit(arm! {movz x(9), #idx});
+            self.emit(arm! {ldr d(ϕ(dst)), [x(20), x(9), lsl #3]});
+        }
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
-        self.emit(arm! {ldr d(ϕ(dst)), [sp, #8*idx]});
+        if idx < 4096 {
+            self.emit(arm! {ldr d(ϕ(dst)), [sp, #8*idx]});
+        } else {
+            self.emit(arm! {movz x(9), #idx});
+            self.emit(arm! {ldr d(ϕ(dst)), [sp, x(9), lsl #3]});
+        }
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        self.emit(arm! {str d(ϕ(dst)), [sp, #8*idx]});
+        if idx < 4096 {
+            self.emit(arm! {str d(ϕ(dst)), [sp, #8*idx]});
+        } else {
+            self.emit(arm! {movz x(9), #idx});
+            self.emit(arm! {str d(ϕ(dst)), [sp, x(9), lsl #3]});
+        }
     }
 
     fn save_stack_result(&mut self, idx: u32) {
@@ -401,7 +427,10 @@ impl Generator for ArmGenerator {
         self.jump("@main", arm! {b.eq label});
 
         let size = align_stack((count_states + count_obs + 1) as u32 * self.reg_size());
-        self.emit(arm! {sub sp, sp, #size});
+        self.emit(arm! {sub sp, sp, #size & 0x0fff});
+        if size >> 12 != 0 {
+            self.emit(arm! {sub sp, sp, #size >> 12, lsl #12});
+        }
         self.emit(arm! {mov x(mem), sp});
 
         for i in 0..count_states {
@@ -443,7 +472,10 @@ impl Generator for ArmGenerator {
         }
 
         let size = align_stack((count_states + count_obs + 1) as u32 * self.reg_size());
-        self.emit(arm! {add sp, sp, #size});
+        if size >> 12 != 0 {
+            self.emit(arm! {add sp, sp, #size >> 12, lsl #12});
+        }
+        self.emit(arm! {add sp, sp, #size & 0x0fff});
 
         self.set_label("@done");
 

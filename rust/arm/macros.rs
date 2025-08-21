@@ -71,6 +71,9 @@ macro_rules! arm {
     ($op:ident $($a:ident($x:expr),)+ [sp, #$imm:expr]) => {
         arm! { $op $($a($x),)* [x(31), #$imm] }
     };
+    ($op:ident $($a:ident($x:expr),)+ [sp, $b:ident($y:expr), lsl #3]) => {
+        arm! { $op $($a($x),)* [x(31), $b($y), lsl #3] }
+    };
     ($op:ident lr, [$b:ident($y:expr), #$imm:expr]) => {
         arm! { $op x(30), [$b($y), #$imm] }
     };
