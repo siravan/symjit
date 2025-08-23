@@ -33,7 +33,7 @@ impl Builder {
 
     pub fn add_call_unary(&mut self, op: &str, arg: Node) -> Result<Node> {
         let lhs = self.block.add_call_unary(op, arg);
-        let _ = VirtualTable::<f64>::from_str(op)?; // check to see if op is defined
+        let _ = VirtualTable::from_str(op)?; // check to see if op is defined
         self.ft.insert(op.to_string());
         Ok(lhs)
     }
@@ -74,7 +74,7 @@ impl Builder {
         }
 
         let lhs = self.block.add_call_binary(op, left, right);
-        let _ = VirtualTable::<f64>::from_str(op)?; // check to see if op is defined
+        let _ = VirtualTable::from_str(op)?; // check to see if op is defined
         self.ft.insert(op.to_string());
         Ok(lhs)
     }
@@ -118,7 +118,11 @@ impl Builder {
     }
 
     pub fn create_unary(&mut self, op: &str, arg: Node) -> Result<Node> {
-        Ok(self.block.create_unary(op, arg))
+        let node = match op {
+            _ => self.block.create_unary(op, arg),
+        };
+
+        Ok(node)
     }
 
     pub fn create_powi(&mut self, arg: Node, power: i32) -> Result<Node> {
@@ -150,6 +154,28 @@ impl Builder {
             "rem" if left.is_unary("_powi_") => {
                 let (arg, power) = left.arg_power().unwrap();
                 self.block.create_modular_powi(arg, right, power)
+            }
+            "min" => {
+                let cond = self.create_binary("leq", left.clone(), right.clone())?;
+                self.add_ifelse(cond, left, right)?
+            }
+            "max" => {
+                let cond = self.create_binary("geq", left.clone(), right.clone())?;
+                self.add_ifelse(cond, left, right)?
+            }
+            "heaviside" => {
+                /*
+                 * In sympy, Heaviside is considered a binary operator,
+                 * where the second argument is the value at 0 (defaults to 0.5).
+                 */
+                let zero = self.create_const(0.0)?;
+                let one = self.create_const(1.0)?;
+
+                let c0 = self.create_binary("eq", left.clone(), zero.clone())?;
+                let x0 = self.add_ifelse(c0, right, one)?;
+
+                let c1 = self.create_binary("geq", left, zero.clone())?;
+                self.add_ifelse(c1, x0, zero)?
             }
             _ => self.block.create_binary(op, left, right),
         };
@@ -215,7 +241,7 @@ impl Builder {
         for f in self.ft.iter() {
             let label = format!("_func_{}_", f);
             ir.set_label(label.as_str());
-            let p = VirtualTable::<f64>::from_str(f).expect("func not found");
+            let p = VirtualTable::from_str(f).expect("func not found");
             ir.append_quad(p as usize as u64);
         }
     }

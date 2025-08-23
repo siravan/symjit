@@ -114,7 +114,7 @@ impl Eval for Statement {
                     "log" => x.log10(),
                     "power" => x.powf(y),
                     op => {
-                        let f = VirtualTable::<f64>::from_str(op)
+                        let f = VirtualTable::from_str(op)
                             .unwrap_or_else(|_| panic!("operation {} not found.", op));
                         f(x, y)
                     }

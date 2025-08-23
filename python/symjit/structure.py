@@ -1,6 +1,6 @@
 from sympy import asin, acos, atan, acsc, asec, acot, log, sqrt
 from sympy import asinh, acosh, atanh, acsch, asech, acoth
-from sympy import Xor, And, Or, Rational, Abs, Mod
+from sympy import Xor, And, Or, Rational, Abs, Mod, Min, Max, Heaviside
 from sympy import (
     Equality,
     Unequality,
@@ -24,11 +24,17 @@ def operation(func):
     if func == sqrt:
         op = "root"
     elif func == Mod:
-        op = "rem"        
+        op = "rem"
     elif func == log:
         op = "ln"  # this is confusing but sympy uses `log` for natural logarithm
     elif func == Abs:
         op = "abs"
+    elif func == Min:
+        op = "min"
+    elif func == Max:
+        op = "max"
+    elif func == Heaviside:
+        op = "heaviside"
     elif func == asin:
         op = "arcsin"
     elif func == acos:
@@ -53,7 +59,7 @@ def process_mul(y):
 def process_pow(y):
     assert y.is_Pow
     return tree_node("power", y.args)
-    
+
 
 def tree(y):
     if y.is_Add:
@@ -140,7 +146,7 @@ def expr(y):
             return tree(y)
     except:
         return y
-        
+
 
 def equation(lhs, rhs):
     return {"lhs": lhs, "rhs": rhs}

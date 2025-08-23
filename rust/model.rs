@@ -17,8 +17,25 @@ const UNARY: &[&str] = &[
 // the list of intrinsic binary ops, i.e., operations that can be implemented directly in
 // machine code
 const BINARY: &[&str] = &[
-    "plus", "minus", "times", "divide", "rem", "gt", "geq", "lt", "leq", "eq", "neq", "and", "or",
-    "xor", "if_pos", "if_neg",
+    "plus",
+    "minus",
+    "times",
+    "divide",
+    "rem",
+    "gt",
+    "geq",
+    "lt",
+    "leq",
+    "eq",
+    "neq",
+    "and",
+    "or",
+    "xor",
+    "if_pos",
+    "if_neg",
+    "min",
+    "max",
+    "heaviside",
 ];
 
 /// Collects the intermediate code (builder) and interface variables
@@ -181,7 +198,7 @@ impl Expr {
     /// Addition and Multiplication can haev multiple arguments
     /// The intermediate tree has only unary and binary nodes
     fn transform_poly(&self, builder: &mut Builder, op: &str, args: &[Expr]) -> Result<Node> {
-        if !(op == "plus" || op == "times") {
+        if !(op == "plus" || op == "times" || op == "min" || op == "max") {
             return Err(anyhow!("missing poly op: {}", op));
         }
 

@@ -393,7 +393,7 @@ impl Node {
                 "trunc" => ir.trunc(reg(dst), reg(r)),
                 "_powi_" => ir.powi(reg(dst), reg(r), *power),
                 "_call_" => ir.setup_call_unary(reg(r)),
-                _ => return Err(anyhow!("unary operator is not recognized")),
+                _ => return Err(anyhow!("unary operator {:?} is not recognized", op)),
             };
 
             Ok(dst)
@@ -432,7 +432,7 @@ impl Node {
                 "select_else" => ir.select_else(reg(dst), reg(l), reg(r)),
                 "_powi_mod_" => ir.powi_mod(reg(dst), reg(l), *power, reg(r)),
                 "_call_" => ir.setup_call_binary(reg(l), reg(r)),
-                _ => return Err(anyhow!("binary operator is not recognized")),
+                _ => return Err(anyhow!("binary operator {:?} is not recognized", op)),
             };
 
             Ok(dst)
@@ -597,6 +597,19 @@ impl Eval for Node {
                     "xor" => f64::from_bits(x.to_bits() ^ y.to_bits()),
                     "select_if" => f64::from_bits(x.to_bits() & y.to_bits()),
                     "select_else" => f64::from_bits(!x.to_bits() & y.to_bits()),
+                    "min" => f64::min(x, y),
+                    "max" => f64::max(x, y),
+                    "heaviside" => {
+                        if x == 0.0 {
+                            y
+                        } else {
+                            if x < 0.0 {
+                                0.0
+                            } else {
+                                1.0
+                            }
+                        }
+                    }
                     "_call_" => {
                         stack[0] = x;
                         stack[1] = y;
