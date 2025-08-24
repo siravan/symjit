@@ -3,7 +3,7 @@ use std::collections::HashSet;
 
 use super::utils::{Compiled, Eval};
 use crate::block::Block;
-use crate::code::VirtualTable;
+use crate::code::{Func, VirtualTable};
 use crate::generator::Generator;
 use crate::node::Node;
 use crate::utils::CompiledFunc;
@@ -33,7 +33,10 @@ impl Builder {
 
     pub fn add_call_unary(&mut self, op: &str, arg: Node) -> Result<Node> {
         let lhs = self.block.add_call_unary(op, arg);
-        let _ = VirtualTable::from_str(op)?; // check to see if op is defined
+        let f = VirtualTable::from_str(op)?; // check to see if op is defined
+        if !matches!(f, Func::Unary(_)) {
+            return Err(anyhow!("{} is not a unary function", op));
+        }
         self.ft.insert(op.to_string());
         Ok(lhs)
     }
@@ -62,8 +65,11 @@ impl Builder {
             };
 
             if let Some(val) = right.as_const() {
+                const ONE_THIRD: f64 = 1.0 / 3.0;
+
                 match val {
                     0.5 => return self.create_unary("root", left),
+                    ONE_THIRD => return self.create_unary("cube", left),
                     1.5 => {
                         let arg = self.create_unary("cube", left)?;
                         return self.create_unary("root", arg);
@@ -74,7 +80,10 @@ impl Builder {
         }
 
         let lhs = self.block.add_call_binary(op, left, right);
-        let _ = VirtualTable::from_str(op)?; // check to see if op is defined
+        let f = VirtualTable::from_str(op)?; // check to see if op is defined
+        if !matches!(f, Func::Binary(_)) {
+            return Err(anyhow!("{} is not a binary function", op));
+        }
         self.ft.insert(op.to_string());
         Ok(lhs)
     }
@@ -242,7 +251,8 @@ impl Builder {
             let label = format!("_func_{}_", f);
             ir.set_label(label.as_str());
             let p = VirtualTable::from_str(f).expect("func not found");
-            ir.append_quad(p as usize as u64);
+            //ir.append_quad(p as usize as u64);
+            ir.append_quad(p.func_ptr());
         }
     }
 }

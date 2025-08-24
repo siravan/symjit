@@ -391,6 +391,7 @@ impl Node {
                 "floor" => ir.floor(reg(dst), reg(r)),
                 "ceiling" => ir.ceiling(reg(dst), reg(r)),
                 "trunc" => ir.trunc(reg(dst), reg(r)),
+                "frac" => ir.frac(reg(dst), reg(r)),
                 "_powi_" => ir.powi(reg(dst), reg(r), *power),
                 "_call_" => ir.setup_call_unary(reg(r)),
                 _ => return Err(anyhow!("unary operator {:?} is not recognized", op)),
@@ -559,6 +560,7 @@ impl Eval for Node {
                     "floor" => x.floor(),
                     "ceiling" => x.ceil(),
                     "trunc" => x.trunc(),
+                    "frac" => x.fract(),
                     "_powi_" => x.powi(*power),
                     "_call_" => {
                         stack[0] = x;

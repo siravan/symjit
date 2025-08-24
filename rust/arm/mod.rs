@@ -231,6 +231,11 @@ impl Generator for ArmGenerator {
         self.emit(arm! {frintz d(ϕ(dst)), d(ϕ(s1))});
     }
 
+    fn frac(&mut self, dst: Reg, s1: Reg) {
+        self.floor(Reg::Temp, s1);
+        self.minus(dst, s1, Reg::Temp);
+    }
+
     fn fmod(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         fmod(self, dst, s1, s2);
     }

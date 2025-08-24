@@ -71,6 +71,7 @@ pub trait Generator {
     fn floor(&mut self, dst: Reg, s1: Reg);
     fn ceiling(&mut self, dst: Reg, s1: Reg);
     fn trunc(&mut self, dst: Reg, s1: Reg);
+    fn frac(&mut self, dst: Reg, s1: Reg);
     fn fmod(&mut self, dst: Reg, s1: Reg, s2: Reg);
 
     fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg);

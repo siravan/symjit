@@ -476,6 +476,11 @@ impl Generator for AmdGenerator {
         roundop!(self, dst, s1, RoundingMode::Trunc);
     }
 
+    fn frac(&mut self, dst: Reg, s1: Reg) {
+        self.floor(Reg::Temp, s1);
+        self.minus(dst, s1, Reg::Temp);
+    }
+
     fn fmod(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         fmod(self, dst, s1, s2);
     }

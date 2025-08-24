@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 use super::utils::{reg, Eval};
-use crate::code::VirtualTable;
+use crate::code::{BinaryFunc, Func, UnaryFunc, VirtualTable};
 use crate::generator::Generator;
 use crate::node::Node;
 use crate::symbol::Loc;
@@ -116,7 +116,10 @@ impl Eval for Statement {
                     op => {
                         let f = VirtualTable::from_str(op)
                             .unwrap_or_else(|_| panic!("operation {} not found.", op));
-                        f(x, y)
+                        match f {
+                            Func::Unary(f) => f(x),
+                            Func::Binary(f) => f(x, y),
+                        }
                     }
                 };
 
