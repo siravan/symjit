@@ -8,7 +8,7 @@ from numpy import random
 import time
 import math
 
-n = 16
+n = 14
 N = 2**n
 
 V = symbols(f'v[0:{N}]')
