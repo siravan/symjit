@@ -108,6 +108,9 @@ macro_rules! arm {
     (ldr x($rd:expr), [x($rn:expr), #$ofs:expr]) => {
         0xf9400000 | rd!($rd) | rn!($rn) | ofs!($ofs)
     };
+    (ldr x($rd:expr), [x($rn:expr), x($rm:expr), lsl #3]) => {
+        0xf8607800 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
 
     (ldr d($rd:expr), label) => {
         0x5c000000 | rd!($rd)
