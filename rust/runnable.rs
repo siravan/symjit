@@ -422,6 +422,7 @@ pub struct Debugger {
     builder: Builder,
     compiled: Box<dyn Compiled<f64>>,
     bytecode: Box<dyn Compiled<f64>>,
+    flip: bool,
 }
 
 impl Debugger {
@@ -434,6 +435,7 @@ impl Debugger {
             builder,
             compiled,
             bytecode,
+            flip: false,
         }
     }
 
@@ -470,6 +472,13 @@ impl Compiled<f64> for Debugger {
         self.compiled.exec(params);
         self.bytecode.exec(params);
 
+        if self.flip {
+            let p = self.bytecode.mem();
+            let q = self.compiled.mem_mut();
+            q.copy_from_slice(p);
+        }
+
+        self.flip = !self.flip;
         self.assert_equal();
     }
 

@@ -66,6 +66,10 @@ impl Assembler {
         for (label, k, code) in self.jumps.iter() {
             let target = self.labels.get(label).expect("label not found");
             let offset = (*target as isize) - (*k as isize) + self.delta;
+
+            #[cfg(target_arch = "aarch64")]
+            assert!(offset >= 0 && offset < 262144);
+
             let x = ((offset as u32) << self.shift) | *code;
 
             self.buf[*k] |= (x & 0xff) as u8;

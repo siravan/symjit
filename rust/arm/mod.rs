@@ -36,12 +36,11 @@ impl ArmGenerator {
 
     fn flush(&mut self, dst: Reg) {
         let reg = ϕ(dst);
-
         let m = 1 << reg;
-        let idx = reg as i32;
 
         if self.mask & m == 0 {
-            self.emit(arm! {str d(reg), [sp, #8*idx]});
+            // self.emit(arm! {str d(reg), [sp, #8*idx]});
+            self.save_d_to_stack(reg, reg as u32);
         }
 
         self.mask |= m;
@@ -52,10 +51,10 @@ impl ArmGenerator {
 
         for reg in last..16 {
             let m = 1 << reg;
-            let idx = reg as i32;
 
             if self.mask & m != 0 {
-                self.emit(arm! {ldr d(reg), [sp, #8*idx]});
+                // self.emit(arm! {ldr d(reg), [sp, #8*idx]});
+                self.load_d_from_stack(reg, reg as u32);
             }
         }
     }
