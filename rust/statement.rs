@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 use super::utils::{reg, Eval};
-use crate::code::{BinaryFunc, Func, UnaryFunc, VirtualTable};
+use crate::code::{Func, VirtualTable};
 use crate::generator::Generator;
 use crate::node::Node;
 use crate::symbol::Loc;

@@ -604,12 +604,10 @@ impl Eval for Node {
                     "heaviside" => {
                         if x == 0.0 {
                             y
+                        } else if x < 0.0 {
+                            0.0
                         } else {
-                            if x < 0.0 {
-                                0.0
-                            } else {
-                                1.0
-                            }
+                            1.0
                         }
                     }
                     "_call_" => {

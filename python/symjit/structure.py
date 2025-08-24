@@ -1,6 +1,6 @@
-from sympy import asin, acos, atan, acsc, asec, acot, log, sqrt
-from sympy import asinh, acosh, atanh, acsch, asech, acoth
-from sympy import Xor, And, Or, Rational, Abs, Mod, Min, Max, Heaviside
+from sympy import asin, acos, atan, log, sqrt
+from sympy import asinh, acosh, atanh
+from sympy import Xor, And, Or, Abs, Mod, Min, Max, Heaviside
 from sympy import (
     Equality,
     Unequality,

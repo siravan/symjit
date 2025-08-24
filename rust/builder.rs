@@ -69,7 +69,7 @@ impl Builder {
 
                 match val {
                     0.5 => return self.create_unary("root", left),
-                    ONE_THIRD => return self.create_unary("cube", left),
+                    ONE_THIRD => return self.add_call_unary("cbrt", left),
                     1.5 => {
                         let arg = self.create_unary("cube", left)?;
                         return self.create_unary("root", arg);
@@ -127,10 +127,12 @@ impl Builder {
     }
 
     pub fn create_unary(&mut self, op: &str, arg: Node) -> Result<Node> {
+        /*
         let node = match op {
             _ => self.block.create_unary(op, arg),
         };
-
+        */
+        let node = self.block.create_unary(op, arg);
         Ok(node)
     }
 
