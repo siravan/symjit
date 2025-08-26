@@ -51,4 +51,6 @@ X = np.arange(-3, 3, 0.01)
 plt.plot(X, np.zeros_like(X), color="red")
 plt.plot(X, g(X)[0])
 plt.plot([x0], [0], "o", color="red")
-plt.show()
+
+if __name__ == "__main__":
+    plt.show()

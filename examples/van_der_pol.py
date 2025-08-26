@@ -29,7 +29,11 @@ sol2 = solve_ivp(f, (0, 10.0), u0, method="BDF", t_eval=t_eval, args=[1e6], jac=
 
 print(f"compilation + running time: {1000 * (time.time() - t0)} ms")
 
-fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1)
-ax1.plot(t_eval, sol1.y[0, :])
-ax2.plot(t_eval, sol2.y[0, :])
-plt.show()
+if __name__ == "__main__":
+    fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1)
+    ax1.plot(t_eval, sol1.y[0, :])
+    ax2.plot(t_eval, sol2.y[0, :])
+    plt.show()
+else:
+    plt.plot(t_eval, sol1.y[0, :])
+    plt.plot(t_eval, sol2.y[0, :])

@@ -30,4 +30,6 @@ print(f"running time: {1e-6 * (t2 - t1):.1f} ms")
 # Z = np.hypot(X, Y)
 
 plt.imshow((np.abs(X) < 2) & (np.abs(Y) < 2))
-plt.show()
+
+if __name__ == "__main__":
+    plt.show()

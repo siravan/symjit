@@ -24,4 +24,6 @@ sol = solve_ivp(f, (0, 100.0), u0, method="BDF", t_eval=t_eval, args=p, jac=jac)
 
 plt.plot(t_eval, sol.y[0, :])
 plt.plot(t_eval, sol.y[1, :])
-plt.show()
+
+if __name__ == "__main__":
+    plt.show()

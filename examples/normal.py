@@ -14,4 +14,6 @@ t = np.arange(0, 200)
 y = f(t, 25.0)[0]
 
 plt.plot(t, y)
-plt.show()
+
+if __name__ == "__main__":
+    plt.show()

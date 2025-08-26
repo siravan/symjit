@@ -13,4 +13,6 @@ t_eval = np.arange(0, 20, 0.01)
 sol = scipy.integrate.solve_ivp(f, (0, 20), (0.0, 1.0), t_eval=t_eval)
 
 plt.plot(t_eval, sol.y.T)
-plt.show()
+
+if __name__ == "__main__":
+    plt.show()

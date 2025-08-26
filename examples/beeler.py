@@ -33,4 +33,6 @@ print(f"compilation time: {1e-6 * (t1 - t0):.1f} ms")
 print(f"running time: {1e-6 * (t2 - t1):.1f} ms")
 
 plt.plot(t_eval, sol.y[6, :])
-plt.show()
+
+if __name__ == "__main__":
+    plt.show()

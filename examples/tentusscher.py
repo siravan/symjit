@@ -28,4 +28,6 @@ t1 = time.perf_counter_ns()
 print(f"done in {(t1-t0)*1e-6:.1f} ms")
 
 plt.plot(t_eval, sol.y[11, :])
-plt.show()
+
+if __name__ == "__main__":
+    plt.show()

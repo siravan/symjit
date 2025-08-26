@@ -28,4 +28,6 @@ sol = solve_ivp(f, (0, 100.0), u0, t_eval=t_eval, args=p)
 print(f"compilation + running time: {1000 * (time.time() - t0):.1f} ms")
 
 plt.plot(sol.y[0, :], sol.y[2, :])
-plt.show()
+
+if __name__ == "__main__":
+    plt.show()

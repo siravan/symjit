@@ -12,6 +12,7 @@ const IDX: u8 = 22; // third arg = index if indirect mode
 const PARAMS: u8 = 20; // fourth arg = params
 const SCRATCH1: u8 = 9;
 const SCRATCH2: u8 = 10;
+const TEMP: u8 = 1;
 
 pub struct ArmGenerator {
     a: Assembler,
@@ -27,8 +28,6 @@ fn ϕ(r: Reg) -> u8 {
         Reg::Gen(dst) => dst + 2,
     }
 }
-
-const TEMP: u8 = 1;
 
 impl ArmGenerator {
     pub fn new() -> ArmGenerator {

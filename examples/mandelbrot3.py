@@ -34,4 +34,6 @@ X = np.reshape(buf[0,:], A.shape)
 Y = np.reshape(buf[1,:], A.shape)
 
 plt.imshow((np.abs(X) < 2) & (np.abs(Y) < 2))
-plt.show()
+
+if __name__ == "__main__":
+    plt.show()
