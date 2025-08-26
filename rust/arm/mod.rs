@@ -5,6 +5,14 @@ use crate::assembler::Assembler;
 use crate::generator::{fmod, powi, powi_mod, setup_call_binary, setup_call_unary, Generator};
 use crate::utils::{align_stack, Reg};
 
+const SP: u8 = 31;
+const MEM: u8 = 19; // first arg = mem if direct mode, otherwise null
+const STATES: u8 = 21; // second arg = states+obs if indirect mode, otherwise null
+const IDX: u8 = 22; // third arg = index if indirect mode
+const PARAMS: u8 = 20; // fourth arg = params
+const SCRATCH1: u8 = 9;
+const SCRATCH2: u8 = 10;
+
 pub struct ArmGenerator {
     a: Assembler,
     mask: u32,
@@ -40,7 +48,7 @@ impl ArmGenerator {
 
         if self.mask & m == 0 {
             // self.emit(arm! {str d(reg), [sp, #8*idx]});
-            self.save_d_to_stack(reg, reg as u32);
+            self.save_d_to_mem(reg, SP, reg as u32);
         }
 
         self.mask |= m;
@@ -54,7 +62,7 @@ impl ArmGenerator {
 
             if self.mask & m != 0 {
                 // self.emit(arm! {ldr d(reg), [sp, #8*idx]});
-                self.load_d_from_stack(reg, reg as u32);
+                self.load_d_from_mem(reg, SP, reg as u32);
             }
         }
     }
@@ -63,27 +71,18 @@ impl ArmGenerator {
         if idx < 4096 {
             self.emit(arm! {ldr d(d), [x(base), #8*idx]});
         } else {
-            self.emit(arm! {movz x(9), #idx});
-            self.emit(arm! {ldr d(d), [x(base), x(9), lsl #3]});
+            self.emit(arm! {movz x(SCRATCH1), #idx});
+            self.emit(arm! {ldr d(d), [x(base), x(SCRATCH1), lsl #3]});
         }
-    }
-
-    fn load_d_from_stack(&mut self, d: u8, idx: u32) {
-        // 31 is the stack register
-        self.load_d_from_mem(d, 31, idx);
     }
 
     fn save_d_to_mem(&mut self, d: u8, base: u8, idx: u32) {
         if idx < 4096 {
             self.emit(arm! {str d(d), [x(base), #8*idx]});
         } else {
-            self.emit(arm! {movz x(9), #idx});
-            self.emit(arm! {str d(d), [x(base), x(9), lsl #3]});
+            self.emit(arm! {movz x(SCRATCH1), #idx});
+            self.emit(arm! {str d(d), [x(base), x(SCRATCH1), lsl #3]});
         }
-    }
-
-    fn save_d_to_stack(&mut self, d: u8, idx: u32) {
-        self.save_d_to_mem(d, 31, idx);
     }
 
     fn load_x_from_mem(&mut self, r: u8, base: u8, idx: u32) {
@@ -92,9 +91,23 @@ impl ArmGenerator {
         if idx < 4096 {
             self.emit(arm! {ldr x(r), [x(base), #8*idx]});
         } else {
-            self.emit(arm! {movz x(9), #idx});
-            self.emit(arm! {ldr x(r), [x(base), x(9), lsl #3]});
+            self.emit(arm! {movz x(SCRATCH1), #idx});
+            self.emit(arm! {ldr x(r), [x(base), x(SCRATCH1), lsl #3]});
         }
+    }
+
+    fn sub_stack(&mut self, size: u32) {
+        self.emit(arm! {sub sp, sp, #size & 0x0fff});
+        if size >> 12 != 0 {
+            self.emit(arm! {sub sp, sp, #size >> 12, lsl #12});
+        }
+    }
+
+    fn add_stack(&mut self, size: u32) {
+        if size >> 12 != 0 {
+            self.emit(arm! {add sp, sp, #size >> 12, lsl #12});
+        }
+        self.emit(arm! {add sp, sp, #size & 0x0fff});
     }
 }
 
@@ -142,11 +155,11 @@ impl Generator for ArmGenerator {
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
         self.flush(dst);
-        self.load_d_from_mem(ϕ(dst), 19, idx);
+        self.load_d_from_mem(ϕ(dst), MEM, idx);
     }
 
     fn save_mem(&mut self, dst: Reg, idx: u32) {
-        self.save_d_to_mem(ϕ(dst), 19, idx);
+        self.save_d_to_mem(ϕ(dst), MEM, idx);
     }
 
     fn save_mem_result(&mut self, idx: u32) {
@@ -154,15 +167,15 @@ impl Generator for ArmGenerator {
     }
 
     fn load_param(&mut self, dst: Reg, idx: u32) {
-        self.load_d_from_mem(ϕ(dst), 20, idx);
+        self.load_d_from_mem(ϕ(dst), PARAMS, idx);
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
-        self.load_d_from_stack(ϕ(dst), idx);
+        self.load_d_from_mem(ϕ(dst), SP, idx);
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        self.save_d_to_stack(ϕ(dst), idx);
+        self.save_d_to_mem(ϕ(dst), SP, idx);
     }
 
     fn save_stack_result(&mut self, idx: u32) {
@@ -353,30 +366,24 @@ impl Generator for ArmGenerator {
     fn prologue(&mut self, cap: u32) {
         self.emit(arm! {sub sp, sp, #32});
         self.emit(arm! {str lr, [sp, #0]});
-        self.emit(arm! {str x(19), [sp, #8]}); // mem
-        self.emit(arm! {str x(20), [sp, #16]}); // param
+        self.emit(arm! {str x(MEM), [sp, #8]});
+        self.emit(arm! {str x(PARAMS), [sp, #16]});
 
         let stack_size = align_stack(self.reg_size() * cap);
-        self.emit(arm! {sub sp, sp, #stack_size & 0x0fff});
-        if stack_size >> 12 != 0 {
-            self.emit(arm! {sub sp, sp, #stack_size >> 12, lsl #12});
-        }
+        self.sub_stack(stack_size);
 
-        self.emit(arm! {mov x(19), x(0)});
-        self.emit(arm! {mov x(20), x(1)});
+        self.emit(arm! {mov x(PARAMS), x(1)});
+        self.emit(arm! {mov x(MEM), x(0)});
     }
 
     fn epilogue(&mut self, cap: u32) {
         self.restore_regs();
 
         let stack_size = align_stack(self.reg_size() * cap);
-        if stack_size >> 12 != 0 {
-            self.emit(arm! {add sp, sp, #stack_size >> 12, lsl #12});
-        }
-        self.emit(arm! {add sp, sp, #stack_size & 0x0fff});
+        self.add_stack(stack_size);
 
-        self.emit(arm! {ldr x(20), [sp, #16]});
-        self.emit(arm! {ldr x(19), [sp, #8]});
+        self.emit(arm! {ldr x(PARAMS), [sp, #16]});
+        self.emit(arm! {ldr x(MEM), [sp, #8]});
         self.emit(arm! {ldr lr, [sp, #0]});
         self.emit(arm! {add sp, sp, #32});
         self.emit(arm! {ret});
@@ -385,15 +392,12 @@ impl Generator for ArmGenerator {
     fn prologue_fast(&mut self, cap: u32, num_args: u32) {
         self.emit(arm! {sub sp, sp, #16});
         self.emit(arm! {str lr, [sp, #0]});
-        self.emit(arm! {str x(19), [sp, #8]});
+        self.emit(arm! {str x(MEM), [sp, #8]});
 
         let stack_size = align_stack(self.reg_size() * cap);
-        self.emit(arm! {sub sp, sp, #stack_size & 0x0fff});
-        if stack_size >> 12 != 0 {
-            self.emit(arm! {sub sp, sp, #stack_size >> 12, lsl #12});
-        }
+        self.sub_stack(stack_size);
 
-        self.emit(arm! {mov x(19), sp});
+        self.emit(arm! {mov x(MEM), sp});
 
         let num_args = num_args as i32;
 
@@ -409,101 +413,83 @@ impl Generator for ArmGenerator {
         self.emit(arm! {ldr d(0), [sp, #8*idx_ret]});
 
         let stack_size = align_stack(self.reg_size() * cap);
-        if stack_size >> 12 != 0 {
-            self.emit(arm! {add sp, sp, #stack_size >> 12, lsl #12});
-        }
-        self.emit(arm! {add sp, sp, #stack_size & 0x0fff});
+        self.add_stack(stack_size);
 
-        self.emit(arm! {ldr x(19), [sp, #8]});
+        self.emit(arm! {ldr x(MEM), [sp, #8]});
         self.emit(arm! {ldr lr, [sp, #0]});
         self.emit(arm! {add sp, sp, #16});
         self.emit(arm! {ret});
     }
 
+    /*
+     * MEM => first arg = mem if direct mode, otherwise null
+     * STATES => second arg = states+obs if indirect mode, otherwise null
+     * IDX => third arg = index if indirect mode
+     * PARAMS => fourth arg = params
+     */
     fn prologue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
         self.emit(arm! {sub sp, sp, #48});
         self.emit(arm! {str lr, [sp, #0]});
-        self.emit(arm! {str x(19), [sp, #8]}); // mem
-        self.emit(arm! {str x(20), [sp, #16]}); // param
-        self.emit(arm! {str x(21), [sp, #24]}); // states
-        self.emit(arm! {str x(22), [sp, #32]}); // idx
+        self.emit(arm! {str x(MEM), [sp, #8]});
+        self.emit(arm! {str x(PARAMS), [sp, #16]});
+        self.emit(arm! {str x(STATES), [sp, #24]});
+        self.emit(arm! {str x(IDX), [sp, #32]});
 
-        let mem: u8 = 19; // first arg = mem if direct mode, otherwise null
-        let states: u8 = 21; // second arg = states+obs if indirect mode, otherwise null
-        let idx: u8 = 22; // third arg = index if indirect mode
-        let params: u8 = 20; // fourth arg = params
+        self.emit(arm! {mov x(MEM), x(0)});
+        self.emit(arm! {mov x(STATES), x(1)});
+        self.emit(arm! {mov x(IDX), x(2)});
+        self.emit(arm! {mov x(PARAMS), x(3)});
 
-        self.emit(arm! {mov x(mem), x(0)});
-        self.emit(arm! {mov x(states), x(1)});
-        self.emit(arm! {mov x(idx), x(2)});
-        self.emit(arm! {mov x(params), x(3)});
-
-        self.emit(arm! {tst x(states), x(states)});
+        self.emit(arm! {tst x(STATES), x(STATES)});
         self.jump("@main", arm! {b.eq label});
 
         let size = align_stack((count_states + count_obs + 1) as u32 * self.reg_size());
-        self.emit(arm! {sub sp, sp, #size & 0x0fff});
-        if size >> 12 != 0 {
-            self.emit(arm! {sub sp, sp, #size >> 12, lsl #12});
-        }
-        self.emit(arm! {mov x(mem), sp});
+        self.sub_stack(size);
+        self.emit(arm! {mov x(MEM), sp});
 
         for i in 0..count_states {
             // self.emit(arm! {ldr x(10), [x(states), #8*i]});
-            self.load_x_from_mem(10, states, i as u32);
-            self.emit(arm! {ldr d(0), [x(10), x(idx), lsl #3]});
+            self.load_x_from_mem(SCRATCH2, STATES, i as u32);
+            self.emit(arm! {ldr d(0), [x(SCRATCH2), x(IDX), lsl #3]});
             // self.emit(arm! {str d(0), [x(mem), #8*i]});
-            self.save_d_to_mem(0, mem, i as u32);
+            self.save_d_to_mem(0, MEM, i as u32);
         }
 
-        // may save idx (RDX) as double in RBP + 8/32 * count_states
+        // TODO: may save idx (RDX) as double in RBP + 8/32 * count_states
 
         self.set_label("@main");
 
         let stack_size = align_stack(self.reg_size() * cap);
-        self.emit(arm! {sub sp, sp, #stack_size & 0x0fff});
-        if stack_size >> 12 != 0 {
-            self.emit(arm! {sub sp, sp, #stack_size >> 12, lsl #12});
-        }
+        self.sub_stack(stack_size);
     }
 
     fn epilogue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
-        let mem: u8 = 19; // first arg = mem if direct mode, otherwise null
-        let states: u8 = 21; // second arg = states+obs if indirect mode, otherwise null
-        let idx: u8 = 22; // third arg = index if indirect mode
-
         let stack_size = align_stack(self.reg_size() * cap);
-        if stack_size >> 12 != 0 {
-            self.emit(arm! {add sp, sp, #stack_size >> 12, lsl #12});
-        }
-        self.emit(arm! {add sp, sp, #stack_size & 0x0fff});
+        self.add_stack(stack_size);
 
-        self.emit(arm! {tst x(states), x(states)});
+        self.emit(arm! {tst x(STATES), x(STATES)});
         self.jump("@done", arm! {b.eq label});
 
         for i in 0..count_obs {
             // self.emit(arm! {ldr x(10), [x(states), #8*(count_states+i)]});
-            self.load_x_from_mem(10, states, (count_states + i) as u32);
+            self.load_x_from_mem(SCRATCH2, STATES, (count_states + i) as u32);
             let k = (count_states + i + 1) as u32;
             //self.emit(arm! {ldr d(0), [x(mem), #8*k]});
-            self.load_d_from_mem(0, mem, k as u32);
-            self.emit(arm! {str d(0), [x(10), x(idx), lsl #3]});
+            self.load_d_from_mem(0, MEM, k as u32);
+            self.emit(arm! {str d(0), [x(SCRATCH2), x(IDX), lsl #3]});
         }
 
         let size = align_stack((count_states + count_obs + 1) as u32 * self.reg_size());
-        if size >> 12 != 0 {
-            self.emit(arm! {add sp, sp, #size >> 12, lsl #12});
-        }
-        self.emit(arm! {add sp, sp, #size & 0x0fff});
+        self.add_stack(size);
 
         self.set_label("@done");
 
         self.restore_regs();
 
-        self.emit(arm! {ldr x(22), [sp, #32]});
-        self.emit(arm! {ldr x(21), [sp, #24]});
-        self.emit(arm! {ldr x(20), [sp, #16]});
-        self.emit(arm! {ldr x(19), [sp, #8]});
+        self.emit(arm! {ldr x(IDX), [sp, #32]});
+        self.emit(arm! {ldr x(STATES), [sp, #24]});
+        self.emit(arm! {ldr x(PARAMS), [sp, #16]});
+        self.emit(arm! {ldr x(MEM), [sp, #8]});
         self.emit(arm! {ldr lr, [sp, #0]});
         self.emit(arm! {add sp, sp, #48});
         self.emit(arm! {ret});
