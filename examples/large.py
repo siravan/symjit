@@ -8,7 +8,7 @@ import numpy as np
 import time
 import math
 
-n = 14
+n = 12
 N = 2**n
 
 V = symbols(f'v[0:{N}]')
