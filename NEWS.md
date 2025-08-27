@@ -1,3 +1,10 @@
+# Version 2.4.1
+
+* Arm64 (aarch64) large stack frame.
+* Consolidated tests suite (plots.py).
+* New intrinsic operators (Min, Max, Heaviside).
+* Switch to spec_math::cephes64 and addition of new numerical functions (erf, gamma, ...).
+
 # Version 2.4 Release Note 
 
 * Common-subexpression elimination (keywork `cse`) implementede.

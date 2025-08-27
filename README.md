@@ -90,6 +90,9 @@ f = compile_func([x, y], [x+y, x*y])
 assert(np.all(f(3, 5) == [8., 15.]))
 ```
 
+`compile_*` functions support these [operators and functions](FUNCTIONS.md).
+
+
 `compile_func` takes two mandatory arguments as `compile_func(states, eqs)`. The first one, `states`, is a list or tuple of sympy symbols. The second argument, `eqs`, is a list, a tuple, or a single expression. We can think of `states` and `eqs` as corresponding to function signature and body. 
 
 If `states` has only one element, it can be passed directly. Similar to sympy `lambdify`, the output follows the form of the second argument to `compile_func`. Therefore, if `f = compile_func([x, y], [x+y, x*y])`, then `f(2, 3)` returns a list. On the other hand, if `f = compile_func([x, y], (x+y, x*y))`, the output will be `(5, 6)`. The third form is a single scalar, such as if `f = compile_func([x, y], sin(x+y))`.

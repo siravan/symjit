@@ -166,10 +166,12 @@ impl Generator for ArmGenerator {
     }
 
     fn load_param(&mut self, dst: Reg, idx: u32) {
+        self.flush(dst);
         self.load_d_from_mem(ϕ(dst), PARAMS, idx);
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
+        self.flush(dst);
         self.load_d_from_mem(ϕ(dst), SP, idx);
     }
 

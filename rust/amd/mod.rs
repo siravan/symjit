@@ -382,6 +382,7 @@ impl Generator for AmdGenerator {
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
+        self.flush(dst);
         select!(
             self,
             movsd_xmm_mem,
