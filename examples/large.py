@@ -8,7 +8,7 @@ import numpy as np
 import time
 import math
 
-n = 12
+n = 13
 N = 2**n
 
 V = symbols(f'v[0:{N}]')
@@ -29,7 +29,7 @@ if n < 8:
     print(T)
 
 t0 = time.perf_counter_ns()
-f = compile_func(V, T)
+f = compile_func(V, T, **args)
 t1  = time.perf_counter_ns()
 print(f'compile_func\t in {1e-6*(t1-t0):.3f} ms')
 

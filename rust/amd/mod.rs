@@ -250,7 +250,7 @@ impl AmdGenerator {
             self.amd.mov_mem_reg(Amd::RSP, 0x08, MEM);
             self.amd.mov_mem_reg(Amd::RSP, 0x10, PARAMS);
             self.amd.mov_mem_reg(Amd::RSP, 0x18, IDX);
-            self.amd.mov_mem_reg(Amd::RSP, 0x20, Amd::R13);
+            self.amd.mov_mem_reg(Amd::RSP, 0x20, STATES);
         } else {
             self.amd.sub_rsp(32);
             self.amd.mov_mem_reg(Amd::RSP, 0x00, MEM);
@@ -273,6 +273,21 @@ impl AmdGenerator {
             self.amd.mov_reg_mem(MEM, Amd::RSP, 0x00);
             self.amd.add_rsp(32);
         }
+    }
+
+    #[cfg(target_family = "linux")]
+    fn chkstk(&mut self, size: u32) {
+        self.amd.sub_rsp(size);
+    }
+
+    #[cfg(target_family = "windows")]
+    fn chkstk(&mut self, mut size: u32) {
+        while size > 4096 {
+            self.amd.sub_rsp(4096);
+            self.amd.mov_reg_mem(Amd::RAX, Amd::RSP, 0);
+            size -= 4096;    
+        }
+        self.amd.sub_rsp(size);
     }
 }
 
@@ -677,7 +692,8 @@ impl Generator for AmdGenerator {
         self.amd.jz("@main");
 
         let size = (count_states + count_obs + 1) as u32 * self.reg_size();
-        self.amd.sub_rsp(size);
+        //self.amd.sub_rsp(size);
+        self.chkstk(size);
         self.amd.mov(MEM, Amd::RSP); // in indirect mode, MEM is allocated on the stack
 
         for i in 0..count_states {
@@ -707,7 +723,8 @@ impl Generator for AmdGenerator {
         // may save idx (RDX) as double in RBP + 8/32 * count_states
 
         self.set_label("@main");
-        self.amd.sub_rsp(self.frame_size(cap));
+        // self.amd.sub_rsp(self.frame_size(cap));
+        self.chkstk(self.frame_size(cap));
     }
 
     fn epilogue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
