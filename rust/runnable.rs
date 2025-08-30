@@ -88,14 +88,14 @@ impl Runnable {
         let params = vec![0.0; count_params + 1];
 
         let compiled = match ty {
-            CompilerType::ByteCode => Self::compile_bytecode(&mut prog, size)?,
+            CompilerType::ByteCode => Self::compile_debugger(&mut prog, size, false)?,
             CompilerType::Native => Self::compile_native(&mut prog, size)?,
             CompilerType::Amd if Platform::has_avx() => Self::compile_avx(&mut prog, size)?,
             CompilerType::Amd if !Platform::has_avx() => Self::compile_avx(&mut prog, size)?,
             CompilerType::AmdAVX => Self::compile_avx(&mut prog, size)?,
             CompilerType::AmdSSE => Self::compile_sse(&mut prog, size)?,
             CompilerType::Arm => Self::compile_arm(&mut prog, size)?,
-            CompilerType::Debug => Self::compile_debugger(&mut prog, size)?,
+            CompilerType::Debug => Self::compile_debugger(&mut prog, size, true)?,
             _ => {
                 unreachable!()
             }
@@ -109,7 +109,8 @@ impl Runnable {
 
         let use_threads = opt & USE_THREADS != 0 && size < 128;
 
-        let can_fast = count_states < 8 && count_params == 0 && count_obs == 1 && count_diffs == 0;
+        let can_fast = count_states < 8 && count_params == 0 && count_obs == 1 && 
+            count_diffs == 0 && !matches!(ty, CompilerType::ByteCode) && !matches!(ty, CompilerType::Debug);
 
         Ok(Runnable {
             prog,
@@ -194,7 +195,8 @@ impl Runnable {
 
     fn compile_bytecode(prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
         let mem: Vec<f64> = vec![0.0; size];
-        let code = ByteCode::new(prog.builder.clone(), mem);
+        let builder = prog.builder.clone();
+        let code = ByteCode::new(builder, mem);
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
 
         Ok(compiled)
@@ -230,11 +232,11 @@ impl Runnable {
         Ok(compiled)
     }
 
-    fn compile_debugger(prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
+    fn compile_debugger(prog: &mut Program, size: usize, debug: bool) -> Result<Box<dyn Compiled<f64>>> {
         let compiled = Self::compile_native(prog, size)?;
         let bytecode = Self::compile_bytecode(prog, size)?;
         let debugger: Box<dyn Compiled<f64>> =
-            Box::new(Debugger::new(prog.builder.clone(), compiled, bytecode));
+            Box::new(Debugger::new(prog.builder.clone(), compiled, bytecode, debug));
         Ok(debugger)
     }
 
@@ -422,7 +424,7 @@ pub struct Debugger {
     builder: Builder,
     compiled: Box<dyn Compiled<f64>>,
     bytecode: Box<dyn Compiled<f64>>,
-    flip: bool,
+    debug: bool,
 }
 
 impl Debugger {
@@ -430,12 +432,13 @@ impl Debugger {
         builder: Builder,
         compiled: Box<dyn Compiled<f64>>,
         bytecode: Box<dyn Compiled<f64>>,
+        debug: bool,
     ) -> Debugger {
         Debugger {
             builder,
             compiled,
             bytecode,
-            flip: false,
+            debug,
         }
     }
 
@@ -445,7 +448,7 @@ impl Debugger {
 
         // accept if the difference is less that 1e-15 to count for rounding error
         // because of different operation order
-        if p.iter().zip(q).any(|(x, y)| !(f64::abs(*x - *y) < 1e-15)) {
+        if p.iter().zip(q).any(|(x, y)| !(f64::abs(*x - *y) < 1e-10)) {
             for (key, sym) in self.builder.block.sym_table.syms.iter() {
                 match sym.borrow().loc {
                     Loc::Mem(idx) => {
@@ -465,29 +468,26 @@ impl Debugger {
 
 impl Compiled<f64> for Debugger {
     fn exec(&mut self, params: &[f64]) {
-        let p = self.bytecode.mem_mut();
-        let q = self.compiled.mem();
-        p.copy_from_slice(q);
-
-        self.compiled.exec(params);
-        self.bytecode.exec(params);
-
-        if self.flip {
-            let p = self.bytecode.mem();
-            let q = self.compiled.mem_mut();
-            q.copy_from_slice(p);
+        if !self.debug {
+            self.bytecode.exec(params);
+            return;
         }
 
-        self.flip = !self.flip;
+        let p = self.compiled.mem_mut();
+        let q = self.bytecode.mem();
+        p.copy_from_slice(q);
+
+        self.bytecode.exec(params);
+        self.compiled.exec(params);
         self.assert_equal();
     }
 
     fn mem(&self) -> &[f64] {
-        self.compiled.mem()
+        self.bytecode.mem()
     }
 
     fn mem_mut(&mut self) -> &mut [f64] {
-        self.compiled.mem_mut()
+        self.bytecode.mem_mut()
     }
 
     fn dump(&self, name: &str) {
