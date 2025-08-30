@@ -275,18 +275,21 @@ impl AmdGenerator {
         }
     }
 
-    #[cfg(target_family = "linux")]
+    #[cfg(target_family = "unix")]
     fn chkstk(&mut self, size: u32) {
         self.amd.sub_rsp(size);
     }
 
     #[cfg(target_family = "windows")]
     fn chkstk(&mut self, mut size: u32) {
-        while size > 4096 {
-            self.amd.sub_rsp(4096);
+        const PAGE_SIZE: u32 = 4096;
+
+        while size > PAGE_SIZE {
+            self.amd.sub_rsp(PAGE_SIZE);
             self.amd.mov_reg_mem(Amd::RAX, Amd::RSP, 0);
-            size -= 4096;    
+            size -= PAGE_SIZE;
         }
+
         self.amd.sub_rsp(size);
     }
 }
