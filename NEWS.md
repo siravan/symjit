@@ -1,3 +1,8 @@
+# Version 2.4.2
+
+* Large stack frame support in x64 (chkstk functionality).
+* Debug mode fixed.
+
 # Version 2.4.1
 
 * Arm64 (aarch64) large stack frame.
