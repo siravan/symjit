@@ -16,6 +16,7 @@ mod utils;
 mod assembler;
 mod builder;
 mod generator;
+// mod mir;
 mod node;
 mod statement;
 mod symbol;

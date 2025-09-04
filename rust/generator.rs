@@ -1,4 +1,5 @@
 use crate::assembler::Assembler;
+use crate::code::Func;
 use crate::utils::Reg;
 
 #[allow(dead_code)]
@@ -91,6 +92,9 @@ pub trait Generator {
     fn or(&mut self, dst: Reg, s1: Reg, s2: Reg);
     fn xor(&mut self, dst: Reg, s1: Reg, s2: Reg);
     fn not(&mut self, dst: Reg, s1: Reg);
+
+    fn add_consts(&mut self, consts: &Vec<f64>);
+    fn add_func(&mut self, f: &str, p: Func);
 
     fn setup_call_unary(&mut self, s1: Reg);
     fn setup_call_binary(&mut self, s1: Reg, s2: Reg);

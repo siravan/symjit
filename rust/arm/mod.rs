@@ -341,6 +341,20 @@ impl Generator for ArmGenerator {
         self.emit(arm! {not v(ϕ(dst)).8b, v(ϕ(s1)).8b});
     }
 
+    fn add_consts(&mut self, consts: &Vec<f64>) {
+        for (idx, val) in consts.iter().enumerate() {
+            let label = format!("_const_{}_", idx);
+            self.set_label(label.as_str());
+            self.append_quad((*val).to_bits());
+        }
+    }
+
+    fn add_func(&mut self, f: &str, p: crate::code::Func) {
+        let label = format!("_func_{}_", f);
+        self.set_label(label.as_str());
+        self.append_quad(p.func_ptr());
+    }
+
     fn setup_call_unary(&mut self, s1: Reg) {
         setup_call_unary(self, s1);
     }

@@ -241,20 +241,25 @@ impl Builder {
     }
 
     fn append_const_section(&self, ir: &mut impl Generator) {
+        ir.add_consts(&self.consts);
+        /*
         for (idx, val) in self.consts.iter().enumerate() {
             let label = format!("_const_{}_", idx);
             ir.set_label(label.as_str());
             ir.append_quad((*val).to_bits());
         }
+        */
     }
 
     fn append_vt_section(&self, ir: &mut impl Generator) {
         for f in self.ft.iter() {
+            let p = VirtualTable::from_str(f).expect("func not found");
+            /*
             let label = format!("_func_{}_", f);
             ir.set_label(label.as_str());
-            let p = VirtualTable::from_str(f).expect("func not found");
-            //ir.append_quad(p as usize as u64);
             ir.append_quad(p.func_ptr());
+            */
+            ir.add_func(f, p);
         }
     }
 }
