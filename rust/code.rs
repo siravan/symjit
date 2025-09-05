@@ -1,9 +1,11 @@
 use anyhow::{anyhow, Result};
 use spec_math::cephes64;
+use std::fmt;
 
 pub type UnaryFunc = extern "C" fn(f64) -> f64;
 pub type BinaryFunc = extern "C" fn(f64, f64) -> f64;
 
+#[derive(Clone)]
 pub enum Func {
     Unary(UnaryFunc),
     Binary(BinaryFunc),
@@ -15,6 +17,12 @@ impl Func {
             Func::Unary(f) => *f as usize as u64,
             Func::Binary(f) => *f as usize as u64,
         }
+    }
+}
+
+impl fmt::Debug for Func {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<function pointer>")
     }
 }
 

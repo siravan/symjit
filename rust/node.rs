@@ -312,8 +312,8 @@ impl Node {
 
     fn compile_const(&self, ir: &mut dyn Generator, base: u8) -> Result<u8> {
         if let Node::Const { idx, .. } = &self {
-            let label = format!("_const_{}_", idx);
-            ir.load_const(reg(base), &label);
+            // let label = format!("_const_{}_", idx);
+            ir.load_const(reg(base), *idx);
             Ok(base)
         } else {
             unreachable!();

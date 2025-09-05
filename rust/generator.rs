@@ -1,55 +1,16 @@
-use crate::assembler::Assembler;
 use crate::code::Func;
 use crate::utils::Reg;
 
 #[allow(dead_code)]
 pub trait Generator {
-    fn count_shadows(&self) -> u8;
-    fn reg_size(&self) -> u32;
-    fn a(&mut self) -> &mut Assembler;
     fn three_address(&self) -> bool;
-
-    // assembler's methods
-    fn bytes(&mut self) -> Vec<u8> {
-        self.a().bytes()
-    }
-
-    fn append_byte(&mut self, b: u8) {
-        self.a().append_byte(b);
-    }
-
-    fn append_bytes(&mut self, bs: &[u8]) {
-        self.a().append_bytes(bs);
-    }
-
-    fn append_word(&mut self, u: u32) {
-        self.a().append_word(u);
-    }
-
-    fn append_quad(&mut self, u: u64) {
-        self.a().append_quad(u);
-    }
-
-    fn ip(&mut self) -> usize {
-        self.a().ip()
-    }
-
-    fn set_label(&mut self, label: &str) {
-        self.a().set_label(label);
-    }
-
-    fn jump(&mut self, label: &str, code: u32) {
-        self.a().jump(label, code)
-    }
-
-    fn apply_jumps(&mut self) {
-        self.a().apply_jumps();
-    }
+    fn bytes(&mut self) -> Vec<u8>;
+    fn seal(&mut self);
 
     /***********************************/
     fn fmov(&mut self, dst: Reg, s1: Reg);
     fn fxchg(&mut self, dst: Reg, s1: Reg);
-    fn load_const(&mut self, dst: Reg, label: &str);
+    fn load_const(&mut self, dst: Reg, idx: u32);
     fn load_mem(&mut self, dst: Reg, idx: u32);
     fn save_mem(&mut self, dst: Reg, idx: u32);
     fn load_param(&mut self, dst: Reg, idx: u32);
@@ -98,12 +59,9 @@ pub trait Generator {
 
     fn setup_call_unary(&mut self, s1: Reg);
     fn setup_call_binary(&mut self, s1: Reg, s2: Reg);
-    fn call(&mut self, label: &str, num_args: usize);
+    fn call(&mut self, op: &str, num_args: usize);
     fn select_if(&mut self, dst: Reg, cond: Reg, s1: Reg);
     fn select_else(&mut self, dst: Reg, cond: Reg, s1: Reg);
-
-    fn prologue(&mut self, n: u32);
-    fn epilogue(&mut self, n: u32);
 
     fn prologue_fast(&mut self, cap: u32, num_args: u32);
     fn epilogue_fast(&mut self, cap: u32, idx_ret: i32);

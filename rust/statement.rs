@@ -47,8 +47,7 @@ impl Statement {
                 num_args,
             } => {
                 let _ = arg.compile_tree(ir)?;
-                let label = format!("_func_{}_", op);
-                ir.call(&label, *num_args);
+                ir.call(op.as_str(), *num_args);
                 Self::save_result(ir, lhs);
             }
         };

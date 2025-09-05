@@ -5,6 +5,7 @@ use super::utils::{Compiled, Eval};
 use crate::block::Block;
 use crate::code::{Func, VirtualTable};
 use crate::generator::Generator;
+use crate::mir::Mir;
 use crate::node::Node;
 use crate::utils::CompiledFunc;
 
@@ -194,6 +195,63 @@ impl Builder {
         Ok(node)
     }
 
+    pub fn create_mir(&mut self) -> Result<Mir> {
+        self.block.eliminate();
+        let mut mir = Mir::new();
+        self.block.compile(&mut mir)?;
+        return Ok(mir);
+    }
+
+    pub fn compile_from_mir(
+        &mut self,
+        mir: &Mir,
+        ir: &mut impl Generator,
+        count_states: usize,
+        count_obs: usize,
+    ) -> Result<()> {
+        // println!("{:#?}", &self.block.stmts);
+        let cap = self.block.sym_table.num_stack as u32;
+        ir.prologue_indirect(cap, count_states, count_obs);
+
+        //self.block.compile(ir)?;
+        mir.rerun(ir);
+
+        ir.epilogue_indirect(cap, count_states, count_obs);
+        self.append_const_section(ir);
+        self.append_vt_section(ir);
+        ir.seal();
+        // println!("{:#?}", &self.block.stmts);
+        // println!("{:02x?}", ir.bytes());
+
+        Ok(())
+    }
+
+    pub fn compile_fast_from_mir(
+        &mut self,
+        mir: &Mir,
+        ir: &mut impl Generator,
+        num_args: u32,
+        idx_ret: i32,
+    ) -> Result<()> {
+        self.block.eliminate();
+        // println!("{:#?}", &self.block.stmts);
+        let cap = self.block.sym_table.num_stack as u32;
+        ir.prologue_fast(cap, num_args);
+
+        // self.block.compile(ir)?;
+        mir.rerun(ir);
+
+        ir.epilogue_fast(cap, idx_ret);
+        self.append_const_section(ir);
+        self.append_vt_section(ir);
+        ir.seal();
+        // println!("{:#?}", &self.block.stmts);
+        // println!("{:02x?}", ir.bytes());
+
+        Ok(())
+    }
+
+    /*
     pub fn compile(
         &mut self,
         ir: &mut impl Generator,
@@ -210,7 +268,7 @@ impl Builder {
         ir.epilogue_indirect(cap, count_states, count_obs);
         self.append_const_section(ir);
         self.append_vt_section(ir);
-        ir.apply_jumps();
+        ir.seal();
         // println!("{:#?}", &self.block.stmts);
         // println!("{:02x?}", ir.bytes());
 
@@ -233,12 +291,13 @@ impl Builder {
         ir.epilogue_fast(cap, idx_ret);
         self.append_const_section(ir);
         self.append_vt_section(ir);
-        ir.apply_jumps();
+        ir.seal();
         // println!("{:#?}", &self.block.stmts);
         // println!("{:02x?}", ir.bytes());
 
         Ok(())
     }
+    */
 
     fn append_const_section(&self, ir: &mut impl Generator) {
         ir.add_consts(&self.consts);

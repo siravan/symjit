@@ -105,6 +105,37 @@ impl AmdGenerator {
         }
     }
 
+    fn count_shadows(&self) -> u8 {
+        if cfg!(target_family = "windows") {
+            4 // xmm2-xmm5
+        } else {
+            14 // xmm2-xmm15
+        }
+    }
+
+    fn reg_size(&self) -> u32 {
+        match self.family {
+            AmdFamily::AvxScalar | AmdFamily::SSEScalar => 8,
+            AmdFamily::AvxVector => 32,
+        }
+    }
+
+    fn append_quad(&mut self, u: u64) {
+        self.amd.a.append_quad(u);
+    }
+
+    fn set_label(&mut self, label: &str) {
+        self.amd.a.set_label(label);
+    }
+
+    fn jump(&mut self, label: &str, code: u32) {
+        self.amd.a.jump(label, code)
+    }
+
+    fn apply_jumps(&mut self) {
+        self.amd.a.apply_jumps();
+    }
+
     /*
         shrink is a helper function used to generate
         SSE codes from 3-address inputs.
@@ -127,6 +158,19 @@ impl AmdGenerator {
             self.fmov(dst, s1);
             (dst, s2)
         }
+    }
+
+    fn load_const_by_name(&mut self, dst: Reg, label: &str) {
+        self.flush(dst);
+
+        select!(
+            self,
+            movsd_xmm_label,
+            vmovsd_xmm_label,
+            vbroadcastsd_label,
+            ϕ(dst),
+            label
+        );
     }
 
     fn vzeroupper(&mut self) {
@@ -295,27 +339,17 @@ impl AmdGenerator {
 }
 
 impl Generator for AmdGenerator {
-    fn count_shadows(&self) -> u8 {
-        if cfg!(target_family = "windows") {
-            4 // xmm2-xmm5
-        } else {
-            14 // xmm2-xmm15
-        }
-    }
-
-    fn reg_size(&self) -> u32 {
-        match self.family {
-            AmdFamily::AvxScalar | AmdFamily::SSEScalar => 8,
-            AmdFamily::AvxVector => 32,
-        }
-    }
-
-    fn a(&mut self) -> &mut Assembler {
-        &mut self.amd.a
+    fn bytes(&mut self) -> Vec<u8> {
+        self.amd.a.bytes()
     }
 
     fn three_address(&self) -> bool {
         !matches!(self.family, AmdFamily::SSEScalar)
+    }
+
+    fn seal(&mut self) {
+        self.predefined_consts();
+        self.apply_jumps();
     }
 
     //***********************************
@@ -345,15 +379,17 @@ impl Generator for AmdGenerator {
         }
     }
 
-    fn load_const(&mut self, dst: Reg, label: &str) {
+    fn load_const(&mut self, dst: Reg, idx: u32) {
         self.flush(dst);
+        let label = format!("_const_{}_", idx);
+
         select!(
             self,
             movsd_xmm_label,
             vmovsd_xmm_label,
             vbroadcastsd_label,
             ϕ(dst),
-            label
+            label.as_str()
         );
     }
 
@@ -430,13 +466,13 @@ impl Generator for AmdGenerator {
 
     fn neg(&mut self, dst: Reg, s1: Reg) {
         self.flush(dst);
-        self.load_const(Reg::Temp, "_minus_zero_");
+        self.load_const_by_name(Reg::Temp, "_minus_zero_");
         self.xor(dst, s1, Reg::Temp);
     }
 
     fn abs(&mut self, dst: Reg, s1: Reg) {
         self.flush(dst);
-        self.load_const(Reg::Temp, "_minus_zero_");
+        self.load_const_by_name(Reg::Temp, "_minus_zero_");
         self.andnot(dst, Reg::Temp, s1);
     }
 
@@ -458,7 +494,7 @@ impl Generator for AmdGenerator {
     fn powi(&mut self, dst: Reg, s1: Reg, power: i32) {
         self.flush(dst);
         if power == 0 {
-            self.load_const(dst, "_one_");
+            self.load_const_by_name(dst, "_one_");
         } else {
             powi(self, dst, s1, power);
         }
@@ -467,7 +503,7 @@ impl Generator for AmdGenerator {
     fn powi_mod(&mut self, dst: Reg, s1: Reg, power: i32, modulus: Reg) {
         self.flush(dst);
         if power == 0 {
-            self.load_const(dst, "_one_");
+            self.load_const_by_name(dst, "_one_");
         } else {
             powi_mod(self, dst, s1, power, modulus);
         }
@@ -475,7 +511,7 @@ impl Generator for AmdGenerator {
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
         self.flush(dst);
-        self.load_const(Reg::Temp, "_one_");
+        self.load_const_by_name(Reg::Temp, "_one_");
         self.divide(dst, Reg::Temp, s1);
     }
 
@@ -562,7 +598,7 @@ impl Generator for AmdGenerator {
 
     fn not(&mut self, dst: Reg, s1: Reg) {
         self.flush(dst);
-        self.load_const(Reg::Temp, "_all_ones_");
+        self.load_const_by_name(Reg::Temp, "_all_ones_");
         self.xor(dst, s1, Reg::Temp);
     }
 
@@ -588,8 +624,8 @@ impl Generator for AmdGenerator {
         setup_call_binary(self, s1, s2);
     }
 
-    fn call(&mut self, label: &str, num_args: usize) {
-        //self.amd.mov_reg_label(Amd::R12, label);
+    fn call(&mut self, op: &str, num_args: usize) {
+        let label = format!("_func_{}_", op);
 
         match self.family {
             AmdFamily::AvxScalar | AmdFamily::SSEScalar => {
@@ -598,36 +634,21 @@ impl Generator for AmdGenerator {
                 self.amd.sub_rsp(32);
 
                 //self.amd.call(Amd::R12);
-                self.amd.call_indirect(label);
+                self.amd.call_indirect(&label);
 
                 #[cfg(target_family = "windows")]
                 self.amd.add_rsp(32);
             }
             AmdFamily::AvxVector => match num_args {
-                1 => self.call_vector_unary(label),
-                2 => self.call_vector_binary(label),
+                1 => self.call_vector_unary(&label),
+                2 => self.call_vector_binary(&label),
                 _ => {
                     panic!("invalid number of arguments")
                 }
             },
         }
     }
-    /*
-        fn branch(&mut self, label: &str) {
-            self.amd.jmp(label);
-        }
 
-        fn branch_if(&mut self, cond: u8, true_label: &str) {
-            self.amd.vucomisd(cond, cond);
-            self.amd.jpe(true_label);
-        }
-
-        fn branch_if_else(&mut self, cond: u8, true_label: &str, false_label: &str) {
-            self.amd.vucomisd(cond, cond);
-            self.amd.jpe(true_label);
-            self.amd.jmp(false_label);
-        }
-    */
     fn select_if(&mut self, dst: Reg, cond: Reg, s1: Reg) {
         self.flush(dst);
         self.amd.vandpd(ϕ(dst), ϕ(cond), ϕ(s1));
@@ -639,28 +660,6 @@ impl Generator for AmdGenerator {
     }
 
     /****************** Prologues/Epilogues ********************/
-
-    #[cfg(target_family = "unix")]
-    fn prologue(&mut self, cap: u32) {
-        self.amd.sub_rsp(32);
-        self.save_nonvolatile_regs();
-        self.amd.mov(MEM, Amd::RDI);
-        self.amd.mov(PARAMS, Amd::RSI);
-        self.amd.sub_rsp(self.frame_size(cap));
-    }
-
-    #[cfg(target_family = "unix")]
-    fn epilogue(&mut self, cap: u32) {
-        self.restore_regs();
-        self.vzeroupper();
-
-        self.amd.add_rsp(self.frame_size(cap));
-        self.load_nonvolatile_regs();
-        self.amd.add_rsp(32);
-        self.amd.ret();
-
-        self.predefined_consts();
-    }
 
     #[cfg(target_family = "unix")]
     fn prologue_fast(&mut self, cap: u32, num_args: u32) {
@@ -684,7 +683,6 @@ impl Generator for AmdGenerator {
         self.amd.pop(PARAMS);
         self.amd.pop(MEM);
         self.amd.ret();
-        self.predefined_consts();
     }
 
     /*
@@ -786,8 +784,6 @@ impl Generator for AmdGenerator {
 
         self.load_nonvolatile_regs();
         self.amd.ret();
-
-        self.predefined_consts();
     }
 
     #[cfg(target_family = "windows")]

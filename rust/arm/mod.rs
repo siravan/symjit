@@ -37,6 +37,30 @@ impl ArmGenerator {
         }
     }
 
+    fn count_shadows(&self) -> u8 {
+        6
+    }
+
+    fn reg_size(&self) -> u32 {
+        8
+    }
+
+    fn append_quad(&mut self, u: u64) {
+        self.a.append_quad(u);
+    }
+
+    fn set_label(&mut self, label: &str) {
+        self.a.set_label(label);
+    }
+
+    fn jump(&mut self, label: &str, code: u32) {
+        self.a.jump(label, code)
+    }
+
+    fn apply_jumps(&mut self) {
+        self.a.apply_jumps();
+    }
+
     fn emit(&mut self, w: u32) {
         self.a.append_word(w);
     }
@@ -111,20 +135,16 @@ impl ArmGenerator {
 }
 
 impl Generator for ArmGenerator {
-    fn count_shadows(&self) -> u8 {
-        6
-    }
-
-    fn reg_size(&self) -> u32 {
-        8
-    }
-
-    fn a(&mut self) -> &mut Assembler {
-        &mut self.a
+    fn bytes(&mut self) -> Vec<u8> {
+        self.a.bytes()
     }
 
     fn three_address(&self) -> bool {
         true
+    }
+
+    fn seal(&mut self) {
+        self.apply_jumps();
     }
 
     //***********************************
@@ -147,9 +167,10 @@ impl Generator for ArmGenerator {
         self.emit(arm! {eor v(ϕ(s1)).8b, v(ϕ(s1)).8b, v(ϕ(s2)).8b});
     }
 
-    fn load_const(&mut self, dst: Reg, label: &str) {
+    fn load_const(&mut self, dst: Reg, idx: u32) {
         self.flush(dst);
-        self.jump(label, arm! {ldr d(ϕ(dst)), label});
+        let label = format!("_const_{}_", idx);
+        self.jump(label.as_str(), arm! {ldr d(ϕ(dst)), label});
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
@@ -363,8 +384,9 @@ impl Generator for ArmGenerator {
         setup_call_binary(self, s1, s2);
     }
 
-    fn call(&mut self, label: &str, _num_args: usize) {
-        self.jump(label, arm! {ldr x(0), label});
+    fn call(&mut self, op: &str, _num_args: usize) {
+        let label = format!("_func_{}_", op);
+        self.jump(label.as_str(), arm! {ldr x(0), label});
         self.emit(arm! {blr x(0)});
     }
 
@@ -376,32 +398,6 @@ impl Generator for ArmGenerator {
     fn select_else(&mut self, dst: Reg, cond: Reg, s1: Reg) {
         self.flush(dst);
         self.andnot(dst, cond, s1);
-    }
-
-    fn prologue(&mut self, cap: u32) {
-        self.emit(arm! {sub sp, sp, #32});
-        self.emit(arm! {str lr, [sp, #0]});
-        self.emit(arm! {str x(MEM), [sp, #8]});
-        self.emit(arm! {str x(PARAMS), [sp, #16]});
-
-        let stack_size = align_stack(self.reg_size() * cap);
-        self.sub_stack(stack_size);
-
-        self.emit(arm! {mov x(PARAMS), x(1)});
-        self.emit(arm! {mov x(MEM), x(0)});
-    }
-
-    fn epilogue(&mut self, cap: u32) {
-        self.restore_regs();
-
-        let stack_size = align_stack(self.reg_size() * cap);
-        self.add_stack(stack_size);
-
-        self.emit(arm! {ldr x(PARAMS), [sp, #16]});
-        self.emit(arm! {ldr x(MEM), [sp, #8]});
-        self.emit(arm! {ldr lr, [sp, #0]});
-        self.emit(arm! {add sp, sp, #32});
-        self.emit(arm! {ret});
     }
 
     fn prologue_fast(&mut self, cap: u32, num_args: u32) {
