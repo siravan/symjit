@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use crate::amd::{AmdFamily, AmdGenerator};
 use crate::arm::ArmGenerator;
-use crate::builder::{Builder, ByteCode};
+use crate::builder::Builder;
 use crate::generator::Generator;
 use crate::machine::MachineCode;
 use crate::matrix::{combine_matrixes, Matrix};
@@ -165,10 +165,6 @@ impl Runnable {
     fn compile_sse(mir: &Mir, prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
         let mut generator = AmdGenerator::new(AmdFamily::SSEScalar);
         let mem: Vec<f64> = vec![0.0; size];
-        /*
-        prog.builder
-            .compile(&mut generator, prog.count_states, prog.count_obs)?;
-        */
         prog.builder
             .compile_from_mir(mir, &mut generator, prog.count_states, prog.count_obs)?;
         let code = MachineCode::new("x86_64", generator.bytes(), mem);
@@ -180,10 +176,6 @@ impl Runnable {
     fn compile_avx(mir: &Mir, prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
         let mut generator = AmdGenerator::new(AmdFamily::AvxScalar);
         let mem: Vec<f64> = vec![0.0; size];
-        /*
-        prog.builder
-            .compile(&mut generator, prog.count_states, prog.count_obs)?;
-        */
         prog.builder
             .compile_from_mir(mir, &mut generator, prog.count_states, prog.count_obs)?;
         let code = MachineCode::new("x86_64", generator.bytes(), mem);
@@ -199,10 +191,6 @@ impl Runnable {
     ) -> Result<Box<dyn Compiled<f64x4>>> {
         let mut generator = AmdGenerator::new(AmdFamily::AvxVector);
         let mem: Vec<f64x4> = vec![f64x4::splat(0.0); size];
-        /*
-        prog.builder
-            .compile(&mut generator, prog.count_states, prog.count_obs)?;
-        */
         prog.builder
             .compile_from_mir(mir, &mut generator, prog.count_states, prog.count_obs)?;
 
@@ -215,10 +203,6 @@ impl Runnable {
     fn compile_arm(mir: &Mir, prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
         let mut generator = ArmGenerator::new();
         let mem: Vec<f64> = vec![0.0; size];
-        /*
-        prog.builder
-            .compile(&mut generator, prog.count_states, prog.count_obs)?;
-        */
         prog.builder
             .compile_from_mir(mir, &mut generator, prog.count_states, prog.count_obs)?;
         let code = MachineCode::new("aarch64", generator.bytes(), mem);
@@ -232,7 +216,6 @@ impl Runnable {
         prog: &mut Program,
         size: usize,
     ) -> Result<Box<dyn Compiled<f64>>> {
-        // let mir = prog.builder.create_mir(prog.count_states, prog.count_obs)?;
         // println!("{:#?}", &mir);
         let mem: Vec<f64> = vec![0.0; size];
         let stack: Vec<f64> = vec![0.0; prog.builder.block.sym_table.num_stack];
@@ -249,10 +232,6 @@ impl Runnable {
     ) -> Result<Box<dyn Compiled<f64>>> {
         let mut generator = AmdGenerator::new(AmdFamily::AvxScalar);
         let mem: Vec<f64> = Vec::new();
-        /*
-        prog.builder
-            .compile_fast(&mut generator, prog.count_states as u32, idx_ret as i32)?;
-        */
         prog.builder.compile_fast_from_mir(
             mir,
             &mut generator,
@@ -273,10 +252,6 @@ impl Runnable {
     ) -> Result<Box<dyn Compiled<f64>>> {
         let mut generator = ArmGenerator::new();
         let mem: Vec<f64> = Vec::new();
-        /*
-        prog.builder
-            .compile_fast(&mut generator, prog.count_states as u32, idx_ret as i32)?;
-        */
         prog.builder.compile_fast_from_mir(
             mir,
             &mut generator,
@@ -567,7 +542,7 @@ impl Compiled<f64> for Debugger {
     }
 
     fn dump(&self, name: &str) {
-        self.compiled.dump(name);
+        self.bytecode.dump(name);
     }
 
     fn func(&self) -> CompiledFunc<f64> {

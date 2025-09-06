@@ -4,8 +4,9 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use super::utils::Eval;
-use crate::generator::Generator;
+// use super::utils::Eval;
+// use crate::generator::Generator;
+use crate::mir::Mir;
 use crate::node::{Node, VarStatus};
 use crate::statement::Statement;
 use crate::symbol::{Symbol, SymbolTable};
@@ -84,7 +85,7 @@ impl Block {
         lhs
     }
 
-    pub fn compile(&mut self, ir: &mut impl Generator) -> Result<()> {
+    pub fn compile(&mut self, ir: &mut Mir) -> Result<()> {
         for stmt in self.stmts.iter_mut() {
             stmt.compile(ir)?;
         }
@@ -328,14 +329,5 @@ impl Block {
         }
 
         None
-    }
-}
-
-impl Eval for Block {
-    fn eval(&self, mem: &mut [f64], stack: &mut [f64], params: &[f64]) -> f64 {
-        for stmt in self.stmts.iter() {
-            stmt.eval(mem, stack, params);
-        }
-        f64::NAN
     }
 }

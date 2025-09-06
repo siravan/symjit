@@ -2,7 +2,7 @@
 mod macros;
 
 use crate::assembler::Assembler;
-use crate::generator::{fmod, powi, powi_mod, setup_call_binary, setup_call_unary, Generator};
+use crate::generator::Generator;
 use crate::utils::{align_stack, Reg};
 
 const SP: u8 = 31;
@@ -219,41 +219,10 @@ impl Generator for ArmGenerator {
         self.emit(arm! {fsqrt d(ϕ(dst)), d(ϕ(s1))});
     }
 
-    fn square(&mut self, dst: Reg, s1: Reg) {
-        self.flush(dst);
-        self.times(dst, s1, s1);
-    }
-
-    fn cube(&mut self, dst: Reg, s1: Reg) {
-        self.flush(dst);
-        self.times(Reg::Temp, s1, s1);
-        self.times(dst, s1, Reg::Temp);
-    }
-
     fn recip(&mut self, dst: Reg, s1: Reg) {
         self.flush(dst);
         self.emit(arm! {fmov d(TEMP), #1.0});
         self.emit(arm! {fdiv d(ϕ(dst)), d(TEMP), d(ϕ(s1))});
-    }
-
-    fn powi(&mut self, dst: Reg, s1: Reg, power: i32) {
-        self.flush(dst);
-
-        if power == 0 {
-            self.emit(arm! {fmov d(ϕ(dst)), #1.0});
-        } else {
-            powi(self, dst, s1, power);
-        }
-    }
-
-    fn powi_mod(&mut self, dst: Reg, s1: Reg, power: i32, modulus: Reg) {
-        self.flush(dst);
-
-        if power == 0 {
-            self.emit(arm! {fmov d(ϕ(dst)), #1.0});
-        } else {
-            powi_mod(self, dst, s1, power, modulus);
-        }
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {
@@ -279,10 +248,6 @@ impl Generator for ArmGenerator {
     fn frac(&mut self, dst: Reg, s1: Reg) {
         self.floor(Reg::Temp, s1);
         self.minus(dst, s1, Reg::Temp);
-    }
-
-    fn fmod(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        fmod(self, dst, s1, s2);
     }
 
     fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
@@ -376,28 +341,10 @@ impl Generator for ArmGenerator {
         self.append_quad(p.func_ptr());
     }
 
-    fn setup_call_unary(&mut self, s1: Reg) {
-        setup_call_unary(self, s1);
-    }
-
-    fn setup_call_binary(&mut self, s1: Reg, s2: Reg) {
-        setup_call_binary(self, s1, s2);
-    }
-
     fn call(&mut self, op: &str, _num_args: usize) {
         let label = format!("_func_{}_", op);
         self.jump(label.as_str(), arm! {ldr x(0), label});
         self.emit(arm! {blr x(0)});
-    }
-
-    fn select_if(&mut self, dst: Reg, cond: Reg, s1: Reg) {
-        self.flush(dst);
-        self.and(dst, cond, s1);
-    }
-
-    fn select_else(&mut self, dst: Reg, cond: Reg, s1: Reg) {
-        self.flush(dst);
-        self.andnot(dst, cond, s1);
     }
 
     fn prologue_fast(&mut self, cap: u32, num_args: u32) {

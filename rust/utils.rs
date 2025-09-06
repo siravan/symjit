@@ -1,3 +1,5 @@
+use std::fmt;
+
 pub type CompiledFunc<T> = fn(*const T, *const *mut f64, usize, *const f64);
 
 pub trait Compiled<T> {
@@ -7,10 +9,6 @@ pub trait Compiled<T> {
     fn dump(&self, name: &str);
     fn func(&self) -> CompiledFunc<T>;
     fn support_indirect(&self) -> bool;
-}
-
-pub trait Eval {
-    fn eval(&self, mem: &mut [f64], stack: &mut [f64], params: &[f64]) -> f64;
 }
 
 pub fn bool_to_f64(b: bool) -> f64 {
@@ -36,13 +34,25 @@ pub enum DataType {
     F64,
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum Reg {
     Ret,
     Temp,
     Gen(u8),
     Left,
     Right,
+}
+
+impl fmt::Debug for Reg {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Reg::Ret => write!(f, "%$"),
+            Reg::Left => write!(f, "%l"),
+            Reg::Right => write!(f, "%r"),
+            Reg::Temp => write!(f, "%t"),
+            Reg::Gen(r) => write!(f, "%{}", r),
+        }
+    }
 }
 
 pub fn reg(r: u8) -> Reg {

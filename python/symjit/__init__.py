@@ -173,7 +173,10 @@ def dumps(compiler, what="scalar"):
     with open(name, "rb") as fd:
         b = fd.read()
     os.remove(name)
-    return b.hex()
+    if b[0] == ord('#') and b[1] == ord('!'):
+        return b.decode("utf8")
+    else:
+        return b.hex()
 
 
 def can_use_rust(backend):

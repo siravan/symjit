@@ -1,5 +1,4 @@
-use crate::assembler::Assembler;
-use crate::generator::{fmod, powi, powi_mod, setup_call_binary, setup_call_unary, Generator};
+use crate::generator::Generator;
 use crate::utils::align_stack;
 use crate::utils::{DataType, Reg};
 
@@ -480,35 +479,6 @@ impl Generator for AmdGenerator {
         uniop!(self, sqrtsd, vsqrtsd, vsqrtpd, dst, s1);
     }
 
-    fn square(&mut self, dst: Reg, s1: Reg) {
-        self.flush(dst);
-        self.times(dst, s1, s1);
-    }
-
-    fn cube(&mut self, dst: Reg, s1: Reg) {
-        self.flush(dst);
-        self.times(Reg::Temp, s1, s1);
-        self.times(dst, s1, Reg::Temp);
-    }
-
-    fn powi(&mut self, dst: Reg, s1: Reg, power: i32) {
-        self.flush(dst);
-        if power == 0 {
-            self.load_const_by_name(dst, "_one_");
-        } else {
-            powi(self, dst, s1, power);
-        }
-    }
-
-    fn powi_mod(&mut self, dst: Reg, s1: Reg, power: i32, modulus: Reg) {
-        self.flush(dst);
-        if power == 0 {
-            self.load_const_by_name(dst, "_one_");
-        } else {
-            powi_mod(self, dst, s1, power, modulus);
-        }
-    }
-
     fn recip(&mut self, dst: Reg, s1: Reg) {
         self.flush(dst);
         self.load_const_by_name(Reg::Temp, "_one_");
@@ -534,10 +504,6 @@ impl Generator for AmdGenerator {
     fn frac(&mut self, dst: Reg, s1: Reg) {
         self.floor(Reg::Temp, s1);
         self.minus(dst, s1, Reg::Temp);
-    }
-
-    fn fmod(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        fmod(self, dst, s1, s2);
     }
 
     fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
@@ -616,14 +582,6 @@ impl Generator for AmdGenerator {
         self.append_quad(p.func_ptr());
     }
 
-    fn setup_call_unary(&mut self, s1: Reg) {
-        setup_call_unary(self, s1);
-    }
-
-    fn setup_call_binary(&mut self, s1: Reg, s2: Reg) {
-        setup_call_binary(self, s1, s2);
-    }
-
     fn call(&mut self, op: &str, num_args: usize) {
         let label = format!("_func_{}_", op);
 
@@ -647,16 +605,6 @@ impl Generator for AmdGenerator {
                 }
             },
         }
-    }
-
-    fn select_if(&mut self, dst: Reg, cond: Reg, s1: Reg) {
-        self.flush(dst);
-        self.amd.vandpd(ϕ(dst), ϕ(cond), ϕ(s1));
-    }
-
-    fn select_else(&mut self, dst: Reg, cond: Reg, s1: Reg) {
-        self.flush(dst);
-        self.amd.vandnpd(ϕ(dst), ϕ(cond), ϕ(s1));
     }
 
     /****************** Prologues/Epilogues ********************/

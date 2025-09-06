@@ -1,8 +1,7 @@
 use anyhow::Result;
 
-use super::utils::{reg, Eval};
-use crate::code::{Func, VirtualTable};
-use crate::generator::Generator;
+use super::utils::reg;
+use crate::mir::Mir;
 use crate::node::Node;
 use crate::symbol::Loc;
 
@@ -34,7 +33,7 @@ impl Statement {
         }
     }
 
-    pub fn compile(&mut self, ir: &mut dyn Generator) -> Result<()> {
+    pub fn compile(&mut self, ir: &mut Mir) -> Result<()> {
         match self {
             Statement::Assign { lhs, rhs } => {
                 let r = rhs.compile_tree(ir)?;
@@ -55,7 +54,7 @@ impl Statement {
         Ok(())
     }
 
-    fn save(ir: &mut dyn Generator, r: u8, v: &Node) {
+    fn save(ir: &mut Mir, r: u8, v: &Node) {
         if let Node::Var { sym, .. } = v {
             match sym.borrow().loc {
                 Loc::Stack(idx) => ir.save_stack(reg(r), idx),
@@ -65,7 +64,7 @@ impl Statement {
         }
     }
 
-    fn save_result(ir: &mut dyn Generator, v: &Node) {
+    fn save_result(ir: &mut Mir, v: &Node) {
         if let Node::Var { sym, .. } = v {
             match sym.borrow().loc {
                 Loc::Stack(idx) => ir.save_stack_result(idx),
@@ -73,64 +72,5 @@ impl Statement {
                 Loc::Param(_) => unreachable!(),
             }
         }
-    }
-}
-
-impl Eval for Statement {
-    fn eval(&self, mem: &mut [f64], stack: &mut [f64], params: &[f64]) -> f64 {
-        match &self {
-            Statement::Assign { lhs, rhs } => {
-                let u = rhs.eval(mem, stack, params);
-
-                if let Node::Var { sym, .. } = lhs {
-                    match sym.borrow().loc {
-                        Loc::Stack(idx) => stack[idx as usize] = u,
-                        Loc::Mem(idx) => mem[idx as usize] = u,
-                        Loc::Param(_) => unreachable!(),
-                    }
-                }
-            }
-            Statement::Call { op, lhs, arg, .. } => {
-                let _ = arg.eval(mem, stack, params);
-                let x = stack[0];
-                let y = stack[1];
-
-                let u = match op.as_str() {
-                    "sin" => x.sin(),
-                    "cos" => x.cos(),
-                    "tan" => x.tan(),
-                    "sinh" => x.sinh(),
-                    "cosh" => x.cosh(),
-                    "tanh" => x.tanh(),
-                    "arcsin" => x.asin(),
-                    "arccos" => x.acos(),
-                    "arctan" => x.atan(),
-                    "arcsinh" => x.asinh(),
-                    "arccosh" => x.acosh(),
-                    "arctanh" => x.atanh(),
-                    "exp" => x.exp(),
-                    "ln" => x.ln(),
-                    "log" => x.log10(),
-                    "power" => x.powf(y),
-                    op => {
-                        let f = VirtualTable::from_str(op)
-                            .unwrap_or_else(|_| panic!("operation {} not found.", op));
-                        match f {
-                            Func::Unary(f) => f(x),
-                            Func::Binary(f) => f(x, y),
-                        }
-                    }
-                };
-
-                if let Node::Var { sym, .. } = lhs {
-                    match sym.borrow().loc {
-                        Loc::Stack(idx) => stack[idx as usize] = u,
-                        Loc::Mem(idx) => mem[idx as usize] = u,
-                        Loc::Param(_) => unreachable!(),
-                    }
-                };
-            }
-        };
-        f64::NAN
     }
 }

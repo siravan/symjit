@@ -6,9 +6,10 @@ use std::fmt::Debug;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
 
-use crate::generator::Generator;
+// use crate::generator::Generator;
+use crate::mir::Mir;
 use crate::symbol::{Loc, Symbol};
-use crate::utils::{bool_to_f64, reg, Eval};
+use crate::utils::reg;
 use crate::COUNT_SCRATCH;
 
 #[derive(Debug, Clone)]
@@ -279,7 +280,7 @@ impl Node {
 
     /// The main entry point to compile an expression tree
     /// should be called on the root of the expression tree
-    pub fn compile_tree(&mut self, ir: &mut dyn Generator) -> Result<u8> {
+    pub fn compile_tree(&mut self, ir: &mut Mir) -> Result<u8> {
         self.postorder_forward(Self::mark_first);
         self.postorder_backward(Self::mark_last);
 
@@ -300,7 +301,7 @@ impl Node {
         self.compile(ir, 0, &mut pool)
     }
 
-    pub fn compile(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> Result<u8> {
+    pub fn compile(&self, ir: &mut Mir, base: u8, pool: &mut Vec<u8>) -> Result<u8> {
         match self {
             Node::Void => Ok(0),
             Node::Const { .. } => self.compile_const(ir, base),
@@ -310,7 +311,7 @@ impl Node {
         }
     }
 
-    fn compile_const(&self, ir: &mut dyn Generator, base: u8) -> Result<u8> {
+    fn compile_const(&self, ir: &mut Mir, base: u8) -> Result<u8> {
         if let Node::Const { idx, .. } = &self {
             // let label = format!("_const_{}_", idx);
             ir.load_const(reg(base), *idx);
@@ -320,7 +321,7 @@ impl Node {
         }
     }
 
-    fn load_var(ir: &mut dyn Generator, dst: u8, loc: &Loc) -> u8 {
+    fn load_var(ir: &mut Mir, dst: u8, loc: &Loc) -> u8 {
         match loc {
             Loc::Stack(idx) => ir.load_stack(reg(dst), *idx),
             Loc::Mem(idx) => ir.load_mem(reg(dst), *idx),
@@ -335,7 +336,7 @@ impl Node {
     ///     1. At the encounter with a variable, load it into a temporary (cache) register
     ///     2. During the subsequent encounters, use the value in the register
     ///     3. After the last encounter, return the register to the pool of available registers
-    fn compile_var(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> Result<u8> {
+    fn compile_var(&self, ir: &mut Mir, base: u8, pool: &mut Vec<u8>) -> Result<u8> {
         if let Node::Var { sym, status, .. } = &self {
             let mut sym = sym.borrow_mut();
 
@@ -374,7 +375,7 @@ impl Node {
         }
     }
 
-    fn compile_unary(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> Result<u8> {
+    fn compile_unary(&self, ir: &mut Mir, base: u8, pool: &mut Vec<u8>) -> Result<u8> {
         if let Node::Unary { op, arg, power, .. } = self {
             let dst = base + self.ershov_number() - 1;
             let r = arg.compile(ir, base, pool)?;
@@ -403,7 +404,7 @@ impl Node {
         }
     }
 
-    fn compile_binary(&self, ir: &mut dyn Generator, base: u8, pool: &mut Vec<u8>) -> Result<u8> {
+    fn compile_binary(&self, ir: &mut Mir, base: u8, pool: &mut Vec<u8>) -> Result<u8> {
         if let Node::Binary {
             op,
             left,
@@ -444,7 +445,7 @@ impl Node {
 
     fn alloc(
         &self,
-        ir: &mut dyn Generator,
+        ir: &mut Mir,
         base: u8,
         left: &Node,
         right: &Node,
@@ -531,95 +532,6 @@ impl Node {
             Some((*arg, power))
         } else {
             None
-        }
-    }
-}
-
-impl Eval for Node {
-    fn eval(&self, mem: &mut [f64], stack: &mut [f64], params: &[f64]) -> f64 {
-        match self {
-            Node::Void => 0.0,
-            Node::Const { val, .. } => *val,
-            Node::Var { sym, .. } => match sym.borrow().loc {
-                Loc::Stack(idx) => stack[idx as usize],
-                Loc::Mem(idx) => mem[idx as usize],
-                Loc::Param(idx) => params[idx as usize],
-            },
-            Node::Unary { op, arg, power, .. } => {
-                let x = arg.eval(mem, stack, params);
-
-                match op.as_str() {
-                    "neg" => -x,
-                    "not" => f64::from_bits(!x.to_bits()),
-                    "abs" => x.abs(),
-                    "root" => x.sqrt(),
-                    "square" => x * x,
-                    "cube" => x * x * x,
-                    "recip" => 1.0 / x,
-                    "round" => x.round(),
-                    "floor" => x.floor(),
-                    "ceiling" => x.ceil(),
-                    "trunc" => x.trunc(),
-                    "frac" => x.fract(),
-                    "_powi_" => x.powi(*power),
-                    "_call_" => {
-                        stack[0] = x;
-                        x
-                    }
-                    s => {
-                        panic!("op {} not found.", s)
-                    } //_ => f64::NAN,
-                }
-            }
-            Node::Binary {
-                op,
-                left,
-                right,
-                power,
-                ..
-            } => {
-                let x = left.eval(mem, stack, params);
-                let y = right.eval(mem, stack, params);
-
-                match op.as_str() {
-                    "plus" => x + y,
-                    "minus" => x - y,
-                    "times" => x * y,
-                    "divide" => x / y,
-                    "rem" => x % y,
-                    "_powi_mod_" => x.powi(*power) % y,
-                    "gt" => bool_to_f64(x > y),
-                    "geq" => bool_to_f64(x >= y),
-                    "lt" => bool_to_f64(x < y),
-                    "leq" => bool_to_f64(x <= y),
-                    "eq" => bool_to_f64(x == y),
-                    "neq" => bool_to_f64(x != y),
-                    "and" => f64::from_bits(x.to_bits() & y.to_bits()),
-                    "or" => f64::from_bits(x.to_bits() | y.to_bits()),
-                    "xor" => f64::from_bits(x.to_bits() ^ y.to_bits()),
-                    "select_if" => f64::from_bits(x.to_bits() & y.to_bits()),
-                    "select_else" => f64::from_bits(!x.to_bits() & y.to_bits()),
-                    "min" => f64::min(x, y),
-                    "max" => f64::max(x, y),
-                    "heaviside" => {
-                        if x == 0.0 {
-                            y
-                        } else if x < 0.0 {
-                            0.0
-                        } else {
-                            1.0
-                        }
-                    }
-                    "_call_" => {
-                        stack[0] = x;
-                        stack[1] = y;
-                        x
-                    }
-                    s => {
-                        panic!("op {} not found.", s)
-                    } //_ => f64::NAN,
-                }
-            }
         }
     }
 }

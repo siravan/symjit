@@ -4,11 +4,21 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub enum Loc {
     Stack(u32),
     Mem(u32),
     Param(u32),
+}
+
+impl fmt::Debug for Loc {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Loc::Mem(idx) => write!(f, "Mem[{}]", idx),
+            Loc::Stack(idx) => write!(f, "Stack[{}]", idx),
+            Loc::Param(idx) => write!(f, "Param[{}]", idx),
+        }
+    }
 }
 
 #[derive(Clone)]

@@ -1,13 +1,11 @@
 use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 
-use super::utils::{Compiled, Eval};
 use crate::block::Block;
 use crate::code::{Func, VirtualTable};
 use crate::generator::Generator;
 use crate::mir::Mir;
 use crate::node::Node;
-use crate::utils::CompiledFunc;
 
 //****************************************************//
 
@@ -199,6 +197,7 @@ impl Builder {
         self.block.eliminate();
         let mut mir = Mir::new();
         self.block.compile(&mut mir)?;
+        mir.add_consts(&self.consts);
         return Ok(mir);
     }
 
@@ -251,125 +250,14 @@ impl Builder {
         Ok(())
     }
 
-    /*
-    pub fn compile(
-        &mut self,
-        ir: &mut impl Generator,
-        count_states: usize,
-        count_obs: usize,
-    ) -> Result<()> {
-        self.block.eliminate();
-        // println!("{:#?}", &self.block.stmts);
-        let cap = self.block.sym_table.num_stack as u32;
-        ir.prologue_indirect(cap, count_states, count_obs);
-
-        self.block.compile(ir)?;
-
-        ir.epilogue_indirect(cap, count_states, count_obs);
-        self.append_const_section(ir);
-        self.append_vt_section(ir);
-        ir.seal();
-        // println!("{:#?}", &self.block.stmts);
-        // println!("{:02x?}", ir.bytes());
-
-        Ok(())
-    }
-
-    pub fn compile_fast(
-        &mut self,
-        ir: &mut impl Generator,
-        num_args: u32,
-        idx_ret: i32,
-    ) -> Result<()> {
-        self.block.eliminate();
-        // println!("{:#?}", &self.block.stmts);
-        let cap = self.block.sym_table.num_stack as u32;
-        ir.prologue_fast(cap, num_args);
-
-        self.block.compile(ir)?;
-
-        ir.epilogue_fast(cap, idx_ret);
-        self.append_const_section(ir);
-        self.append_vt_section(ir);
-        ir.seal();
-        // println!("{:#?}", &self.block.stmts);
-        // println!("{:02x?}", ir.bytes());
-
-        Ok(())
-    }
-    */
-
     fn append_const_section(&self, ir: &mut impl Generator) {
         ir.add_consts(&self.consts);
-        /*
-        for (idx, val) in self.consts.iter().enumerate() {
-            let label = format!("_const_{}_", idx);
-            ir.set_label(label.as_str());
-            ir.append_quad((*val).to_bits());
-        }
-        */
     }
 
     fn append_vt_section(&self, ir: &mut impl Generator) {
         for f in self.ft.iter() {
             let p = VirtualTable::from_str(f).expect("func not found");
-            /*
-            let label = format!("_func_{}_", f);
-            ir.set_label(label.as_str());
-            ir.append_quad(p.func_ptr());
-            */
             ir.add_func(f, p);
         }
-    }
-}
-
-impl Eval for Builder {
-    fn eval(&self, mem: &mut [f64], stack: &mut [f64], params: &[f64]) -> f64 {
-        self.block.eval(mem, stack, params)
-    }
-}
-
-/************************************************/
-
-pub struct ByteCode {
-    builder: Builder,
-    mem: Vec<f64>,
-    stack: Vec<f64>,
-}
-
-impl ByteCode {
-    pub fn new(builder: Builder, mem: Vec<f64>) -> ByteCode {
-        let stack: Vec<f64> = vec![0.0; builder.block.sym_table.num_stack];
-
-        ByteCode {
-            builder,
-            mem,
-            stack,
-        }
-    }
-}
-
-impl Compiled<f64> for ByteCode {
-    fn exec(&mut self, params: &[f64]) {
-        self.builder
-            .eval(&mut self.mem[..], &mut self.stack[..], params);
-    }
-
-    fn mem(&self) -> &[f64] {
-        &self.mem[..]
-    }
-
-    fn mem_mut(&mut self) -> &mut [f64] {
-        &mut self.mem[..]
-    }
-
-    fn dump(&self, _name: &str) {}
-
-    fn func(&self) -> CompiledFunc<f64> {
-        unreachable!()
-    }
-
-    fn support_indirect(&self) -> bool {
-        false
     }
 }
