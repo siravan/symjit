@@ -133,6 +133,10 @@ impl Mir {
         self.consts = consts.clone();
     }
 
+    pub fn nop(&mut self) {
+        self.push(Instruction::Nop);
+    }
+
     pub fn fmov(&mut self, dst: Reg, s1: Reg) {
         self.push(Instruction::Mov { dst, s1 });
     }
@@ -290,6 +294,9 @@ impl Mir {
             let mut n = power >> (t + 1);
             let mut s = s1;
 
+            // nop is required to prevent a bug caused by load/mov peephole optimization
+            self.nop();
+
             self.fmov(dst, s1);
 
             while n > 0 {
@@ -321,6 +328,9 @@ impl Mir {
             let t = power.trailing_zeros();
             let mut n = power >> (t + 1);
             let mut s = s1;
+
+            // nop is required to prevent a bug caused by load/mov peephole optimization
+            self.nop();
 
             self.fmov(dst, s);
 
@@ -487,11 +497,11 @@ impl Mir {
                 self.fmov(Reg::Left, s1);
             }
         } else {
-            if s1 != Reg::Left {
-                self.fmov(Reg::Left, s1);
-            }
             if s2 != Reg::Right {
                 self.fmov(Reg::Right, s2);
+            }
+            if s1 != Reg::Left {
+                self.fmov(Reg::Left, s1);
             }
         };
     }
@@ -693,10 +703,14 @@ impl Mir {
                     Self::rerun_binop(ir, *op, *dst, *s1, *s2);
                 }
                 Instruction::Mov { dst, s1 } => {
-                    ir.fmov(*dst, *s1);
+                    if *dst != *s1 {
+                        ir.fmov(*dst, *s1);
+                    }
                 }
                 Instruction::Xchg { s1, s2 } => {
-                    ir.fxchg(*s1, *s2);
+                    if *s1 != *s2 {
+                        ir.fxchg(*s1, *s2);
+                    }
                 }
                 Instruction::Load { dst, loc } => {
                     match loc {
@@ -721,6 +735,192 @@ impl Mir {
                 },
             }
         }
+    }
+}
+
+impl Mir {
+    fn fuse(
+        &self,
+        q0: &Instruction,
+        q1: &Instruction,
+        q2: &Instruction,
+    ) -> Option<(usize, Instruction, Instruction)> {
+        /*
+         * example:
+         *      %0 = Root(%2)
+         *      %l = %0
+         *      call power
+         * becomes
+         *      %l = Root(%2)
+         *      call power
+         */
+        if let Instruction::Uni { op, dst, s1 } = *q0 {
+            if let Instruction::Mov { dst: dst1, s1: s11 } = *q1 {
+                if dst == s11 {
+                    return Some((2, Instruction::Uni { op, dst: dst1, s1 }, Instruction::Nop));
+                }
+            }
+        };
+
+        /*
+         * example:
+         *      %0 = %2 Plus %3
+         *      %l = %0
+         *      call power
+         * becomes
+         *      %l = %2 Plus %3
+         *      call power
+         */
+        if let Instruction::Bi { op, dst, s1, s2 } = *q0 {
+            if let Instruction::Mov { dst: dst1, s1: s11 } = *q1 {
+                if dst == s11 {
+                    return Some((
+                        2,
+                        Instruction::Bi {
+                            op,
+                            dst: dst1,
+                            s1,
+                            s2,
+                        },
+                        Instruction::Nop,
+                    ));
+                }
+            }
+        };
+
+        /*
+         * example
+         *      %0 := Stack[2]
+         *      %2 := %0
+         * becomes
+         *      %2 := Stack[2]
+         *
+         * note that we assume %0 is not needed anymore. This was not true for powi and
+         * powi_mod; therefore, we added nop to prevent this rule from firing for those
+         * functions.
+         */
+        if let Instruction::Load { dst, loc } = *q0 {
+            if let Instruction::Mov { dst: dst1, s1: s11 } = *q1 {
+                if dst == s11 {
+                    return Some((2, Instruction::Load { dst: dst1, loc }, Instruction::Nop));
+                }
+            }
+        };
+
+        if let Instruction::LoadConst { dst, idx } = *q0 {
+            if let Instruction::Mov { dst: dst1, s1: s11 } = *q1 {
+                if dst == s11 {
+                    return Some((
+                        2,
+                        Instruction::LoadConst { dst: dst1, idx },
+                        Instruction::Nop,
+                    ));
+                }
+            }
+        };
+
+        /*
+         * example
+         *      %0 := %1
+         *      Mem[4] = %0
+         * becomes
+         *      Mem[4] := %1
+         */
+        if let Instruction::Mov { dst, s1 } = *q0 {
+            if let Instruction::Save { dst: dst1, loc } = *q1 {
+                if dst == dst1 {
+                    return Some((2, Instruction::Save { dst: s1, loc }, Instruction::Nop));
+                }
+            }
+        }
+
+        /*
+         * this combination happens in return from remote function calls
+         * examples:
+         *      call sin
+         *      Stack[10] = %$
+         *      %0 = Stack[10]
+         *      Mem[5] = %0
+         * becomes
+         *      call sin
+         *      Mem[5] = %$
+         */
+        if let Instruction::Save { dst, loc } = *q0 {
+            if let Instruction::Load {
+                dst: dst1,
+                loc: loc1,
+            } = *q1
+            {
+                if let Instruction::Save {
+                    dst: dst2,
+                    loc: loc2,
+                } = *q2
+                {
+                    if dst == Reg::Ret && loc == loc1 && dst1 == dst2 {
+                        return Some((
+                            3,
+                            Instruction::Save {
+                                dst: Reg::Ret,
+                                loc: loc2,
+                            },
+                            Instruction::Nop,
+                        ));
+                    }
+                }
+            }
+        };
+
+        /*
+         * example
+         *      Stack[6] = %2
+         *      %0 = Stack[6]
+         * becomes
+         *      Stack[6] = %2
+         *      %0 := %2
+         *
+         * note that if we know that Stack[6] is not accessed again, we can remove the
+         * first instruction, but this is not yet implemented.
+         */
+        if let Instruction::Save { dst, loc } = *q0 {
+            if let Instruction::Load {
+                dst: dst1,
+                loc: loc1,
+            } = *q1
+            {
+                if loc == loc1 {
+                    return Some((2, q0.clone(), Instruction::Mov { dst: dst1, s1: dst }));
+                }
+            }
+        };
+
+        None
+    }
+
+    pub fn optimize_peephole(&mut self) {
+        self.push(Instruction::Nop);
+        self.push(Instruction::Nop);
+        let mut code: Vec<Instruction> = Vec::new();
+
+        let mut i = 0;
+
+        while i < self.code.len() - 2 {
+            let f = self.fuse(&self.code[i], &self.code[i + 1], &self.code[i + 2]);
+            match f {
+                Some((d, p0, p1)) => {
+                    code.push(p0);
+                    if !matches!(p1, Instruction::Nop) {
+                        code.push(p1);
+                    }
+                    i += d;
+                }
+                None => {
+                    code.push(self.code[i].clone());
+                    i += 1;
+                }
+            }
+        }
+
+        self.code = code;
     }
 }
 

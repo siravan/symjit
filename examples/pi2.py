@@ -7,7 +7,7 @@ from symjit import compile_func
 
 # calculating pi using Viète's formula (https://en.wikipedia.org/wiki/Vi%C3%A8te%27s_formula)
 
-N = 21
+N = 4
 
 x = symbols('x')
 
@@ -36,7 +36,10 @@ def lemniscate(x):
     return p
 
 
-f = compile_func([x], [2 / viete(x), 2 / lemniscate(x)], **args)
+# f = compile_func([x], [2 / viete(x), 2 / lemniscate(x)], **args)
+f = compile_func([x], [2 / viete(x), x], **args)
+
+print(f.dumps())
 
 p, q = f(1/2)
 print(p, '?= ', math.pi, '(pi)')

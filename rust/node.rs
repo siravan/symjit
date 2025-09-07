@@ -12,6 +12,50 @@ use crate::symbol::{Loc, Symbol};
 use crate::utils::reg;
 use crate::COUNT_SCRATCH;
 
+pub struct Pool {
+    available: u32,
+    returned: u32,
+}
+
+impl Pool {
+    fn new(last: u8) -> Pool {
+        let mut available = 0;
+        for r in last..COUNT_SCRATCH {
+            let n = 1 << r;
+            available |= n;
+        }
+
+        Pool {
+            available,
+            returned: 0,
+        }
+    }
+
+    fn pop(&mut self) -> Option<u8> {
+        if self.available == 0 {
+            None
+        } else {
+            let r = self.available.trailing_zeros();
+            let n = 1 << r;
+            self.available &= !n;
+            Some(r as u8)
+        }
+    }
+
+    fn push(&mut self, r: u8) {
+        let n = 1 << r;
+        self.returned |= n;
+    }
+
+    fn release(&mut self, r: u8) {
+        let n = 1 << r;
+        if self.returned & n != 0 {
+            self.returned &= !n;
+            self.available |= n;
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum VarStatus {
     Unknown,
@@ -291,17 +335,25 @@ impl Node {
         // This check may not be actually necessary, but we need to prove its
         // correctness first.
 
+        /*
         let mut pool: Vec<u8> = if ir.three_address() {
             (last..COUNT_SCRATCH).rev().collect()
         } else {
             Vec::new()
         };
+        */
+
+        let mut pool = Pool::new(if ir.three_address() {
+            last
+        } else {
+            COUNT_SCRATCH
+        });
 
         // println!("{:#?}", &self);
         self.compile(ir, 0, &mut pool)
     }
 
-    pub fn compile(&self, ir: &mut Mir, base: u8, pool: &mut Vec<u8>) -> Result<u8> {
+    pub fn compile(&self, ir: &mut Mir, base: u8, pool: &mut Pool) -> Result<u8> {
         match self {
             Node::Void => Ok(0),
             Node::Const { .. } => self.compile_const(ir, base),
@@ -336,7 +388,7 @@ impl Node {
     ///     1. At the encounter with a variable, load it into a temporary (cache) register
     ///     2. During the subsequent encounters, use the value in the register
     ///     3. After the last encounter, return the register to the pool of available registers
-    fn compile_var(&self, ir: &mut Mir, base: u8, pool: &mut Vec<u8>) -> Result<u8> {
+    fn compile_var(&self, ir: &mut Mir, base: u8, pool: &mut Pool) -> Result<u8> {
         if let Node::Var { sym, status, .. } = &self {
             let mut sym = sym.borrow_mut();
 
@@ -354,10 +406,10 @@ impl Node {
                 }
                 VarStatus::Last => {
                     if let Some(r) = sym.reg {
-                        ir.fmov(reg(base), reg(r));
+                        // ir.fmov(reg(base), reg(r));
                         pool.push(r);
                         sym.reg = None;
-                        base
+                        r
                     } else {
                         Self::load_var(ir, base, &sym.loc)
                     }
@@ -375,10 +427,11 @@ impl Node {
         }
     }
 
-    fn compile_unary(&self, ir: &mut Mir, base: u8, pool: &mut Vec<u8>) -> Result<u8> {
+    fn compile_unary(&self, ir: &mut Mir, base: u8, pool: &mut Pool) -> Result<u8> {
         if let Node::Unary { op, arg, power, .. } = self {
             let dst = base + self.ershov_number() - 1;
             let r = arg.compile(ir, base, pool)?;
+            pool.release(r);
 
             match op.as_str() {
                 "neg" => ir.neg(reg(dst), reg(r)),
@@ -404,7 +457,7 @@ impl Node {
         }
     }
 
-    fn compile_binary(&self, ir: &mut Mir, base: u8, pool: &mut Vec<u8>) -> Result<u8> {
+    fn compile_binary(&self, ir: &mut Mir, base: u8, pool: &mut Pool) -> Result<u8> {
         if let Node::Binary {
             op,
             left,
@@ -414,6 +467,8 @@ impl Node {
         } = self
         {
             let (dst, l, r) = self.alloc(ir, base, left, right, pool)?;
+            pool.release(l);
+            pool.release(r);
 
             match op.as_str() {
                 "plus" => ir.plus(reg(dst), reg(l), reg(r)),
@@ -449,7 +504,7 @@ impl Node {
         base: u8,
         left: &Node,
         right: &Node,
-        pool: &mut Vec<u8>,
+        pool: &mut Pool,
     ) -> Result<(u8, u8, u8)> {
         let el = left.ershov_number();
         let er = right.ershov_number();

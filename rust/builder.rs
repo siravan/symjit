@@ -197,6 +197,7 @@ impl Builder {
         self.block.eliminate();
         let mut mir = Mir::new();
         self.block.compile(&mut mir)?;
+        mir.optimize_peephole();
         mir.add_consts(&self.consts);
         return Ok(mir);
     }

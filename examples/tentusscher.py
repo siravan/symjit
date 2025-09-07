@@ -14,6 +14,9 @@ with open(path) as fd:
     model = fd.read()
 
 f = compile_json(model, **args)
+
+# print(f.dumps())
+
 u0 = f.get_u0()
 p = f.get_p()
 
