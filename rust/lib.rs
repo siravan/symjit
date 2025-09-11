@@ -33,6 +33,7 @@ pub const COUNT_SCRATCH: u8 = 14;
 pub const USE_SIMD: u32 = 0x01;
 pub const USE_THREADS: u32 = 0x02;
 pub const CSE: u32 = 0x04;
+pub const FASTMATH: u32 = 0x08;
 
 #[derive(Debug, Clone, Copy)]
 pub enum CompilerStatus {

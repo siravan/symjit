@@ -22,6 +22,14 @@ macro_rules! rd2 {
     }};
 }
 
+macro_rules! ra {
+    ($x:expr) => {{
+        let x = $x;
+        assert!(x < 32);
+        (x as u32) << 10
+    }};
+}
+
 macro_rules! rm {
     ($x:expr) => {{
         let x = $x;
@@ -179,6 +187,26 @@ macro_rules! arm {
     };
     (fabs d($rd:expr), d($rn:expr)) => {
         0x1e60c000 | rd!($rd) | rn!($rn)
+    };
+
+    // rd := rm * rn + ra
+    (fmadd d($rd:expr), d($rn:expr), d($rm:expr), d($ra:expr)) => {
+        0x1f400000 | rd!($rd) | rn!($rn) | rm!($rm) | ra!($ra)
+    };
+
+    // rd := -rm * rn + ra
+    (fmsub d($rd:expr), d($rn:expr), d($rm:expr), d($ra:expr)) => {
+        0x1f408000 | rd!($rd) | rn!($rn) | rm!($rm) | ra!($ra)
+    };
+
+    // rd := -(rm * rn + ra)
+    (fnmadd d($rd:expr), d($rn:expr), d($rm:expr), d($ra:expr)) => {
+        0x1f600000 | rd!($rd) | rn!($rn) | rm!($rm) | ra!($ra)
+    };
+
+    // rd := -(rm * rn - ra)
+    (fnmsub d($rd:expr), d($rn:expr), d($rm:expr), d($ra:expr)) => {
+        0x1f608000 | rd!($rd) | rn!($rn) | rm!($rm) | ra!($ra)
     };
 
     // round double to integral (double-coded integer)

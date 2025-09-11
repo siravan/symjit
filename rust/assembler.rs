@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 pub struct Assembler {
-    buf: Vec<u8>,
+    pub buf: Vec<u8>,
     labels: HashMap<String, usize>,
     jumps: Vec<(String, usize, u32)>,
     delta: isize,
@@ -70,8 +70,11 @@ impl Assembler {
             // TODO: we need a better place for this check
             // assembler is supposed to be arch agnostic
             #[cfg(target_arch = "aarch64")]
-            assert!(offset >= 0 && offset < (1 << 20), "the code segment is too large!");
-            
+            assert!(
+                offset >= 0 && offset < (1 << 20),
+                "the code segment is too large!"
+            );
+
             let x = ((offset as u32) << self.shift) | *code;
 
             self.buf[*k] |= (x & 0xff) as u8;

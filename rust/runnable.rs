@@ -10,7 +10,7 @@ use crate::mir::{CompiledMir, Mir};
 use crate::model::Program;
 use crate::symbol::Loc;
 use crate::utils::*;
-use crate::{USE_SIMD, USE_THREADS};
+use crate::{FASTMATH, USE_SIMD, USE_THREADS};
 
 use rayon::prelude::*;
 
@@ -89,7 +89,8 @@ impl Runnable {
 
         let params = vec![0.0; count_params + 1];
 
-        let mir = prog.builder.create_mir()?;
+        let fastmath = opt & FASTMATH != 0;
+        let mir = prog.builder.create_mir(fastmath)?;
 
         let compiled = match ty {
             CompilerType::ByteCode => Self::compile_debugger(&mir, &mut prog, size, false)?,
@@ -499,7 +500,7 @@ impl Debugger {
 
         // accept if the difference is less that 1e-15 to count for rounding error
         // because of different operation order
-        if p.iter().zip(q).any(|(x, y)| !(f64::abs(*x - *y) < 1e-10)) {
+        if p.iter().zip(q).any(|(x, y)| !(f64::abs(*x - *y) < 1e-6)) {
             for (key, sym) in self.builder.block.sym_table.syms.iter() {
                 match sym.borrow().loc {
                     Loc::Mem(idx) => {

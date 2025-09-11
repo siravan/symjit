@@ -187,10 +187,13 @@ class Matrix:
 
 
 class RustyCompiler:
-    def __init__(self, model, ty="native", use_simd=True, use_threads=True, cse=True, convert=True):
+    def __init__(self, model, ty="native", use_simd=True, use_threads=True, cse=True, fastmath=False, convert=True):
         if convert:
             model = json.dumps(model)
-        opt = (0x01 if use_simd else 0) | (0x02 if use_threads else 0) | (0x04 if cse else 0)
+        opt = ((0x01 if use_simd else 0)
+            |  (0x02 if use_threads else 0)
+            |  (0x04 if cse else 0)
+            |  (0x08 if fastmath else 0))
         self.p = lib._compile(model.encode("utf-8"), ty.encode("utf8"), opt)
         status = lib._check_status(self.p)
         if status != b"Success":

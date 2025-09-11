@@ -49,7 +49,12 @@ pub trait Generator {
     fn xor(&mut self, dst: Reg, s1: Reg, s2: Reg);
     fn not(&mut self, dst: Reg, s1: Reg);
 
-    fn add_consts(&mut self, consts: &Vec<f64>);
+    fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg);
+    fn fused_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg);
+    fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg);
+    fn fused_neg_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg);
+
+    fn add_consts(&mut self, consts: &[f64]);
     fn add_func(&mut self, f: &str, p: Func);
     fn call(&mut self, op: &str, num_args: usize);
 

@@ -193,13 +193,13 @@ impl Builder {
         Ok(node)
     }
 
-    pub fn create_mir(&mut self) -> Result<Mir> {
+    pub fn create_mir(&mut self, fastmath: bool) -> Result<Mir> {
         self.block.eliminate();
-        let mut mir = Mir::new();
+        let mut mir = Mir::new(fastmath);
         self.block.compile(&mut mir)?;
         mir.optimize_peephole();
         mir.add_consts(&self.consts);
-        return Ok(mir);
+        Ok(mir)
     }
 
     pub fn compile_from_mir(

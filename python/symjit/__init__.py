@@ -192,7 +192,7 @@ def can_use_python(backend):
 
 
 def compile_func(
-    states, eqs, params=None, obs=None, ty="native", use_simd=True, use_threads=True, cse=True, backend="rust"
+    states, eqs, params=None, obs=None, ty="native", use_simd=True, use_threads=True, cse=True, fastmath=False, backend="rust"
 ):
     """Compile a list of symbolic expression into an executable form.
     compile_func tries to mimic sympy lambdify, but instead of generating
@@ -222,6 +222,7 @@ def compile_func(
     use_threads (default True): use multi-threading to speed up parallel operations when called
         on numpy arrays.
     cse (default True): performs common-subexpression elimination.
+    fastmath (default False): use fastmath floating point operations, especially fused multiply-addition.
 
     ==> returns a Func object, is a callable object `f` with signature `f(x_1,...,x_n,p_1,...,p_m)`,
         where `x`s are the state variables and `p`s are the parameters.
@@ -236,7 +237,7 @@ def compile_func(
     """
     if can_use_rust(backend):
         model = structure.model(states, eqs, params=params, obs=obs)
-        compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd, use_threads=use_threads, cse=cse)
+        compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd, use_threads=use_threads, cse=cse, fastmath=fastmath)
     elif can_use_python(backend):
         model = pyengine.tree.model(states, eqs, params, obs)
         compiler = pyengine.PyCompiler(model, ty=ty)
@@ -247,7 +248,7 @@ def compile_func(
 
 
 def compile_ode(
-    iv, states, odes, params=None, ty="native", use_simd=True, use_threads=True, cse=True, backend="rust"
+    iv, states, odes, params=None, ty="native", use_simd=True, use_threads=True, cse=True, fastmath=False, backend="rust"
 ):
     """Compile a symbolic ODE model into an executable form suitable for
     passung to scipy.integrate.solve_ivp.
@@ -292,7 +293,7 @@ def compile_ode(
     """
     if can_use_rust(backend):
         model = structure.model_ode(iv, states, odes, params)
-        compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd, cse=cse)
+        compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd, cse=cse, fastmath=fastmath)
     elif can_use_python(backend):
         model = pyengine.tree.model_ode(iv, states, odes, params)
         compiler = pyengine.PyCompiler(model)
@@ -303,7 +304,7 @@ def compile_ode(
 
 
 def compile_jac(
-    iv, states, odes, params=None, ty="native", use_simd=True, use_threads=True, cse=True, backend="rust"
+    iv, states, odes, params=None, ty="native", use_simd=True, use_threads=True, cse=True, fastmath=False, backend="rust"
 ):
     """Genenrates and compiles Jacobian for an ODE system.
         iv: a single symbol, the independent variable.
@@ -330,7 +331,7 @@ def compile_jac(
     """
     if can_use_rust(backend):
         model = structure.model_jac(iv, states, odes, params)
-        compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd, cse=cse)
+        compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd, cse=cse, fastmath=fastmath)
     elif can_use_python(backend):
         model = pyengine.tree.model_jac(iv, states, odes, params)
         compiler = pyengine.PyCompiler(model)
@@ -340,13 +341,13 @@ def compile_jac(
     return JacFunc(compiler)
 
 
-def compile_json(model, ty="native", use_simd=True, use_threads=True, cse=True, backend="rust"):
+def compile_json(model, ty="native", use_simd=True, use_threads=True, cse=True, fastmath=False, backend="rust"):
     """Compiles CellML models
     CellML json files are extracted using CellMLToolkit.jl
     model is already in Json format; hence, `convert = False`
     """
     if can_use_rust("rust"):
-        compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd, convert=False)
+        compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd, fastmath=fastmath, convert=False)
         return OdeFunc(compiler)
     else:
         raise ValueError("CellML json files only work with the rust backend")

@@ -7,7 +7,7 @@ use crate::generator::Generator;
 use crate::symbol::Loc;
 use crate::utils::{bool_to_f64, Compiled, CompiledFunc, Reg};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum UniOp {
     Abs,
     Not,
@@ -20,7 +20,7 @@ pub enum UniOp {
     Trunc,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BinOp {
     Plus,
     Minus,
@@ -36,6 +36,14 @@ pub enum BinOp {
     AndNot,
     Or,
     Xor,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum FusedOp {
+    MulAdd,    // + a * b + c
+    NegMulAdd, // - a * b + c
+    MulSub,    // a * b - c
+    NegMulSub, // -a * b - c
 }
 
 #[derive(Clone)]
@@ -76,6 +84,13 @@ pub enum Instruction {
         label: String,
         f: Func,
     },
+    Fused {
+        op: FusedOp,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+        c: Reg,
+    },
 }
 
 impl fmt::Debug for Instruction {
@@ -92,6 +107,12 @@ impl fmt::Debug for Instruction {
             Instruction::Load { dst, loc } => write!(f, "{:?} := {:?}", &dst, &loc),
             Instruction::Save { dst, loc } => write!(f, "{:?} := {:?}", &loc, &dst),
             Instruction::LoadConst { dst, idx } => write!(f, "{:?} := consts[{:?}]", &dst, idx),
+            Instruction::Fused { op, dst, a, b, c } => match op {
+                FusedOp::MulAdd => write!(f, "{:?} := {:?} * {:?} + {:?}", &dst, &a, &b, &c),
+                FusedOp::NegMulAdd => write!(f, "{:?} := - {:?} * {:?} + {:?}", &dst, &a, &b, &c),
+                FusedOp::MulSub => write!(f, "{:?} := {:?} * {:?} - {:?}", &dst, &a, &b, &c),
+                FusedOp::NegMulSub => write!(f, "{:?} := - {:?} * {:?} - {:?}", &dst, &a, &b, &c),
+            },
         }
     }
 }
@@ -100,22 +121,24 @@ impl fmt::Debug for Instruction {
 pub struct Mir {
     code: Vec<Instruction>,
     consts: Vec<f64>,
+    fastmath: bool,
 }
 
 impl fmt::Debug for Mir {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (i, ins) in self.code.iter().enumerate() {
-            write!(f, "{:05}\t{:?}\n", i, ins)?;
+            writeln!(f, "{:05}\t{:?}", i, ins)?;
         }
         Ok(())
     }
 }
 
 impl Mir {
-    pub fn new() -> Mir {
+    pub fn new(fastmath: bool) -> Mir {
         Mir {
             code: Vec::new(),
             consts: Vec::new(),
+            fastmath,
         }
     }
 
@@ -129,8 +152,8 @@ impl Mir {
         true
     }
 
-    pub fn add_consts(&mut self, consts: &Vec<f64>) {
-        self.consts = consts.clone();
+    pub fn add_consts(&mut self, consts: &[f64]) {
+        self.consts = consts.to_owned();
     }
 
     pub fn nop(&mut self) {
@@ -530,7 +553,7 @@ impl Mir {
 }
 
 impl Mir {
-    fn get(regs: &Vec<f64>, r: Reg) -> f64 {
+    fn get(regs: &[f64], r: Reg) -> f64 {
         match r {
             Reg::Ret | Reg::Left => regs[0],
             Reg::Temp | Reg::Right => regs[1],
@@ -538,7 +561,7 @@ impl Mir {
         }
     }
 
-    fn set(regs: &mut Vec<f64>, r: Reg, val: f64) {
+    fn set(regs: &mut [f64], r: Reg, val: f64) {
         match r {
             Reg::Ret | Reg::Left => {
                 regs[0] = val;
@@ -552,7 +575,7 @@ impl Mir {
         }
     }
 
-    fn exec_uniop(regs: &mut Vec<f64>, op: UniOp, dst: Reg, s1: Reg) {
+    fn exec_uniop(regs: &mut [f64], op: UniOp, dst: Reg, s1: Reg) {
         let s1 = Self::get(regs, s1);
 
         let val = match op {
@@ -570,7 +593,7 @@ impl Mir {
         Self::set(regs, dst, val);
     }
 
-    fn exec_binop(regs: &mut Vec<f64>, op: BinOp, dst: Reg, s1: Reg, s2: Reg) {
+    fn exec_binop(regs: &mut [f64], op: BinOp, dst: Reg, s1: Reg, s2: Reg) {
         let s1 = Self::get(regs, s1);
         let s2 = Self::get(regs, s2);
 
@@ -594,11 +617,26 @@ impl Mir {
         Self::set(regs, dst, val);
     }
 
+    fn exec_fused(regs: &mut [f64], op: FusedOp, dst: Reg, a: Reg, b: Reg, c: Reg) {
+        let a = Self::get(regs, a);
+        let b = Self::get(regs, b);
+        let c = Self::get(regs, c);
+
+        let val = match op {
+            FusedOp::MulAdd => a * b + c,
+            FusedOp::MulSub => a * b - c,
+            FusedOp::NegMulAdd => -a * b + c,
+            FusedOp::NegMulSub => -a * b - c,
+        };
+
+        Self::set(regs, dst, val);
+    }
+
     fn exec_instruction(
         &mut self,
-        mem: &mut Vec<f64>,
-        stack: &mut Vec<f64>,
-        regs: &mut Vec<f64>,
+        mem: &mut [f64],
+        stack: &mut [f64],
+        regs: &mut [f64],
         params: &[f64],
     ) {
         for ins in self.code.iter() {
@@ -653,6 +691,9 @@ impl Mir {
                         p(Self::get(regs, Reg::Left), Self::get(regs, Reg::Right)),
                     ),
                 },
+                Instruction::Fused { op, dst, a, b, c } => {
+                    Self::exec_fused(regs, *op, *dst, *a, *b, *c);
+                }
             }
         }
     }
@@ -730,8 +771,14 @@ impl Mir {
                     ir.load_const(*dst, *idx);
                 }
                 Instruction::Call { label, f } => match f {
-                    Func::Unary(_) => ir.call(&label, 1),
-                    Func::Binary(_) => ir.call(&label, 2),
+                    Func::Unary(_) => ir.call(label, 1),
+                    Func::Binary(_) => ir.call(label, 2),
+                },
+                Instruction::Fused { op, dst, a, b, c } => match op {
+                    FusedOp::MulAdd => ir.fused_mul_add(*dst, *a, *b, *c),
+                    FusedOp::MulSub => ir.fused_mul_sub(*dst, *a, *b, *c),
+                    FusedOp::NegMulAdd => ir.fused_neg_mul_add(*dst, *a, *b, *c),
+                    FusedOp::NegMulSub => ir.fused_neg_mul_sub(*dst, *a, *b, *c),
                 },
             }
         }
@@ -739,12 +786,7 @@ impl Mir {
 }
 
 impl Mir {
-    fn fuse(
-        &self,
-        q0: &Instruction,
-        q1: &Instruction,
-        q2: &Instruction,
-    ) -> Option<(usize, Instruction, Instruction)> {
+    fn fuse_op_mov(&self, code: &mut Vec<Instruction>, q0: &Instruction, q1: &Instruction) -> bool {
         /*
          * example:
          *      %0 = Root(%2)
@@ -755,9 +797,18 @@ impl Mir {
          *      call power
          */
         if let Instruction::Uni { op, dst, s1 } = *q0 {
-            if let Instruction::Mov { dst: dst1, s1: s11 } = *q1 {
-                if dst == s11 {
-                    return Some((2, Instruction::Uni { op, dst: dst1, s1 }, Instruction::Nop));
+            if let Instruction::Mov {
+                dst: dst_q1,
+                s1: s1_q1,
+            } = *q1
+            {
+                if dst == s1_q1 {
+                    code.push(Instruction::Uni {
+                        op,
+                        dst: dst_q1,
+                        s1,
+                    });
+                    return true;
                 }
             }
         };
@@ -772,22 +823,27 @@ impl Mir {
          *      call power
          */
         if let Instruction::Bi { op, dst, s1, s2 } = *q0 {
-            if let Instruction::Mov { dst: dst1, s1: s11 } = *q1 {
-                if dst == s11 {
-                    return Some((
-                        2,
-                        Instruction::Bi {
-                            op,
-                            dst: dst1,
-                            s1,
-                            s2,
-                        },
-                        Instruction::Nop,
-                    ));
+            if let Instruction::Mov {
+                dst: dst_q1,
+                s1: s1_q1,
+            } = *q1
+            {
+                if dst == s1_q1 {
+                    code.push(Instruction::Bi {
+                        op,
+                        dst: dst_q1,
+                        s1,
+                        s2,
+                    });
+                    return true;
                 }
             }
         };
 
+        false
+    }
+
+    fn fuse_load(&self, code: &mut Vec<Instruction>, q0: &Instruction, q1: &Instruction) -> bool {
         /*
          * example
          *      %0 := Stack[2]
@@ -800,25 +856,35 @@ impl Mir {
          * functions.
          */
         if let Instruction::Load { dst, loc } = *q0 {
-            if let Instruction::Mov { dst: dst1, s1: s11 } = *q1 {
-                if dst == s11 {
-                    return Some((2, Instruction::Load { dst: dst1, loc }, Instruction::Nop));
+            if let Instruction::Mov {
+                dst: dst_q1,
+                s1: s1_q1,
+            } = *q1
+            {
+                if dst == s1_q1 {
+                    code.push(Instruction::Load { dst: dst_q1, loc });
+                    return true;
                 }
             }
         };
 
         if let Instruction::LoadConst { dst, idx } = *q0 {
-            if let Instruction::Mov { dst: dst1, s1: s11 } = *q1 {
-                if dst == s11 {
-                    return Some((
-                        2,
-                        Instruction::LoadConst { dst: dst1, idx },
-                        Instruction::Nop,
-                    ));
+            if let Instruction::Mov {
+                dst: dst_q1,
+                s1: s1_q1,
+            } = *q1
+            {
+                if dst == s1_q1 {
+                    code.push(Instruction::LoadConst { dst: dst_q1, idx });
+                    return true;
                 }
             }
         };
 
+        false
+    }
+
+    fn fuse_save(&self, code: &mut Vec<Instruction>, q0: &Instruction, q1: &Instruction) -> bool {
         /*
          * example
          *      %0 := %1
@@ -827,48 +893,20 @@ impl Mir {
          *      Mem[4] := %1
          */
         if let Instruction::Mov { dst, s1 } = *q0 {
-            if let Instruction::Save { dst: dst1, loc } = *q1 {
-                if dst == dst1 {
-                    return Some((2, Instruction::Save { dst: s1, loc }, Instruction::Nop));
+            if let Instruction::Save {
+                dst: dst_q1,
+                loc: loc_q1,
+            } = *q1
+            {
+                if dst == dst_q1 {
+                    code.push(Instruction::Save {
+                        dst: s1,
+                        loc: loc_q1,
+                    });
+                    return true;
                 }
             }
         }
-
-        /*
-         * this combination happens in return from remote function calls
-         * examples:
-         *      call sin
-         *      Stack[10] = %$
-         *      %0 = Stack[10]
-         *      Mem[5] = %0
-         * becomes
-         *      call sin
-         *      Mem[5] = %$
-         */
-        if let Instruction::Save { dst, loc } = *q0 {
-            if let Instruction::Load {
-                dst: dst1,
-                loc: loc1,
-            } = *q1
-            {
-                if let Instruction::Save {
-                    dst: dst2,
-                    loc: loc2,
-                } = *q2
-                {
-                    if dst == Reg::Ret && loc == loc1 && dst1 == dst2 {
-                        return Some((
-                            3,
-                            Instruction::Save {
-                                dst: Reg::Ret,
-                                loc: loc2,
-                            },
-                            Instruction::Nop,
-                        ));
-                    }
-                }
-            }
-        };
 
         /*
          * example
@@ -883,17 +921,224 @@ impl Mir {
          */
         if let Instruction::Save { dst, loc } = *q0 {
             if let Instruction::Load {
-                dst: dst1,
-                loc: loc1,
+                dst: dst_q1,
+                loc: loc_q1,
             } = *q1
             {
-                if loc == loc1 {
-                    return Some((2, q0.clone(), Instruction::Mov { dst: dst1, s1: dst }));
+                if loc == loc_q1 {
+                    code.push(q0.clone());
+                    code.push(Instruction::Mov {
+                        dst: dst_q1,
+                        s1: dst,
+                    });
+                    return true;
                 }
             }
         };
 
-        None
+        false
+    }
+
+    fn fuse_save3(
+        &self,
+        code: &mut Vec<Instruction>,
+        q0: &Instruction,
+        q1: &Instruction,
+        q2: &Instruction,
+    ) -> bool {
+        /*
+         * this combination happens in return from remote function calls
+         * examples:
+         *      call sin
+         *      Stack[10] = %$
+         *      %0 = Stack[10]
+         *      Mem[5] = %0
+         * becomes
+         *      call sin
+         *      Mem[5] = %$
+         */
+        if let Instruction::Save { dst, loc } = *q0 {
+            if let Instruction::Load {
+                dst: dst_q1,
+                loc: loc_q1,
+            } = *q1
+            {
+                if let Instruction::Save {
+                    dst: dst_q2,
+                    loc: loc_q2,
+                } = *q2
+                {
+                    if dst == Reg::Ret && loc == loc_q1 && dst_q1 == dst_q2 {
+                        code.push(Instruction::Save {
+                            dst: Reg::Ret,
+                            loc: loc_q2,
+                        });
+                        return true;
+                    }
+                }
+            }
+        };
+
+        false
+    }
+
+    fn fuse_fma(&self, code: &mut Vec<Instruction>, q0: &Instruction, q1: &Instruction) -> bool {
+        if let Instruction::Bi { op, dst, s1, s2 } = *q0 {
+            if let Instruction::Bi {
+                op: op_q1,
+                dst: dst_q1,
+                s1: s1_q1,
+                s2: s2_q1,
+            } = *q1
+            {
+                if op == BinOp::Times && op_q1 == BinOp::Plus && s1_q1 == dst {
+                    code.push(Instruction::Fused {
+                        op: FusedOp::MulAdd,
+                        dst: dst_q1,
+                        a: s1,
+                        b: s2,
+                        c: s2_q1,
+                    });
+                    return true;
+                }
+
+                if op == BinOp::Times && op_q1 == BinOp::Plus && s2_q1 == dst {
+                    code.push(Instruction::Fused {
+                        op: FusedOp::MulAdd,
+                        dst: dst_q1,
+                        a: s1,
+                        b: s2,
+                        c: s1_q1,
+                    });
+                    return true;
+                }
+
+                if op == BinOp::Times && op_q1 == BinOp::Minus && s1_q1 == dst {
+                    code.push(Instruction::Fused {
+                        op: FusedOp::MulSub,
+                        dst: dst_q1,
+                        a: s1,
+                        b: s2,
+                        c: s2_q1,
+                    });
+                    return true;
+                }
+
+                if op == BinOp::Times && op_q1 == BinOp::Minus && s2_q1 == dst {
+                    code.push(Instruction::Fused {
+                        op: FusedOp::NegMulAdd,
+                        dst: dst_q1,
+                        a: s1,
+                        b: s2,
+                        c: s1_q1,
+                    });
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
+    fn fuse_fma3(
+        &self,
+        code: &mut Vec<Instruction>,
+        q0: &Instruction,
+        q1: &Instruction,
+        q2: &Instruction,
+    ) -> bool {
+        if let Instruction::Bi { op, dst, s1, s2 } = *q0 {
+            if let Instruction::LoadConst {
+                dst: dst_q1,
+                idx: idx_q1,
+            } = *q1
+            {
+                if let Instruction::Bi {
+                    op: op_q2,
+                    dst: dst_q2,
+                    s1: s1_q2,
+                    s2: s2_q2,
+                } = *q2
+                {
+                    if op == BinOp::Times
+                        && op_q2 == BinOp::Plus
+                        && ((s1_q2 == dst && s2_q2 == dst_q1) || (s1_q2 == dst_q1 && s2_q2 == dst))
+                    {
+                        code.push(Instruction::LoadConst {
+                            dst: Reg::Temp,
+                            idx: idx_q1,
+                        });
+                        code.push(Instruction::Fused {
+                            op: FusedOp::MulAdd,
+                            dst: dst_q2,
+                            a: s1,
+                            b: s2,
+                            c: Reg::Temp,
+                        });
+                        return true;
+                    }
+                }
+            }
+        }
+
+        if let Instruction::Bi { op, dst, s1, s2 } = *q0 {
+            if let Instruction::Load {
+                dst: dst_q1,
+                loc: loc_q1,
+            } = *q1
+            {
+                if let Instruction::Bi {
+                    op: op_q2,
+                    dst: dst_q2,
+                    s1: s1_q2,
+                    s2: s2_q2,
+                } = *q2
+                {
+                    if op == BinOp::Times
+                        && op_q2 == BinOp::Plus
+                        && ((s1_q2 == dst && s2_q2 == dst_q1) || (s1_q2 == dst_q1 && s2_q2 == dst))
+                    {
+                        code.push(Instruction::Load {
+                            dst: Reg::Temp,
+                            loc: loc_q1,
+                        });
+                        code.push(Instruction::Fused {
+                            op: FusedOp::MulAdd,
+                            dst: dst_q2,
+                            a: s1,
+                            b: s2,
+                            c: Reg::Temp,
+                        });
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    fn fuse(
+        &self,
+        code: &mut Vec<Instruction>,
+        q0: &Instruction,
+        q1: &Instruction,
+        q2: &Instruction,
+    ) -> usize {
+        if self.fuse_op_mov(code, q0, q1)
+            || self.fuse_load(code, q0, q1)
+            || self.fuse_save(code, q0, q1)
+            || (self.fastmath && self.fuse_fma(code, q0, q1))
+        {
+            2
+        } else if self.fuse_save3(code, q0, q1, q2)
+            || (self.fastmath && self.fuse_fma3(code, q0, q1, q2))
+        {
+            3
+        } else {
+            code.push(q0.clone());
+            1
+        }
     }
 
     pub fn optimize_peephole(&mut self) {
@@ -904,20 +1149,13 @@ impl Mir {
         let mut i = 0;
 
         while i < self.code.len() - 2 {
-            let f = self.fuse(&self.code[i], &self.code[i + 1], &self.code[i + 2]);
-            match f {
-                Some((d, p0, p1)) => {
-                    code.push(p0);
-                    if !matches!(p1, Instruction::Nop) {
-                        code.push(p1);
-                    }
-                    i += d;
-                }
-                None => {
-                    code.push(self.code[i].clone());
-                    i += 1;
-                }
-            }
+            let d = self.fuse(
+                &mut code,
+                &self.code[i],
+                &self.code[i + 1],
+                &self.code[i + 2],
+            );
+            i += d;
         }
 
         self.code = code;
@@ -962,7 +1200,7 @@ impl Compiled<f64> for CompiledMir {
 
     fn dump(&self, name: &str) {
         let mut fs = fs::File::create(name).unwrap();
-        let _ = write!(fs, "#!\n");
+        let _ = writeln!(fs, "#!");
         let _ = write!(fs, "{:?}", self.mir);
     }
 

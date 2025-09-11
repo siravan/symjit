@@ -20,7 +20,7 @@ f = symjit.compile_json(model, **args)
 u0 = f.get_u0()
 p = f.get_p()
 
-print(f.dumps())
+# print(f.dumps())
 
 t1 = time.perf_counter_ns()
 

@@ -327,7 +327,32 @@ impl Generator for ArmGenerator {
         self.emit(arm! {not v(ϕ(dst)).8b, v(ϕ(s1)).8b});
     }
 
-    fn add_consts(&mut self, consts: &Vec<f64>) {
+    fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
+        // self.times(Reg::Temp, s1, s2);
+        // self.plus(dst, Reg::Temp, s3);
+        self.emit(arm! {fmadd d(ϕ(dst)), d(ϕ(s1)), d(ϕ(s2)), d(ϕ(s3))});
+    }
+
+    fn fused_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
+        // self.times(Reg::Temp, s1, s2);
+        // self.minus(dst, Reg::Temp, s3);
+        self.emit(arm! {fmsub d(ϕ(dst)), d(ϕ(s1)), d(ϕ(s2)), d(ϕ(s3))});
+    }
+
+    fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
+        // self.times(Reg::Temp, s1, s2);
+        // self.minus(dst, s3, Reg::Temp);
+        self.emit(arm! {fnmsub d(ϕ(dst)), d(ϕ(s1)), d(ϕ(s2)), d(ϕ(s3))});
+    }
+
+    fn fused_neg_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
+        // self.times(Reg::Temp, s1, s2);
+        // self.plus(dst, Reg::Temp, s3);
+        // self.neg(dst, dst);
+        self.emit(arm! {fnmadd d(ϕ(dst)), d(ϕ(s1)), d(ϕ(s2)), d(ϕ(s3))});
+    }
+
+    fn add_consts(&mut self, consts: &[f64]) {
         for (idx, val) in consts.iter().enumerate() {
             let label = format!("_const_{}_", idx);
             self.set_label(label.as_str());
@@ -433,7 +458,7 @@ impl Generator for ArmGenerator {
             self.load_x_from_mem(SCRATCH2, STATES, (count_states + i) as u32);
             let k = (count_states + i + 1) as u32;
             //self.emit(arm! {ldr d(0), [x(mem), #8*k]});
-            self.load_d_from_mem(0, MEM, k as u32);
+            self.load_d_from_mem(0, MEM, k);
             self.emit(arm! {str d(0), [x(SCRATCH2), x(IDX), lsl #3]});
         }
 

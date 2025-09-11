@@ -3,7 +3,11 @@ use crate::utils::align_stack;
 use crate::utils::{DataType, Reg};
 
 mod asm;
+mod fused;
+
 use asm::{Amd, RoundingMode};
+
+const RET: u8 = 0;
 
 macro_rules! binop {
     ($self:ident, $sse:ident, $avx:ident, $simd:ident, $dst:expr, $s1: expr, $s2: expr, $com:ident) => {
@@ -58,6 +62,23 @@ macro_rules! roundop {
     };
 }
 
+macro_rules! fuseop {
+    ($self:ident, $f132:ident, $f213:ident, $f231:ident, $dst: expr, $a: expr, $b: expr, $c:ident) => {{
+        $self.flush($dst);
+
+        if $dst == $a {
+            $self.amd.$f132(ϕ($a), ϕ($c), ϕ($b));
+        } else if $dst == $b {
+            $self.amd.$f213(ϕ($b), ϕ($a), ϕ($c));
+        } else if $dst == $c {
+            $self.amd.$f231(ϕ($c), ϕ($a), ϕ($b));
+        } else {
+            $self.fmov($dst, $a);
+            $self.amd.$f132(ϕ($dst), ϕ($c), ϕ($b));
+        }
+    }};
+}
+
 pub enum AmdFamily {
     AvxScalar,
     AvxVector,
@@ -88,8 +109,6 @@ fn ϕ(r: Reg) -> u8 {
         Reg::Gen(dst) => dst + 2,
     }
 }
-
-const RET: u8 = 0;
 
 impl AmdGenerator {
     pub fn new(family: AmdFamily) -> AmdGenerator {
@@ -568,7 +587,104 @@ impl Generator for AmdGenerator {
         self.xor(dst, s1, Reg::Temp);
     }
 
-    fn add_consts(&mut self, consts: &Vec<f64>) {
+    fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
+        match self.family {
+            AmdFamily::AvxScalar => {
+                fuseop!(self, vfmadd132sd, vfmadd213sd, vfmadd231sd, dst, s1, s2, s3)
+            }
+            AmdFamily::AvxVector => {
+                fuseop!(self, vfmadd132pd, vfmadd213pd, vfmadd231pd, dst, s1, s2, s3)
+            }
+            _ => {
+                self.times(s1, s1, s2);
+                self.plus(dst, s1, s3);
+            }
+        }
+    }
+
+    fn fused_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
+        match self.family {
+            AmdFamily::AvxScalar => {
+                fuseop!(self, vfmsub132sd, vfmsub213sd, vfmsub231sd, dst, s1, s2, s3)
+            }
+            AmdFamily::AvxVector => {
+                fuseop!(self, vfmsub132pd, vfmsub213pd, vfmsub231pd, dst, s1, s2, s3)
+            }
+            _ => {
+                self.times(s1, s1, s2);
+                self.minus(dst, s1, s3);
+            }
+        }
+    }
+
+    fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
+        match self.family {
+            AmdFamily::AvxScalar => {
+                fuseop!(
+                    self,
+                    vfnmadd132sd,
+                    vfnmadd213sd,
+                    vfnmadd231sd,
+                    dst,
+                    s1,
+                    s2,
+                    s3
+                )
+            }
+            AmdFamily::AvxVector => {
+                fuseop!(
+                    self,
+                    vfnmadd132pd,
+                    vfnmadd213pd,
+                    vfnmadd231pd,
+                    dst,
+                    s1,
+                    s2,
+                    s3
+                )
+            }
+            _ => {
+                self.times(s1, s1, s2);
+                self.minus(dst, s3, s1);
+            }
+        }
+    }
+
+    fn fused_neg_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
+        match self.family {
+            AmdFamily::AvxScalar => {
+                fuseop!(
+                    self,
+                    vfnmsub132sd,
+                    vfnmsub213sd,
+                    vfnmsub231sd,
+                    dst,
+                    s1,
+                    s2,
+                    s3
+                )
+            }
+            AmdFamily::AvxVector => {
+                fuseop!(
+                    self,
+                    vfnmsub132pd,
+                    vfnmsub213pd,
+                    vfnmsub231pd,
+                    dst,
+                    s1,
+                    s2,
+                    s3
+                )
+            }
+            _ => {
+                self.times(s1, s1, s2);
+                self.plus(dst, s1, s3);
+                self.neg(dst, dst);
+            }
+        }
+    }
+
+    fn add_consts(&mut self, consts: &[f64]) {
         for (idx, val) in consts.iter().enumerate() {
             let label = format!("_const_{}_", idx);
             self.set_label(label.as_str());
