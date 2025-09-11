@@ -336,13 +336,13 @@ impl Generator for ArmGenerator {
     fn fused_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
         // self.times(Reg::Temp, s1, s2);
         // self.minus(dst, Reg::Temp, s3);
-        self.emit(arm! {fmsub d(ϕ(dst)), d(ϕ(s1)), d(ϕ(s2)), d(ϕ(s3))});
+        self.emit(arm! {fnmsub d(ϕ(dst)), d(ϕ(s1)), d(ϕ(s2)), d(ϕ(s3))});
     }
 
     fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
         // self.times(Reg::Temp, s1, s2);
         // self.minus(dst, s3, Reg::Temp);
-        self.emit(arm! {fnmsub d(ϕ(dst)), d(ϕ(s1)), d(ϕ(s2)), d(ϕ(s3))});
+        self.emit(arm! {fmsub d(ϕ(dst)), d(ϕ(s1)), d(ϕ(s2)), d(ϕ(s3))});
     }
 
     fn fused_neg_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
