@@ -333,18 +333,24 @@ impl Generator for ArmGenerator {
         self.emit(arm! {fmadd d(ϕ(dst)), d(ϕ(s1)), d(ϕ(s2)), d(ϕ(s3))});
     }
 
+    // fused_mul_sub is s1 * s2 - s3, corresponding to fnmsub in aarch64
+    // and vmsub... in amd64
     fn fused_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
         // self.times(Reg::Temp, s1, s2);
         // self.minus(dst, Reg::Temp, s3);
         self.emit(arm! {fnmsub d(ϕ(dst)), d(ϕ(s1)), d(ϕ(s2)), d(ϕ(s3))});
     }
 
+    // fused_neg_mul_add is s3 - s1 * s2, corresponding to fmsub in aarch64
+    // and vnmadd... in amd64
     fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
         // self.times(Reg::Temp, s1, s2);
         // self.minus(dst, s3, Reg::Temp);
         self.emit(arm! {fmsub d(ϕ(dst)), d(ϕ(s1)), d(ϕ(s2)), d(ϕ(s3))});
     }
 
+    // fused_neg_mul_sub is -s3 - s1 * s2, corresponding to fnmadd in aarch64
+    // and vnmsub... in amd64
     fn fused_neg_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
         // self.times(Reg::Temp, s1, s2);
         // self.plus(dst, Reg::Temp, s3);

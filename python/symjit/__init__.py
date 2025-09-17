@@ -51,7 +51,7 @@ class Func:
             if self.f is not None:
                 return self.fmt(args)
 
-            u = np.array(args[: self.count_states], dtype="double")
+            u = np.asarray(args[: self.count_states], dtype="double")
             self.compiler.states[:] = u
             self.compiler.execute()
             return self.fmt(self.compiler.obs)
@@ -113,6 +113,28 @@ class Func:
 
     def execute_vectorized(self, buf):
         self.compiler.execute_vectorized(buf)
+
+
+class VecFunc:
+    def __init__(self, compiler):
+        self.compiler = compiler
+
+    def __call__(self, y, p=None):
+        y = np.asarray(y, dtype="double")
+        self.compiler.states[:] = y
+
+        if p is not None:
+            p = np.asarray(p, dtype="double")
+            self.compiler.params[:] = p
+
+        self.compiler.execute(0.0)
+        return self.compiler.obs.copy()
+
+    def dump(self, name, what="scalar"):
+        return self.compiler.dump(name, what=what)
+
+    def dumps(self, what="scalar"):
+        return dumps(self.compiler, what=what)
 
 
 class OdeFunc:
@@ -192,7 +214,7 @@ def can_use_python(backend):
 
 
 def compile_func(
-    states, eqs, params=None, obs=None, ty="native", use_simd=True, use_threads=True, cse=True, fastmath=False, backend="rust"
+    states, eqs, params=None, obs=None, ty="native", signature="lambdify", use_simd=True, use_threads=True, cse=True, fastmath=False, backend="rust"
 ):
     """Compile a list of symbolic expression into an executable form.
     compile_func tries to mimic sympy lambdify, but instead of generating
@@ -215,6 +237,9 @@ def compile_func(
         * "debug": runs "native" and "bytecode" codes and throws an exception if different
     obs (optional): a list of symbols to name equations. If obs is not None, its length should
         be the same as eqs.
+    signature (default `lambdify`): the signature of the call function. If `lambdify`, the result
+        behaves similar to Sympy lambdify. If `vector`, the return function has a signature of
+        `f(y, p)`, where both `y` and `p` are numpy vectors.
     backend (default `rust`): the code-generator backend (`rust`: dynamic library coded
         in rust. `python`: pyengine library coded in plain Python.
     use_simd (default True): generates SIMD code for vectorized operations.
@@ -244,8 +269,12 @@ def compile_func(
     else:
         raise ValueError("unsupported platform")
 
-    return Func(compiler, eqs)
-
+    if signature == "lambdify":
+        return Func(compiler, eqs)
+    elif signature == "vector":
+        return VecFunc(compiler)
+    else:
+        raise ValueError("signature not defined")
 
 def compile_ode(
     iv, states, odes, params=None, ty="native", use_simd=True, use_threads=True, cse=True, fastmath=False, backend="rust"

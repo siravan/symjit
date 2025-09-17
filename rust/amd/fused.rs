@@ -2,6 +2,8 @@ use super::asm::Amd;
 
 #[allow(dead_code)]
 impl Amd {
+    // sets W bit of vex3 to 1
+    // should be called immediately after a vex-prefix instruction
     fn set_w1(&mut self) {
         let b = self.a.buf.pop().unwrap();
         self.a.buf.push(b | 0x80);

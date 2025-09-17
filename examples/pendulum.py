@@ -10,7 +10,7 @@ import time
 import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
-from symjit import compile_func
+from symjit import compile_func, OdeFunc
 
 # %%
 # **A chain**
@@ -139,8 +139,8 @@ force1 = me.msubs(force, dict_w, dict_v)
 MM1 = [MM1[i, j] for i in range(MM1.shape[0]) for j in range(MM1.shape[1])]
 force1 = list(force1)
 pL1 = (m, g, l, iZZ, reibung)
-MM_jit = compile_func((*w1, *v1), MM1, params=pL1, **args)
-force_jit = compile_func((*w1, *v1), force1, params=pL1, **args)
+MM_jit = compile_func((*w1, *v1), MM1, params=pL1, signature='vector', **args)
+force_jit = compile_func((*w1, *v1), force1, params=pL1, signature='vector', **args)
 
 # print('w1 = ', w1)
 # print('v1 = ', v1)
@@ -201,6 +201,17 @@ iZZ1 = 1./12. * m1 * (l1/n)**2        # from the internet
 pL_vals = [m1, g1, l1, iZZ1, reibung1]
 y0 =[*q1, *u1]
 
+def call(f, y, args):
+    y = np.array(y, dtype="double")
+    f.compiler.states[:] = y
+
+    args = np.array(args, dtype="double")
+    f.compiler.params[:] = args
+
+    f.compiler.execute(0.0)
+    return f.compiler.obs.copy()
+
+
 if symJIT is False:
     def gradient(t, y, args):
         sol = np.linalg.solve(MM_lam(*y, *args), force_lam(*y, *args))
@@ -208,8 +219,10 @@ if symJIT is False:
 
 else:
     def gradient(t, y, args):
-        MM_matrix = np.array(MM_jit(*y, *args)).reshape((n*2, n*2))
-        force_vector = np.array(force_jit(*y, *args))
+        # MM_matrix = np.array(MM_jit(*y, *args)).reshape((n*2, n*2))
+        # force_vector = np.array(force_jit(*y, *args))
+        MM_matrix = MM_jit(y, args).reshape((n*2, n*2))
+        force_vector = force_jit(y, args)
         sol = np.linalg.solve(MM_matrix, force_vector)
         return np.array(sol)
 
