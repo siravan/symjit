@@ -201,16 +201,6 @@ iZZ1 = 1./12. * m1 * (l1/n)**2        # from the internet
 pL_vals = [m1, g1, l1, iZZ1, reibung1]
 y0 =[*q1, *u1]
 
-def call(f, y, args):
-    y = np.array(y, dtype="double")
-    f.compiler.states[:] = y
-
-    args = np.array(args, dtype="double")
-    f.compiler.params[:] = args
-
-    f.compiler.execute(0.0)
-    return f.compiler.obs.copy()
-
 
 if symJIT is False:
     def gradient(t, y, args):
