@@ -1,4 +1,5 @@
 import util
+
 args = util.process_argv()
 
 import os
@@ -15,7 +16,7 @@ with open(path) as fd:
     model = fd.read()
 
 g = compile_json(model, **args)
-args['ty'] = 'bytecode'
+args["ty"] = "bytecode"
 f = compile_json(model, **args)
 
 u0 = f.get_u0()
@@ -25,10 +26,12 @@ print(u0)
 
 U = []
 
+
 def F(t, u, *p):
     du = f(t, u, *p)
     U.append((t, u))
     return du
+
 
 t_eval = np.arange(0, 2000, 1.0)
 
@@ -38,7 +41,7 @@ sol = scipy.integrate.solve_ivp(
 
 np.set_printoptions(precision=10)
 
-for (t, u) in U:
+for t, u in U:
     du_f = f(t, u, p)
     du_g = g(t, u, p)
 
@@ -49,18 +52,17 @@ for (t, u) in U:
     err2 = np.abs(obs_f - obs_g)
 
     if max(err) > 1e-10 or max(err2) > 1e-10:
-        print(t, ' fails')
-        print('u:')
+        print(t, " fails")
+        print("u:")
         print(u)
-
 
         print(err)
         print(err2)
 
-        print('bytecode')
+        print("bytecode")
         print(du_f)
 
-        print('compiled')
+        print("compiled")
         print(du_g)
 
         break

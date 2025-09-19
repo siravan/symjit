@@ -1,11 +1,12 @@
 import util
+
 args = util.process_argv()
 
 from sympy import *
 from symjit import compile_func
 import time
 
-x = symbols('x')
+x = symbols("x")
 
 x0 = 0.0001
 
@@ -30,4 +31,4 @@ for i in range(14):
     for _ in range(1000):
         l = fl(x0)
 
-    print(f"{i}\t{l:.12f}\t{r:.12f}\t{1e-6*(t1-t0):.3f}")
+    print(f"{i}\t{l:.12f}\t{r:.12f}\t{1e-6 * (t1 - t0):.3f}")

@@ -1,4 +1,5 @@
 import util
+
 args = util.process_argv()
 
 import time
@@ -17,7 +18,7 @@ t0 = time.time()
 
 f = compile_ode(t, (x, y, z), ode, params=(sigma, rho, beta), **args)
 
-if args['ty'] == 'bytecode':
+if args["ty"] == "debug":
     print(f.dumps())
 
 u0 = (1.0, 1.0, 1.0)

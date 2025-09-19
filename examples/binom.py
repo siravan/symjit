@@ -1,4 +1,5 @@
 import util
+
 args = util.process_argv()
 
 import math
@@ -12,13 +13,15 @@ from symjit import compile_func
 N = 7
 K = 4
 
+
 def binom(x, y, n, k):
     if k == 0 or k == n:
         return 1.0
     else:
         return binom(x, y, n - 1, k) * x + binom(x, y, n - 1, k - 1) * y
 
-x, y = symbols('x y')
+
+x, y = symbols("x y")
 f = compile_func([x, y], binom(x, y, N, K), **args)
-print(f(1, 1), '?=', math.comb(N, K))
+print(f(1, 1), "?=", math.comb(N, K))
 # print(f.dumps())

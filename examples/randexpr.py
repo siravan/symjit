@@ -1,4 +1,5 @@
 import util
+
 args = util.process_argv()
 
 from sympy import *

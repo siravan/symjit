@@ -1,4 +1,5 @@
 import util
+
 args = util.process_argv()
 
 import os
@@ -28,7 +29,7 @@ sol = scipy.integrate.solve_ivp(
 )
 t1 = time.perf_counter_ns()
 
-print(f"done in {(t1-t0)*1e-6:.1f} ms")
+print(f"done in {(t1 - t0) * 1e-6:.1f} ms")
 
 plt.plot(t_eval, sol.y[11, :])
 

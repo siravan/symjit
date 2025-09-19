@@ -21,26 +21,26 @@ class Func:
     def prepare_fmt(self, eqs):
         if self.f is not None:
             if isinstance(eqs, list):
-                self.fmt = lambda args : [self.f(*args)]
+                self.fmt = lambda args: [self.f(*args)]
             elif isinstance(eqs, tuple):
-                self.fmt = lambda args : (self.f(*args),)
+                self.fmt = lambda args: (self.f(*args),)
             else:
-                self.fmt = lambda args : self.f(*args)
+                self.fmt = lambda args: self.f(*args)
         else:
             if isinstance(eqs, list):
-                self.fmt = lambda obs : obs.tolist()
+                self.fmt = lambda obs: obs.tolist()
             elif isinstance(eqs, tuple):
-                self.fmt = lambda obs : tuple(obs.tolist())
+                self.fmt = lambda obs: tuple(obs.tolist())
             else:
-                self.fmt = lambda obs : obs[0]
+                self.fmt = lambda obs: obs[0]
 
     def prepare_vecfmt(self, eqs):
         if isinstance(eqs, list):
-            self.vecfmt = lambda res : res
+            self.vecfmt = lambda res: res
         elif isinstance(eqs, tuple):
-            self.vecfmt = lambda res : tuple(res)
+            self.vecfmt = lambda res: tuple(res)
         else:
-            self.vecfmt = lambda res : res[0]
+            self.vecfmt = lambda res: res[0]
 
     def __call__(self, *args):
         if len(args) > self.count_states:
@@ -114,12 +114,7 @@ class Func:
     def execute_vectorized(self, buf):
         self.compiler.execute_vectorized(buf)
 
-
-class VecFunc:
-    def __init__(self, compiler):
-        self.compiler = compiler
-
-    def __call__(self, y, p=None):
+    def apply(self, y, p=None):
         y = np.asarray(y, dtype="double")
         self.compiler.states[:] = y
 
@@ -128,13 +123,8 @@ class VecFunc:
             self.compiler.params[:] = p
 
         self.compiler.execute(0.0)
-        return self.compiler.obs.copy()
-
-    def dump(self, name, what="scalar"):
-        return self.compiler.dump(name, what=what)
-
-    def dumps(self, what="scalar"):
-        return dumps(self.compiler, what=what)
+        # return self.compiler.obs.copy()
+        return self.compiler.obs
 
 
 class OdeFunc:
@@ -195,7 +185,7 @@ def dumps(compiler, what="scalar"):
     with open(name, "rb") as fd:
         b = fd.read()
     os.remove(name)
-    if b[0] == ord('#') and b[1] == ord('!'):
+    if b[0] == ord("#") and b[1] == ord("!"):
         return b.decode("utf8")
     else:
         return b.hex()
@@ -214,7 +204,17 @@ def can_use_python(backend):
 
 
 def compile_func(
-    states, eqs, params=None, obs=None, ty="native", signature="lambdify", use_simd=True, use_threads=True, cse=True, fastmath=False, backend="rust"
+    states,
+    eqs,
+    params=None,
+    obs=None,
+    ty="native",
+    signature="lambdify",
+    use_simd=True,
+    use_threads=True,
+    cse=True,
+    fastmath=False,
+    backend="rust",
 ):
     """Compile a list of symbolic expression into an executable form.
     compile_func tries to mimic sympy lambdify, but instead of generating
@@ -237,9 +237,6 @@ def compile_func(
         * "debug": runs "native" and "bytecode" codes and throws an exception if different
     obs (optional): a list of symbols to name equations. If obs is not None, its length should
         be the same as eqs.
-    signature (default `lambdify`): the signature of the call function. If `lambdify`, the result
-        behaves similar to Sympy lambdify. If `vector`, the return function has a signature of
-        `f(y, p)`, where both `y` and `p` are numpy vectors.
     backend (default `rust`): the code-generator backend (`rust`: dynamic library coded
         in rust. `python`: pyengine library coded in plain Python.
     use_simd (default True): generates SIMD code for vectorized operations.
@@ -259,25 +256,38 @@ def compile_func(
     >>> x, y = symbols('x y')
     >>> f = compile_func([x, y], [x+y, x*y])
     >>> assert(np.all(f(3, 5) == [8., 15.]))
+    >>> assert(np.all(f.apply([3, 5]) == [8., 15.]))
     """
     if can_use_rust(backend):
         model = structure.model(states, eqs, params=params, obs=obs)
-        compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd, use_threads=use_threads, cse=cse, fastmath=fastmath)
+        compiler = engine.RustyCompiler(
+            model,
+            ty=ty,
+            use_simd=use_simd,
+            use_threads=use_threads,
+            cse=cse,
+            fastmath=fastmath,
+        )
     elif can_use_python(backend):
         model = pyengine.tree.model(states, eqs, params, obs)
         compiler = pyengine.PyCompiler(model, ty=ty)
     else:
         raise ValueError("unsupported platform")
 
-    if signature == "lambdify":
-        return Func(compiler, eqs)
-    elif signature == "vector":
-        return VecFunc(compiler)
-    else:
-        raise ValueError("signature not defined")
+    return Func(compiler, eqs)
+
 
 def compile_ode(
-    iv, states, odes, params=None, ty="native", use_simd=True, use_threads=True, cse=True, fastmath=False, backend="rust"
+    iv,
+    states,
+    odes,
+    params=None,
+    ty="native",
+    use_simd=True,
+    use_threads=True,
+    cse=True,
+    fastmath=False,
+    backend="rust",
 ):
     """Compile a symbolic ODE model into an executable form suitable for
     passung to scipy.integrate.solve_ivp.
@@ -322,7 +332,9 @@ def compile_ode(
     """
     if can_use_rust(backend):
         model = structure.model_ode(iv, states, odes, params)
-        compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd, cse=cse, fastmath=fastmath)
+        compiler = engine.RustyCompiler(
+            model, ty=ty, use_simd=use_simd, cse=cse, fastmath=fastmath
+        )
     elif can_use_python(backend):
         model = pyengine.tree.model_ode(iv, states, odes, params)
         compiler = pyengine.PyCompiler(model)
@@ -333,7 +345,16 @@ def compile_ode(
 
 
 def compile_jac(
-    iv, states, odes, params=None, ty="native", use_simd=True, use_threads=True, cse=True, fastmath=False, backend="rust"
+    iv,
+    states,
+    odes,
+    params=None,
+    ty="native",
+    use_simd=True,
+    use_threads=True,
+    cse=True,
+    fastmath=False,
+    backend="rust",
 ):
     """Genenrates and compiles Jacobian for an ODE system.
         iv: a single symbol, the independent variable.
@@ -360,7 +381,9 @@ def compile_jac(
     """
     if can_use_rust(backend):
         model = structure.model_jac(iv, states, odes, params)
-        compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd, cse=cse, fastmath=fastmath)
+        compiler = engine.RustyCompiler(
+            model, ty=ty, use_simd=use_simd, cse=cse, fastmath=fastmath
+        )
     elif can_use_python(backend):
         model = pyengine.tree.model_jac(iv, states, odes, params)
         compiler = pyengine.PyCompiler(model)
@@ -370,13 +393,23 @@ def compile_jac(
     return JacFunc(compiler)
 
 
-def compile_json(model, ty="native", use_simd=True, use_threads=True, cse=True, fastmath=False, backend="rust"):
+def compile_json(
+    model,
+    ty="native",
+    use_simd=True,
+    use_threads=True,
+    cse=True,
+    fastmath=False,
+    backend="rust",
+):
     """Compiles CellML models
     CellML json files are extracted using CellMLToolkit.jl
     model is already in Json format; hence, `convert = False`
     """
     if can_use_rust("rust"):
-        compiler = engine.RustyCompiler(model, ty=ty, use_simd=use_simd, fastmath=fastmath, convert=False)
+        compiler = engine.RustyCompiler(
+            model, ty=ty, use_simd=use_simd, fastmath=fastmath, convert=False
+        )
         return OdeFunc(compiler)
     else:
         raise ValueError("CellML json files only work with the rust backend")

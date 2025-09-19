@@ -1,4 +1,5 @@
 import util
+
 args = util.process_argv()
 
 import time
@@ -30,8 +31,8 @@ t2 = time.perf_counter_ns()
 print(f"compilation time: {1e-6 * (t1 - t0):.1f} ms")
 print(f"running time: {1e-6 * (t2 - t1):.1f} ms")
 
-X = np.reshape(buf[0,:], A.shape)
-Y = np.reshape(buf[1,:], A.shape)
+X = np.reshape(buf[0, :], A.shape)
+Y = np.reshape(buf[1, :], A.shape)
 
 plt.imshow((np.abs(X) < 2) & (np.abs(Y) < 2))
 

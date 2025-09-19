@@ -1,4 +1,5 @@
 import util
+
 args = util.process_argv()
 
 import time
@@ -10,6 +11,7 @@ from symjit import compile_func
 x, y, a, b = symbols("x y a b")
 
 A, B = np.meshgrid(np.arange(-2, 1, 0.002), np.arange(-1.5, 1.5, 0.002))
+
 
 def quad_map(x, y, a, b):
     return (x**2 - y**2 + a, 2 * x * y + b)

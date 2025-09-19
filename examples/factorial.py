@@ -1,4 +1,5 @@
 import util
+
 args = util.process_argv()
 
 import math
@@ -10,14 +11,14 @@ def factorial(x, n):
     if n == 0:
         return 1
     else:
-        return Piecewise([n, x >= n], [1, True]) * factorial(x, n-1)
+        return Piecewise([n, x >= n], [1, True]) * factorial(x, n - 1)
 
 
-x = symbols('x')
+x = symbols("x")
 
 p = factorial(x, 20)
 f = compile_func([x], p, **args)
 
 # print(f.dumps())
 
-print(f(18), ' ?= ', math.factorial(18))
+print(f(18), " ?= ", math.factorial(18))

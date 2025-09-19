@@ -9,6 +9,7 @@ from random import randint
 
 L = 1000
 
+
 def arch():
     if platform.machine() in ["x86_64", "AMD64"]:
         return "amd"
@@ -17,22 +18,23 @@ def arch():
     else:
         return None
 
+
 x, y, z, a, b = symbols("x y z a b")
 
 
 def func(states, p, args):
     t0 = time.perf_counter_ns()
 
-    if args['backend'] == 'sympy':
+    if args["backend"] == "sympy":
         f = lambdify(states, p)
-    elif args['backend'] == 'python':
-        f = compile_func(states, p, backend='python')
+    elif args["backend"] == "python":
+        f = compile_func(states, p, backend="python")
     else:
         f = compile_func(states, p, **args)
 
     t1 = time.perf_counter_ns()
 
-    print(f'compile in {(t1-t0)*1e-6:.1f} ms\t', end='')
+    print(f"compile in {(t1 - t0) * 1e-6:.1f} ms\t", end="")
     return f
 
 
@@ -79,7 +81,7 @@ def mandelbrot3(args):
 
     t0 = time.perf_counter_ns()
 
-    if args['backend'] == 'sympy':
+    if args["backend"] == "sympy":
         X = np.zeros_like(A)
         Y = np.zeros_like(A)
         for i in range(5):
@@ -91,8 +93,8 @@ def mandelbrot3(args):
         buf[3, :] = B.ravel()
         for i in range(5):
             f.execute_vectorized(buf)
-        X = np.reshape(buf[0,:], A.shape)
-        Y = np.reshape(buf[1,:], A.shape)
+        X = np.reshape(buf[0, :], A.shape)
+        Y = np.reshape(buf[1, :], A.shape)
 
     t1 = time.perf_counter_ns()
 
@@ -106,17 +108,17 @@ def pi(args):
         s = x
         for i in range(1, N):
             coef = -(1 + 2 * i) if (i & 1 == 1) else 1 + 2 * i
-            s += x**abs(coef) / coef
+            s += x ** abs(coef) / coef
         return s
 
     p = 4 * (4 * arctan_series(x) - arctan_series(y))
     f = func([x, y], p, args)
 
     t0 = time.perf_counter_ns()
-    u = [f(1/5, 1/239) for _ in range(L)]
+    u = [f(1 / 5, 1 / 239) for _ in range(L)]
     t1 = time.perf_counter_ns()
 
-    return u[randint(0, L-1)], t1 - t0
+    return u[randint(0, L - 1)], t1 - t0
 
 
 def viete(args):
@@ -134,7 +136,7 @@ def viete(args):
     u = [f(1 / 2) for _ in range(L)]
     t1 = time.perf_counter_ns()
 
-    return u[randint(0, L-1)], t1 - t0
+    return u[randint(0, L - 1)], t1 - t0
 
 
 def lemniscate(args):
@@ -152,7 +154,7 @@ def lemniscate(args):
     u = [f(1 / 2) for _ in range(L)]
     t1 = time.perf_counter_ns()
 
-    return u[randint(0, L-1)], t1 - t0
+    return u[randint(0, L - 1)], t1 - t0
 
 
 def binom(args):
@@ -171,7 +173,7 @@ def binom(args):
     u = [f(1, 1) for _ in range(L)]
     t1 = time.perf_counter_ns()
 
-    return u[randint(0, L-1)], t1 - t0
+    return u[randint(0, L - 1)], t1 - t0
 
 
 def stress(args):
@@ -187,7 +189,7 @@ def stress(args):
     u = [f(0.001) for _ in range(L)]
     t1 = time.perf_counter_ns()
 
-    return u[randint(0, L-1)], t1 - t0
+    return u[randint(0, L - 1)], t1 - t0
 
 
 def power(args):
@@ -196,8 +198,8 @@ def power(args):
     p = 0
     x0 = math.exp(math.log(N) / N)
 
-    for i in range(-N, N+1):
-        p += sin(1 + x**i)**2
+    for i in range(-N, N + 1):
+        p += sin(1 + x**i) ** 2
 
     f = func([x], [p], args)
 
@@ -205,7 +207,7 @@ def power(args):
     u = [f(x0) for _ in range(L)]
     t1 = time.perf_counter_ns()
 
-    return u[randint(0, L-1)], t1 - t0
+    return u[randint(0, L - 1)], t1 - t0
 
 
 def powi_mod(args):
@@ -215,7 +217,7 @@ def powi_mod(args):
         else:
             return binom(x, y, n - 1, k) * x + binom(x, y, n - 1, k - 1) * y
 
-    p = binom(x, y, 7, 4)**5 % 65537 + binom(x, y, 8, 5)**(4**x) % 65537
+    p = binom(x, y, 7, 4) ** 5 % 65537 + binom(x, y, 8, 5) ** (4**x) % 65537
 
     f = func([x, y], [p], args)
 
@@ -223,7 +225,7 @@ def powi_mod(args):
     u = [f(1, 1) for _ in range(L)]
     t1 = time.perf_counter_ns()
 
-    return u[randint(0, L-1)], t1 - t0
+    return u[randint(0, L - 1)], t1 - t0
 
 
 def fact(args):
@@ -231,7 +233,7 @@ def fact(args):
         if n == 0:
             return 1
         else:
-            return Piecewise([n, x >= n], [1, True]) * factorial(x, n-1)
+            return Piecewise([n, x >= n], [1, True]) * factorial(x, n - 1)
 
     p = factorial(x, 20)
     f = func([x], [p], args)
@@ -240,7 +242,7 @@ def fact(args):
     u = [f(18) for _ in range(L)]
     t1 = time.perf_counter_ns()
 
-    return u[randint(0, L-1)], t1 - t0
+    return u[randint(0, L - 1)], t1 - t0
 
 
 def triple(args):
@@ -248,7 +250,9 @@ def triple(args):
     f = func([x, y, z], p, args)
 
     t0 = time.perf_counter_ns()
-    u = integrate.tplquad(lambda x, y, z: f(x, y, z), 0, math.pi, 0, math.pi, 0, math.pi)[0]
+    u = integrate.tplquad(
+        lambda x, y, z: f(x, y, z), 0, math.pi, 0, math.pi, 0, math.pi
+    )[0]
     t1 = time.perf_counter_ns()
 
     return u, t1 - t0
@@ -259,11 +263,13 @@ def triple_fast(args):
 
     f = func([x, y, z], p, args)
 
-    if hasattr(f, 'fast_func'):
+    if hasattr(f, "fast_func"):
         f = f.fast_func()
 
     t0 = time.perf_counter_ns()
-    u = integrate.tplquad(lambda x, y, z: f(x, y, z), 0, math.pi, 0, math.pi, 0, math.pi)[0]
+    u = integrate.tplquad(
+        lambda x, y, z: f(x, y, z), 0, math.pi, 0, math.pi, 0, math.pi
+    )[0]
     t1 = time.perf_counter_ns()
 
     return u, t1 - t0
@@ -271,84 +277,91 @@ def triple_fast(args):
 
 #############################################################################
 
+
 def test_model(f, label, pyback=True, bytecode=True):
-    print(f'testing {label}')
+    print(f"testing {label}")
 
-    args = {'backend': 'rust', 'ty': 'native', 'use_simd': True, 'use_threads': True, 'cse': True}
+    args = {
+        "backend": "rust",
+        "ty": "native",
+        "use_simd": True,
+        "use_threads": True,
+        "cse": True,
+    }
 
-    print('\tlambdify...\t', end='')
-    args['backend'] = 'sympy'
+    print("\tlambdify...\t", end="")
+    args["backend"] = "sympy"
     X0, dt = f(args)
-    print(f'\tdone in {1e-6 * dt:.3f} ms')
+    print(f"\tdone in {1e-6 * dt:.3f} ms")
 
-    args['backend'] = 'rust'
-    args['ty'] = arch()
+    args["backend"] = "rust"
+    args["ty"] = arch()
 
-    print('\trust backend...\t', end='')
+    print("\trust backend...\t", end="")
     X, dt = f(args)
     np.testing.assert_array_almost_equal(X0, X)
-    print(f'\tpass in {1e-6 * dt:.3f} ms')
+    print(f"\tpass in {1e-6 * dt:.3f} ms")
 
-    print('\tno CSE...\t', end='')
-    args['cse'] = False
+    print("\tno CSE...\t", end="")
+    args["cse"] = False
     X, dt = f(args)
-    args['cse'] = True
+    args["cse"] = True
     np.testing.assert_array_almost_equal(X0, X)
-    print(f'\tpass in {1e-6 * dt:.3f} ms')
+    print(f"\tpass in {1e-6 * dt:.3f} ms")
 
-    print('\tno threads...\t', end='')
-    args['use_threads'] = False
+    print("\tno threads...\t", end="")
+    args["use_threads"] = False
     X, dt = f(args)
-    args['use_threads'] = True
+    args["use_threads"] = True
     np.testing.assert_array_almost_equal(X0, X)
-    print(f'\tpass in {1e-6 * dt:.3f} ms')
+    print(f"\tpass in {1e-6 * dt:.3f} ms")
 
-    if args['ty'] == 'amd':
-        print('\tno simd...\t', end='')
-        args['use_simd'] = False
+    if args["ty"] == "amd":
+        print("\tno simd...\t", end="")
+        args["use_simd"] = False
         X, dt = f(args)
-        args['use_simd'] = True
+        args["use_simd"] = True
         np.testing.assert_array_almost_equal(X0, X)
-        print(f'\tpass in {1e-6 * dt:.3f} ms')
+        print(f"\tpass in {1e-6 * dt:.3f} ms")
 
-        print('\tamd-sse...\t', end='')
-        args['ty'] = 'amd-sse'
+        print("\tamd-sse...\t", end="")
+        args["ty"] = "amd-sse"
         X, dt = f(args)
-        args['ty'] = 'amd'
+        args["ty"] = "amd"
         np.testing.assert_array_almost_equal(X0, X)
-        print(f'\tpass in {1e-6 * dt:.3f} ms')
+        print(f"\tpass in {1e-6 * dt:.3f} ms")
 
     if bytecode:
-        print('\tbytecode...\t', end='')
-        args['ty'] = 'bytecode'
+        print("\tbytecode...\t", end="")
+        args["ty"] = "bytecode"
         X, dt = f(args)
         np.testing.assert_array_almost_equal(X0, X)
-        print(f'\tpass in {1e-6 * dt:.3f} ms')
+        print(f"\tpass in {1e-6 * dt:.3f} ms")
 
-        print('\tdebug mode...\t', end='')
-        args['ty'] = 'debug'
+        print("\tdebug mode...\t", end="")
+        args["ty"] = "debug"
         X, dt = f(args)
         np.testing.assert_array_almost_equal(X0, X)
-        print(f'\tpass in {1e-6 * dt:.3f} ms')
+        print(f"\tpass in {1e-6 * dt:.3f} ms")
 
     if pyback:
-        print('\tpython backend...', end='')
-        args['backend'] = 'python'
+        print("\tpython backend...", end="")
+        args["backend"] = "python"
         X, dt = f(args)
         np.testing.assert_array_almost_equal(X0, X)
-        print(f'\tpass in {1e-6 * dt:.3f} ms')
+        print(f"\tpass in {1e-6 * dt:.3f} ms")
 
 
-test_model(mandelbrot, 'mandelbrot')
-test_model(mandelbrot2, 'mandelbrot2')
-test_model(mandelbrot2, 'mandelbrot3')
-test_model(pi, 'pi')
-test_model(viete, 'pi-viete')
-test_model(lemniscate, 'lemniscate')
-test_model(binom, 'binom')
-test_model(binom, 'stress')
-test_model(power, 'power')
-test_model(powi_mod, 'powi_mod', pyback=False)
-test_model(fact, 'fact')
-test_model(triple, 'triple')
-test_model(triple_fast, 'triple_fast', pyback=False, bytecode=False)
+test_model(mandelbrot, "mandelbrot")
+test_model(mandelbrot2, "mandelbrot2")
+test_model(mandelbrot2, "mandelbrot3")
+test_model(pi, "pi")
+test_model(viete, "pi-viete")
+test_model(lemniscate, "lemniscate")
+test_model(binom, "binom")
+test_model(binom, "stress")
+test_model(power, "power")
+test_model(powi_mod, "powi_mod", pyback=False)
+test_model(fact, "fact")
+test_model(triple, "triple")
+test_model(triple_fast, "triple_fast", pyback=False, bytecode=False)

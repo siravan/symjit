@@ -1,4 +1,5 @@
 import util
+
 args = util.process_argv()
 
 import math
@@ -9,7 +10,7 @@ from symjit import compile_func
 
 N = 4
 
-x = symbols('x')
+x = symbols("x")
 
 
 def viete(x):
@@ -41,7 +42,7 @@ f = compile_func([x], [2 / viete(x), x], **args)
 
 print(f.dumps())
 
-p, q = f(1/2)
-print(p, '?= ', math.pi, '(pi)')
-print(q, '?= ', 2.622057554292119, '(lemniscate constant)')
+p, q = f(1 / 2)
+print(p, "?= ", math.pi, "(pi)")
+print(q, "?= ", 2.622057554292119, "(lemniscate constant)")
 # print(f.dumps())

@@ -1,4 +1,5 @@
 import util
+
 args = util.process_argv()
 
 import math
@@ -9,7 +10,8 @@ from symjit import compile_func
 
 N = 21
 
-x = symbols('x')
+x = symbols("x")
+
 
 def lemniscate(x):
     p = 1
@@ -24,7 +26,7 @@ def lemniscate(x):
 
 
 f = compile_func([x], [2 / lemniscate(x)], **args)
-p = f(1/2)
+p = f(1 / 2)
 
-print(p, '?= ', 2.622057554292119, '(lemniscate constant)')
+print(p, "?= ", 2.622057554292119, "(lemniscate constant)")
 # print(f.dumps())

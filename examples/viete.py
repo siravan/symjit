@@ -1,4 +1,5 @@
 import util
+
 args = util.process_argv()
 
 import math
@@ -10,7 +11,8 @@ from symjit import compile_func
 
 N = 21
 
-x = symbols('x')
+x = symbols("x")
+
 
 def viete(x):
     p = 1
@@ -26,8 +28,8 @@ def viete(x):
 
 f = compile_func([x], [2 / viete(x)], **args)
 
-ps = [f(1/2) for _ in range(1000)]
+ps = [f(1 / 2) for _ in range(1000)]
 p = ps[randint(0, 999)]
 
-print(p, '?= ', math.pi, '(pi)')
+print(p, "?= ", math.pi, "(pi)")
 # print(f.dumps())
