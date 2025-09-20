@@ -90,10 +90,10 @@ f = compile_func([x, y], [x+y, x*y])
 assert(np.all(f(3, 5) == [8., 15.]))
 ```
 
-`compile_*` functions support these [operators and functions](FUNCTIONS.md).
+`compile_*` functions support these [operators and functions](./docs/FUNCTIONS.md).
 
 
-`compile_func` takes two mandatory arguments as `compile_func(states, eqs)`. The first one, `states`, is a list or tuple of sympy symbols. The second argument, `eqs`, is a list, a tuple, or a single expression. We can think of `states` and `eqs` as corresponding to function signature and body. 
+`compile_func` takes two mandatory arguments as `compile_func(states, eqs)`. The first one, `states`, is a list or tuple of sympy symbols. The second argument, `eqs`, is a list, a tuple, or a single expression. We can think of `states` and `eqs` as corresponding to function signature and body.
 
 If `states` has only one element, it can be passed directly. Similar to sympy `lambdify`, the output follows the form of the second argument to `compile_func`. Therefore, if `f = compile_func([x, y], [x+y, x*y])`, then `f(2, 3)` returns a list. On the other hand, if `f = compile_func([x, y], (x+y, x*y))`, the output will be `(5, 6)`. The third form is a single scalar, such as if `f = compile_func([x, y], sin(x+y))`.
 
@@ -172,63 +172,7 @@ The output is:
 
 ## Optimization
 
-The Rust backend supports different optimization and parallelization methods, which can be controlled using `compile_func` arguments. The options are:
-
-* `use_simd` (default `True`): generates SIMD instructions if possible (currently supports AVX instructions on X86-64 processors). SIMD code should improve the performance up to 4x for certain tasks (using 256-bit registers that encode and operate on four doubles simultaneously).
-* `use_threads` (default `True`): use multi-threading to speed up parallel processing of array operations using [Rayon rust crate](https://docs.rs/rayon/latest/rayon/). 
-* `cse` (default `True`): New to version 2.4. It performs common-subexpression elimination, i.e., factoring common expressions and sub-expressions. 
-
-Note that SIMD and multi-threading optimizations only apply to vectorized calls, but common-subexpression elimination applies to both scalar and vectorized operations. 
-
-
-## Fast Functions
-
-The result of different `compile` functions is a Python object, say `f`, that encapsulates the underlying compiled code. When we call `f(...)`,  `f.__call__` is called with the arguments. Then, `__call__` checks the type of arguments (scalar vs. vector), packages the inputs accordingly, calls the correct compiled routine via the respective Rust routines, and finally, formats the return values. All these actions have an overhead. The overhead is acceptable if the compiled function is large and complex, but it becomes relatively too expensive if the function is simple and lightweight. In this situation, it is faster to call the underlying compiled code directly. If the following conditions hold, it is possible to do so:
-
-1. The output is a single **scalar** expression.
-2. There are zero to eight **scalar** input arguments.
-3. There is no parameter.
-
-In most cases, *Symjit* can automatically switch a function to a fast one. However, there are situations when using the fast function directly improves performance. For example, this applies when passing functions to Scipy integration functions (`quad`, `nquad`, `dbpquad`, `tplquad`). To assist this, we can access the fast function by calling `f.fast_func()`. The result is a `ctypes.CFUNCTYPE`-generated foreign function. For example, we can rewrite the integration example above as
-
-```python
-import numpy as np
-from scipy.integrate import nquad
-from sympy import symbols, exp
-from symjit import compile_func
-
-def integrate():
-    N = 5
-    t, x = symbols("t x")
-    f = compile_func([t, x], exp(-t*x)/t**N)
-    fast = f.fast_func()
-    return nquad(lambda t, x: fast(t, x), [[1, np.inf], [0, np.inf]])
-
-sol = integrate()
-np.testing.assert_approx_equal(sol[0], 1/N)
-```
-
-Some points. First, we pass a lambda function to `nquad` because of the peculiarities of `nquad` (and other Scipy integration routines) concerning the expected signature of the foreign functions. We plan to generate the correct signature in a future version. Second, the lifetime of the fast function is linked to `f`. If `f` goes out of the scope and is garbage-collected, the fast function becomes invalid. Therefore, never store the resulting fast function separately from the parent `f`. Thus, in the example above, we had to add the `integrate` function to provide a scope for the fast function.
-
-
-## Exponentiation to an Integer Power and Modular Exponentiation
-
-Polynomial manipulation over various finite and infinite fields, such as &Zopf;p and &Zopf;, is the cornerstone of computer algebra systems. *Symjit* is primarily designed as a bridge between Sympy and numerical libraries (NumPy, SciPy, ...) and, as such, focuses on floating-point calculations. However, to assist with sympy integer calculations, version 2 has the capability of detecting and emitting special codes for integer exponentiation and modular exponentiation. IEEE 754 doubles can represent integers accurately up to 2**53 = 9007199254740992.
-
-The first special form is `x**n`, where `x` is any variable or expression, and `n` is a constant integer. *Symjit* emits the corresponding code directly in the function byte stream using the exponentiation-by-squaring method. This improves performance by allowing for better register allocations.
-
-The second special form is `x**n % p`, where `p` is any expression. Instead of calculating `x**n` first and then applying `%` (which can easily overflow), *Symjit* incorporates modular reduction at each stage of squaring. For example,
-
-```python
-from sympy import symbols
-from symjit import compile_func
-
-x = symbols("x")
-f = compile_func([x], x ** 1000 % 257)
-assert(f(10) == 189)
-```
-
-Note that `10**1000` can be represented by a double (the max double value is ~1.8*10**308). Therefore, calculating `10**1000` directly would overflow.
+The Rust backend supports different optimization methods, which can be controlled using `compile_func` arguments. See [Optimization](./docs/OPTIMIZATION.md) for details.
 
 ## `compile_ode`: to solve ODEs
 
@@ -356,47 +300,4 @@ Note that `ty='wasm'` is no longer supported in version 2. Also, as discussed ab
 
 ## Code Inspection
 
-To inspect the generated code, you can use either 'dump' function of various `Func` callables to write the binary into a file or use `dumps` to return a hex string. The output of `dump` is a flat binary file with no header or other extras that can be disassembled. For example,
-
-```python
-from symjit import compile_func
-from sympy import symbols
-
-x, y = symbols('x y')
-f = compile_func([x, y], [x+y, x*y])
-f.dump('test.bin', what='scalar')
-```
-
-Passing `what='simd'` dumps the vectorized version of the function and `what='fast'` to dump the fast function.
-
-On a Linux system, we can invoke `objdump` to disassemble the output as below:
-
-```
-objdump -b binary -m i386:x86-64 -M intel -D test.bin
-```
-
-The output (assuming a Linux x86-64 machine) is
-
-```
-0000000000000000 <.data>:
-   0:	55                   	push   rbp
-   1:	53                   	push   rbx
-   2:	48 8b ef             	mov    rbp,rdi
-   5:	48 81 ec 88 00 00 00 	sub    rsp,0x88
-   c:	c5 fb 10 5d 00       	vmovsd xmm3,QWORD PTR [rbp+0x0]
-  11:	c5 fb 10 55 08       	vmovsd xmm2,QWORD PTR [rbp+0x8]
-  16:	c5 e3 58 da          	vaddsd xmm3,xmm3,xmm2
-  1a:	c5 fb 11 5d 18       	vmovsd QWORD PTR [rbp+0x18],xmm3
-  1f:	c5 fb 10 5d 00       	vmovsd xmm3,QWORD PTR [rbp+0x0]
-  24:	c5 fb 10 55 08       	vmovsd xmm2,QWORD PTR [rbp+0x8]
-  29:	c5 e3 59 da          	vmulsd xmm3,xmm3,xmm2
-  2d:	c5 fb 11 5d 20       	vmovsd QWORD PTR [rbp+0x20],xmm3
-  32:	c5 f8 77             	vzeroupper
-  35:	48 81 c4 88 00 00 00 	add    rsp,0x88
-  3c:	5b                   	pop    rbx
-  3d:	5d                   	pop    rbp
-  3e:	c3                   	ret
-```
-
-Note that this is the output from an older version, and the more recent versions have a more complex prologue and epilogue. 
-
+You can inspect the generate intermediate form (IR) and machine code. Refer to [Inspection](./docs/INSPECTION.ms) for details.
