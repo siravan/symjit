@@ -299,4 +299,4 @@ Note that `ty='wasm'` is no longer supported in version 2. Also, as discussed ab
 
 ## Code Inspection
 
-You can inspect the generate intermediate form (IR) and machine code. Refer to [Inspection](./docs/INSPECTION.ms) for details.
+You can inspect the generate intermediate form (IR) and machine code. Refer to [Inspection](./docs/INSPECTION.md) for details.
