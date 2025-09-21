@@ -448,6 +448,95 @@ pub unsafe extern "C" fn fast_func(q: *mut CompilerResult) -> *const usize {
     }
 }
 
+/// # Safety
+///     1. If the model cannot be compiled to a fast function, NULL is returned.
+///     2. The resulting function lives as long as q does and should not be stored
+///         separately.
+///
+#[no_mangle]
+pub unsafe extern "C" fn callable_quad(n: usize, xx: *const f64, q: *mut CompilerResult) -> f64 {
+    let q: &mut CompilerResult = unsafe { &mut *q };
+    let xx: &[f64] = unsafe { std::slice::from_raw_parts(xx, n) };
+
+    if let Some(func) = &mut q.func {
+        func.exec_callable(xx)
+    } else {
+        f64::NAN
+    }
+}
+
+/// # Safety
+///     1. If the model cannot be compiled to a fast function, NULL is returned.
+///     2. The resulting function lives as long as q does and should not be stored
+///         separately.
+///
+#[no_mangle]
+pub unsafe extern "C" fn callable_quad_fast(n: usize, xx: *const f64, f: *const usize) -> f64 {
+    let xx: &[f64] = unsafe { std::slice::from_raw_parts(xx, n) };
+
+    match n {
+        0 => {
+            let f: fn() -> f64 = unsafe { std::mem::transmute(f) };
+            f()
+        }
+        1 => {
+            let f: fn(f64) -> f64 = unsafe { std::mem::transmute(f) };
+            f(xx[0])
+        }
+        2 => {
+            let f: fn(f64, f64) -> f64 = unsafe { std::mem::transmute(f) };
+            f(xx[0], xx[1])
+        }
+        3 => {
+            let f: fn(f64, f64, f64) -> f64 = unsafe { std::mem::transmute(f) };
+            f(xx[0], xx[1], xx[2])
+        }
+        4 => {
+            let f: fn(f64, f64, f64, f64) -> f64 = unsafe { std::mem::transmute(f) };
+            f(xx[0], xx[1], xx[2], xx[3])
+        }
+        5 => {
+            let f: fn(f64, f64, f64, f64, f64) -> f64 = unsafe { std::mem::transmute(f) };
+            f(xx[0], xx[1], xx[2], xx[3], xx[4])
+        }
+        6 => {
+            let f: fn(f64, f64, f64, f64, f64, f64) -> f64 = unsafe { std::mem::transmute(f) };
+            f(xx[0], xx[1], xx[2], xx[3], xx[4], xx[5])
+        }
+        7 => {
+            let f: fn(f64, f64, f64, f64, f64, f64, f64) -> f64 = unsafe { std::mem::transmute(f) };
+            f(xx[0], xx[1], xx[2], xx[3], xx[4], xx[5], xx[6])
+        }
+        _ => {
+            panic!("too many parameters for a fast func");
+        }
+    }
+}
+
+/// # Safety
+///     1. If the model cannot be compiled to a fast function, NULL is returned.
+///     2. The resulting function lives as long as q does and should not be stored
+///         separately.
+///
+#[no_mangle]
+pub unsafe extern "C" fn callable_filter(
+    buffer: *const f64,
+    filter_size: usize,
+    return_value: *mut f64,
+    q: *mut CompilerResult,
+) -> i64 {
+    let q: &mut CompilerResult = unsafe { &mut *q };
+    let xx: &[f64] = unsafe { std::slice::from_raw_parts(buffer, filter_size) };
+
+    if let Some(func) = &mut q.func {
+        let p: &mut f64 = unsafe { &mut *return_value };
+        *p = func.exec_callable(xx);
+        1
+    } else {
+        0
+    }
+}
+
 /************************************************/
 
 /// Creates an empty Matrix (a 2d array)

@@ -275,6 +275,22 @@ def triple_fast(args):
     return u, t1 - t0
 
 
+def triple_callable(args):
+    p = 1 / (1 - cos(x) * cos(y) * cos(z))
+
+    f = func([x, y, z], p, args)
+
+    if args["backend"] == "sympy":
+        h = lambda x, y, z: f(x, y, z)
+    else:
+        h = f.callable_quad()
+
+    t0 = time.perf_counter_ns()
+    u = integrate.tplquad(h, 0, math.pi, 0, math.pi, 0, math.pi)[0]
+    t1 = time.perf_counter_ns()
+    return u, t1 - t0
+
+
 #############################################################################
 
 
@@ -363,5 +379,6 @@ test_model(binom, "stress")
 test_model(power, "power")
 test_model(powi_mod, "powi_mod", pyback=False)
 test_model(fact, "fact")
-test_model(triple, "triple")
-test_model(triple_fast, "triple_fast", pyback=False, bytecode=False)
+# test_model(triple, "triple")
+# test_model(triple_fast, "triple_fast", pyback=False, bytecode=False)
+test_model(triple_callable, "triple_callable", pyback=False, bytecode=False)

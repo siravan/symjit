@@ -1,7 +1,7 @@
 # Introduction
 [Release Notes](NEWS.md)
 
-*Symjit* is a lightweight just-in-time (JIT) compiler that directly translates *sympy* expressions into machine code without using a separate library such as LLVM. Its main utility is to generate fast numerical functions to feed into various numerical solvers provided by the NumPy/SciPy ecosystem, including numerical integration routines and ordinary differential equation (ODE) solvers.
+*Symjit* is a lightweight just-in-time (JIT) compiler that directly translates *sympy* expressions into machine code without using a separate library such as LLVM. Its main utility is to generate fast numerical functions to feed into various numerical solvers provided by the NumPy/SciPy ecosystem, including numerical integration routines, ordinary differential equation (ODE) solvers, and image filtering functions. It is also able to generate `LowLevelCallable` functions for better coupling to certain fast Scipy numerical functions.
 
 *Symjit* has two different code-generating backends. The default is a Rust library with minimum external dependencies. The second backend is written in plain Python, relying solely on the Python standard library and NumPy. Both backends generate AMD64 (also known as x86-64) and ARM64 (also known as aarch64) machine code on Linux, Windows, and Darwin (MacOS) platforms. Further architectures (e.g., RISC V) are planned.
 

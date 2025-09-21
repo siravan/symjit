@@ -126,6 +126,12 @@ class Func:
         # return self.compiler.obs.copy()
         return self.compiler.obs
 
+    def callable_quad(self, use_fast=True):
+        return self.compiler.callable_quad(use_fast=use_fast)
+
+    def callable_filter(self):
+        return self.compiler.callable_filter()
+
 
 class OdeFunc:
     def __init__(self, compiler):

@@ -58,6 +58,30 @@ As a workaround, in Version 2.5, we have added an `apply` method to `f`, which a
 
 Note that the output of `apply` is always a numpy array.
 
+## Callable
+
+`scipy.LowLevelCallable` is a method to speed up certain Scipy functions by passing a compiled function. Currently, the functions using this feature are mainly doing numerical integration (e.g., `quad`, `dblquad`, `tplquad` in `scipy.integrate`) and image filtering (e.g., `generic_filter` in `scipy.ndimage`). The standard way to create a `scipy.LowLevelCallable` is by wrting the function in C and compile it into a shared library. *Symjit* provides an easier option. As of version 2.5, the object returned by `compile_func` (say, `f` of type `symjit.Func`) has two helper functions that return `LowLevelCallable` objects:
+
+* `Func.callable_quad`: returns a `LowLevelCallable` with a type signature `double (int, double *, void *)`, suitable to be passed to various integration functions (e.g., see `examples/integrate.py`).
+* `Func.callable_filter`: returns a `LowLevelCallable` with a type signature `int (double *, npy_intp, double *, void *)`, suitable to be passed to image filtering functions (e.g., see `examples/filter.py`).
+
+The following example shows how to use `callable_quad`:
+
+```python
+from scipy.integrate import quad
+from sympy import symbols
+from symjit import compile_func
+
+x = symbols("x")
+f = compile_func([x], x**3)
+callable = f.callable_quad()
+res = quad(callable, 0, 1)
+
+assert(res[0] == 0.25)
+```
+
+As the Scipy ecosystem expands to use `LowLevelCallable` in other applications, we will add them to `Func`.
+
 ## Exponentiation to an Integer Power and Modular Exponentiation
 
 Polynomial manipulation over various finite and infinite fields, such as &Zopf;p and &Zopf;, is the cornerstone of computer algebra systems. *Symjit* is primarily designed as a bridge between Sympy and numerical libraries (NumPy, SciPy, ...) and, as such, focuses on floating-point calculations. However, to assist with sympy integer calculations, version 2 has the capability of detecting and emitting special codes for integer exponentiation and modular exponentiation. IEEE 754 doubles can represent integers accurately up to 2**53 = 9007199254740992.

@@ -141,6 +141,31 @@ class Engine:
         ]
         self._execute_matrix.restype = ctypes.c_bool
 
+        self._callable_quad = self.dll.callable_quad
+        self._callable_quad.argtypes = [
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_double),
+            ctypes.c_void_p,
+        ]
+        self._callable_quad.restype = ctypes.c_double
+
+        self._callable_quad_fast = self.dll.callable_quad_fast
+        self._callable_quad_fast.argtypes = [
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_double),
+            ctypes.c_void_p,
+        ]
+        self._callable_quad_fast.restype = ctypes.c_double
+
+        self._callable_filter = self.dll.callable_filter
+        self._callable_filter.argtypes = [
+            ctypes.POINTER(ctypes.c_double),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_double),
+            ctypes.c_void_p,
+        ]
+        self._callable_filter.restype = ctypes.c_int64
+
     def info(self):
         return self._info()
 
@@ -272,3 +297,37 @@ class RustyCompiler:
         sig = [ctypes.c_double for _ in range(self.count_states + 1)]
         fac = ctypes.CFUNCTYPE(*sig)
         return fac(f)
+
+    def callable_quad(self, use_fast=True):
+        f = lib._fast_func(self.p)
+
+        try:
+            from scipy import LowLevelCallable
+
+            if f is not None and use_fast:
+                return LowLevelCallable(
+                    lib._callable_quad_fast,
+                    user_data=ctypes.c_void_p(f),
+                    signature="double (int, double *, void *)",
+                )
+            else:
+                return LowLevelCallable(
+                    lib._callable_quad,
+                    user_data=ctypes.c_void_p(self.p),
+                    signature="double (int, double *, void *)",
+                )
+        except:
+            return None
+
+    def callable_filter(self, use_fast=True):
+        try:
+            from scipy import LowLevelCallable
+
+            return LowLevelCallable(
+                lib._callable_filter,
+                user_data=ctypes.c_void_p(self.p),
+                signature="int (double *, npy_intp, double *, void *)",
+            )
+
+        except:
+            return None

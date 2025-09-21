@@ -290,6 +290,14 @@ impl Runnable {
         self.compiled.exec(&self.params[..]);
     }
 
+    pub fn exec_callable(&mut self, xx: &[f64]) -> f64 {
+        let mem = self.compiled.mem_mut();
+        mem[self.first_state..self.first_state + self.count_states].copy_from_slice(xx);
+        mem[self.idx_iv] = 0.0;
+        self.compiled.exec(&self.params[..]);
+        self.compiled.mem()[self.first_obs]
+    }
+
     fn prepare_simd(&mut self) {
         // SIMD compilation is lazy!
         if self.compiled_simd.is_none() && self.use_simd {
