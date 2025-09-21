@@ -851,25 +851,6 @@ impl Generator for AmdGenerator {
     }
 
     #[cfg(target_family = "windows")]
-    fn prologue(&mut self, cap: u32) {
-        self.save_nonvolatile_regs();
-        self.amd.mov(MEM, Amd::RCX);
-        self.amd.mov(PARAMS, Amd::RDX);
-        self.amd.sub_rsp(self.frame_size(cap));
-    }
-
-    #[cfg(target_family = "windows")]
-    fn epilogue(&mut self, cap: u32) {
-        self.restore_regs();
-        self.vzeroupper();
-
-        self.amd.add_rsp(self.frame_size(cap));
-        self.load_nonvolatile_regs();
-        self.amd.ret();
-        self.predefined_consts();
-    }
-
-    #[cfg(target_family = "windows")]
     fn prologue_fast(&mut self, cap: u32, num_args: u32) {
         self.amd.mov_mem_reg(Amd::RSP, 0x08, MEM);
         self.amd.mov_mem_reg(Amd::RSP, 0x10, PARAMS);
