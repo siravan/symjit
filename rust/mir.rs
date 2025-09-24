@@ -1125,16 +1125,15 @@ impl Mir {
         q1: &Instruction,
         q2: &Instruction,
     ) -> usize {
-        if self.fuse_op_mov(code, q0, q1)
+        if self.fuse_save3(code, q0, q1, q2) || (self.fastmath && self.fuse_fma3(code, q0, q1, q2))
+        {
+            3
+        } else if self.fuse_op_mov(code, q0, q1)
             || self.fuse_load(code, q0, q1)
             || self.fuse_save(code, q0, q1)
             || (self.fastmath && self.fuse_fma(code, q0, q1))
         {
             2
-        } else if self.fuse_save3(code, q0, q1, q2)
-            || (self.fastmath && self.fuse_fma3(code, q0, q1, q2))
-        {
-            3
         } else {
             code.push(q0.clone());
             1
