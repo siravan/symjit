@@ -1,9 +1,15 @@
+# Version 2.5.1
+
+* Sympy constants accepted (is_number).
+* Riscv compilation (bytecode only).
+
 # Version 2.5.0
 
-* New Intemediate-Representation (MIR)
-* Peephole optimization on MIR
-* Optional fused-mul-add instructions (fastmath option)
-* Adding `apply` function to Python Func
+* New Intemediate-Representation (MIR).
+* Peephole optimization on MIR.
+* Optional fused-mul-add instructions (fastmath option).
+* Adding `apply` function to Python `Func`.
+* Adding callable functions to Python `Func`.
 
 # Version 2.4.2
 

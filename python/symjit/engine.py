@@ -14,6 +14,8 @@ class Engine:
             dll_name = self.find_dll("x86_64-linux")
         if sys.platform == "linux" and platform.machine() == "aarch64":
             dll_name = self.find_dll("aarch64-linux")
+        if sys.platform == "linux" and platform.machine() == "riscv64":
+            dll_name = self.find_dll("riscv64-linux")
         if sys.platform == "darwin":
             dll_name = self.find_dll("darwin")
         elif sys.platform == "win32":

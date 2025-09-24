@@ -132,7 +132,7 @@ def var(sym, val=0.0):
 
 def expr(y):
     try:
-        if isinstance(y, numbers.Number) or y.is_Number:
+        if isinstance(y, numbers.Number) or y.is_number:
             return {"type": "Const", "val": float(y)}
         elif y.is_Symbol:
             return {"type": "Var", "name": y.name}

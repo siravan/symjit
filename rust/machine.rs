@@ -14,15 +14,9 @@ pub struct MachineCode<T> {
 
 impl<T> MachineCode<T> {
     pub fn new(arch: &str, machine_code: Vec<u8>, _mem: Vec<T>) -> MachineCode<T> {
-        #[cfg(target_arch = "x86_64")]
-        if arch != "x86_64" {
-            panic!("cannot run {:?} code", arch);
-        }
-
-        #[cfg(target_arch = "aarch64")]
-        if arch != "aarch64" {
-            panic!("cannot run {:?} code", arch);
-        }
+        let valid = (cfg!(target_arch = "x86_64") && arch == "x86_64")
+            || (cfg!(target_arch = "aarch64") && arch == "aarch64")
+            || (cfg!(target_arch = "riscv64") && arch == "riscv64");
 
         let size = machine_code.len();
 
@@ -34,13 +28,29 @@ impl<T> MachineCode<T> {
 
         code.set_readable_and_executable().unwrap();
 
-        let f: CompiledFunc<T> = unsafe { std::mem::transmute(p) };
+        let f: CompiledFunc<T> = if valid {
+            unsafe { std::mem::transmute(p) }
+        } else {
+            Self::invalid
+        };
 
         MachineCode {
             machine_code,
             code,
             f,
             _mem,
+        }
+    }
+
+    fn invalid(_a: *const T, _b: *const *mut f64, _c: usize, _d: *const f64) {
+        if cfg!(target_arch = "x86_64") {
+            panic!("invalid processor architecture; expect x86_64");
+        } else if cfg!(target_arch = "aarch64") {
+            panic!("invalid processor architecture; expect aarch64");
+        } else if cfg!(target_arch = "riscv64") {
+            panic!("invalid processor architecture; expect riscv64");
+        } else {
+            panic!("invalid processor architecture; unknown");
         }
     }
 }
