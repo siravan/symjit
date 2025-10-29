@@ -7,6 +7,8 @@ use crate::generator::Generator;
 use crate::symbol::Loc;
 use crate::utils::{bool_to_f64, Compiled, CompiledFunc, Reg};
 
+use crate::COUNT_SCRATCH;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum UniOp {
     Abs,
@@ -144,6 +146,54 @@ impl Mir {
 
     fn push(&mut self, ins: Instruction) {
         self.code.push(ins)
+    }
+
+    pub fn used_registers(&self) -> Vec<u8> {
+        let mut mask: u32 = 0;
+
+        for ins in self.code.iter() {
+            match *ins {
+                Instruction::Uni {
+                    dst: Reg::Gen(r), ..
+                } => mask |= 1 << r,
+                Instruction::Bi {
+                    dst: Reg::Gen(r), ..
+                } => mask |= 1 << r,
+                Instruction::Mov {
+                    dst: Reg::Gen(r), ..
+                } => mask |= 1 << r,
+                Instruction::Xchg {
+                    s1: Reg::Gen(r1),
+                    s2: Reg::Gen(r2),
+                } => {
+                    mask |= 1 << r1;
+                    mask |= 1 << r2;
+                }
+                Instruction::Load {
+                    dst: Reg::Gen(r), ..
+                } => mask |= 1 << r,
+                Instruction::Save {
+                    dst: Reg::Gen(r), ..
+                } => mask |= 1 << r,
+                Instruction::LoadConst {
+                    dst: Reg::Gen(r), ..
+                } => mask |= 1 << r,
+                Instruction::Fused {
+                    dst: Reg::Gen(r), ..
+                } => mask |= 1 << r,
+                _ => {}
+            };
+        }
+
+        let mut used: Vec<u8> = Vec::new();
+
+        for i in 0..COUNT_SCRATCH {
+            if mask & (1 << i) != 0 {
+                used.push(i as u8);
+            }
+        }
+
+        used
     }
 }
 

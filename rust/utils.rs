@@ -1,5 +1,7 @@
 use std::fmt;
 
+use crate::COUNT_SCRATCH;
+
 pub type CompiledFunc<T> = fn(*const T, *const *mut f64, usize, *const f64);
 
 pub trait Compiled<T> {
@@ -56,7 +58,7 @@ impl fmt::Debug for Reg {
 }
 
 pub fn reg(r: u8) -> Reg {
-    assert!(r < 14);
+    assert!(r < COUNT_SCRATCH);
     Reg::Gen(r)
 }
 

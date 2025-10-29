@@ -6,6 +6,8 @@ use crate::code::{Func, VirtualTable};
 use crate::generator::Generator;
 use crate::mir::Mir;
 use crate::node::Node;
+use crate::utils::reg;
+use crate::COUNT_SCRATCH;
 
 //****************************************************//
 
@@ -202,6 +204,34 @@ impl Builder {
         Ok(mir)
     }
 
+    fn save_registers(mir: &Mir, ir: &mut impl Generator) {
+        let count_shadows = ir.count_shadows();
+        if count_shadows == COUNT_SCRATCH {
+            return;
+        }
+        let used = mir.used_registers();
+
+        for r in used {
+            if r >= count_shadows {
+                ir.save_stack(reg(r), r as u32);
+            }
+        }
+    }
+
+    fn restore_registers(mir: &Mir, ir: &mut impl Generator) {
+        let count_shadows = ir.count_shadows();
+        if count_shadows == COUNT_SCRATCH {
+            return;
+        }
+        let used = mir.used_registers();
+
+        for r in used {
+            if r >= count_shadows {
+                ir.load_stack(reg(r), r as u32);
+            }
+        }
+    }
+
     pub fn compile_from_mir(
         &mut self,
         mir: &Mir,
@@ -209,12 +239,13 @@ impl Builder {
         count_states: usize,
         count_obs: usize,
     ) -> Result<()> {
-        // println!("{:#?}", &self.block.stmts);
+        // println!("{:#?}", mir.used_registers());
         let cap = self.block.sym_table.num_stack as u32;
         ir.prologue_indirect(cap, count_states, count_obs);
 
-        //self.block.compile(ir)?;
+        Self::save_registers(mir, ir);
         mir.rerun(ir);
+        Self::restore_registers(mir, ir);
 
         ir.epilogue_indirect(cap, count_states, count_obs);
         self.append_const_section(ir);
@@ -238,8 +269,9 @@ impl Builder {
         let cap = self.block.sym_table.num_stack as u32;
         ir.prologue_fast(cap, num_args);
 
-        // self.block.compile(ir)?;
+        Self::save_registers(mir, ir);
         mir.rerun(ir);
+        Self::restore_registers(mir, ir);
 
         ir.epilogue_fast(cap, idx_ret);
         self.append_const_section(ir);

@@ -3,6 +3,7 @@ use crate::utils::Reg;
 
 #[allow(dead_code)]
 pub trait Generator {
+    fn count_shadows(&self) -> u8;
     fn three_address(&self) -> bool;
     fn bytes(&mut self) -> Vec<u8>;
     fn seal(&mut self);

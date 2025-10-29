@@ -11,8 +11,6 @@ const RET: u8 = 0;
 
 macro_rules! binop {
     ($self:ident, $sse:ident, $avx:ident, $simd:ident, $dst:expr, $s1: expr, $s2: expr, $com:ident) => {
-        $self.flush($dst);
-
         match $self.family {
             AmdFamily::AvxScalar => $self.amd.$avx(ϕ($dst), ϕ($s1), ϕ($s2)),
             AmdFamily::AvxVector => $self.amd.$simd(ϕ($dst), ϕ($s1), ϕ($s2)),
@@ -50,22 +48,18 @@ macro_rules! select {
 
 macro_rules! uniop {
     ($self:ident, $sse:ident, $avx:ident, $simd:ident, $dst:expr, $s1: expr) => {
-        $self.flush($dst);
         select!($self, $sse, $avx, $simd, ϕ($dst), ϕ($s1));
     };
 }
 
 macro_rules! roundop {
     ($self:ident, $dst:expr, $s1: expr, $mode: expr) => {
-        $self.flush($dst);
         select!($self, roundsd, vroundsd, vroundpd, ϕ($dst), ϕ($s1), $mode);
     };
 }
 
 macro_rules! fuseop {
     ($self:ident, $f132:ident, $f213:ident, $f231:ident, $dst: expr, $a: expr, $b: expr, $c:ident) => {{
-        $self.flush($dst);
-
         if $dst == $a {
             $self.amd.$f132(ϕ($a), ϕ($c), ϕ($b));
         } else if $dst == $b {
@@ -88,7 +82,6 @@ pub enum AmdFamily {
 pub struct AmdGenerator {
     amd: Amd,
     family: AmdFamily,
-    mask: u32,
 }
 
 const MEM: u8 = Amd::RBP;
@@ -115,19 +108,6 @@ impl AmdGenerator {
         AmdGenerator {
             amd: Amd::new(DataType::F64),
             family,
-            mask: if cfg!(target_family = "windows") {
-                0x003f
-            } else {
-                0xffff
-            },
-        }
-    }
-
-    fn count_shadows(&self) -> u8 {
-        if cfg!(target_family = "windows") {
-            4 // xmm2-xmm5
-        } else {
-            14 // xmm2-xmm15
         }
     }
 
@@ -179,8 +159,6 @@ impl AmdGenerator {
     }
 
     fn load_const_by_name(&mut self, dst: Reg, label: &str) {
-        self.flush(dst);
-
         select!(
             self,
             movsd_xmm_label,
@@ -263,46 +241,6 @@ impl AmdGenerator {
         }
     }
 
-    fn flush(&mut self, dst: Reg) {
-        let reg = ϕ(dst);
-        let m = 1 << reg;
-
-        if self.mask & m == 0 {
-            select!(
-                self,
-                movsd_mem_xmm,
-                vmovsd_mem_xmm,
-                vmovpd_mem_ymm,
-                Amd::RSP,
-                (self.reg_size() as i32) * (reg as i32),
-                reg
-            );
-        }
-
-        self.mask |= m;
-    }
-
-    fn restore_regs(&mut self) {
-        // let last = self.first_shadow() + self.count_shadows();
-        let last = ϕ(Reg::Gen(self.count_shadows()));
-
-        for reg in last..16 {
-            let m = 1 << reg;
-
-            if self.mask & m != 0 {
-                select!(
-                    self,
-                    movsd_xmm_mem,
-                    vmovsd_xmm_mem,
-                    vmovpd_ymm_mem,
-                    reg,
-                    Amd::RSP,
-                    (self.reg_size() as i32) * (reg as i32)
-                );
-            }
-        }
-    }
-
     fn frame_size(&self, cap: u32) -> u32 {
         align_stack(self.reg_size() * cap + 8) - 8
     }
@@ -361,6 +299,14 @@ impl Generator for AmdGenerator {
         self.amd.a.bytes()
     }
 
+    fn count_shadows(&self) -> u8 {
+        if cfg!(target_family = "windows") {
+            4 // xmm2-xmm5
+        } else {
+            14 // xmm2-xmm15
+        }
+    }
+
     fn three_address(&self) -> bool {
         !matches!(self.family, AmdFamily::SSEScalar)
     }
@@ -374,15 +320,11 @@ impl Generator for AmdGenerator {
 
     fn fmov(&mut self, dst: Reg, s1: Reg) {
         if dst != s1 {
-            self.flush(dst);
             select!(self, movapd, vmovapd, vmovapd, ϕ(dst), ϕ(s1));
         }
     }
 
     fn fxchg(&mut self, s1: Reg, s2: Reg) {
-        self.flush(s1);
-        self.flush(s2);
-
         match self.family {
             AmdFamily::AvxScalar | AmdFamily::AvxVector => {
                 self.amd.vxorpd(ϕ(s1), ϕ(s1), ϕ(s2));
@@ -398,7 +340,6 @@ impl Generator for AmdGenerator {
     }
 
     fn load_const(&mut self, dst: Reg, idx: u32) {
-        self.flush(dst);
         let label = format!("_const_{}_", idx);
 
         select!(
@@ -412,7 +353,6 @@ impl Generator for AmdGenerator {
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
-        self.flush(dst);
         select!(
             self,
             movsd_xmm_mem,
@@ -441,7 +381,6 @@ impl Generator for AmdGenerator {
     }
 
     fn load_param(&mut self, dst: Reg, idx: u32) {
-        self.flush(dst);
         select!(
             self,
             movsd_xmm_mem,
@@ -454,7 +393,6 @@ impl Generator for AmdGenerator {
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
-        self.flush(dst);
         select!(
             self,
             movsd_xmm_mem,
@@ -483,13 +421,11 @@ impl Generator for AmdGenerator {
     }
 
     fn neg(&mut self, dst: Reg, s1: Reg) {
-        self.flush(dst);
         self.load_const_by_name(Reg::Temp, "_minus_zero_");
         self.xor(dst, s1, Reg::Temp);
     }
 
     fn abs(&mut self, dst: Reg, s1: Reg) {
-        self.flush(dst);
         self.load_const_by_name(Reg::Temp, "_minus_zero_");
         self.andnot(dst, Reg::Temp, s1);
     }
@@ -499,7 +435,6 @@ impl Generator for AmdGenerator {
     }
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
-        self.flush(dst);
         self.load_const_by_name(Reg::Temp, "_one_");
         self.divide(dst, Reg::Temp, s1);
     }
@@ -582,7 +517,6 @@ impl Generator for AmdGenerator {
     }
 
     fn not(&mut self, dst: Reg, s1: Reg) {
-        self.flush(dst);
         self.load_const_by_name(Reg::Temp, "_all_ones_");
         self.xor(dst, s1, Reg::Temp);
     }
@@ -739,7 +673,6 @@ impl Generator for AmdGenerator {
 
     #[cfg(target_family = "unix")]
     fn epilogue_fast(&mut self, cap: u32, idx_ret: i32) {
-        self.restore_regs();
         self.vzeroupper();
         self.amd.movsd_xmm_mem(0, Amd::RSP, 8 * idx_ret);
 
@@ -807,8 +740,6 @@ impl Generator for AmdGenerator {
     }
 
     fn epilogue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
-        self.restore_regs();
-
         self.amd.add_rsp(self.frame_size(cap));
 
         self.amd.or(STATES, STATES);
@@ -879,7 +810,6 @@ impl Generator for AmdGenerator {
 
     #[cfg(target_family = "windows")]
     fn epilogue_fast(&mut self, cap: u32, idx_ret: i32) {
-        self.restore_regs();
         self.vzeroupper();
         self.amd.movsd_xmm_mem(0, MEM, 8 * idx_ret);
 
