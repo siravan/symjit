@@ -94,6 +94,7 @@ pub enum Node {
         ershov: u8,
         h: u64,
         w: u32,
+        cond: Option<Loc>,
     },
 }
 
@@ -166,7 +167,7 @@ impl Node {
         }
     }
 
-    pub fn create_binary(op: &str, left: Node, right: Node, power: i32) -> Node {
+    pub fn create_binary(op: &str, left: Node, right: Node, power: i32, cond: Option<Loc>) -> Node {
         let e = Self::calc_ershov(&left, &right);
 
         let mut hasher = DefaultHasher::new();
@@ -184,6 +185,7 @@ impl Node {
 
         l.hash(&mut hasher);
         r.hash(&mut hasher);
+        cond.hash(&mut hasher);
 
         let w = 1 + left.weightof() + right.weightof();
 
@@ -195,6 +197,16 @@ impl Node {
             power,
             h: hasher.finish(),
             w,
+            cond,
+        }
+    }
+
+    pub fn create_ifelse(cond: &Node, left: Node, right: Node) -> Node {
+        if let Node::Var { sym, .. } = cond {
+            let sym = sym.borrow();
+            Self::create_binary("_ifelse_", left, right, 0, Some(sym.loc))
+        } else {
+            unreachable!()
         }
     }
 
@@ -203,7 +215,7 @@ impl Node {
     }
 
     pub fn create_modular_powi(left: Node, right: Node, power: i32) -> Node {
-        Self::create_binary("_powi_mod_", left, right, power)
+        Self::create_binary("_powi_mod_", left, right, power, None)
     }
 
     pub fn first(&mut self) -> Option<&mut Node> {
@@ -463,6 +475,7 @@ impl Node {
             left,
             right,
             power,
+            cond,
             ..
         } = self
         {
@@ -485,8 +498,13 @@ impl Node {
                 "and" => ir.and(reg(dst), reg(l), reg(r)),
                 "or" => ir.or(reg(dst), reg(l), reg(r)),
                 "xor" => ir.xor(reg(dst), reg(l), reg(r)),
-                "select_if" => ir.select_if(reg(dst), reg(l), reg(r)),
-                "select_else" => ir.select_else(reg(dst), reg(l), reg(r)),
+                "_ifelse_" => {
+                    if let Loc::Stack(idx) = cond.unwrap() {
+                        ir.ifelse(reg(dst), reg(l), reg(r), idx);
+                    } else {
+                        unreachable!()
+                    }
+                }
                 "_powi_mod_" => ir.powi_mod(reg(dst), reg(l), *power, reg(r)),
                 "_call_" => ir.setup_call_binary(reg(l), reg(r)),
                 _ => return Err(anyhow!("binary operator {:?} is not recognized", op)),

@@ -120,6 +120,8 @@ impl Generator for ArmGenerator {
         self.apply_jumps();
     }
 
+    fn align(&mut self) {}
+
     //***********************************
 
     fn fmov(&mut self, dst: Reg, s1: Reg) {

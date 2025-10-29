@@ -305,7 +305,7 @@ def test_model(f, label, pyback=True, bytecode=True):
         "cse": True,
     }
 
-    print("\tlambdify...\t", end="")
+    print("\tlambdify.......\t", end="")
     args["backend"] = "sympy"
     X0, dt = f(args)
     print(f"\tdone in {1e-6 * dt:.3f} ms")
@@ -313,19 +313,19 @@ def test_model(f, label, pyback=True, bytecode=True):
     args["backend"] = "rust"
     args["ty"] = arch()
 
-    print("\trust backend...\t", end="")
+    print("\trust default...\t", end="")
     X, dt = f(args)
     np.testing.assert_array_almost_equal(X0, X)
     print(f"\tpass in {1e-6 * dt:.3f} ms")
 
-    print("\tno CSE...\t", end="")
+    print("\tno CSE.........\t", end="")
     args["cse"] = False
     X, dt = f(args)
     args["cse"] = True
     np.testing.assert_array_almost_equal(X0, X)
     print(f"\tpass in {1e-6 * dt:.3f} ms")
 
-    print("\tno threads...\t", end="")
+    print("\tno threads.....\t", end="")
     args["use_threads"] = False
     X, dt = f(args)
     args["use_threads"] = True
@@ -333,14 +333,14 @@ def test_model(f, label, pyback=True, bytecode=True):
     print(f"\tpass in {1e-6 * dt:.3f} ms")
 
     if args["ty"] == "amd":
-        print("\tno simd...\t", end="")
+        print("\tno simd........\t", end="")
         args["use_simd"] = False
         X, dt = f(args)
         args["use_simd"] = True
         np.testing.assert_array_almost_equal(X0, X)
         print(f"\tpass in {1e-6 * dt:.3f} ms")
 
-        print("\tamd-sse...\t", end="")
+        print("\tamd-sse........\t", end="")
         args["ty"] = "amd-sse"
         X, dt = f(args)
         args["ty"] = "amd"
@@ -348,20 +348,20 @@ def test_model(f, label, pyback=True, bytecode=True):
         print(f"\tpass in {1e-6 * dt:.3f} ms")
 
     if bytecode:
-        print("\tbytecode...\t", end="")
+        print("\tbytecode.......\t", end="")
         args["ty"] = "bytecode"
         X, dt = f(args)
         np.testing.assert_array_almost_equal(X0, X)
         print(f"\tpass in {1e-6 * dt:.3f} ms")
 
-        print("\tdebug mode...\t", end="")
+        print("\tdebug mode......\t", end="")
         args["ty"] = "debug"
         X, dt = f(args)
         np.testing.assert_array_almost_equal(X0, X)
         print(f"\tpass in {1e-6 * dt:.3f} ms")
 
     if pyback:
-        print("\tpython backend...", end="")
+        print("\tpython.........", end="")
         args["backend"] = "python"
         X, dt = f(args)
         np.testing.assert_array_almost_equal(X0, X)

@@ -189,7 +189,7 @@ impl Mir {
 
         for i in 0..COUNT_SCRATCH {
             if mask & (1 << i) != 0 {
-                used.push(i as u8);
+                used.push(i);
             }
         }
 
@@ -429,6 +429,23 @@ impl Mir {
         }
     }
 
+    pub fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {
+        if true_val == false_val {
+            self.fmov(dst, true_val);
+        } else if dst != false_val {
+            self.load_stack(Reg::Temp, idx);
+            self.and(dst, Reg::Temp, true_val);
+            self.andnot(Reg::Temp, Reg::Temp, false_val);
+            self.or(dst, dst, Reg::Temp);
+        } else {
+            // dst == false_val && dst != true_val
+            self.load_stack(Reg::Temp, idx);
+            self.andnot(dst, Reg::Temp, false_val);
+            self.and(Reg::Temp, Reg::Temp, true_val);
+            self.or(dst, dst, Reg::Temp);
+        }
+    }
+
     pub fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.push(Instruction::Bi {
             op: BinOp::Plus,
@@ -591,14 +608,6 @@ impl Mir {
             f,
             label: op.to_string(),
         });
-    }
-
-    pub fn select_if(&mut self, dst: Reg, cond: Reg, s1: Reg) {
-        self.and(dst, cond, s1);
-    }
-
-    pub fn select_else(&mut self, dst: Reg, cond: Reg, s1: Reg) {
-        self.andnot(dst, cond, s1);
     }
 }
 

@@ -9,7 +9,7 @@ use std::rc::Rc;
 use crate::mir::Mir;
 use crate::node::{Node, VarStatus};
 use crate::statement::Statement;
-use crate::symbol::{Symbol, SymbolTable};
+use crate::symbol::{Loc, Symbol, SymbolTable};
 use crate::COUNT_SCRATCH;
 
 //****************************************************//
@@ -109,7 +109,11 @@ impl Block {
     }
 
     pub fn create_binary(&mut self, op: &str, left: Node, right: Node) -> Node {
-        Node::create_binary(op, left, right, 1)
+        Node::create_binary(op, left, right, 1, None)
+    }
+
+    pub fn create_ifelse(&mut self, cond: &Node, left: Node, right: Node) -> Node {
+        Node::create_ifelse(cond, left, right)
     }
 
     pub fn create_powi(&mut self, arg: Node, power: i32) -> Node {
@@ -147,8 +151,9 @@ impl Block {
                 left,
                 right,
                 power,
+                cond,
                 ..
-            } => self.trim_binary(op, *left, *right, power),
+            } => self.trim_binary(op, *left, *right, power, cond),
         }
     }
 
@@ -157,7 +162,14 @@ impl Block {
         Node::create_unary(op.as_str(), arg, power)
     }
 
-    fn trim_binary(&mut self, op: String, left: Node, right: Node, power: i32) -> Node {
+    fn trim_binary(
+        &mut self,
+        op: String,
+        left: Node,
+        right: Node,
+        power: i32,
+        cond: Option<Loc>,
+    ) -> Node {
         let left = self.trim(left);
         let right = self.trim(right);
 
@@ -171,7 +183,7 @@ impl Block {
             right
         };
 
-        Node::create_binary(op.as_str(), left, right, power)
+        Node::create_binary(op.as_str(), left, right, power, cond)
     }
 
     /*
@@ -301,12 +313,13 @@ impl Block {
                 left,
                 right,
                 power,
+                cond,
                 h,
                 ..
             } => self.common_subexpr(cs, ls, h).unwrap_or_else(|| {
                 let left = self.rewrite_cse(cs, ls, *left);
                 let right = self.rewrite_cse(cs, ls, *right);
-                Node::create_binary(op.as_str(), left, right, power)
+                Node::create_binary(op.as_str(), left, right, power, cond)
             }),
         }
     }

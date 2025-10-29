@@ -7,6 +7,7 @@ pub trait Generator {
     fn three_address(&self) -> bool;
     fn bytes(&mut self) -> Vec<u8>;
     fn seal(&mut self);
+    fn align(&mut self);
 
     /***********************************/
     fn fmov(&mut self, dst: Reg, s1: Reg);

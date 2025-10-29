@@ -92,10 +92,7 @@ impl Builder {
     pub fn add_ifelse(&mut self, cond: Node, true_val: Node, false_val: Node) -> Result<Node> {
         let tmp = self.block.add_tmp();
         let tmp = self.add_assign(tmp, cond)?;
-        let true_val = self.create_binary("select_if", tmp.clone(), true_val)?;
-        let false_val = self.create_binary("select_else", tmp, false_val)?;
-
-        self.create_binary("or", true_val, false_val)
+        self.create_ifelse(&tmp, true_val, false_val)
     }
 
     pub fn create_void(&mut self) -> Result<Node> {
@@ -128,11 +125,6 @@ impl Builder {
     }
 
     pub fn create_unary(&mut self, op: &str, arg: Node) -> Result<Node> {
-        /*
-        let node = match op {
-            _ => self.block.create_unary(op, arg),
-        };
-        */
         let node = self.block.create_unary(op, arg);
         Ok(node)
     }
@@ -195,6 +187,10 @@ impl Builder {
         Ok(node)
     }
 
+    pub fn create_ifelse(&mut self, cond: &Node, left: Node, right: Node) -> Result<Node> {
+        Ok(self.block.create_ifelse(cond, left, right))
+    }
+
     pub fn create_mir(&mut self, fastmath: bool) -> Result<Mir> {
         self.block.eliminate();
         let mut mir = Mir::new(fastmath);
@@ -248,6 +244,7 @@ impl Builder {
         Self::restore_registers(mir, ir);
 
         ir.epilogue_indirect(cap, count_states, count_obs);
+        ir.align();
         self.append_const_section(ir);
         self.append_vt_section(ir);
         ir.seal();
@@ -274,6 +271,7 @@ impl Builder {
         Self::restore_registers(mir, ir);
 
         ir.epilogue_fast(cap, idx_ret);
+        ir.align();
         self.append_const_section(ir);
         self.append_vt_section(ir);
         ir.seal();

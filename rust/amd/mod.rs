@@ -232,15 +232,6 @@ impl AmdGenerator {
         self.append_quad(0xffffffffffffffff);
     }
 
-    fn align(&mut self) {
-        let mut n = self.amd.a.ip();
-
-        while (n & 7) != 0 {
-            self.amd.nop();
-            n += 1
-        }
-    }
-
     fn frame_size(&self, cap: u32) -> u32 {
         align_stack(self.reg_size() * cap + 8) - 8
     }
@@ -314,6 +305,15 @@ impl Generator for AmdGenerator {
     fn seal(&mut self) {
         self.predefined_consts();
         self.apply_jumps();
+    }
+
+    fn align(&mut self) {
+        let mut n = self.amd.a.ip();
+
+        while (n & 7) != 0 {
+            self.amd.nop();
+            n += 1
+        }
     }
 
     //***********************************
