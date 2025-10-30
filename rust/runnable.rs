@@ -517,8 +517,7 @@ impl Debugger {
                         let eq = if a == b { "pass" } else { "fail" };
                         println!("{:14.8} {:14.8} {} -> \t{}", a, b, eq, key);
                     }
-                    Loc::Param(..) => {}
-                    Loc::Stack(..) => {}
+                    _ => {}
                 }
             }
             panic!("discrepencies detected!");

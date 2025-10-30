@@ -148,41 +148,50 @@ impl Mir {
         self.code.push(ins)
     }
 
+    fn get_dst(ins: &Instruction) -> (Option<u8>, Option<u8>) {
+        match *ins {
+            Instruction::Uni {
+                dst: Reg::Gen(r), ..
+            } => (Some(r), None),
+            Instruction::Bi {
+                dst: Reg::Gen(r), ..
+            } => (Some(r), None),
+            Instruction::Mov {
+                dst: Reg::Gen(r), ..
+            } => (Some(r), None),
+            Instruction::Xchg {
+                s1: Reg::Gen(r1),
+                s2: Reg::Gen(r2),
+            } => (Some(r1), Some(r2)),
+            Instruction::Load {
+                dst: Reg::Gen(r), ..
+            } => (Some(r), None),
+            Instruction::Save {
+                dst: Reg::Gen(r), ..
+            } => (Some(r), None),
+            Instruction::LoadConst {
+                dst: Reg::Gen(r), ..
+            } => (Some(r), None),
+            Instruction::Fused {
+                dst: Reg::Gen(r), ..
+            } => (Some(r), None),
+            _ => (None, None),
+        }
+    }
+
     pub fn used_registers(&self) -> Vec<u8> {
         let mut mask: u32 = 0;
 
         for ins in self.code.iter() {
-            match *ins {
-                Instruction::Uni {
-                    dst: Reg::Gen(r), ..
-                } => mask |= 1 << r,
-                Instruction::Bi {
-                    dst: Reg::Gen(r), ..
-                } => mask |= 1 << r,
-                Instruction::Mov {
-                    dst: Reg::Gen(r), ..
-                } => mask |= 1 << r,
-                Instruction::Xchg {
-                    s1: Reg::Gen(r1),
-                    s2: Reg::Gen(r2),
-                } => {
-                    mask |= 1 << r1;
-                    mask |= 1 << r2;
-                }
-                Instruction::Load {
-                    dst: Reg::Gen(r), ..
-                } => mask |= 1 << r,
-                Instruction::Save {
-                    dst: Reg::Gen(r), ..
-                } => mask |= 1 << r,
-                Instruction::LoadConst {
-                    dst: Reg::Gen(r), ..
-                } => mask |= 1 << r,
-                Instruction::Fused {
-                    dst: Reg::Gen(r), ..
-                } => mask |= 1 << r,
-                _ => {}
-            };
+            let (r1, r2) = Self::get_dst(ins);
+
+            if r1.is_some() {
+                mask |= 1 << r1.unwrap();
+            }
+
+            if r2.is_some() {
+                mask |= 1 << r2.unwrap();
+            }
         }
 
         let mut used: Vec<u8> = Vec::new();
@@ -194,6 +203,60 @@ impl Mir {
         }
 
         used
+    }
+
+    pub fn cache_loads(&mut self) {
+        let mut v: Vec<Instruction> = Vec::new();
+        let mut p: Vec<Loc> = vec![Loc::Nowhere; COUNT_SCRATCH as usize];
+
+        for ins in self.code.iter() {
+            let mut b = true;
+
+            if let Instruction::Load { dst, loc } = *ins {
+                if let Reg::Gen(r) = dst {
+                    if p[r as usize] == loc {
+                        b = false;
+                    } else {
+                        let k = p.iter().position(|l| *l == loc);
+                        if k.is_some() {
+                            let s1 = Reg::Gen(k.unwrap() as u8);
+                            v.push(Instruction::Mov { dst, s1 });
+                            b = false;
+                        }
+                        p[r as usize] = loc;
+                    }
+                }
+            } else if let Instruction::Save { loc, .. } = *ins {
+                for i in 0..COUNT_SCRATCH {
+                    if p[i as usize] == loc {
+                        p[i as usize] = Loc::Nowhere;
+                    }
+                }
+            } else if let Instruction::Call { .. } = *ins {
+                for i in 0..COUNT_SCRATCH {
+                    p[i as usize] = Loc::Nowhere;
+                }
+            } else {
+                let (r1, r2) = Self::get_dst(ins);
+
+                if r1.is_some() {
+                    p[r1.unwrap() as usize] = Loc::Nowhere;
+                }
+
+                if r2.is_some() {
+                    p[r2.unwrap() as usize] = Loc::Nowhere;
+                }
+            }
+
+            if b {
+                v.push(ins.clone());
+            };
+        }
+
+        // println!("{:#?}", self.code);
+        // println!("-------------------------------");
+        // println!("{:#?}", v);
+        self.code = v;
     }
 }
 
@@ -722,6 +785,7 @@ impl Mir {
                         Loc::Mem(idx) => mem[*idx as usize],
                         Loc::Stack(idx) => stack[*idx as usize],
                         Loc::Param(idx) => params[*idx as usize],
+                        Loc::Nowhere => unreachable!(),
                     };
                     Self::set(regs, *dst, val);
                 }
@@ -737,6 +801,7 @@ impl Mir {
                         Loc::Param(_) => {
                             unreachable!()
                         }
+                        Loc::Nowhere => unreachable!(),
                     };
                 }
                 Instruction::LoadConst { dst, idx } => {
@@ -817,6 +882,7 @@ impl Mir {
                         Loc::Mem(idx) => ir.load_mem(*dst, *idx),
                         Loc::Stack(idx) => ir.load_stack(*dst, *idx),
                         Loc::Param(idx) => ir.load_param(*dst, *idx),
+                        Loc::Nowhere => unreachable!(),
                     };
                 }
                 Instruction::Save { dst, loc } => {
@@ -824,6 +890,7 @@ impl Mir {
                         Loc::Mem(idx) => ir.save_mem(*dst, *idx),
                         Loc::Stack(idx) => ir.save_stack(*dst, *idx),
                         Loc::Param(_) => unreachable!(),
+                        Loc::Nowhere => unreachable!(),
                     };
                 }
                 Instruction::LoadConst { dst, idx } => {

@@ -59,7 +59,7 @@ impl Statement {
             match sym.borrow().loc {
                 Loc::Stack(idx) => ir.save_stack(reg(r), idx),
                 Loc::Mem(idx) => ir.save_mem(reg(r), idx),
-                Loc::Param(_) => unreachable!(),
+                Loc::Param(_) | Loc::Nowhere => unreachable!(),
             }
         }
     }
@@ -69,7 +69,7 @@ impl Statement {
             match sym.borrow().loc {
                 Loc::Stack(idx) => ir.save_stack_result(idx),
                 Loc::Mem(idx) => ir.save_mem_result(idx),
-                Loc::Param(_) => unreachable!(),
+                Loc::Param(_) | Loc::Nowhere => unreachable!(),
             }
         }
     }

@@ -390,6 +390,7 @@ impl Node {
             Loc::Stack(idx) => ir.load_stack(reg(dst), *idx),
             Loc::Mem(idx) => ir.load_mem(reg(dst), *idx),
             Loc::Param(idx) => ir.load_param(reg(dst), *idx),
+            Loc::Nowhere => unreachable!(),
         };
 
         dst

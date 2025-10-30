@@ -196,6 +196,7 @@ impl Builder {
         let mut mir = Mir::new(fastmath);
         self.block.compile(&mut mir)?;
         mir.optimize_peephole();
+        mir.cache_loads();
         mir.add_consts(&self.consts);
         Ok(mir)
     }
