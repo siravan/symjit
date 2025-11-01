@@ -232,7 +232,7 @@ class RustyCompiler:
             | (0x02 if use_threads else 0)
             | (0x04 if cse else 0)
             | (0x08 if fastmath else 0)
-            | ((opt_level and 0x0F) << 8)
+            | ((opt_level & 0x0F) << 8)
         )
         self.p = lib._compile(model.encode("utf-8"), ty.encode("utf8"), opt)
         status = lib._check_status(self.p)

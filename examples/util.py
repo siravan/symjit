@@ -38,6 +38,7 @@ def process_argv():
         action="store",
         dest="opt_level",
         default=1,
+        type=int,
     )
     parser.add_argument(
         "--nosymjit",

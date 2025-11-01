@@ -46,8 +46,16 @@ impl Allocator {
             graph: UnGraph::new_undirected(),
         };
 
+        // create single-static-assignment form
         allocator.create(mir);
+
+        // add edges to the graph based on which register
+        // pairs overlap in the same region
         allocator.add_edges();
+
+        // allocate registers using a coloring algorithm and
+        // replace the static registers with the corresponding
+        // logical (colored) registers
         allocator.color();
 
         mir.code = allocator.code;
@@ -61,6 +69,7 @@ impl Allocator {
         self.code.len() as u32
     }
 
+    // resets cache on call boundaries to account for cobbled registers
     fn reset(&mut self) {
         self.regs = vec![(Reg::Ret, Loc::Nowhere); COUNT_SCRATCH as usize];
     }
@@ -97,6 +106,10 @@ impl Allocator {
         s
     }
 
+    // consumes a logical register and returns the corresponding
+    // static register.
+    // note that the cache (self.regs) is not invalidated and may
+    // be used afterward
     fn consume_static(&mut self, src: Reg) -> Reg {
         if let Reg::Gen(r) = src {
             let (s, _) = self.regs[r as usize];
@@ -109,6 +122,7 @@ impl Allocator {
         }
     }
 
+    // converts a destination logical register to a static one
     fn subs_dst(&mut self, dst: Reg) -> Reg {
         if let Reg::Gen(r) = dst {
             let s = self.create_static();
@@ -142,6 +156,8 @@ impl Allocator {
 
     fn load(&mut self, dst: Reg, loc: Loc) {
         if let Reg::Gen(r) = dst {
+            // if the desired location is already in a static reg, we just
+            // use this reg
             if let Some(k) = self.regs.iter().position(|(_, l)| *l == loc) {
                 self.regs[r as usize] = self.regs[k];
                 return;
@@ -156,9 +172,7 @@ impl Allocator {
     }
 
     pub fn create(&mut self, mir: &Mir) {
-        let u = mir.code.clone();
-
-        for ins in u.iter() {
+        for ins in mir.code.iter() {
             match *ins {
                 Instruction::Nop => self.push(Instruction::Nop),
                 Instruction::Uni { op, dst, s1 } => {
@@ -177,11 +191,8 @@ impl Allocator {
                     self.load(dst, loc);
                 }
                 Instruction::Save { src, loc } => {
-                    let t = Instruction::Save {
-                        src: self.consume_static(src),
-                        loc,
-                    };
-                    self.push(t);
+                    let src = self.consume_static(src);
+                    self.push(Instruction::Save { src, loc });
                 }
                 Instruction::Mov { dst, s1 } => {
                     let (dst, s1) = self.subs_uni(dst, s1);
@@ -199,6 +210,8 @@ impl Allocator {
         }
     }
 
+    // converts a static register to the corresponding logical register
+    // calculated by the coloring algorithm
     fn alloc(&self, dst: Reg) -> Reg {
         if let Reg::Static(s) = dst {
             let idx = NodeIndex::new(s as usize);
@@ -215,10 +228,10 @@ impl Allocator {
             self.graph[*idx].reg = Reg::Gen(*r as u8);
         }
 
-        let u = self.code.clone();
-        self.code.clear();
+        let code = std::mem::take(&mut self.code);
 
-        for ins in u.iter() {
+        // replace all static regs with the corresponding logical ones
+        for ins in code.iter() {
             match *ins {
                 Instruction::Nop => self.push(Instruction::Nop),
                 Instruction::Uni { op, dst, s1 } => self.push(Instruction::Uni {
