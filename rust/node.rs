@@ -347,15 +347,7 @@ impl Node {
         // This check may not be actually necessary, but we need to prove its
         // correctness first.
 
-        /*
-        let mut pool: Vec<u8> = if ir.three_address() {
-            (last..COUNT_SCRATCH).rev().collect()
-        } else {
-            Vec::new()
-        };
-        */
-
-        let mut pool = Pool::new(if ir.three_address() {
+        let mut pool = Pool::new(if ir.opt_level >= 1 && ir.three_address() {
             last
         } else {
             COUNT_SCRATCH

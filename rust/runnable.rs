@@ -9,7 +9,7 @@ use crate::matrix::{combine_matrixes, Matrix};
 use crate::mir::{CompiledMir, Mir};
 use crate::model::Program;
 use crate::symbol::Loc;
-use crate::utils::*;
+use crate::{utils::*, OPT_LEVEL_MASK, OPT_LEVEL_SHIFT};
 use crate::{FASTMATH, USE_SIMD, USE_THREADS};
 
 use rayon::prelude::*;
@@ -90,7 +90,8 @@ impl Runnable {
         let params = vec![0.0; count_params + 1];
 
         let fastmath = opt & FASTMATH != 0;
-        let mir = prog.builder.create_mir(fastmath)?;
+        let opt_level = ((opt & OPT_LEVEL_MASK) >> OPT_LEVEL_SHIFT) as u8;
+        let mir = prog.builder.create_mir(fastmath, opt_level)?;
 
         let compiled = match ty {
             CompilerType::ByteCode => Self::compile_debugger(&mir, &mut prog, size, false)?,

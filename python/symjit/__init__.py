@@ -221,6 +221,7 @@ def compile_func(
     cse=True,
     fastmath=False,
     backend="rust",
+    opt_level=1,
 ):
     """Compile a list of symbolic expression into an executable form.
     compile_func tries to mimic sympy lambdify, but instead of generating
@@ -273,6 +274,7 @@ def compile_func(
             use_threads=use_threads,
             cse=cse,
             fastmath=fastmath,
+            opt_level=opt_level,
         )
     elif can_use_python(backend):
         model = pyengine.tree.model(states, eqs, params, obs)
@@ -294,6 +296,7 @@ def compile_ode(
     cse=True,
     fastmath=False,
     backend="rust",
+    opt_level=1,
 ):
     """Compile a symbolic ODE model into an executable form suitable for
     passung to scipy.integrate.solve_ivp.
@@ -339,7 +342,12 @@ def compile_ode(
     if can_use_rust(backend):
         model = structure.model_ode(iv, states, odes, params)
         compiler = engine.RustyCompiler(
-            model, ty=ty, use_simd=use_simd, cse=cse, fastmath=fastmath
+            model,
+            ty=ty,
+            use_simd=use_simd,
+            cse=cse,
+            fastmath=fastmath,
+            opt_level=opt_level,
         )
     elif can_use_python(backend):
         model = pyengine.tree.model_ode(iv, states, odes, params)
@@ -361,6 +369,7 @@ def compile_jac(
     cse=True,
     fastmath=False,
     backend="rust",
+    opt_level=1,
 ):
     """Genenrates and compiles Jacobian for an ODE system.
         iv: a single symbol, the independent variable.
@@ -388,7 +397,12 @@ def compile_jac(
     if can_use_rust(backend):
         model = structure.model_jac(iv, states, odes, params)
         compiler = engine.RustyCompiler(
-            model, ty=ty, use_simd=use_simd, cse=cse, fastmath=fastmath
+            model,
+            ty=ty,
+            use_simd=use_simd,
+            cse=cse,
+            fastmath=fastmath,
+            opt_level=opt_level,
         )
     elif can_use_python(backend):
         model = pyengine.tree.model_jac(iv, states, odes, params)
@@ -406,6 +420,7 @@ def compile_json(
     use_threads=True,
     cse=True,
     fastmath=False,
+    opt_level=1,
     backend="rust",
 ):
     """Compiles CellML models
@@ -414,7 +429,12 @@ def compile_json(
     """
     if can_use_rust("rust"):
         compiler = engine.RustyCompiler(
-            model, ty=ty, use_simd=use_simd, fastmath=fastmath, convert=False
+            model,
+            ty=ty,
+            use_simd=use_simd,
+            fastmath=fastmath,
+            opt_level=opt_level,
+            convert=False,
         )
         return OdeFunc(compiler)
     else:

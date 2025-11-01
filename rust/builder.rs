@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 
+use crate::allocator::{self, Allocator};
 use crate::block::Block;
 use crate::code::{Func, VirtualTable};
 use crate::generator::Generator;
@@ -191,12 +192,19 @@ impl Builder {
         Ok(self.block.create_ifelse(cond, left, right))
     }
 
-    pub fn create_mir(&mut self, fastmath: bool) -> Result<Mir> {
+    pub fn create_mir(&mut self, fastmath: bool, opt_level: u8) -> Result<Mir> {
         self.block.eliminate();
-        let mut mir = Mir::new(fastmath);
+        let mut mir = Mir::new(opt_level, fastmath);
         self.block.compile(&mut mir)?;
-        mir.optimize_peephole();
-        mir.cache_loads();
+
+        if opt_level >= 1 {
+            mir.optimize_peephole();
+        }
+
+        if opt_level >= 2 {
+            Allocator::optimize(&mut mir);
+        }
+
         mir.add_consts(&self.consts);
         Ok(mir)
     }

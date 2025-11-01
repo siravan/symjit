@@ -43,6 +43,7 @@ pub enum Reg {
     Gen(u8),
     Left,
     Right,
+    Static(u32),
 }
 
 impl fmt::Debug for Reg {
@@ -53,6 +54,7 @@ impl fmt::Debug for Reg {
             Reg::Right => write!(f, "%r"),
             Reg::Temp => write!(f, "%t"),
             Reg::Gen(r) => write!(f, "%{}", r),
+            Reg::Static(r) => write!(f, "σ{}", r),
         }
     }
 }

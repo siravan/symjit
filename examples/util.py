@@ -33,6 +33,13 @@ def process_argv():
         dest="fastmath",
     )
     parser.add_argument(
+        "--opt_level",
+        help="optimization level (0, 1, or 2)",
+        action="store",
+        dest="opt_level",
+        default=1,
+    )
+    parser.add_argument(
         "--nosymjit",
         help="do not use symjit at all!",
         action="store_false",

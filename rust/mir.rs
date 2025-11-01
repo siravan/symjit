@@ -66,16 +66,12 @@ pub enum Instruction {
         dst: Reg,
         s1: Reg,
     },
-    Xchg {
-        s1: Reg,
-        s2: Reg,
-    },
     Load {
         dst: Reg,
         loc: Loc,
     },
     Save {
-        dst: Reg,
+        src: Reg,
         loc: Loc,
     },
     LoadConst {
@@ -105,9 +101,8 @@ impl fmt::Debug for Instruction {
             }
             Instruction::Call { label, .. } => write!(f, "call {}", &label),
             Instruction::Mov { dst, s1 } => write!(f, "{:?} := {:?}", &dst, &s1),
-            Instruction::Xchg { s1, s2 } => write!(f, "xchg {:?} and {:?}", &s1, &s2),
             Instruction::Load { dst, loc } => write!(f, "{:?} := {:?}", &dst, &loc),
-            Instruction::Save { dst, loc } => write!(f, "{:?} := {:?}", &loc, &dst),
+            Instruction::Save { src, loc } => write!(f, "{:?} := {:?}", &loc, &src),
             Instruction::LoadConst { dst, idx } => write!(f, "{:?} := consts[{:?}]", &dst, idx),
             Instruction::Fused { op, dst, a, b, c } => match op {
                 FusedOp::MulAdd => write!(f, "{:?} := {:?} * {:?} + {:?}", &dst, &a, &b, &c),
@@ -121,9 +116,10 @@ impl fmt::Debug for Instruction {
 
 #[derive(Clone)]
 pub struct Mir {
-    code: Vec<Instruction>,
-    consts: Vec<f64>,
-    fastmath: bool,
+    pub code: Vec<Instruction>,
+    pub consts: Vec<f64>,
+    pub opt_level: u8,
+    pub fastmath: bool,
 }
 
 impl fmt::Debug for Mir {
@@ -136,10 +132,11 @@ impl fmt::Debug for Mir {
 }
 
 impl Mir {
-    pub fn new(fastmath: bool) -> Mir {
+    pub fn new(opt_level: u8, fastmath: bool) -> Mir {
         Mir {
             code: Vec::new(),
             consts: Vec::new(),
+            opt_level,
             fastmath,
         }
     }
@@ -148,34 +145,28 @@ impl Mir {
         self.code.push(ins)
     }
 
-    fn get_dst(ins: &Instruction) -> (Option<u8>, Option<u8>) {
+    pub fn get_dst(ins: &Instruction) -> Option<u8> {
         match *ins {
             Instruction::Uni {
                 dst: Reg::Gen(r), ..
-            } => (Some(r), None),
+            } => Some(r),
             Instruction::Bi {
                 dst: Reg::Gen(r), ..
-            } => (Some(r), None),
+            } => Some(r),
             Instruction::Mov {
                 dst: Reg::Gen(r), ..
-            } => (Some(r), None),
-            Instruction::Xchg {
-                s1: Reg::Gen(r1),
-                s2: Reg::Gen(r2),
-            } => (Some(r1), Some(r2)),
+            } => Some(r),
             Instruction::Load {
                 dst: Reg::Gen(r), ..
-            } => (Some(r), None),
-            Instruction::Save {
-                dst: Reg::Gen(r), ..
-            } => (Some(r), None),
+            } => Some(r),
             Instruction::LoadConst {
                 dst: Reg::Gen(r), ..
-            } => (Some(r), None),
+            } => Some(r),
             Instruction::Fused {
                 dst: Reg::Gen(r), ..
-            } => (Some(r), None),
-            _ => (None, None),
+            } => Some(r),
+            Instruction::Save { .. } => None,
+            _ => None,
         }
     }
 
@@ -183,14 +174,10 @@ impl Mir {
         let mut mask: u32 = 0;
 
         for ins in self.code.iter() {
-            let (r1, r2) = Self::get_dst(ins);
+            let r = Self::get_dst(ins);
 
-            if r1.is_some() {
-                mask |= 1 << r1.unwrap();
-            }
-
-            if r2.is_some() {
-                mask |= 1 << r2.unwrap();
+            if r.is_some() {
+                mask |= 1 << r.unwrap();
             }
         }
 
@@ -203,60 +190,6 @@ impl Mir {
         }
 
         used
-    }
-
-    pub fn cache_loads(&mut self) {
-        let mut v: Vec<Instruction> = Vec::new();
-        let mut p: Vec<Loc> = vec![Loc::Nowhere; COUNT_SCRATCH as usize];
-
-        for ins in self.code.iter() {
-            let mut b = true;
-
-            if let Instruction::Load { dst, loc } = *ins {
-                if let Reg::Gen(r) = dst {
-                    if p[r as usize] == loc {
-                        b = false;
-                    } else {
-                        let k = p.iter().position(|l| *l == loc);
-                        if k.is_some() {
-                            let s1 = Reg::Gen(k.unwrap() as u8);
-                            v.push(Instruction::Mov { dst, s1 });
-                            b = false;
-                        }
-                        p[r as usize] = loc;
-                    }
-                }
-            } else if let Instruction::Save { loc, .. } = *ins {
-                for i in 0..COUNT_SCRATCH {
-                    if p[i as usize] == loc {
-                        p[i as usize] = Loc::Nowhere;
-                    }
-                }
-            } else if let Instruction::Call { .. } = *ins {
-                for i in 0..COUNT_SCRATCH {
-                    p[i as usize] = Loc::Nowhere;
-                }
-            } else {
-                let (r1, r2) = Self::get_dst(ins);
-
-                if r1.is_some() {
-                    p[r1.unwrap() as usize] = Loc::Nowhere;
-                }
-
-                if r2.is_some() {
-                    p[r2.unwrap() as usize] = Loc::Nowhere;
-                }
-            }
-
-            if b {
-                v.push(ins.clone());
-            };
-        }
-
-        // println!("{:#?}", self.code);
-        // println!("-------------------------------");
-        // println!("{:#?}", v);
-        self.code = v;
     }
 }
 
@@ -277,8 +210,9 @@ impl Mir {
         self.push(Instruction::Mov { dst, s1 });
     }
 
-    pub fn fxchg(&mut self, s1: Reg, s2: Reg) {
-        self.push(Instruction::Xchg { s1, s2 });
+    pub fn fxchg(&mut self, _s1: Reg, _s2: Reg) {
+        panic!("xchg not defined for IR");
+        // self.push(Instruction::Xchg { s1, s2 });
     }
 
     pub fn load_const(&mut self, dst: Reg, idx: u32) {
@@ -292,9 +226,9 @@ impl Mir {
         });
     }
 
-    pub fn save_mem(&mut self, dst: Reg, idx: u32) {
+    pub fn save_mem(&mut self, src: Reg, idx: u32) {
         self.push(Instruction::Save {
-            dst,
+            src,
             loc: Loc::Mem(idx),
         });
     }
@@ -313,9 +247,9 @@ impl Mir {
         });
     }
 
-    pub fn save_stack(&mut self, dst: Reg, idx: u32) {
+    pub fn save_stack(&mut self, src: Reg, idx: u32) {
         self.push(Instruction::Save {
-            dst,
+            src,
             loc: Loc::Stack(idx),
         });
     }
@@ -680,6 +614,7 @@ impl Mir {
             Reg::Ret | Reg::Left => regs[0],
             Reg::Temp | Reg::Right => regs[1],
             Reg::Gen(r) => regs[r as usize + 2],
+            Reg::Static(..) => todo!(),
         }
     }
 
@@ -694,6 +629,7 @@ impl Mir {
             Reg::Gen(r) => {
                 regs[r as usize + 2] = val;
             }
+            Reg::Static(..) => todo!(),
         }
     }
 
@@ -774,12 +710,6 @@ impl Mir {
                     let x = Self::get(regs, *s1);
                     Self::set(regs, *dst, x);
                 }
-                Instruction::Xchg { s1, s2 } => {
-                    let x1 = Self::get(regs, *s1);
-                    let x2 = Self::get(regs, *s2);
-                    Self::set(regs, *s1, x2);
-                    Self::set(regs, *s2, x1);
-                }
                 Instruction::Load { dst, loc } => {
                     let val = match loc {
                         Loc::Mem(idx) => mem[*idx as usize],
@@ -789,8 +719,8 @@ impl Mir {
                     };
                     Self::set(regs, *dst, val);
                 }
-                Instruction::Save { dst, loc } => {
-                    let val = Self::get(regs, *dst);
+                Instruction::Save { src, loc } => {
+                    let val = Self::get(regs, *src);
                     match loc {
                         Loc::Mem(idx) => {
                             mem[*idx as usize] = val;
@@ -872,11 +802,6 @@ impl Mir {
                         ir.fmov(*dst, *s1);
                     }
                 }
-                Instruction::Xchg { s1, s2 } => {
-                    if *s1 != *s2 {
-                        ir.fxchg(*s1, *s2);
-                    }
-                }
                 Instruction::Load { dst, loc } => {
                     match loc {
                         Loc::Mem(idx) => ir.load_mem(*dst, *idx),
@@ -885,10 +810,10 @@ impl Mir {
                         Loc::Nowhere => unreachable!(),
                     };
                 }
-                Instruction::Save { dst, loc } => {
+                Instruction::Save { src, loc } => {
                     match loc {
-                        Loc::Mem(idx) => ir.save_mem(*dst, *idx),
-                        Loc::Stack(idx) => ir.save_stack(*dst, *idx),
+                        Loc::Mem(idx) => ir.save_mem(*src, *idx),
+                        Loc::Stack(idx) => ir.save_stack(*src, *idx),
                         Loc::Param(_) => unreachable!(),
                         Loc::Nowhere => unreachable!(),
                     };
@@ -1020,13 +945,13 @@ impl Mir {
          */
         if let Instruction::Mov { dst, s1 } = *q0 {
             if let Instruction::Save {
-                dst: dst_q1,
+                src: dst_q1,
                 loc: loc_q1,
             } = *q1
             {
                 if dst == dst_q1 {
                     code.push(Instruction::Save {
-                        dst: s1,
+                        src: s1,
                         loc: loc_q1,
                     });
                     return true;
@@ -1045,7 +970,7 @@ impl Mir {
          * note that if we know that Stack[6] is not accessed again, we can remove the
          * first instruction, but this is not yet implemented.
          */
-        if let Instruction::Save { dst, loc } = *q0 {
+        if let Instruction::Save { src, loc } = *q0 {
             if let Instruction::Load {
                 dst: dst_q1,
                 loc: loc_q1,
@@ -1055,7 +980,7 @@ impl Mir {
                     code.push(q0.clone());
                     code.push(Instruction::Mov {
                         dst: dst_q1,
-                        s1: dst,
+                        s1: src,
                     });
                     return true;
                 }
@@ -1083,20 +1008,20 @@ impl Mir {
          *      call sin
          *      Mem[5] = %$
          */
-        if let Instruction::Save { dst, loc } = *q0 {
+        if let Instruction::Save { src, loc } = *q0 {
             if let Instruction::Load {
                 dst: dst_q1,
                 loc: loc_q1,
             } = *q1
             {
                 if let Instruction::Save {
-                    dst: dst_q2,
+                    src: dst_q2,
                     loc: loc_q2,
                 } = *q2
                 {
-                    if dst == Reg::Ret && loc == loc_q1 && dst_q1 == dst_q2 {
+                    if src == Reg::Ret && loc == loc_q1 && dst_q1 == dst_q2 {
                         code.push(Instruction::Save {
-                            dst: Reg::Ret,
+                            src: Reg::Ret,
                             loc: loc_q2,
                         });
                         return true;

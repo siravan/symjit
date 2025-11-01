@@ -25,6 +25,7 @@ fn ϕ(r: Reg) -> u8 {
         Reg::Left => 0,
         Reg::Right => 1,
         Reg::Gen(dst) => dst + 2,
+        Reg::Static(..) => panic!("passing static registers to codegen"),
     }
 }
 
