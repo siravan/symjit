@@ -1,0 +1,62 @@
+x;u;0
+(1//2)*(x^2);u**2/2;0
+(1//18)*(x^18);u**18/18;0
+4x;4*u;0
+1 / x;1/u;0
+1 / (2 + x);1/(u + 2);0
+1 / (0.9092974268256817 + x);1/(u + 0.909297426825682);0
+(5(x^5)) / (-5 + 2(x^6));5*u**5/(2*u**6 - 5);0
+(5(x^5)) / (5 + 2(x^6));5*u**5/(2*u**6 + 5);0
+1 / (x^2);u**(-2);0
+-1 / (x^5);-1/u**5;0
+log(x);log(u);0
+log(3x);log(3*u);0
+log(x^2);log(u**2);0
+exp(x);exp(u);0
+exp(-x);exp(-u);0
+exp(17x);exp(17*u);0
+x*exp(x);u*exp(u);0
+x*exp(x^2);u*exp(u**2);0
+exp(-(x^2));exp(-u**2);0
+2^x;2**u;0
+x*(2^x);2**u*u;0
+sin(x);sin(u);0
+cos(x);cos(u);0
+tan(x);tan(u);0
+0.9974949866040544sin(x);0.997494986604054*sin(u);0
+sin(x)*cos(x);sin(u)*cos(u);0
+cos(x) / sin(x);cos(u)/sin(u);0
+x*sin(7x);u*sin(7*u);0
+(x^2)*cos(x);u**2*cos(u);0
+asin((1//4)*x)*acos((1//4)*x);acos(u/4)*asin(u/4);0
+sin(x) / (1 + cos(x)^2);sin(u)/(cos(u)**2 + 1);0
+1 / (2 + cos(x));1/(cos(u) + 2);0
+(2sin(x)*cos(x)) / (1 + sin(x)^4);2*sin(u)*cos(u)/(sin(u)**4 + 1);0
+1 / cosh(x);1/cosh(u);0
+sinh(x);sinh(u);0
+cosh(x);cosh(u);0
+x*sinh(x);u*sinh(u);0
+x*cosh(x);u*cosh(u);0
+x*asinh((1//2)*x);u*asinh(u/2);0
+sin(x)*exp(x);exp(u)*sin(u);0
+sin(x / sqrt(-x));sin(u/sqrt(-u));0
+1 / sqrt(x);1/sqrt(u);0
+1 / (sqrt(x)^3);u**(-3/2);0
+sqrt(x)^3;u**(3/2);0
+sin(x)*sqrt(cos(x));sin(u)*sqrt(cos(u));0
+sin(2sqrt(x));sin(2*sqrt(u));0
+SpecialFunctions.erf(x);erf(u);0
+1 / (5 + x);1/(u + 5);0
+1 / (1.4142135623730951 + x);1/(u + 1.4142135623731);0
+sqrt(1 + 7(x^2));sqrt(7*u**2 + 1);0
+sqrt(1 - 7(x^2));sqrt(1 - 7*u**2);0
+1 / sqrt(1 + 7(x^2));1/sqrt(7*u**2 + 1);0
+1 / sqrt(1 - 7(x^2));1/sqrt(1 - 7*u**2);0
+exp(-7(x^2));exp(-7*u**2);0
+1 / sqrt(9 - 4(x^2));1/sqrt(9 - 4*u**2);0
+1 / sqrt(9 + 4(x^2));1/sqrt(4*u**2 + 9);0
+1 / sqrt(-4 + 3(x^2));1/sqrt(3*u**2 - 4);0
+1 / (x*(1 + log(x)^2));1/(u*(log(u)**2 + 1));0
+tan(x) + (x - tan(x)) / (tan(x)^2);(u - tan(u))/tan(u)**2 + tan(u);0
+((-1 + x + log(x) + exp(x))*(1 + x + x*exp(x))) / (x*((x + log(x) + exp(x))^2));(u*exp(u) + u + 1)*(u + exp(u) + log(u) - 1)/(u*(u + exp(u) + log(u))**2);0
+(exp(-(x^2))*SpecialFunctions.erf(x)) / (1 - SpecialFunctions.erf(x) - (SpecialFunctions.erf(x)^2) + SpecialFunctions.erf(x)^3);exp(-u**2)*erf(u)/(erf(u)**3 - erf(u)**2 - erf(u) + 1);0
