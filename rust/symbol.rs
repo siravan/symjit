@@ -6,7 +6,6 @@ use std::rc::Rc;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Loc {
-    Nowhere,
     Stack(u32),
     Mem(u32),
     Param(u32),
@@ -18,7 +17,6 @@ impl fmt::Debug for Loc {
             Loc::Mem(idx) => write!(f, "Mem[{}]", idx),
             Loc::Stack(idx) => write!(f, "Stack[{}]", idx),
             Loc::Param(idx) => write!(f, "Param[{}]", idx),
-            Loc::Nowhere => write!(f, "Nowhere!"),
         }
     }
 }
@@ -37,7 +35,6 @@ impl fmt::Debug for Symbol {
             Loc::Stack(idx) => write!(f, "{} in Stack[{}]", self._name, idx),
             Loc::Param(idx) => write!(f, "{} in Param[{}]", self._name, idx),
             Loc::Mem(idx) => write!(f, "{} in Mem[{}]", self._name, idx),
-            Loc::Nowhere => write!(f, "{} in Nowhere]", self._name),
         }
     }
 }

@@ -61,12 +61,12 @@ impl Allocator {
         // allocate registers using a coloring algorithm and
         // replace the static registers with the corresponding
         // logical (colored) registers
-        let count_colors = allocator.color();
+        let res = allocator.color();
 
-        if count_colors <= COUNT_SCRATCH as usize {
+        if res.is_ok() {
             mir.code = allocator.code;
         } else {
-            println!("Level 2 register allocator requests too many registers ({}), will revert back to level 1.", count_colors);
+            println!("Level 2 register allocator requests too many registers ({}), will revert back to level 1.", res.unwrap_err());
         }
     }
 
@@ -242,8 +242,12 @@ impl Allocator {
         }
     }
 
-    fn color(&mut self) -> usize {
+    fn color(&mut self) -> Result<(), usize> {
         let (coloring, count_colors) = dsatur_coloring(&self.graph);
+
+        if count_colors > COUNT_SCRATCH as usize {
+            return Err(count_colors);
+        }
 
         for (idx, r) in coloring.iter() {
             self.graph[*idx].reg = Reg::Gen(*r as u8);
@@ -302,6 +306,6 @@ impl Allocator {
             }
         }
 
-        count_colors
+        Ok(())
     }
 }

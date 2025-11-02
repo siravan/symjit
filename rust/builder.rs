@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 
-use crate::allocator::{self, Allocator};
+use crate::allocator::Allocator;
 use crate::block::Block;
 use crate::code::{Func, VirtualTable};
 use crate::generator::Generator;

@@ -715,7 +715,6 @@ impl Mir {
                         Loc::Mem(idx) => mem[*idx as usize],
                         Loc::Stack(idx) => stack[*idx as usize],
                         Loc::Param(idx) => params[*idx as usize],
-                        Loc::Nowhere => unreachable!(),
                     };
                     Self::set(regs, *dst, val);
                 }
@@ -731,7 +730,6 @@ impl Mir {
                         Loc::Param(_) => {
                             unreachable!()
                         }
-                        Loc::Nowhere => unreachable!(),
                     };
                 }
                 Instruction::LoadConst { dst, idx } => {
@@ -807,7 +805,6 @@ impl Mir {
                         Loc::Mem(idx) => ir.load_mem(*dst, *idx),
                         Loc::Stack(idx) => ir.load_stack(*dst, *idx),
                         Loc::Param(idx) => ir.load_param(*dst, *idx),
-                        Loc::Nowhere => unreachable!(),
                     };
                 }
                 Instruction::Save { src, loc } => {
@@ -815,7 +812,6 @@ impl Mir {
                         Loc::Mem(idx) => ir.save_mem(*src, *idx),
                         Loc::Stack(idx) => ir.save_stack(*src, *idx),
                         Loc::Param(_) => unreachable!(),
-                        Loc::Nowhere => unreachable!(),
                     };
                 }
                 Instruction::LoadConst { dst, idx } => {

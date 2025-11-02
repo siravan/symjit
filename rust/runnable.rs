@@ -511,14 +511,11 @@ impl Debugger {
         // because of different operation order
         if p.iter().zip(q).any(|(x, y)| !(f64::abs(*x - *y) < 1e-6)) {
             for (key, sym) in self.builder.block.sym_table.syms.iter() {
-                match sym.borrow().loc {
-                    Loc::Mem(idx) => {
-                        let a = p[idx as usize];
-                        let b = q[idx as usize];
-                        let eq = if a == b { "pass" } else { "fail" };
-                        println!("{:14.8} {:14.8} {} -> \t{}", a, b, eq, key);
-                    }
-                    _ => {}
+                if let Loc::Mem(idx) = sym.borrow().loc {
+                    let a = p[idx as usize];
+                    let b = q[idx as usize];
+                    let eq = if a == b { "pass" } else { "fail" };
+                    println!("{:14.8} {:14.8} {} -> \t{}", a, b, eq, key);
                 }
             }
             panic!("discrepencies detected!");
