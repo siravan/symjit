@@ -9,6 +9,10 @@ The Rust backend supports different optimization and parallelization methods, wh
 
 Note that SIMD and multi-threading optimizations only apply to vectorized calls, but common-subexpression elimination applies to both scalar and vectorized operations.
 
+## Optimization Level
+
+In version 2.6, the `opt_level` option is added to various `compile_*` functions. `opt_level` accepts a value of 0, 1, or 2. The default is 1.     Broadly, the levels are parallel to -O0, -O1, -O2 options in gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization. Level-2 uses an improved graph-coloring algorithm for better register allocation. However, level-2 may fail with a warning and revert back to level-1.
+
 ## Fast Functions
 
 The result of different `compile` functions is a Python object, say `f`, that encapsulates the underlying compiled code. When we call `f(...)`,  `f.__call__` is called with the arguments. Then, `__call__` checks the type of arguments (scalar vs. vector), packages the inputs accordingly, calls the correct compiled routine via the respective Rust routines, and finally, formats the return values. All these actions have an overhead. The overhead is acceptable if the compiled function is large and complex, but it becomes relatively too expensive if the function is simple and lightweight. In this situation, it is faster to call the underlying compiled code directly. If the following conditions hold, it is possible to do so:

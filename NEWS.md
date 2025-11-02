@@ -1,3 +1,10 @@
+# Version 2.6.0
+
+* `flush()` removed and replaced with `used_registers` in the preamble code.
+* Alignment fixed before writing constants.
+* Level-2 optimization with improved graph coloring algorithm added.
+* `opt_level` argument added to compile functions.
+
 # Version 2.5.1
 
 * Sympy constants accepted (is_number).

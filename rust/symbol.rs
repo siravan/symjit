@@ -4,7 +4,7 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
-#[derive(Clone, Copy, PartialEq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Loc {
     Nowhere,
     Stack(u32),

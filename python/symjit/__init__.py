@@ -252,6 +252,9 @@ def compile_func(
         on numpy arrays.
     cse (default True): performs common-subexpression elimination.
     fastmath (default False): use fastmath floating point operations, especially fused multiply-addition.
+    opt_level (default 1): optimization level (0, 1, or 2). Broadly the numbers are parallel to -O0, -O1, -O2
+        options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
+        Level-2 uses an improved graph-coloring algorithm for better register allocation.
 
     ==> returns a Func object, is a callable object `f` with signature `f(x_1,...,x_n,p_1,...,p_m)`,
         where `x`s are the state variables and `p`s are the parameters.
@@ -317,6 +320,10 @@ def compile_ode(
     use_threads (default True): use multi-threading to speed up parallel operations when called
         on numpy arrays.
     cse (default True): performs common-subexpression elimination.
+    fastmath (default False): use fastmath floating point operations, especially fused multiply-addition.
+    opt_level (default 1): optimization level (0, 1, or 2). Broadly the numbers are parallel to -O0, -O1, -O2
+        options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
+        Level-2 uses an improved graph-coloring algorithm for better register allocation.
 
     Note that compile_ode accepts use_simd and use_threads but in practice ingores them,
         because compile_ode is usually called on scalars only.
@@ -385,6 +392,10 @@ def compile_jac(
         use_threads (default True): use multi-threading to speed up parallel operations when called
             on numpy arrays.
         cse (default True): performs common-subexpression elimination.
+        fastmath (default False): use fastmath floating point operations, especially fused multiply-addition.
+        opt_level (default 1): optimization level (0, 1, or 2). Broadly the numbers are parallel to -O0, -O1, -O2
+            options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
+            Level-2 uses an improved graph-coloring algorithm for better register allocation.
 
         Note that similar to compile_ode, compile_jac accepts use_simd and use_threads but in
             practice ingores them, because compile_ode is usually called on scalars only.

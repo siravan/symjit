@@ -303,6 +303,7 @@ def test_model(f, label, pyback=True, bytecode=True):
         "use_simd": True,
         "use_threads": True,
         "cse": True,
+        "opt_level": 1,
     }
 
     print("\tlambdify.......\t", end="")

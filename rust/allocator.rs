@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 use petgraph::algo::coloring::dsatur_coloring;
@@ -19,7 +20,9 @@ struct Vertex {
 #[derive(Clone)]
 pub struct Allocator {
     pub code: Vec<Instruction>,
-    regs: Vec<(Reg, Loc)>,
+    regs: Vec<Reg>,
+    locs: HashMap<Loc, Reg>,
+    loads: HashSet<Loc>,
     count_statics: u32,
     graph: UnGraph<Vertex, ()>,
 }
@@ -41,9 +44,11 @@ impl Allocator {
     pub fn optimize(mir: &mut Mir) {
         let mut allocator = Allocator {
             code: Vec::new(),
-            regs: vec![(Reg::Ret, Loc::Nowhere); COUNT_SCRATCH as usize],
+            regs: vec![Reg::Ret; COUNT_SCRATCH as usize],
             count_statics: 0,
             graph: UnGraph::new_undirected(),
+            locs: HashMap::new(),
+            loads: HashSet::new(),
         };
 
         // create single-static-assignment form
@@ -56,9 +61,13 @@ impl Allocator {
         // allocate registers using a coloring algorithm and
         // replace the static registers with the corresponding
         // logical (colored) registers
-        allocator.color();
+        let count_colors = allocator.color();
 
-        mir.code = allocator.code;
+        if count_colors <= COUNT_SCRATCH as usize {
+            mir.code = allocator.code;
+        } else {
+            println!("Level 2 register allocator requests too many registers ({}), will revert back to level 1.", count_colors);
+        }
     }
 
     fn push(&mut self, ins: Instruction) {
@@ -71,7 +80,8 @@ impl Allocator {
 
     // resets cache on call boundaries to account for cobbled registers
     fn reset(&mut self) {
-        self.regs = vec![(Reg::Ret, Loc::Nowhere); COUNT_SCRATCH as usize];
+        self.regs = vec![Reg::Ret; COUNT_SCRATCH as usize];
+        self.locs.clear();
     }
 
     fn overlap(&self, idx1: NodeIndex, idx2: NodeIndex) -> bool {
@@ -112,7 +122,7 @@ impl Allocator {
     // be used afterward
     fn consume_static(&mut self, src: Reg) -> Reg {
         if let Reg::Gen(r) = src {
-            let (s, _) = self.regs[r as usize];
+            let s = self.regs[r as usize];
             if let Reg::Static(k) = s {
                 self.graph[NodeIndex::new(k as usize)].end = self.ip();
             };
@@ -126,7 +136,7 @@ impl Allocator {
     fn subs_dst(&mut self, dst: Reg) -> Reg {
         if let Reg::Gen(r) = dst {
             let s = self.create_static();
-            self.regs[r as usize] = (s, Loc::Nowhere);
+            self.regs[r as usize] = s;
             s
         } else {
             dst
@@ -158,16 +168,28 @@ impl Allocator {
         if let Reg::Gen(r) = dst {
             // if the desired location is already in a static reg, we just
             // use this reg
-            if let Some(k) = self.regs.iter().position(|(_, l)| *l == loc) {
-                self.regs[r as usize] = self.regs[k];
+            if let Some(dst) = self.locs.get(&loc) {
+                self.regs[r as usize] = *dst;
                 return;
             } else {
                 let dst = self.create_static();
-                self.regs[r as usize] = (dst, loc);
+                self.regs[r as usize] = dst;
+                self.locs.insert(loc, dst);
                 self.push(Instruction::Load { dst, loc });
             };
         } else {
             self.push(Instruction::Load { dst, loc });
+        }
+
+        self.loads.insert(loc);
+    }
+
+    fn save(&mut self, src: Reg, loc: Loc) {
+        let src = self.consume_static(src);
+        self.push(Instruction::Save { src, loc });
+
+        if let Reg::Static(..) = src {
+            self.locs.insert(loc, src);
         }
     }
 
@@ -191,8 +213,7 @@ impl Allocator {
                     self.load(dst, loc);
                 }
                 Instruction::Save { src, loc } => {
-                    let src = self.consume_static(src);
-                    self.push(Instruction::Save { src, loc });
+                    self.save(src, loc);
                 }
                 Instruction::Mov { dst, s1 } => {
                     let (dst, s1) = self.subs_uni(dst, s1);
@@ -253,10 +274,14 @@ impl Allocator {
                     dst: self.alloc(dst),
                     loc,
                 }),
-                Instruction::Save { src, loc } => self.push(Instruction::Save {
-                    src: self.alloc(src),
-                    loc,
-                }),
+                Instruction::Save { src, loc } => {
+                    if !matches!(loc, Loc::Stack(..)) || self.loads.contains(&loc) {
+                        self.push(Instruction::Save {
+                            src: self.alloc(src),
+                            loc,
+                        })
+                    }
+                }
                 Instruction::Mov { dst, s1 } => self.push(Instruction::Mov {
                     dst: self.alloc(dst),
                     s1: self.alloc(s1),
