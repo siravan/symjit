@@ -11,7 +11,7 @@ Note that SIMD and multi-threading optimizations only apply to vectorized calls,
 
 ## Optimization Level
 
-In version 2.6, the `opt_level` option is added to various `compile_*` functions. `opt_level` accepts a value of 0, 1, or 2. The default is 1.     Broadly, the levels are parallel to -O0, -O1, -O2 options in gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization. Level-2 uses an improved graph-coloring algorithm for better register allocation. However, level-2 may fail with a warning and revert back to level-1.
+In version 2.6, the `opt_level` option is added to `compile_*` functions. `opt_level` accepts a value of 0, 1, or 2. The default is 1. Broadly, the levels are parallel to -O0, -O1, -O2 options in gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does basic optimization, such as caching and peephole optimization. Level-2 uses an improved graph-coloring algorithm (based on petgraph crate) for better register allocation. However, level-2 may fail with a warning and revert back to level-1.
 
 ## Fast Functions
 
