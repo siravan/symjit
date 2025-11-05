@@ -210,30 +210,16 @@ impl Builder {
     }
 
     fn save_registers(mir: &Mir, ir: &mut impl Generator) {
-        let count_shadows = ir.count_shadows();
-        if count_shadows == COUNT_SCRATCH {
-            return;
-        }
-        let used = mir.used_registers();
-
-        for r in used {
-            if r >= count_shadows {
-                ir.save_stack(reg(r), r as u32);
-            }
+        if ir.count_shadows() < COUNT_SCRATCH {
+            let used = mir.used_registers();
+            ir.save_used_registers(&used);
         }
     }
 
     fn restore_registers(mir: &Mir, ir: &mut impl Generator) {
-        let count_shadows = ir.count_shadows();
-        if count_shadows == COUNT_SCRATCH {
-            return;
-        }
-        let used = mir.used_registers();
-
-        for r in used {
-            if r >= count_shadows {
-                ir.load_stack(reg(r), r as u32);
-            }
+        if ir.count_shadows() < COUNT_SCRATCH {
+            let used = mir.used_registers();
+            ir.load_used_registers(&used);
         }
     }
 

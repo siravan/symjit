@@ -17,7 +17,7 @@ pub struct Amd {
 impl Amd {
     pub fn new(dtype: DataType) -> Amd {
         Amd {
-            a: Assembler::new(-4, 0),
+            a: Assembler::new(|x| (x - 4) as u32),
             dtype,
         }
     }

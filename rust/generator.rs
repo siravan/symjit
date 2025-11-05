@@ -65,4 +65,7 @@ pub trait Generator {
 
     fn prologue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize);
     fn epilogue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize);
+
+    fn save_used_registers(&mut self, used: &[u8]);
+    fn load_used_registers(&mut self, used: &[u8]);
 }

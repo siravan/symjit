@@ -1,21 +1,21 @@
 use std::collections::HashMap;
 
+pub type Jumper = fn(x: i32) -> u32;
+
 pub struct Assembler {
     pub buf: Vec<u8>,
     labels: HashMap<String, usize>,
     jumps: Vec<(String, usize, u32)>,
-    delta: isize,
-    shift: isize,
+    f: Jumper,
 }
 
 impl Assembler {
-    pub fn new(delta: isize, shift: isize) -> Assembler {
+    pub fn new(f: Jumper) -> Assembler {
         Assembler {
             buf: Vec::new(),
             labels: HashMap::new(),
             jumps: Vec::new(),
-            delta,
-            shift,
+            f,
         }
     }
 
@@ -65,7 +65,7 @@ impl Assembler {
     pub fn apply_jumps(&mut self) {
         for (label, k, code) in self.jumps.iter() {
             let target = self.labels.get(label).expect("label not found");
-            let offset = (*target as isize) - (*k as isize) + self.delta;
+            let offset = (*target as i32) - (*k as i32);
 
             // TODO: we need a better place for this check
             // assembler is supposed to be arch agnostic
@@ -75,7 +75,7 @@ impl Assembler {
                 "the code segment is too large!"
             );
 
-            let x = ((offset as u32) << self.shift) | *code;
+            let x = (self.f)(offset) | *code;
 
             self.buf[*k] |= (x & 0xff) as u8;
             self.buf[*k + 1] |= ((x >> 8) & 0xff) as u8;

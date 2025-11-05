@@ -1,6 +1,6 @@
 use crate::generator::Generator;
 use crate::utils::align_stack;
-use crate::utils::{DataType, Reg};
+use crate::utils::{reg, DataType, Reg};
 
 mod asm;
 mod fused;
@@ -819,5 +819,25 @@ impl Generator for AmdGenerator {
         self.amd.mov_reg_mem(MEM, Amd::RSP, 0x08);
         self.amd.ret();
         self.predefined_consts();
+    }
+
+    fn save_used_registers(&mut self, used: &[u8]) {
+        let count_shadows = self.count_shadows();
+
+        for r in used {
+            if *r >= count_shadows {
+                self.save_stack(reg(*r), *r as u32);
+            }
+        }
+    }
+
+    fn load_used_registers(&mut self, used: &[u8]) {
+        let count_shadows = self.count_shadows();
+
+        for r in used {
+            if *r >= count_shadows {
+                self.load_stack(reg(*r), *r as u32);
+            }
+        }
     }
 }
