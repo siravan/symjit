@@ -32,7 +32,7 @@ fn ϕ(r: Reg) -> u8 {
 impl ArmGenerator {
     pub fn new() -> ArmGenerator {
         ArmGenerator {
-            a: Assembler::new(|x| (x << 3) as u32),
+            a: Assembler::new(),
         }
     }
 
@@ -49,7 +49,7 @@ impl ArmGenerator {
     }
 
     fn jump(&mut self, label: &str, code: u32) {
-        self.a.jump(label, code)
+        self.a.jump(label, code, |x| (x << 3) as u32);
     }
 
     fn apply_jumps(&mut self) {

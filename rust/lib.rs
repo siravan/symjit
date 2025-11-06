@@ -24,6 +24,7 @@ mod symbol;
 
 mod amd;
 mod arm;
+mod riscv64;
 
 use matrix::Matrix;
 use model::{CellModel, Program};
@@ -114,6 +115,7 @@ pub unsafe extern "C" fn compile(
     let func = match ty {
         "bytecode" => Runnable::new(prog, CompilerType::ByteCode, opt),
         "arm" => Runnable::new(prog, CompilerType::Arm, opt),
+        "riscv" => Runnable::new(prog, CompilerType::RiscV, opt),
         "amd" => Runnable::new(prog, CompilerType::Amd, opt),
         "amd-avx" => Runnable::new(prog, CompilerType::AmdAVX, opt),
         "amd-sse" => Runnable::new(prog, CompilerType::AmdSSE, opt),

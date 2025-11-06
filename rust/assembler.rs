@@ -5,17 +5,15 @@ pub type Jumper = fn(x: i32) -> u32;
 pub struct Assembler {
     pub buf: Vec<u8>,
     labels: HashMap<String, usize>,
-    jumps: Vec<(String, usize, u32)>,
-    f: Jumper,
+    jumps: Vec<(String, usize, u32, Jumper)>,
 }
 
 impl Assembler {
-    pub fn new(f: Jumper) -> Assembler {
+    pub fn new() -> Assembler {
         Assembler {
             buf: Vec::new(),
             labels: HashMap::new(),
             jumps: Vec::new(),
-            f,
         }
     }
 
@@ -57,15 +55,15 @@ impl Assembler {
         self.labels.insert(label.to_string(), self.ip());
     }
 
-    pub fn jump(&mut self, label: &str, code: u32) {
-        self.jumps.push((label.to_string(), self.ip(), code));
-        self.append_word(code);
+    pub fn jump(&mut self, label: &str, code: u32, f: Jumper) {
+        self.jumps.push((label.to_string(), self.ip(), code, f));
+        self.append_word(0);
     }
 
     pub fn apply_jumps(&mut self) {
-        for (label, k, code) in self.jumps.iter() {
+        for (label, ip, code, f) in self.jumps.iter() {
             let target = self.labels.get(label).expect("label not found");
-            let offset = (*target as i32) - (*k as i32);
+            let offset = (*target as i32) - (*ip as i32);
 
             // TODO: we need a better place for this check
             // assembler is supposed to be arch agnostic
@@ -75,12 +73,12 @@ impl Assembler {
                 "the code segment is too large!"
             );
 
-            let x = (self.f)(offset) | *code;
+            let x = f(offset) | code;
 
-            self.buf[*k] |= (x & 0xff) as u8;
-            self.buf[*k + 1] |= ((x >> 8) & 0xff) as u8;
-            self.buf[*k + 2] |= ((x >> 16) & 0xff) as u8;
-            self.buf[*k + 3] |= ((x >> 24) & 0xff) as u8;
+            self.buf[*ip] |= (x & 0xff) as u8;
+            self.buf[*ip + 1] |= ((x >> 8) & 0xff) as u8;
+            self.buf[*ip + 2] |= ((x >> 16) & 0xff) as u8;
+            self.buf[*ip + 3] |= ((x >> 24) & 0xff) as u8;
         }
     }
 }

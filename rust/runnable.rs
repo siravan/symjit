@@ -8,6 +8,7 @@ use crate::machine::MachineCode;
 use crate::matrix::{combine_matrixes, Matrix};
 use crate::mir::{CompiledMir, Mir};
 use crate::model::Program;
+use crate::riscv64::RiscVGenerator;
 use crate::symbol::Loc;
 use crate::{utils::*, OPT_LEVEL_MASK, OPT_LEVEL_SHIFT};
 use crate::{FASTMATH, USE_SIMD, USE_THREADS};
@@ -22,6 +23,7 @@ pub enum CompilerType {
     AmdAVX,
     AmdSSE,
     Arm,
+    RiscV,
     Debug,
 }
 
@@ -29,24 +31,19 @@ pub struct Platform;
 
 impl Platform {
     pub fn is_amd64() -> bool {
-        #[cfg(target_arch = "x86_64")]
-        return true;
-        #[cfg(not(target_arch = "x86_64"))]
-        return false;
+        cfg!(target_arch = "x86_64")
     }
 
     pub fn is_arm64() -> bool {
-        #[cfg(target_arch = "aarch64")]
-        return true;
-        #[cfg(not(target_arch = "aarch64"))]
-        return false;
+        cfg!(target_arch = "aarch64")
+    }
+
+    pub fn is_riscv64() -> bool {
+        cfg!(target_arch = "riscv64")
     }
 
     pub fn has_avx() -> bool {
-        #[cfg(target_arch = "x86_64")]
-        return is_x86_feature_detected!("avx");
-        #[cfg(not(target_arch = "x86_64"))]
-        return false;
+        cfg!(target_arch = "x86_64") && is_x86_feature_detected!("avx")
     }
 }
 
@@ -101,6 +98,7 @@ impl Runnable {
             CompilerType::AmdAVX => Self::compile_avx(&mir, &mut prog, size)?,
             CompilerType::AmdSSE => Self::compile_sse(&mir, &mut prog, size)?,
             CompilerType::Arm => Self::compile_arm(&mir, &mut prog, size)?,
+            CompilerType::RiscV => Self::compile_riscv(&mir, &mut prog, size)?,
             CompilerType::Debug => Self::compile_debugger(&mir, &mut prog, size, true)?,
             _ => {
                 unreachable!()
@@ -208,6 +206,17 @@ impl Runnable {
         prog.builder
             .compile_from_mir(mir, &mut generator, prog.count_states, prog.count_obs)?;
         let code = MachineCode::new("aarch64", generator.bytes(), mem);
+        let compiled: Box<dyn Compiled<f64>> = Box::new(code);
+
+        Ok(compiled)
+    }
+
+    fn compile_riscv(mir: &Mir, prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
+        let mut generator = RiscVGenerator::new();
+        let mem: Vec<f64> = vec![0.0; size];
+        prog.builder
+            .compile_from_mir(mir, &mut generator, prog.count_states, prog.count_obs)?;
+        let code = MachineCode::new("riscv64", generator.bytes(), mem);
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
 
         Ok(compiled)

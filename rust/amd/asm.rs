@@ -17,7 +17,7 @@ pub struct Amd {
 impl Amd {
     pub fn new(dtype: DataType) -> Amd {
         Amd {
-            a: Assembler::new(|x| (x - 4) as u32),
+            a: Assembler::new(),
             dtype,
         }
     }
@@ -57,6 +57,10 @@ impl Amd {
 
     pub fn append_quad(&mut self, u: u64) {
         self.a.append_quad(u)
+    }
+
+    pub fn jump(&mut self, label: &str) {
+        self.a.jump(label, 0, |x| (x - 4) as u32);
     }
 
     pub fn modrm_reg(&mut self, reg: u8, rm: u8) {
@@ -246,7 +250,7 @@ impl Amd {
         self.append_byte(0x10);
         // modr/m byte with MOD=00 and R/M=101 (RIP-relative address)
         self.append_byte(5 | ((reg & 7) << 3));
-        self.a.jump(label, 0);
+        self.jump(label);
     }
 
     pub fn vmovsd_mem_xmm(&mut self, rm: u8, offset: i32, reg: u8) {
@@ -377,7 +381,7 @@ impl Amd {
         self.append_byte(0x19);
         // modr/m byte with MOD=00 and R/M=101 (RIP-relative address)
         self.append_byte(5 | ((reg & 7) << 3));
-        self.a.jump(label, 0);
+        self.jump(label);
     }
 
     pub fn vmovpd_ymm_mem(&mut self, reg: u8, rm: u8, offset: i32) {
@@ -397,7 +401,7 @@ impl Amd {
         self.append_byte(0x10);
         // modr/m byte with MOD=00 and R/M=101 (RIP-relative address)
         self.append_byte(5 | ((reg & 7) << 3));
-        self.a.jump(label, 0);
+        self.jump(label);
     }
 
     pub fn vmovpd_mem_ymm(&mut self, rm: u8, offset: i32, reg: u8) {
@@ -558,7 +562,7 @@ impl Amd {
         self.append_byte(0x10);
         // modr/m byte with MOD=00 and R/M=101 (RIP-relative address)
         self.append_byte(5 | ((reg & 7) << 3));
-        self.a.jump(label, 0);
+        self.jump(label);
     }
 
     pub fn movsd_mem_xmm(&mut self, rm: u8, offset: i32, reg: u8) {
@@ -724,7 +728,7 @@ impl Amd {
         self.append_byte(0x8b);
         // modr/m byte with MOD=00 and R/M=101 (RIP-relative address)
         self.append_byte(5 | ((reg & 7) << 3));
-        self.a.jump(label, 0);
+        self.jump(label);
     }
 
     pub fn mov_mem_reg(&mut self, rm: u8, offset: i32, reg: u8) {
@@ -750,7 +754,7 @@ impl Amd {
 
     pub fn call_indirect(&mut self, label: &str) {
         self.append_bytes(&[0xff, 0x15]);
-        self.a.jump(label, 0);
+        self.jump(label);
     }
 
     pub fn push(&mut self, reg: u8) {
@@ -822,24 +826,24 @@ impl Amd {
 
     pub fn jmp(&mut self, label: &str) {
         self.append_byte(0xe9);
-        self.a.jump(label, 0);
+        self.jump(label);
     }
 
     pub fn jz(&mut self, label: &str) {
         self.append_bytes(&[0x0f, 0x84]);
-        self.a.jump(label, 0);
+        self.jump(label);
     }
 
     pub fn jnz(&mut self, label: &str) {
         self.append_bytes(&[0x0f, 0x85]);
-        self.a.jump(label, 0);
+        self.jump(label);
     }
 
     pub fn jpe(&mut self, label: &str) {
         // jump if parity even is true if vucomisd returns
         // an unordered result
         self.append_bytes(&[0x0f, 0x8a]);
-        self.a.jump(label, 0);
+        self.jump(label);
     }
 
     pub fn nop(&mut self) {

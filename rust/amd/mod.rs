@@ -127,10 +127,6 @@ impl AmdGenerator {
         self.amd.a.set_label(label);
     }
 
-    fn jump(&mut self, label: &str, code: u32) {
-        self.amd.a.jump(label, code)
-    }
-
     fn apply_jumps(&mut self) {
         self.amd.a.apply_jumps();
     }
