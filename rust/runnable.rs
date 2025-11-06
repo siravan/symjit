@@ -43,7 +43,10 @@ impl Platform {
     }
 
     pub fn has_avx() -> bool {
-        cfg!(target_arch = "x86_64") && is_x86_feature_detected!("avx")
+        #[cfg(target_arch = "x86_64")]
+        return is_x86_feature_detected!("avx");
+        #[cfg(not(target_arch = "x86_64"))]
+        return false;
     }
 }
 
@@ -156,6 +159,8 @@ impl Runnable {
             Self::compile_sse(mir, prog, size)
         } else if Platform::is_arm64() {
             Self::compile_arm(mir, prog, size)
+        } else if Platform::is_riscv64() {
+            Self::compile_riscv(mir, prog, size)
         } else {
             println!("cpu not supported, falling back to bytecode.");
             Self::compile_bytecode(mir, prog, size)
