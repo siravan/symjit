@@ -36,9 +36,9 @@ macro_rules! stype {
 
         $code
             | (rs1 << 15)
-            | (rs1 << 20)
+            | (rs2 << 20)
             | ((imm & 0x01f) << 7) as u32
-            | ((imm & 0x0fe0) << 25) as u32
+            | ((imm & 0x0fe0) << 20) as u32
     }};
 }
 
@@ -166,12 +166,12 @@ macro_rules! rvv {
         itype!($rd, $rs1, $imm, 0x40005013)
     };
 
-    (lw x($rd:expr), x($rs1:expr), $imm:expr) => {
-        itype!($rd, $rs1, $imm, 0x00002003)
+    (ld x($rd:expr), x($rs1:expr), $imm:expr) => {
+        itype!($rd, $rs1, $imm, 0x00003003)
     };
 
-    (sw x($rs1:expr), x($rs2:expr), $imm:expr) => {
-        stype!($rs1, $rs2, $imm, 0x00002023)
+    (sd x($rs1:expr), x($rs2:expr), $imm:expr) => {
+        stype!($rs2, $rs1, $imm, 0x00003023)
     };
 
     (beq x($rs1:expr), x($rs2:expr), $imm:expr) => {
@@ -235,7 +235,7 @@ macro_rules! rvv {
     };
 
     (auipc x($rd:expr), $imm:expr) => {
-        utype!($rd, $imm, 0x00000027)
+        utype!($rd, $imm, 0x00000017)
     };
 
     // float point ops
@@ -304,7 +304,7 @@ macro_rules! rvv {
     };
 
     (fsd f($rd:expr), x($rs1:expr), $imm:expr) => {
-        stype!($rd, $rs1, $imm, 0x00003027)
+        stype!($rs1, $rd, $imm, 0x00003027)
     };
 
     (fabs.d f($rd:expr), f($rs1:expr)) => {{

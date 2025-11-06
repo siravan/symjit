@@ -74,7 +74,7 @@ impl RiscVGenerator {
     }
 
     fn load_x_from_mem(&mut self, r: u8, base: u8, idx: u32) {
-        self.emit(rvv! {lw x(r), x(base), 8*idx});
+        self.emit(rvv! {ld x(r), x(base), 8*idx});
     }
 
     fn sub_stack(&mut self, size: u32) {
@@ -105,7 +105,7 @@ impl Generator for RiscVGenerator {
 
     fn align(&mut self) {}
 
-    //***********************************
+    //***********************************/
 
     fn fmov(&mut self, dst: Reg, s1: Reg) {
         if dst == s1 {
@@ -291,7 +291,7 @@ impl Generator for RiscVGenerator {
     fn call(&mut self, op: &str, _num_args: usize) {
         let label = format!("_func_{}_", op);
         let f = |offset| itype!(0, 0, offset, 0);
-        self.a.jump(label.as_str(), rvv! {lw x(RET), x(TEXT), 0}, f);
+        self.a.jump(label.as_str(), rvv! {ld x(RET), x(TEXT), 0}, f);
         self.emit(rvv! {jalr x(RA), x(RET), 0});
     }
 
@@ -335,17 +335,17 @@ impl Generator for RiscVGenerator {
      * PARAMS => fourth arg = params
      */
     fn prologue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
-        self.set_label("@text");
+	self.set_label("@text");
         self.emit(rvv! {auipc x(5), 0});
         self.emit(rvv! {addi x(SP), x(SP), -64});
 
-        self.emit(rvv! {sw x(RA), x(SP), 0});
-        self.emit(rvv! {sw x(MEM), x(SP), 8});
-        self.emit(rvv! {sw x(PARAMS), x(SP), 16});
-        self.emit(rvv! {sw x(STATES), x(SP), 24});
-        self.emit(rvv! {sw x(IDX), x(SP), 32});
-        self.emit(rvv! {sw x(TEXT), x(SP), 40});
-        self.emit(rvv! {sw x(SAVED), x(SP), 48});
+        self.emit(rvv! {sd x(RA), x(SP), 0});
+        self.emit(rvv! {sd x(MEM), x(SP), 8});
+        self.emit(rvv! {sd x(PARAMS), x(SP), 16});
+        self.emit(rvv! {sd x(STATES), x(SP), 24});
+        self.emit(rvv! {sd x(IDX), x(SP), 32});
+        self.emit(rvv! {sd x(TEXT), x(SP), 40});
+        self.emit(rvv! {sd x(SAVED), x(SP), 48});
 
         self.emit(rvv! {mv x(MEM), x(10)});
         self.emit(rvv! {mv x(STATES), x(11)});
@@ -401,13 +401,13 @@ impl Generator for RiscVGenerator {
         self.set_label("@done");
         */
 
-        self.emit(rvv! {lw x(RA), x(SP), 0});
-        self.emit(rvv! {lw x(MEM), x(SP), 8});
-        self.emit(rvv! {lw x(PARAMS), x(SP), 16});
-        self.emit(rvv! {lw x(STATES), x(SP), 24});
-        self.emit(rvv! {lw x(IDX), x(SP), 32});
-        self.emit(rvv! {lw x(TEXT), x(SP), 40});
-        self.emit(rvv! {lw x(SAVED), x(SP), 48});
+        self.emit(rvv! {ld x(RA), x(SP), 0});
+        self.emit(rvv! {ld x(MEM), x(SP), 8});
+        self.emit(rvv! {ld x(PARAMS), x(SP), 16});
+        self.emit(rvv! {ld x(STATES), x(SP), 24});
+        self.emit(rvv! {ld x(IDX), x(SP), 32});
+        self.emit(rvv! {ld x(TEXT), x(SP), 40});
+        self.emit(rvv! {ld x(SAVED), x(SP), 48});
 
         self.emit(rvv! {addi x(SP), x(SP), 64});
         self.emit(rvv! {ret});
