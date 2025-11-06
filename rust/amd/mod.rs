@@ -654,6 +654,23 @@ impl Generator for AmdGenerator {
         }
     }
 
+    fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {
+        if true_val == false_val {
+            self.fmov(dst, true_val);
+        } else if dst != false_val {
+            self.load_stack(Reg::Temp, idx);
+            self.and(dst, Reg::Temp, true_val);
+            self.andnot(Reg::Temp, Reg::Temp, false_val);
+            self.or(dst, dst, Reg::Temp);
+        } else {
+            // dst == false_val && dst != true_val
+            self.load_stack(Reg::Temp, idx);
+            self.andnot(dst, Reg::Temp, false_val);
+            self.and(Reg::Temp, Reg::Temp, true_val);
+            self.or(dst, dst, Reg::Temp);
+        }
+    }
+
     /****************** Prologues/Epilogues ********************/
 
     #[cfg(target_family = "unix")]

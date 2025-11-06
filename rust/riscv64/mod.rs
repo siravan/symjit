@@ -3,40 +3,148 @@ mod macros;
 
 use crate::assembler::Assembler;
 use crate::generator::Generator;
-use crate::utils::{align_stack, reg, Reg};
+use crate::utils::{align_stack, Reg};
 
-const RA: u8 = 1;
-const SP: u8 = 2;
-
-const MEM: u8 = 18; // first arg = mem if direct mode, otherwise null
-const STATES: u8 = 19; // second arg = states+obs if indirect mode, otherwise null
-const IDX: u8 = 20; // third arg = index if indirect mode
-const PARAMS: u8 = 21; // fourth arg = params
-const TEXT: u8 = 22;
-const SAVED: u8 = 8;
-const RET: u8 = 10;
-const TEMP: u8 = 11;
-
-pub struct RiscVGenerator {
+pub struct RiscV {
     a: Assembler,
 }
 
-const REG_MAP: [u8; 16] = [10, 11, 12, 13, 14, 15, 16, 17, 5, 6, 7, 8, 28, 29, 30, 31];
+impl RiscV {
+    const zero: u8 = 0;
+    const ra: u8 = 1;
+    const sp: u8 = 2;
+    const gp: u8 = 3;
+    const tp: u8 = 4;
+    const t0: u8 = 5;
+    const t1: u8 = 6;
+    const t2: u8 = 7;
+    const s0: u8 = 8;
+    const fp: u8 = 8;
+    const s1: u8 = 9;
+    const a0: u8 = 10;
+    const a1: u8 = 11;
+    const a2: u8 = 12;
+    const a3: u8 = 13;
+    const a4: u8 = 14;
+    const a5: u8 = 15;
+    const a6: u8 = 16;
+    const a7: u8 = 17;
+    const s2: u8 = 18;
+    const s3: u8 = 19;
+    const s4: u8 = 20;
+    const s5: u8 = 21;
+    const s6: u8 = 22;
+    const s7: u8 = 23;
+    const s8: u8 = 24;
+    const s9: u8 = 25;
+    const s10: u8 = 26;
+    const s11: u8 = 27;
+    const t3: u8 = 28;
+    const t4: u8 = 29;
+    const t5: u8 = 30;
+    const t6: u8 = 31;
+
+    const ft0: u8 = 0;
+    const ft1: u8 = 1;
+    const ft2: u8 = 2;
+    const ft3: u8 = 3;
+    const ft4: u8 = 4;
+    const ft5: u8 = 5;
+    const ft6: u8 = 6;
+    const ft7: u8 = 7;
+    const fs0: u8 = 8;
+    const fs1: u8 = 9;
+    const fa0: u8 = 10;
+    const fa1: u8 = 11;
+    const fa2: u8 = 12;
+    const fa3: u8 = 13;
+    const fa4: u8 = 14;
+    const fa5: u8 = 15;
+    const fa6: u8 = 16;
+    const fa7: u8 = 17;
+    const fs2: u8 = 18;
+    const fs3: u8 = 19;
+    const fs4: u8 = 20;
+    const fs5: u8 = 21;
+    const fs6: u8 = 22;
+    const fs7: u8 = 23;
+    const fs8: u8 = 24;
+    const fs9: u8 = 25;
+    const fs10: u8 = 26;
+    const fs11: u8 = 27;
+    const ft8: u8 = 28;
+    const ft9: u8 = 29;
+    const ft10: u8 = 30;
+    const ft11: u8 = 31;
+}
+
+const FMAP: [u8; 16] = [
+    RiscV::fa0,
+    RiscV::fa1,
+    RiscV::fa2,
+    RiscV::fa3,
+    RiscV::fa4,
+    RiscV::fa5,
+    RiscV::fa6,
+    RiscV::fa7,
+    RiscV::ft4,
+    RiscV::ft5,
+    RiscV::ft6,
+    RiscV::ft7,
+    RiscV::ft8,
+    RiscV::ft9,
+    RiscV::ft10,
+    RiscV::ft11,
+];
 
 fn ϕ(r: Reg) -> u8 {
     match r {
-        Reg::Ret => 10,
-        Reg::Temp => 11,
-        Reg::Left => 10,
-        Reg::Right => 11,
-        Reg::Gen(dst) => REG_MAP[dst as usize],
+        Reg::Ret | Reg::Left => RiscV::fa0,
+        Reg::Temp | Reg::Right => RiscV::fa1,
+        Reg::Gen(dst) => FMAP[dst as usize],
         Reg::Static(..) => panic!("passing static registers to codegen"),
     }
 }
 
-impl RiscVGenerator {
-    pub fn new() -> RiscVGenerator {
-        RiscVGenerator {
+const XMAP: [u8; 16] = [
+    RiscV::a0,
+    99,
+    RiscV::a2,
+    RiscV::a3,
+    RiscV::a4,
+    RiscV::a5,
+    RiscV::a6,
+    RiscV::a7,
+    RiscV::a2,
+    RiscV::t0,
+    RiscV::t1,
+    RiscV::t2,
+    RiscV::t3,
+    RiscV::t4,
+    RiscV::t5,
+    RiscV::t6,
+];
+
+fn λ(r: Reg) -> u8 {
+    match r {
+        Reg::Ret | Reg::Left => RiscV::a0,
+        Reg::Temp | Reg::Right => panic!("reg Temp/Right not defined for x-registers"),
+        Reg::Gen(dst) => XMAP[dst as usize],
+        Reg::Static(..) => panic!("passing static registers to codegen"),
+    }
+}
+
+const MEM: u8 = RiscV::fs2; // first arg = mem if direct mode, otherwise null
+const STATES: u8 = RiscV::fs3; // second arg = states+obs if indirect mode, otherwise null
+const IDX: u8 = RiscV::fs4; // third arg = index if indirect mode
+const PARAMS: u8 = RiscV::fs5; // fourth arg = params
+
+const RET: u8 = RiscV::fa0;
+const TEMP: u8 = RiscV::fa1;
+
+impl RiscV {
+    pub fn new() -> RiscV {
+        RiscV {
             a: Assembler::new(),
         }
     }
@@ -78,15 +186,15 @@ impl RiscVGenerator {
     }
 
     fn sub_stack(&mut self, size: u32) {
-        self.emit(rvv! {addi x(SP), x(SP), -(size as i32)});
+        self.emit(rvv! {addi x(Self::sp), x(Self::sp), -(size as i32)});
     }
 
     fn add_stack(&mut self, size: u32) {
-        self.emit(rvv! {addi x(SP), x(SP), (size as i32)});
+        self.emit(rvv! {addi x(Self::sp), x(Self::sp), (size as i32)});
     }
 }
 
-impl Generator for RiscVGenerator {
+impl Generator for RiscV {
     fn bytes(&mut self) -> Vec<u8> {
         self.a.bytes()
     }
@@ -101,12 +209,12 @@ impl Generator for RiscVGenerator {
 
     fn seal(&mut self) {
         self.apply_jumps();
+        println!("{:#?}", &self.a);
     }
 
     fn align(&mut self) {}
 
     //***********************************/
-
     fn fmov(&mut self, dst: Reg, s1: Reg) {
         if dst == s1 {
             return;
@@ -120,9 +228,13 @@ impl Generator for RiscVGenerator {
 
     fn load_const(&mut self, dst: Reg, idx: u32) {
         let label = format!("_const_{}_", idx);
-        let f = |offset| itype!(0, 0, offset, 0);
+
+        let f = |offset| utype!(0, offset, 0);
+        self.a.jump(label.as_str(), rvv! {auipc x(Self::a0), 0}, f);
+
+        let f = |offset| itype!(0, 0, offset + 4, 0);
         self.a
-            .jump(label.as_str(), rvv! {fld f(ϕ(dst)), x(TEXT), 0}, f);
+            .jump(label.as_str(), rvv! {fld f(ϕ(dst)), x(Self::a0), 0}, f);
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
@@ -142,10 +254,10 @@ impl Generator for RiscVGenerator {
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
-        self.load_d_from_mem(ϕ(dst), SP, idx);
+        self.load_d_from_mem(ϕ(dst), Self::sp, idx);
     }
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        self.save_d_to_mem(ϕ(dst), SP, idx);
+        self.save_d_to_mem(ϕ(dst), Self::sp, idx);
     }
 
     fn save_stack_result(&mut self, idx: u32) {
@@ -207,49 +319,49 @@ impl Generator for RiscVGenerator {
     }
 
     fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(rvv! {fgt.d x(ϕ(dst)), f(ϕ(s1)), f(ϕ(s2))});
+        self.emit(rvv! {fgt.d x(λ(dst)), f(ϕ(s1)), f(ϕ(s2))});
     }
 
     fn geq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(rvv! {fge.d x(ϕ(dst)), f(ϕ(s1)), f(ϕ(s2))});
+        self.emit(rvv! {fge.d x(λ(dst)), f(ϕ(s1)), f(ϕ(s2))});
     }
 
     fn lt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(rvv! {flt.d x(ϕ(dst)), f(ϕ(s1)), f(ϕ(s2))});
+        self.emit(rvv! {flt.d x(λ(dst)), f(ϕ(s1)), f(ϕ(s2))});
     }
 
     fn leq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(rvv! {fle.d x(ϕ(dst)), f(ϕ(s1)), f(ϕ(s2))});
+        self.emit(rvv! {fle.d x(λ(dst)), f(ϕ(s1)), f(ϕ(s2))});
     }
 
     fn eq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(rvv! {feq.d x(ϕ(dst)), f(ϕ(s1)), f(ϕ(s2))});
+        self.emit(rvv! {feq.d x(λ(dst)), f(ϕ(s1)), f(ϕ(s2))});
     }
 
     fn neq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(rvv! {feq.d x(ϕ(dst)), f(ϕ(s1)), f(ϕ(s2))});
-        self.emit(rvv! {not x(ϕ(dst)), x(ϕ(dst))});
+        self.emit(rvv! {feq.d x(λ(dst)), f(ϕ(s1)), f(ϕ(s2))});
+        self.emit(rvv! {not x(λ(dst)), x(λ(dst))});
     }
 
     fn and(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(rvv! {and x(ϕ(dst)), x(ϕ(s1)), x(ϕ(s2))});
+        self.emit(rvv! {and x(λ(dst)), x(λ(s1)), x(λ(s2))});
     }
 
     fn andnot(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(rvv! {and x(ϕ(dst)), x(ϕ(s1)), x(ϕ(s2))});
-        self.emit(rvv! {not x(ϕ(dst)), x(ϕ(dst))});
+        self.emit(rvv! {and x(λ(dst)), x(λ(s1)), x(λ(s2))});
+        self.emit(rvv! {not x(λ(dst)), x(λ(dst))});
     }
 
     fn or(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(rvv! {or x(ϕ(dst)), x(ϕ(s1)), x(ϕ(s2))});
+        self.emit(rvv! {or x(λ(dst)), x(λ(s1)), x(λ(s2))});
     }
 
     fn xor(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(rvv! {xor x(ϕ(dst)), x(ϕ(s1)), x(ϕ(s2))});
+        self.emit(rvv! {xor x(λ(dst)), x(λ(s1)), x(λ(s2))});
     }
 
     fn not(&mut self, dst: Reg, s1: Reg) {
-        self.emit(rvv! {not x(ϕ(dst)), x(ϕ(dst))});
+        self.emit(rvv! {not x(λ(dst)), x(λ(s1))});
     }
 
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
@@ -290,10 +402,26 @@ impl Generator for RiscVGenerator {
 
     fn call(&mut self, op: &str, _num_args: usize) {
         let label = format!("_func_{}_", op);
-        let f = |offset| itype!(0, 0, offset, 0);
-        self.a.jump(label.as_str(), rvv! {ld x(RET), x(TEXT), 0}, f);
-        self.emit(rvv! {jalr x(RA), x(RET), 0});
+
+        let f = |offset| utype!(0, offset, 0);
+        self.a.jump(label.as_str(), rvv! {auipc x(Self::a0), 0}, f);
+
+        let f = |offset| itype!(0, 0, offset + 4, 0);
+        self.a
+            .jump(label.as_str(), rvv! {ld x(Self::a0), x(Self::a0), 0}, f);
+
+        self.emit(rvv! {jalr x(Self::ra), x(Self::a0), 0});
     }
+
+    fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {
+        self.emit(rvv! {ld x(Self::a0), x(MEM), idx});
+        self.emit(rvv! {beq x(Self::a0), x(Self::zero), 12});
+        self.emit(rvv! {fmv.d f(ϕ(dst)), f(ϕ(true_val))});
+        self.emit(rvv! {beq x(Self::zero), x(Self::zero), 8});
+        self.emit(rvv! {fmv.d f(ϕ(dst)), f(ϕ(false_val))});
+    }
+
+    /********************************************************/
 
     fn prologue_fast(&mut self, cap: u32, num_args: u32) {
         /*
@@ -335,23 +463,18 @@ impl Generator for RiscVGenerator {
      * PARAMS => fourth arg = params
      */
     fn prologue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
-	self.set_label("@text");
-        self.emit(rvv! {auipc x(5), 0});
-        self.emit(rvv! {addi x(SP), x(SP), -64});
+        self.emit(rvv! {addi x(Self::sp), x(Self::sp), -64});
 
-        self.emit(rvv! {sd x(RA), x(SP), 0});
-        self.emit(rvv! {sd x(MEM), x(SP), 8});
-        self.emit(rvv! {sd x(PARAMS), x(SP), 16});
-        self.emit(rvv! {sd x(STATES), x(SP), 24});
-        self.emit(rvv! {sd x(IDX), x(SP), 32});
-        self.emit(rvv! {sd x(TEXT), x(SP), 40});
-        self.emit(rvv! {sd x(SAVED), x(SP), 48});
+        self.emit(rvv! {sd x(Self::ra), x(Self::sp), 0});
+        self.emit(rvv! {sd x(MEM), x(Self::sp), 8});
+        self.emit(rvv! {sd x(STATES), x(Self::sp), 16});
+        self.emit(rvv! {sd x(IDX), x(Self::sp), 24});
+        self.emit(rvv! {sd x(PARAMS), x(Self::sp), 32});
 
-        self.emit(rvv! {mv x(MEM), x(10)});
-        self.emit(rvv! {mv x(STATES), x(11)});
-        self.emit(rvv! {mv x(IDX), x(12)});
-        self.emit(rvv! {mv x(PARAMS), x(13)});
-        self.emit(rvv! {mv x(TEXT), x(5)});
+        self.emit(rvv! {mv x(MEM), x(Self::a0)});
+        self.emit(rvv! {mv x(STATES), x(Self::a1)});
+        self.emit(rvv! {mv x(IDX), x(Self::a2)});
+        self.emit(rvv! {mv x(PARAMS), x(Self::a3)});
 
         /*
         self.emit(arm! {tst x(STATES), x(STATES)});
@@ -401,35 +524,17 @@ impl Generator for RiscVGenerator {
         self.set_label("@done");
         */
 
-        self.emit(rvv! {ld x(RA), x(SP), 0});
-        self.emit(rvv! {ld x(MEM), x(SP), 8});
-        self.emit(rvv! {ld x(PARAMS), x(SP), 16});
-        self.emit(rvv! {ld x(STATES), x(SP), 24});
-        self.emit(rvv! {ld x(IDX), x(SP), 32});
-        self.emit(rvv! {ld x(TEXT), x(SP), 40});
-        self.emit(rvv! {ld x(SAVED), x(SP), 48});
+        self.emit(rvv! {ld x(Self::ra), x(Self::sp), 0});
+        self.emit(rvv! {ld x(MEM), x(Self::sp), 8});
+        self.emit(rvv! {ld x(STATES), x(Self::sp), 16});
+        self.emit(rvv! {ld x(IDX), x(Self::sp), 24});
+        self.emit(rvv! {ld x(PARAMS), x(Self::sp), 32});
 
-        self.emit(rvv! {addi x(SP), x(SP), 64});
+        self.emit(rvv! {addi x(Self::sp), x(Self::sp), 64});
         self.emit(rvv! {ret});
     }
 
-    fn save_used_registers(&mut self, used: &[u8]) {
-        let count_shadows = self.count_shadows();
+    fn save_used_registers(&mut self, _used: &[u8]) {}
 
-        for r in used {
-            if *r >= count_shadows {
-                self.save_stack(reg(*r), *r as u32);
-            }
-        }
-    }
-
-    fn load_used_registers(&mut self, used: &[u8]) {
-        let count_shadows = self.count_shadows();
-
-        for r in used {
-            if *r >= count_shadows {
-                self.load_stack(reg(*r), *r as u32);
-            }
-        }
-    }
+    fn load_used_registers(&mut self, _used: &[u8]) {}
 }

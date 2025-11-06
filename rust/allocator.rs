@@ -227,6 +227,20 @@ impl Allocator {
                     let (dst, a, b, c) = self.subs_tri(dst, a, b, c);
                     self.push(Instruction::Fused { op, dst, a, b, c });
                 }
+                Instruction::IfElse {
+                    dst,
+                    true_val,
+                    false_val,
+                    idx,
+                } => {
+                    let (dst, true_val, false_val) = self.subs_bi(dst, true_val, false_val);
+                    self.push(Instruction::IfElse {
+                        dst,
+                        true_val,
+                        false_val,
+                        idx,
+                    });
+                }
             }
         }
     }
@@ -303,6 +317,17 @@ impl Allocator {
                         c: self.alloc(c),
                     });
                 }
+                Instruction::IfElse {
+                    dst,
+                    true_val,
+                    false_val,
+                    idx,
+                } => self.push(Instruction::IfElse {
+                    dst: self.alloc(dst),
+                    true_val: self.alloc(true_val),
+                    false_val: self.alloc(false_val),
+                    idx,
+                }),
             }
         }
 

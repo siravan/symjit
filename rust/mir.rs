@@ -2,6 +2,8 @@ use std::fmt;
 use std::fs;
 use std::io::Write;
 
+use petgraph::matrix_graph::Zero;
+
 use crate::code::{Func, VirtualTable};
 use crate::generator::Generator;
 use crate::symbol::Loc;
@@ -89,6 +91,12 @@ pub enum Instruction {
         b: Reg,
         c: Reg,
     },
+    IfElse {
+        dst: Reg,
+        true_val: Reg,
+        false_val: Reg,
+        idx: u32,
+    },
 }
 
 impl fmt::Debug for Instruction {
@@ -110,6 +118,16 @@ impl fmt::Debug for Instruction {
                 FusedOp::MulSub => write!(f, "{:?} := {:?} * {:?} - {:?}", &dst, &a, &b, &c),
                 FusedOp::NegMulSub => write!(f, "{:?} := - {:?} * {:?} - {:?}", &dst, &a, &b, &c),
             },
+            Instruction::IfElse {
+                dst,
+                true_val,
+                false_val,
+                idx,
+            } => write!(
+                f,
+                "{:?} := mem[{}] ? {:?} : {:?}",
+                &dst, &idx, &true_val, &false_val
+            ),
         }
     }
 }
@@ -166,6 +184,9 @@ impl Mir {
                 dst: Reg::Gen(r), ..
             } => Some(r),
             Instruction::Save { .. } => None,
+            Instruction::IfElse {
+                dst: Reg::Gen(r), ..
+            } => Some(r),
             _ => None,
         }
     }
@@ -427,20 +448,12 @@ impl Mir {
     }
 
     pub fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {
-        if true_val == false_val {
-            self.fmov(dst, true_val);
-        } else if dst != false_val {
-            self.load_stack(Reg::Temp, idx);
-            self.and(dst, Reg::Temp, true_val);
-            self.andnot(Reg::Temp, Reg::Temp, false_val);
-            self.or(dst, dst, Reg::Temp);
-        } else {
-            // dst == false_val && dst != true_val
-            self.load_stack(Reg::Temp, idx);
-            self.andnot(dst, Reg::Temp, false_val);
-            self.and(Reg::Temp, Reg::Temp, true_val);
-            self.or(dst, dst, Reg::Temp);
-        }
+        self.push(Instruction::IfElse {
+            dst,
+            true_val,
+            false_val,
+            idx,
+        });
     }
 
     pub fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
@@ -746,6 +759,23 @@ impl Mir {
                 Instruction::Fused { op, dst, a, b, c } => {
                     Self::exec_fused(regs, *op, *dst, *a, *b, *c);
                 }
+                Instruction::IfElse {
+                    dst,
+                    true_val,
+                    false_val,
+                    idx,
+                } => {
+                    let cond = mem[*idx as usize];
+                    Self::set(
+                        regs,
+                        *dst,
+                        if cond.is_zero() {
+                            Self::get(regs, *false_val)
+                        } else {
+                            Self::get(regs, *true_val)
+                        },
+                    );
+                }
             }
         }
     }
@@ -827,6 +857,14 @@ impl Mir {
                     FusedOp::NegMulAdd => ir.fused_neg_mul_add(*dst, *a, *b, *c),
                     FusedOp::NegMulSub => ir.fused_neg_mul_sub(*dst, *a, *b, *c),
                 },
+                Instruction::IfElse {
+                    dst,
+                    true_val,
+                    false_val,
+                    idx,
+                } => {
+                    ir.ifelse(*dst, *true_val, *false_val, *idx);
+                }
             }
         }
     }

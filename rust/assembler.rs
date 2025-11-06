@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 pub type Jumper = fn(x: i32) -> u32;
 
+#[derive(Debug)]
 pub struct Assembler {
     pub buf: Vec<u8>,
     labels: HashMap<String, usize>,

@@ -68,4 +68,6 @@ pub trait Generator {
 
     fn save_used_registers(&mut self, used: &[u8]);
     fn load_used_registers(&mut self, used: &[u8]);
+
+    fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32);
 }

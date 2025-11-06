@@ -323,6 +323,25 @@ impl Generator for ArmGenerator {
         self.emit(arm! {blr x(0)});
     }
 
+    fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {
+        if true_val == false_val {
+            self.fmov(dst, true_val);
+        } else if dst != false_val {
+            self.load_stack(Reg::Temp, idx);
+            self.and(dst, Reg::Temp, true_val);
+            self.andnot(Reg::Temp, Reg::Temp, false_val);
+            self.or(dst, dst, Reg::Temp);
+        } else {
+            // dst == false_val && dst != true_val
+            self.load_stack(Reg::Temp, idx);
+            self.andnot(dst, Reg::Temp, false_val);
+            self.and(Reg::Temp, Reg::Temp, true_val);
+            self.or(dst, dst, Reg::Temp);
+        }
+    }
+
+    /**************************************************/
+
     fn prologue_fast(&mut self, cap: u32, num_args: u32) {
         self.emit(arm! {sub sp, sp, #16});
         self.emit(arm! {str lr, [sp, #0]});

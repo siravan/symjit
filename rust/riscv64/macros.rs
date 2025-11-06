@@ -234,9 +234,13 @@ macro_rules! rvv {
         utype!($rd, $imm, 0x00000037)
     };
 
-    (auipc x($rd:expr), $imm:expr) => {
-        utype!($rd, $imm, 0x00000017)
-    };
+    (auipc x($rd:expr), $imm:expr) => {{
+        let mut imm = $imm;
+        if imm & 0x0800 != 0 {
+            imm += 0x1000;
+        }
+        utype!($rd, imm, 0x00000017)
+    }};
 
     // float point ops
     (fadd.d f($rd:expr), f($rs1:expr), f($rs2:expr)) => {

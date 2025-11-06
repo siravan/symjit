@@ -8,7 +8,7 @@ use crate::machine::MachineCode;
 use crate::matrix::{combine_matrixes, Matrix};
 use crate::mir::{CompiledMir, Mir};
 use crate::model::Program;
-use crate::riscv64::RiscVGenerator;
+use crate::riscv64::RiscV;
 use crate::symbol::Loc;
 use crate::{utils::*, OPT_LEVEL_MASK, OPT_LEVEL_SHIFT};
 use crate::{FASTMATH, USE_SIMD, USE_THREADS};
@@ -217,7 +217,7 @@ impl Runnable {
     }
 
     fn compile_riscv(mir: &Mir, prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
-        let mut generator = RiscVGenerator::new();
+        let mut generator = RiscV::new();
         let mem: Vec<f64> = vec![0.0; size];
         prog.builder
             .compile_from_mir(mir, &mut generator, prog.count_states, prog.count_obs)?;

@@ -24,6 +24,8 @@ mod symbol;
 
 mod amd;
 mod arm;
+
+#[allow(non_upper_case_globals)]
 mod riscv64;
 
 use matrix::Matrix;
