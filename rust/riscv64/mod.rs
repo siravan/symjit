@@ -106,34 +106,6 @@ fn ϕ(r: Reg) -> u8 {
     }
 }
 
-const XMAP: [u8; 16] = [
-    RiscV::a0,
-    99,
-    RiscV::a2,
-    RiscV::a3,
-    RiscV::a4,
-    RiscV::a5,
-    RiscV::a6,
-    RiscV::a7,
-    RiscV::a2,
-    RiscV::t0,
-    RiscV::t1,
-    RiscV::t2,
-    RiscV::t3,
-    RiscV::t4,
-    RiscV::t5,
-    RiscV::t6,
-];
-
-fn λ(r: Reg) -> u8 {
-    match r {
-        Reg::Ret | Reg::Left => RiscV::a0,
-        Reg::Temp | Reg::Right => panic!("reg Temp/Right not defined for x-registers"),
-        Reg::Gen(dst) => XMAP[dst as usize],
-        Reg::Static(..) => panic!("passing static registers to codegen"),
-    }
-}
-
 const MEM: u8 = RiscV::fs2; // first arg = mem if direct mode, otherwise null
 const STATES: u8 = RiscV::fs3; // second arg = states+obs if indirect mode, otherwise null
 const IDX: u8 = RiscV::fs4; // third arg = index if indirect mode
@@ -171,6 +143,36 @@ impl RiscV {
 
     fn emit(&mut self, w: u32) {
         self.a.append_word(w);
+    }
+
+    fn load_float(&mut self, d: u8, base: u8, idx: u32) {
+        if idx < 2048 {
+            self.emit(rvv! {fld f(d), x(base), idx});
+        } else {
+            self.emit(rvv! {lui x(Self::t0), idx});
+            self.emit(rvv! {addi x(Self::t0), x(base), idx});
+            self.emit(rvv! {fld f(d), x(Self::t0), 0});
+        }
+    }
+
+    fn save_float(&mut self, d: u8, base: u8, idx: u32) {
+        if idx < 2048 {
+            self.emit(rvv! {fsd f(d), x(base), idx});
+        } else {
+            self.emit(rvv! {lui x(Self::t0), idx});
+            self.emit(rvv! {addi x(Self::t0), x(base), idx});
+            self.emit(rvv! {fsd f(d), x(Self::t0), 0});
+        }
+    }
+
+    fn load_int(&mut self, d: u8, base: u8, idx: u32) {
+        if idx < 2048 {
+            self.emit(rvv! {ld x(d), x(base), idx});
+        } else {
+            self.emit(rvv! {lui x(Self::t0), idx});
+            self.emit(rvv! {addi x(Self::t0), x(base), idx});
+            self.emit(rvv! {ld x(d), x(Self::t0), 0});
+        }
     }
 
     fn sub_stack(&mut self, size: u32) {
@@ -225,31 +227,31 @@ impl Generator for RiscV {
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
-        self.emit(rvv! {fld f(ϕ(dst)), x(MEM), 8*idx});
+        self.load_float(ϕ(dst), MEM, 8 * idx);
     }
 
     fn save_mem(&mut self, dst: Reg, idx: u32) {
-        self.emit(rvv! {fsd f(ϕ(dst)), x(MEM), 8*idx});
+        self.save_float(ϕ(dst), MEM, 8 * idx);
     }
 
     fn save_mem_result(&mut self, idx: u32) {
-        self.emit(rvv! {fsd f(Self::fa0), x(MEM), 8*idx});
+        self.save_float(Self::fa0, MEM, 8 * idx);
     }
 
     fn load_param(&mut self, dst: Reg, idx: u32) {
-        self.emit(rvv! {fld f(ϕ(dst)), x(PARAMS), 8*idx});
+        self.load_float(ϕ(dst), PARAMS, 8 * idx);
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
-        self.emit(rvv! {fld f(ϕ(dst)), x(Self::sp), 8*idx});
+        self.load_float(ϕ(dst), Self::sp, 8 * idx);
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        self.emit(rvv! {fsd f(ϕ(dst)), x(Self::sp), 8*idx});
+        self.save_float(ϕ(dst), Self::sp, 8 * idx);
     }
 
     fn save_stack_result(&mut self, idx: u32) {
-        self.emit(rvv! {fsd f(Self::fa0), x(Self::sp), 8*idx});
+        self.save_float(Self::fa0, Self::sp, 8 * idx);
     }
 
     fn neg(&mut self, dst: Reg, s1: Reg) {
@@ -463,7 +465,7 @@ impl Generator for RiscV {
      * PARAMS => fourth arg = params
      */
     fn prologue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
-        self.emit(rvv! {addi x(Self::sp), x(Self::sp), -64});
+        self.sub_stack(64);
 
         self.emit(rvv! {sd x(Self::ra), x(Self::sp), 0});
         self.emit(rvv! {sd x(MEM), x(Self::sp), 8});
@@ -476,26 +478,26 @@ impl Generator for RiscV {
         self.emit(rvv! {mv x(IDX), x(Self::a2)});
         self.emit(rvv! {mv x(PARAMS), x(Self::a3)});
 
-        /*
-        self.emit(arm! {tst x(STATES), x(STATES)});
-        self.jump("@main", arm! {b.eq label});
+        self.a
+            .jump("@main", rvv! {beq x(STATES), x(Self::zero), 0}, |offset| {
+                btype!(0, 0, offset, 0)
+            });
 
         let size = align_stack((count_states + count_obs + 1) as u32 * self.reg_size());
         self.sub_stack(size);
-        self.emit(arm! {mov x(MEM), sp});
+        self.emit(rvv! {mv x(MEM), x(Self::sp)});
 
         for i in 0..count_states {
-            // self.emit(arm! {ldr x(10), [x(states), #8*i]});
-            self.load_x_from_mem(SCRATCH2, STATES, i as u32);
-            self.emit(arm! {ldr d(0), [x(SCRATCH2), x(IDX), lsl #3]});
-            // self.emit(arm! {str d(0), [x(mem), #8*i]});
-            self.save_d_to_mem(0, MEM, i as u32);
+            self.load_int(Self::t0, STATES, 8 * i as u32);
+            self.emit(rvv! {add x(Self::t0), x(Self::t0), x(IDX)});
+            self.emit(rvv! {slli x(Self::t0), x(Self::t0), 3});
+            self.load_float(Self::fa0, Self::t0, 0);
+            self.save_float(Self::fa0, MEM, 8 * i as u32);
         }
 
         // TODO: may save idx (RDX) as double in RBP + 8/32 * count_states
 
         self.set_label("@main");
-        */
 
         let stack_size = align_stack(self.reg_size() * cap);
         self.sub_stack(stack_size);
@@ -505,24 +507,23 @@ impl Generator for RiscV {
         let stack_size = align_stack(self.reg_size() * cap);
         self.add_stack(stack_size);
 
-        /*
-        self.emit(arm! {tst x(STATES), x(STATES)});
-        self.jump("@done", arm! {b.eq label});
+        self.a
+            .jump("@main", rvv! {beq x(STATES), x(Self::zero), 0}, |offset| {
+                btype!(0, 0, offset, 0)
+            });
 
         for i in 0..count_obs {
-            // self.emit(arm! {ldr x(10), [x(states), #8*(count_states+i)]});
-            self.load_x_from_mem(SCRATCH2, STATES, (count_states + i) as u32);
-            let k = (count_states + i + 1) as u32;
-            //self.emit(arm! {ldr d(0), [x(mem), #8*k]});
-            self.load_d_from_mem(0, MEM, k);
-            self.emit(arm! {str d(0), [x(SCRATCH2), x(IDX), lsl #3]});
+            self.load_int(Self::t0, STATES, 8 * (count_states + i) as u32);
+            self.emit(rvv! {add x(Self::t0), x(Self::t0), x(IDX)});
+            self.emit(rvv! {slli x(Self::t0), x(Self::t0), 3});
+            self.load_float(Self::fa0, MEM, 8 * (count_states + i + 1) as u32);
+            self.save_float(Self::fa0, Self::t0, 0);
         }
 
         let size = align_stack((count_states + count_obs + 1) as u32 * self.reg_size());
         self.add_stack(size);
 
         self.set_label("@done");
-        */
 
         self.emit(rvv! {ld x(Self::ra), x(Self::sp), 0});
         self.emit(rvv! {ld x(MEM), x(Self::sp), 8});
@@ -530,7 +531,7 @@ impl Generator for RiscV {
         self.emit(rvv! {ld x(IDX), x(Self::sp), 24});
         self.emit(rvv! {ld x(PARAMS), x(Self::sp), 32});
 
-        self.emit(rvv! {addi x(Self::sp), x(Self::sp), 64});
+        self.add_stack(64);
         self.emit(rvv! {ret});
     }
 

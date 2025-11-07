@@ -226,13 +226,13 @@ macro_rules! rvv {
         itype!(0, 1, 0, 0x00000067)
     };
 
-    (lui x($rd:expr), $imm:expr) => {
-        utype!($rd, $imm, 0x00000037)
-    };
-
-    (lui x($rd:expr), $imm:expr) => {
-        utype!($rd, $imm, 0x00000037)
-    };
+    (lui x($rd:expr), $imm:expr) => {{
+        let mut imm = $imm;
+        if imm & 0x0800 != 0 {
+            imm += 0x1000;
+        }
+        utype!($rd, imm, 0x00000037)
+    }};
 
     (auipc x($rd:expr), $imm:expr) => {{
         let mut imm = $imm;
