@@ -197,7 +197,6 @@ impl Generator for RiscV {
 
     fn seal(&mut self) {
         self.apply_jumps();
-        println!("{:#?}", &self.a);
     }
 
     fn align(&mut self) {}
@@ -415,8 +414,8 @@ impl Generator for RiscV {
     }
 
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {
-        self.emit(rvv! {ld x(Self::a0), x(MEM), idx});
-        self.emit(rvv! {beq x(Self::a0), x(Self::zero), 12});
+        self.emit(rvv! {ld x(Self::t0), x(Self::sp), 8*idx});
+        self.emit(rvv! {beq x(Self::t0), x(Self::zero), 12});
         self.emit(rvv! {fmv.d f(ϕ(dst)), f(ϕ(true_val))});
         self.emit(rvv! {beq x(Self::zero), x(Self::zero), 8});
         self.emit(rvv! {fmv.d f(ϕ(dst)), f(ϕ(false_val))});

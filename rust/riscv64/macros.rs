@@ -53,11 +53,11 @@ macro_rules! btype {
 
         $code
             | (rs1 << 15)
-            | (rs1 << 20)
+            | (rs2 << 20)
             | ((imm & 0x001e) << 7) as u32
-            | ((imm & 0x07e0) << 25) as u32
-            | ((imm & 0x0800) << 31) as u32
-            | ((imm & 0x0400) << 7) as u32
+            | ((imm & 0x07e0) << 20) as u32
+            | ((imm & 0x0800) << 19) as u32
+            | ((imm & 0x0400) >> 4) as u32
     }};
 }
 
@@ -336,7 +336,7 @@ macro_rules! rvv {
     }};
 
     (fcvt.d.w f($rd:expr), x($rs1:expr)) => {{
-        itype!($rd, $rs1, 0, 0xcd000053)
+        itype!($rd, $rs1, 0, 0xd2000053)
     }};
 
     (fmv.x.d x($rd:expr), f($rs1:expr)) => {{
