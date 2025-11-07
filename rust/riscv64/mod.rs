@@ -78,9 +78,9 @@ impl RiscV {
     const ft11: u8 = 31;
 }
 
-const FMAP: [u8; 16] = [
-    RiscV::fa0,
-    RiscV::fa1,
+const FMAP: [u8; 14] = [
+    //RiscV::fa0,
+    //RiscV::fa1,
     RiscV::fa2,
     RiscV::fa3,
     RiscV::fa4,
@@ -487,10 +487,11 @@ impl Generator for RiscV {
         self.sub_stack(size);
         self.emit(rvv! {mv x(MEM), x(Self::sp)});
 
+	self.emit(rvv! {slli x(Self::t1), x(IDX), 3});
+
         for i in 0..count_states {
             self.load_int(Self::t0, STATES, 8 * i as u32);
-            self.emit(rvv! {add x(Self::t0), x(Self::t0), x(IDX)});
-            self.emit(rvv! {slli x(Self::t0), x(Self::t0), 3});
+            self.emit(rvv! {add x(Self::t0), x(Self::t0), x(Self::t1)});
             self.load_float(Self::fa0, Self::t0, 0);
             self.save_float(Self::fa0, MEM, 8 * i as u32);
         }
@@ -508,14 +509,15 @@ impl Generator for RiscV {
         self.add_stack(stack_size);
 
         self.a
-            .jump("@main", rvv! {beq x(STATES), x(Self::zero), 0}, |offset| {
+            .jump("@done", rvv! {beq x(STATES), x(Self::zero), 0}, |offset| {
                 btype!(0, 0, offset, 0)
             });
 
+        self.emit(rvv! {slli x(Self::t1), x(IDX), 3});
+
         for i in 0..count_obs {
             self.load_int(Self::t0, STATES, 8 * (count_states + i) as u32);
-            self.emit(rvv! {add x(Self::t0), x(Self::t0), x(IDX)});
-            self.emit(rvv! {slli x(Self::t0), x(Self::t0), 3});
+            self.emit(rvv! {add x(Self::t0), x(Self::t0), x(Self::t1)});
             self.load_float(Self::fa0, MEM, 8 * (count_states + i + 1) as u32);
             self.save_float(Self::fa0, Self::t0, 0);
         }
