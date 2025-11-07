@@ -173,18 +173,6 @@ impl RiscV {
         self.a.append_word(w);
     }
 
-    fn load_d_from_mem(&mut self, d: u8, base: u8, idx: u32) {
-        self.emit(rvv! {fld f(d), x(base), 8*idx});
-    }
-
-    fn save_d_to_mem(&mut self, d: u8, base: u8, idx: u32) {
-        self.emit(rvv! {fsd f(d), x(base), 8*idx});
-    }
-
-    fn load_x_from_mem(&mut self, r: u8, base: u8, idx: u32) {
-        self.emit(rvv! {ld x(r), x(base), 8*idx});
-    }
-
     fn sub_stack(&mut self, size: u32) {
         self.emit(rvv! {addi x(Self::sp), x(Self::sp), -(size as i32)});
     }
@@ -238,30 +226,31 @@ impl Generator for RiscV {
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
-        self.load_d_from_mem(ϕ(dst), MEM, idx);
+        self.emit(rvv! {fld f(ϕ(dst)), x(MEM), 8*idx});
     }
 
     fn save_mem(&mut self, dst: Reg, idx: u32) {
-        self.save_d_to_mem(ϕ(dst), MEM, idx);
+        self.emit(rvv! {fsd f(ϕ(dst)), x(MEM), 8*idx});
     }
 
     fn save_mem_result(&mut self, idx: u32) {
-        self.save_mem(Reg::Ret, idx);
+        self.emit(rvv! {fsd f(Self::fa0), x(MEM), 8*idx});
     }
 
     fn load_param(&mut self, dst: Reg, idx: u32) {
-        self.load_d_from_mem(ϕ(dst), PARAMS, idx);
+        self.emit(rvv! {fld f(ϕ(dst)), x(PARAMS), 8*idx});
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
-        self.load_d_from_mem(ϕ(dst), Self::sp, idx);
+        self.emit(rvv! {fld f(ϕ(dst)), x(Self::sp), 8*idx});
     }
+
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        self.save_d_to_mem(ϕ(dst), Self::sp, idx);
+        self.emit(rvv! {fsd f(ϕ(dst)), x(Self::sp), 8*idx});
     }
 
     fn save_stack_result(&mut self, idx: u32) {
-        self.save_stack(Reg::Ret, idx);
+        self.emit(rvv! {fsd f(Self::fa0), x(Self::sp), 8*idx});
     }
 
     fn neg(&mut self, dst: Reg, s1: Reg) {
@@ -277,8 +266,9 @@ impl Generator for RiscV {
     }
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
-        // self.emit(arm! {fmov d(TEMP), #1.0});
-        self.emit(rvv! {fdiv.d f(ϕ(dst)), f(TEMP),f(ϕ(s1))});
+        self.emit(rvv! {addi x(Self::t0), x(Self::zero), 1});
+        self.emit(rvv! {fcvt.d.w f(Self::fa0), x(Self::t0)});
+        self.emit(rvv! {fdiv.d f(ϕ(dst)), f(Self::fa0), f(ϕ(s1))});
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {
@@ -319,49 +309,60 @@ impl Generator for RiscV {
     }
 
     fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(rvv! {fgt.d x(λ(dst)), f(ϕ(s1)), f(ϕ(s2))});
+        self.emit(rvv! {fgt.d x(Self::t0), f(ϕ(s1)), f(ϕ(s2))});
+        self.emit(rvv! {fcvt.d.w f(ϕ(dst)), x(Self::t0)});
     }
 
     fn geq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(rvv! {fge.d x(λ(dst)), f(ϕ(s1)), f(ϕ(s2))});
+        self.emit(rvv! {fge.d x(Self::t0), f(ϕ(s1)), f(ϕ(s2))});
+        self.emit(rvv! {fcvt.d.w f(ϕ(dst)), x(Self::t0)});
     }
 
     fn lt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(rvv! {flt.d x(λ(dst)), f(ϕ(s1)), f(ϕ(s2))});
+        self.emit(rvv! {flt.d x(Self::t0), f(ϕ(s1)), f(ϕ(s2))});
+        self.emit(rvv! {fcvt.d.w f(ϕ(dst)), x(Self::t0)});
     }
 
     fn leq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(rvv! {fle.d x(λ(dst)), f(ϕ(s1)), f(ϕ(s2))});
+        self.emit(rvv! {fle.d x(Self::t0), f(ϕ(s1)), f(ϕ(s2))});
+        self.emit(rvv! {fcvt.d.w f(ϕ(dst)), x(Self::t0)});
     }
 
     fn eq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(rvv! {feq.d x(λ(dst)), f(ϕ(s1)), f(ϕ(s2))});
+        self.emit(rvv! {feq.d x(Self::t0), f(ϕ(s1)), f(ϕ(s2))});
+        self.emit(rvv! {fcvt.d.w f(ϕ(dst)), x(Self::t0)});
     }
 
     fn neq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(rvv! {feq.d x(λ(dst)), f(ϕ(s1)), f(ϕ(s2))});
-        self.emit(rvv! {not x(λ(dst)), x(λ(dst))});
+        self.emit(rvv! {feq.d x(Self::t0), f(ϕ(s1)), f(ϕ(s2))});
+        self.emit(rvv! {not x(Self::t0), x(Self::t0)});
+        self.emit(rvv! {fcvt.d.w f(ϕ(dst)), x(Self::t0)});
     }
 
     fn and(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(rvv! {and x(λ(dst)), x(λ(s1)), x(λ(s2))});
+        self.emit(rvv! {fmin.d f(ϕ(dst)), f(ϕ(s1)), f(ϕ(s2))});
     }
 
     fn andnot(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(rvv! {and x(λ(dst)), x(λ(s1)), x(λ(s2))});
-        self.emit(rvv! {not x(λ(dst)), x(λ(dst))});
+        self.emit(rvv! {fcvt.w.d x(Self::t0), f(ϕ(s1))});
+        self.emit(rvv! {fcvt.w.d x(Self::t1), f(ϕ(s2))});
+        self.emit(rvv! {not x(Self::t0), x(Self::t0)});
+        self.emit(rvv! {and x(Self::t0), x(Self::t0), x(Self::t1)});
+        self.emit(rvv! {fcvt.d.w f(ϕ(dst)), x(Self::t0)});
     }
 
     fn or(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(rvv! {or x(λ(dst)), x(λ(s1)), x(λ(s2))});
+        self.emit(rvv! {fmax.d f(ϕ(dst)), f(ϕ(s1)), f(ϕ(s2))});
     }
 
     fn xor(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(rvv! {xor x(λ(dst)), x(λ(s1)), x(λ(s2))});
+        self.neq(dst, s1, s2);
     }
 
     fn not(&mut self, dst: Reg, s1: Reg) {
-        self.emit(rvv! {not x(λ(dst)), x(λ(s1))});
+        self.emit(rvv! {fcvt.w.d x(Self::t0), f(ϕ(s1))});
+        self.emit(rvv! {not x(Self::t0), x(Self::t0)});
+        self.emit(rvv! {fcvt.d.w f(ϕ(dst)), x(Self::t0)});
     }
 
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
