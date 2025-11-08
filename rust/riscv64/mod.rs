@@ -527,11 +527,14 @@ impl Generator for RiscV {
         let size = align_stack((count_states + count_obs + 1) as u32 * self.reg_size());
         self.sub_stack(size);
         self.emit(rvv! {mv x(MEM), x(Self::sp)});
-
         self.emit(rvv! {slli x(IDX), x(IDX), 3});
-        self.emit(rvv! {mv x(Self::t1), x(MEM)});
 
-        for i in 0..count_states {
+        if count_states > 0 {
+            self.emit(rvv! {mv x(Self::t1), x(MEM)});
+            self.li(Self::t2, count_states as i32);
+
+            self.set_label("@pro");
+
             self.emit(rvv! {ld x(Self::t0), x(STATES), 0});
             self.emit(rvv! {add x(Self::t0), x(Self::t0), x(IDX)});
 
@@ -540,6 +543,13 @@ impl Generator for RiscV {
 
             self.emit(rvv! {addi x(STATES), x(STATES), 8});
             self.emit(rvv! {addi x(Self::t1), x(Self::t1), 8});
+
+            self.emit(rvv! {addi x(Self::t2), x(Self::t2), -1});
+
+            self.a
+                .jump("@pro", rvv! {bne x(Self::t2), x(Self::zero), 0}, |offset| {
+                    btype!(0, 0, offset, 0)
+                });
         }
 
         // TODO: may save idx (RDX) as double in RBP + 8/32 * count_states
@@ -559,10 +569,13 @@ impl Generator for RiscV {
                 btype!(0, 0, offset, 0)
             });
 
-        self.li(Self::t1, 8 * (count_states + 1) as i32);
-        self.emit(rvv! {add x(Self::t1), x(Self::t1), x(MEM)});
+        if count_obs > 0 {
+            self.li(Self::t1, 8 * (count_states + 1) as i32);
+            self.emit(rvv! {add x(Self::t1), x(Self::t1), x(MEM)});
+            self.li(Self::t2, count_states as i32);
 
-        for i in 0..count_obs {
+            self.set_label("@epi");
+
             self.emit(rvv! {ld x(Self::t0), x(STATES), 0});
             self.emit(rvv! {add x(Self::t0), x(Self::t0), x(IDX)});
 
@@ -571,6 +584,13 @@ impl Generator for RiscV {
 
             self.emit(rvv! {addi x(STATES), x(STATES), 8});
             self.emit(rvv! {addi x(Self::t1), x(Self::t1), 8});
+
+            self.emit(rvv! {addi x(Self::t2), x(Self::t2), -1});
+
+            self.a
+                .jump("@pro", rvv! {bne x(Self::t2), x(Self::zero), 0}, |offset| {
+                    btype!(0, 0, offset, 0)
+                });
         }
 
         let size = align_stack((count_states + count_obs + 1) as u32 * self.reg_size());
