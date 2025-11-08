@@ -247,8 +247,11 @@ impl Generator for RiscV {
     fn load_const(&mut self, dst: Reg, idx: u32) {
         let label = format!("_const_{}_", idx);
 
-        let f = |offset| utype!(0, hi(offset as u32), 0);
-        self.a.jump(label.as_str(), rvv! {auipc x(Self::a0), 0}, f);
+        self.a.jump(
+            label.as_str(),
+            0,
+            |offset| rvv! {auipc x(Self::a0), hi(offset as u32)},
+        );
 
         let f = |offset| itype!(0, 0, lo((offset + 4) as u32), 0);
         self.a
@@ -527,10 +530,11 @@ impl Generator for RiscV {
         self.emit(rvv! {mv x(IDX), x(Self::a2)});
         self.emit(rvv! {mv x(PARAMS), x(Self::a3)});
 
-        self.a
-            .jump("@main", rvv! {beq x(STATES), x(Self::zero), 0}, |offset| {
-                btype!(0, 0, offset, 0)
-            });
+        self.a.jump(
+            "@main",
+            0,
+            |offset| rvv! {beq x(STATES), x(Self::zero), offset},
+        );
 
         let size = align_stack((count_states + count_obs + 1) as u32 * self.reg_size());
         self.sub_stack(size);
@@ -545,10 +549,9 @@ impl Generator for RiscV {
             self.prologue_inner();
             self.emit(rvv! {addi x(Self::t2), x(Self::t2), -1});
 
-            self.a
-                .jump("@pro", rvv! {bne x(Self::t2), x(Self::zero), 0}, |offset| {
-                    btype!(0, 0, offset, 0)
-                });
+            self.a.jump("@pro", 0, |offset| {
+                rvv! {bne x(Self::t2), x(Self::zero), offset}
+            });
         } else if count_states > 0 {
             self.emit(rvv! {mv x(Self::t1), x(MEM)});
 
@@ -569,10 +572,9 @@ impl Generator for RiscV {
         let stack_size = align_stack(self.reg_size() * cap);
         self.add_stack(stack_size);
 
-        self.a
-            .jump("@done", rvv! {beq x(STATES), x(Self::zero), 0}, |offset| {
-                btype!(0, 0, offset, 0)
-            });
+        self.a.jump("@done", 0, |offset| {
+            rvv! {beq x(STATES), x(Self::zero), offset}
+        });
 
         if count_obs > 16 {
             self.li(Self::t1, 8 * (count_states + 1) as i32);
@@ -583,10 +585,9 @@ impl Generator for RiscV {
             self.epilogue_inner();
             self.emit(rvv! {addi x(Self::t2), x(Self::t2), -1});
 
-            self.a
-                .jump("@epi", rvv! {bne x(Self::t2), x(Self::zero), 0}, |offset| {
-                    btype!(0, 0, offset, 0)
-                });
+            self.a.jump("@epi", 0, |offset| {
+                rvv! {bne x(Self::t2), x(Self::zero), offset}
+            });
         } else if count_obs > 0 {
             self.li(Self::t1, 8 * (count_states + 1) as i32);
             self.emit(rvv! {add x(Self::t1), x(Self::t1), x(MEM)});
