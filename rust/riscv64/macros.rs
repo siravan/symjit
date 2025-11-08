@@ -64,11 +64,8 @@ macro_rules! btype {
 macro_rules! utype {
     ($rd:expr, $imm:expr, $code:expr) => {{
         let rd = $rd as u32;
-        let imm = $imm as i32;
-
         assert!(rd < 32);
-
-        $code | (rd << 7) | (imm as u32 & 0xfffff000)
+        $code | (rd << 7) | (($imm as u32) << 12)
     }};
 }
 
@@ -227,24 +224,21 @@ macro_rules! rvv {
     };
 
     (lui x($rd:expr), $imm:expr) => {{
-        let mut imm = $imm;
-        if imm & 0x0800 != 0 {
-            imm += 0x1000;
-        }
-        utype!($rd, imm, 0x00000037)
+        utype!($rd, $imm, 0x00000037)
     }};
 
     (auipc x($rd:expr), $imm:expr) => {{
-        let mut imm = $imm;
-        if imm & 0x0800 != 0 {
-            imm += 0x1000;
-        }
-        utype!($rd, imm, 0x00000017)
+        utype!($rd, $imm, 0x00000017)
     }};
 
     // float point ops
     (fadd.d f($rd:expr), f($rs1:expr), f($rs2:expr)) => {
         rtype!($rd, $rs1, $rs2, 0x02007053)
+    };
+
+    // fadd with rounding-mode, used for round/floor/... functions
+    (fadd.d f($rd:expr), f($rs1:expr), f($rs2:expr), $rm:expr) => {
+        rtype!($rd, $rs1, $rs2, 0x02000053) | ($rm << 12)
     };
 
     (fsub.d f($rd:expr), f($rs1:expr), f($rs2:expr)) => {
