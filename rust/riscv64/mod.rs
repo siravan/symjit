@@ -1,7 +1,7 @@
 #[macro_use]
 mod macros;
 
-use crate::assembler::Assembler;
+use crate::assembler::{Assembler, Jumper};
 use crate::generator::Generator;
 use crate::utils::{align_stack, Reg};
 
@@ -143,12 +143,12 @@ impl RiscV {
         self.a.set_label(label);
     }
 
-    //fn jump(&mut self, label: &str, code: u32) {
-    //    self.a.jump(label, code)
-    //}
-
     fn apply_jumps(&mut self) {
         self.a.apply_jumps();
+    }
+
+    fn jump(&mut self, label: &str, code: u32, f: Jumper) {
+        self.a.jump(label, code, f)
     }
 
     fn emit(&mut self, w: u32) {
@@ -247,15 +247,17 @@ impl Generator for RiscV {
     fn load_const(&mut self, dst: Reg, idx: u32) {
         let label = format!("_const_{}_", idx);
 
-        self.a.jump(
+        self.jump(
             label.as_str(),
             0,
-            |offset| rvv! {auipc x(Self::a0), hi(offset as u32)},
+            |offset, _| rvv! {auipc x(Self::a0), hi(offset as u32)},
         );
 
-        let f = |offset| itype!(0, 0, lo((offset + 4) as u32), 0);
-        self.a
-            .jump(label.as_str(), rvv! {fld f(ϕ(dst)), x(Self::a0), 0}, f);
+        self.jump(
+            label.as_str(),
+            ϕ(dst) as u32,
+            |offset, r| rvv! {fld f(r), x(Self::a0), lo((offset + 4) as u32)},
+        );
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
@@ -456,12 +458,17 @@ impl Generator for RiscV {
     fn call(&mut self, op: &str, _num_args: usize) {
         let label = format!("_func_{}_", op);
 
-        let f = |offset| utype!(0, hi(offset as u32), 0);
-        self.a.jump(label.as_str(), rvv! {auipc x(Self::a0), 0}, f);
+        self.jump(
+            label.as_str(),
+            0,
+            |offset, r| rvv! {auipc x(Self::a0), hi(offset as u32)},
+        );
 
-        let f = |offset| itype!(0, 0, lo((offset + 4) as u32), 0);
-        self.a
-            .jump(label.as_str(), rvv! {ld x(Self::a0), x(Self::a0), 0}, f);
+        self.jump(
+            label.as_str(),
+            0,
+            |offset, _| rvv! {ld x(Self::a0), x(Self::a0), lo((offset + 4) as u32)},
+        );
 
         self.emit(rvv! {jalr x(Self::ra), x(Self::a0), 0});
     }
@@ -530,10 +537,10 @@ impl Generator for RiscV {
         self.emit(rvv! {mv x(IDX), x(Self::a2)});
         self.emit(rvv! {mv x(PARAMS), x(Self::a3)});
 
-        self.a.jump(
+        self.jump(
             "@main",
             0,
-            |offset| rvv! {beq x(STATES), x(Self::zero), offset},
+            |offset, _| rvv! {beq x(STATES), x(Self::zero), offset},
         );
 
         let size = align_stack((count_states + count_obs + 1) as u32 * self.reg_size());
@@ -549,7 +556,7 @@ impl Generator for RiscV {
             self.prologue_inner();
             self.emit(rvv! {addi x(Self::t2), x(Self::t2), -1});
 
-            self.a.jump("@pro", 0, |offset| {
+            self.jump("@pro", 0, |offset, _| {
                 rvv! {bne x(Self::t2), x(Self::zero), offset}
             });
         } else if count_states > 0 {
@@ -572,7 +579,7 @@ impl Generator for RiscV {
         let stack_size = align_stack(self.reg_size() * cap);
         self.add_stack(stack_size);
 
-        self.a.jump("@done", 0, |offset| {
+        self.jump("@done", 0, |offset, _| {
             rvv! {beq x(STATES), x(Self::zero), offset}
         });
 
@@ -585,7 +592,7 @@ impl Generator for RiscV {
             self.epilogue_inner();
             self.emit(rvv! {addi x(Self::t2), x(Self::t2), -1});
 
-            self.a.jump("@epi", 0, |offset| {
+            self.jump("@epi", 0, |offset, _| {
                 rvv! {bne x(Self::t2), x(Self::zero), offset}
             });
         } else if count_obs > 0 {

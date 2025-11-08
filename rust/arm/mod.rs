@@ -49,7 +49,8 @@ impl ArmGenerator {
     }
 
     fn jump(&mut self, label: &str, code: u32) {
-        self.a.jump(label, code, |x| (x << 3) as u32);
+        self.a
+            .jump(label, code, |offset, code| code | (offset << 3) as u32);
     }
 
     fn apply_jumps(&mut self) {

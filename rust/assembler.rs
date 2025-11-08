@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-pub type Jumper = fn(x: i32) -> u32;
+pub type Jumper = fn(x: i32, code: u32) -> u32;
 
 #[derive(Debug)]
 pub struct Assembler {
@@ -74,7 +74,7 @@ impl Assembler {
                 "the code segment is too large!"
             );
 
-            let x = f(offset) | code;
+            let x = f(offset, *code);
 
             self.buf[*ip] |= (x & 0xff) as u8;
             self.buf[*ip + 1] |= ((x >> 8) & 0xff) as u8;

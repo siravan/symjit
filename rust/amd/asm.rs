@@ -60,7 +60,7 @@ impl Amd {
     }
 
     pub fn jump(&mut self, label: &str) {
-        self.a.jump(label, 0, |x| (x - 4) as u32);
+        self.a.jump(label, 0, |offset, _| (offset - 4) as u32);
     }
 
     pub fn modrm_reg(&mut self, reg: u8, rm: u8) {
