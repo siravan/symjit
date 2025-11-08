@@ -320,17 +320,20 @@ macro_rules! rvv {
         rtype!($rd, rs1, rs1, 0x22001053)
     }};
 
-    (fround.d f($rd:expr), f($rs1:expr), $rm:expr) => {{
-        let rs1 = $rs1;
-        rtype!($rd, rs1, rs1, 0x22000053 | ($rm << 12))
-    }};
-
     (fcvt.w.d x($rd:expr), f($rs1:expr)) => {{
         itype!($rd, $rs1, 0, 0xc2007053)
     }};
 
     (fcvt.d.w f($rd:expr), x($rs1:expr)) => {{
         itype!($rd, $rs1, 0, 0xd2000053)
+    }};
+
+    (fcvt.l.d x($rd:expr), f($rs1:expr), $rm:expr) => {{
+        itype!($rd, $rs1, 0, 0xc2200053 | ($rm << 12))
+    }};
+
+    (fcvt.d.l f($rd:expr), x($rs1:expr)) => {{
+        itype!($rd, $rs1, 0, 0xd2207053)
     }};
 
     (fmv.x.d x($rd:expr), f($rs1:expr)) => {{

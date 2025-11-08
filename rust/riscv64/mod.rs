@@ -283,23 +283,23 @@ impl Generator for RiscV {
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {
-        self.emit(rvv! {fmv.d.x f(Self::fa0), x(Self::zero)});
-        self.emit(rvv! {fadd.d f(ϕ(dst)), f(ϕ(s1)), f(Self::fa0), 0});
-    }
-
-    fn floor(&mut self, dst: Reg, s1: Reg) {
-        self.emit(rvv! {fmv.d.x f(Self::fa0), x(Self::zero)});
-        self.emit(rvv! {fadd.d f(ϕ(dst)), f(ϕ(s1)), f(Self::fa0), 2});
-    }
-
-    fn ceiling(&mut self, dst: Reg, s1: Reg) {
-        self.emit(rvv! {fmv.d.x f(Self::fa0), x(Self::zero)});
-        self.emit(rvv! {fadd.d f(ϕ(dst)), f(ϕ(s1)), f(Self::fa0), 3});
+        self.emit(rvv! {fcvt.l.d x(Self::t0), f(ϕ(s1)), 0});
+        self.emit(rvv! {fcvt.d.l f(ϕ(dst)), x(Self::t0)});
     }
 
     fn trunc(&mut self, dst: Reg, s1: Reg) {
-        self.emit(rvv! {fmv.d.x f(Self::fa0), x(Self::zero)});
-        self.emit(rvv! {fadd.d f(ϕ(dst)), f(ϕ(s1)), f(Self::fa0), 1});
+        self.emit(rvv! {fcvt.l.d x(Self::t0), f(ϕ(s1)), 1});
+        self.emit(rvv! {fcvt.d.l f(ϕ(dst)), x(Self::t0)});
+    }
+
+    fn floor(&mut self, dst: Reg, s1: Reg) {
+        self.emit(rvv! {fcvt.l.d x(Self::t0), f(ϕ(s1)), 2});
+        self.emit(rvv! {fcvt.d.l f(ϕ(dst)), x(Self::t0)});
+    }
+
+    fn ceiling(&mut self, dst: Reg, s1: Reg) {
+        self.emit(rvv! {fcvt.l.d x(Self::t0), f(ϕ(s1)), 3});
+        self.emit(rvv! {fcvt.d.l f(ϕ(dst)), x(Self::t0)});
     }
 
     fn frac(&mut self, dst: Reg, s1: Reg) {
@@ -458,36 +458,34 @@ impl Generator for RiscV {
     /********************************************************/
 
     fn prologue_fast(&mut self, cap: u32, num_args: u32) {
-        /*
-        self.emit(arm! {sub sp, sp, #16});
-        self.emit(arm! {str lr, [sp, #0]});
-        self.emit(arm! {str x(MEM), [sp, #8]});
+        self.sub_stack(16);
+
+        self.emit(rvv! {sd x(Self::ra), x(Self::sp), 0});
+        self.emit(rvv! {sd x(MEM), x(Self::sp), 8});
 
         let stack_size = align_stack(self.reg_size() * cap);
         self.sub_stack(stack_size);
 
-        self.emit(arm! {mov x(MEM), sp});
+        self.emit(rvv! {mv x(MEM), x(Self::sp)});
 
         let num_args = num_args as i32;
 
         for i in 0..num_args {
-            self.emit(arm! {str d(i), [sp, #8*i]});
+            self.emit(rvv! {fsd f(Self::fa0 + i as u8), x(MEM), 8 * i});
         }
-        */
     }
 
     fn epilogue_fast(&mut self, cap: u32, idx_ret: i32) {
-        /*
-        self.emit(arm! {ldr d(0), [sp, #8*idx_ret]});
+        self.emit(rvv! {fld f(Self::fa0), x(MEM), 8*idx_ret});
 
         let stack_size = align_stack(self.reg_size() * cap);
         self.add_stack(stack_size);
 
-        self.emit(arm! {ldr x(MEM), [sp, #8]});
-        self.emit(arm! {ldr lr, [sp, #0]});
-        self.emit(arm! {add sp, sp, #16});
-        self.emit(arm! {ret});
-        */
+        self.emit(rvv! {ld x(Self::ra), x(Self::sp), 0});
+        self.emit(rvv! {ld x(MEM), x(Self::sp), 8});
+
+        self.add_stack(16);
+        self.emit(rvv! {ret});
     }
 
     /*
