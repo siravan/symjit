@@ -490,13 +490,7 @@ impl Node {
                 "and" => ir.and(reg(dst), reg(l), reg(r)),
                 "or" => ir.or(reg(dst), reg(l), reg(r)),
                 "xor" => ir.xor(reg(dst), reg(l), reg(r)),
-                "_ifelse_" => {
-                    if let Loc::Stack(idx) = cond.unwrap() {
-                        ir.ifelse(reg(dst), reg(l), reg(r), idx);
-                    } else {
-                        unreachable!()
-                    }
-                }
+                "_ifelse_" => ir.ifelse(reg(dst), reg(l), reg(r), cond.unwrap()),
                 "_powi_mod_" => ir.powi_mod(reg(dst), reg(l), *power, reg(r)),
                 "_call_" => ir.setup_call_binary(reg(l), reg(r)),
                 _ => return Err(anyhow!("binary operator {:?} is not recognized", op)),

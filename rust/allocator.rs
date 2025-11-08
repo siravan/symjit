@@ -231,14 +231,14 @@ impl Allocator {
                     dst,
                     true_val,
                     false_val,
-                    idx,
+                    cond,
                 } => {
                     let (dst, true_val, false_val) = self.subs_bi(dst, true_val, false_val);
                     self.push(Instruction::IfElse {
                         dst,
                         true_val,
                         false_val,
-                        idx,
+                        cond,
                     });
                 }
             }
@@ -321,12 +321,12 @@ impl Allocator {
                     dst,
                     true_val,
                     false_val,
-                    idx,
+                    cond,
                 } => self.push(Instruction::IfElse {
                     dst: self.alloc(dst),
                     true_val: self.alloc(true_val),
                     false_val: self.alloc(false_val),
-                    idx,
+                    cond,
                 }),
             }
         }

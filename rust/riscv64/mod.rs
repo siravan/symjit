@@ -186,11 +186,24 @@ impl RiscV {
     }
 
     fn sub_stack(&mut self, size: u32) {
-        self.emit(rvv! {addi x(Self::sp), x(Self::sp), -(size as i32)});
+        if size < 2048 {
+            self.emit(rvv! {addi x(Self::sp), x(Self::sp), -(size as i32)});
+        } else {
+            let size = (-(size as i32)) as u32;
+            self.emit(rvv! {lui x(Self::t0), hi(size)});
+            self.emit(rvv! {addi x(Self::t0), x(Self::t0), lo(size)});
+            self.emit(rvv! {add x(Self::sp), x(Self::sp), x(Self::t0)});
+        }
     }
 
     fn add_stack(&mut self, size: u32) {
-        self.emit(rvv! {addi x(Self::sp), x(Self::sp), (size as i32)});
+        if size < 2048 {
+            self.emit(rvv! {addi x(Self::sp), x(Self::sp), size});
+        } else {
+            self.emit(rvv! {lui x(Self::t0), hi(size)});
+            self.emit(rvv! {addi x(Self::t0), x(Self::t0), lo(size)});
+            self.emit(rvv! {add x(Self::sp), x(Self::sp), x(Self::t0)});
+        }
     }
 }
 

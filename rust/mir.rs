@@ -95,7 +95,7 @@ pub enum Instruction {
         dst: Reg,
         true_val: Reg,
         false_val: Reg,
-        idx: u32,
+        cond: Loc,
     },
 }
 
@@ -122,11 +122,11 @@ impl fmt::Debug for Instruction {
                 dst,
                 true_val,
                 false_val,
-                idx,
+                cond,
             } => write!(
                 f,
-                "{:?} := mem[{}] ? {:?} : {:?}",
-                &dst, &idx, &true_val, &false_val
+                "{:?} := {:?} ? {:?} : {:?}",
+                &dst, cond, &true_val, &false_val
             ),
         }
     }
@@ -447,12 +447,12 @@ impl Mir {
         }
     }
 
-    pub fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {
+    pub fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, cond: Loc) {
         self.push(Instruction::IfElse {
             dst,
             true_val,
             false_val,
-            idx,
+            cond,
         });
     }
 
@@ -763,9 +763,13 @@ impl Mir {
                     dst,
                     true_val,
                     false_val,
-                    idx,
+                    cond,
                 } => {
-                    let cond = mem[*idx as usize];
+                    let cond = match cond {
+                        Loc::Mem(idx) => mem[*idx as usize],
+                        Loc::Stack(idx) => stack[*idx as usize],
+                        Loc::Param(idx) => params[*idx as usize],
+                    };
                     Self::set(
                         regs,
                         *dst,
@@ -774,7 +778,7 @@ impl Mir {
                         } else {
                             Self::get(regs, *true_val)
                         },
-                    );
+                    )
                 }
             }
         }
@@ -861,9 +865,13 @@ impl Mir {
                     dst,
                     true_val,
                     false_val,
-                    idx,
+                    cond,
                 } => {
-                    ir.ifelse(*dst, *true_val, *false_val, *idx);
+                    if let Loc::Stack(idx) = *cond {
+                        ir.ifelse(*dst, *true_val, *false_val, idx);
+                    } else {
+                        panic!("IfElse condition should be stored in the stack");
+                    }
                 }
             }
         }

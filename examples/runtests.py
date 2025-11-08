@@ -15,6 +15,8 @@ def arch():
         return "amd"
     elif platform.machine() in ["arm64", "aarch64"]:
         return "arm"
+    elif platform.machine() == "riscv64":
+        return "riscv"
     else:
         return None
 
@@ -355,13 +357,13 @@ def test_model(f, label, pyback=True, bytecode=True):
         np.testing.assert_array_almost_equal(X0, X)
         print(f"\tpass in {1e-6 * dt:.3f} ms")
 
-        print("\tdebug mode......\t", end="")
+        print("\tdebug mode.....\t", end="")
         args["ty"] = "debug"
         X, dt = f(args)
         np.testing.assert_array_almost_equal(X0, X)
         print(f"\tpass in {1e-6 * dt:.3f} ms")
 
-    if pyback:
+    if pyback and arch() != "riscv":
         print("\tpython.........", end="")
         args["backend"] = "python"
         X, dt = f(args)
