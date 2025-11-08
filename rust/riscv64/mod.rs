@@ -185,25 +185,23 @@ impl RiscV {
         }
     }
 
-    fn sub_stack(&mut self, size: u32) {
-        if size < 2048 {
-            self.emit(rvv! {addi x(Self::sp), x(Self::sp), -(size as i32)});
+    fn li(&mut self, dst: u8, val: i32) {
+        if val >= 2048 || val < -2048 {
+            self.emit(rvv! {lui x(dst), hi(val as u32)});
+            self.emit(rvv! {addi x(dst), x(dst), lo(val as u32)});
         } else {
-            let size = (-(size as i32)) as u32;
-            self.emit(rvv! {lui x(Self::t0), hi(size)});
-            self.emit(rvv! {addi x(Self::t0), x(Self::t0), lo(size)});
-            self.emit(rvv! {add x(Self::sp), x(Self::sp), x(Self::t0)});
+            self.emit(rvv! {addi x(dst), x(Self::zero), lo(val as u32)});
         }
     }
 
+    fn sub_stack(&mut self, size: u32) {
+        self.li(Self::t0, -(size as i32));
+        self.emit(rvv! {add x(Self::sp), x(Self::sp), x(Self::t0)});
+    }
+
     fn add_stack(&mut self, size: u32) {
-        if size < 2048 {
-            self.emit(rvv! {addi x(Self::sp), x(Self::sp), size});
-        } else {
-            self.emit(rvv! {lui x(Self::t0), hi(size)});
-            self.emit(rvv! {addi x(Self::t0), x(Self::t0), lo(size)});
-            self.emit(rvv! {add x(Self::sp), x(Self::sp), x(Self::t0)});
-        }
+        self.li(Self::t0, size as i32);
+        self.emit(rvv! {add x(Self::sp), x(Self::sp), x(Self::t0)});
     }
 }
 
@@ -530,13 +528,18 @@ impl Generator for RiscV {
         self.sub_stack(size);
         self.emit(rvv! {mv x(MEM), x(Self::sp)});
 
-        self.emit(rvv! {slli x(Self::t1), x(IDX), 3});
+        self.emit(rvv! {slli x(IDX), x(IDX), 3});
+        self.emit(rvv! {mv x(Self::t1), x(MEM)});
 
         for i in 0..count_states {
-            self.load_int(Self::t0, STATES, 8 * i as u32);
-            self.emit(rvv! {add x(Self::t0), x(Self::t0), x(Self::t1)});
-            self.load_float(Self::fa0, Self::t0, 0);
-            self.save_float(Self::fa0, MEM, 8 * i as u32);
+            self.emit(rvv! {ld x(Self::t0), x(STATES), 0});
+            self.emit(rvv! {add x(Self::t0), x(Self::t0), x(IDX)});
+
+            self.emit(rvv! {fld f(Self::fa0), x(Self::t0), 0});
+            self.emit(rvv! {fsd f(Self::fa0), x(Self::t1), 0});
+
+            self.emit(rvv! {addi x(STATES), x(STATES), 8});
+            self.emit(rvv! {addi x(Self::t1), x(Self::t1), 8});
         }
 
         // TODO: may save idx (RDX) as double in RBP + 8/32 * count_states
@@ -556,13 +559,18 @@ impl Generator for RiscV {
                 btype!(0, 0, offset, 0)
             });
 
-        self.emit(rvv! {slli x(Self::t1), x(IDX), 3});
+        self.li(Self::t1, 8 * (count_states + 1) as i32);
+        self.emit(rvv! {add x(Self::t1), x(Self::t1), x(MEM)});
 
         for i in 0..count_obs {
-            self.load_int(Self::t0, STATES, 8 * (count_states + i) as u32);
-            self.emit(rvv! {add x(Self::t0), x(Self::t0), x(Self::t1)});
-            self.load_float(Self::fa0, MEM, 8 * (count_states + i + 1) as u32);
-            self.save_float(Self::fa0, Self::t0, 0);
+            self.emit(rvv! {ld x(Self::t0), x(STATES), 0});
+            self.emit(rvv! {add x(Self::t0), x(Self::t0), x(IDX)});
+
+            self.emit(rvv! {fld f(Self::fa0), x(Self::t1), 0});
+            self.emit(rvv! {fsd f(Self::fa0), x(Self::t0), 0});
+
+            self.emit(rvv! {addi x(STATES), x(STATES), 8});
+            self.emit(rvv! {addi x(Self::t1), x(Self::t1), 8});
         }
 
         let size = align_stack((count_states + count_obs + 1) as u32 * self.reg_size());
