@@ -280,6 +280,26 @@ impl Runnable {
         Ok(compiled)
     }
 
+    fn compile_riscv_fast(
+        mir: &Mir,
+        prog: &mut Program,
+        _size: usize,
+        idx_ret: u32,
+    ) -> Result<Box<dyn Compiled<f64>>> {
+        let mut generator = RiscV::new();
+        let mem: Vec<f64> = Vec::new();
+        prog.builder.compile_fast_from_mir(
+            mir,
+            &mut generator,
+            prog.count_states as u32,
+            idx_ret as i32,
+        )?;
+        let code = MachineCode::new("riscv64", generator.bytes(), mem);
+        let compiled: Box<dyn Compiled<f64>> = Box::new(code);
+
+        Ok(compiled)
+    }
+
     fn compile_debugger(
         mir: &Mir,
         prog: &mut Program,
@@ -333,6 +353,14 @@ impl Runnable {
                 .ok();
             } else if Platform::is_arm64() {
                 self.compiled_fast = Self::compile_arm_fast(
+                    &self.mir,
+                    &mut self.prog,
+                    self.size,
+                    self.first_obs as u32,
+                )
+                .ok();
+            } else if Platform::is_riscv64() {
+                self.compiled_fast = Self::compile_riscv_fast(
                     &self.mir,
                     &mut self.prog,
                     self.size,
