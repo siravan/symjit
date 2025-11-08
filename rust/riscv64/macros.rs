@@ -56,8 +56,8 @@ macro_rules! btype {
             | (rs2 << 20)
             | ((imm & 0x001e) << 7) as u32
             | ((imm & 0x07e0) << 20) as u32
-            | ((imm & 0x0800) << 19) as u32
-            | ((imm & 0x0400) >> 4) as u32
+            | ((imm & 0x0800) >> 4) as u32
+            | ((imm & 0x1000) << 19) as u32
     }};
 }
 
