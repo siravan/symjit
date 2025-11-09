@@ -116,7 +116,15 @@ impl Runnable {
 
         let use_threads = opt & USE_THREADS != 0 && size < 128;
 
-        let can_fast = count_states < 8
+        // max_args is the maximum number of arguments that
+        // can be passes directly in registers
+        let max_args = if Platform::is_amd64() && cfg!(target_family = "windows") {
+            4
+        } else {
+            8
+        };
+
+        let can_fast = count_states < max_args
             && count_params == 0
             && count_obs == 1
             && count_diffs == 0

@@ -64,6 +64,13 @@ impl SymbolTable {
             num_param: 0,
         };
 
+        /*
+           The spill area has two functions:
+
+           1, As storage area for fast functions to store arguments
+               passed in registers (up to 4 in Windows and 8 otherwise).
+           2. To preserve registers XMM6-XMM15 in Windows (if needed).
+        */
         for i in 0..SymbolTable::SPILL_AREA {
             s.add_stack(&format!("μ{}", i));
         }
