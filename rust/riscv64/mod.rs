@@ -420,25 +420,25 @@ impl Generator for RiscV {
     }
 
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        todo!();
+        self.emit(rvv! {fmadd.d f(ϕ(dst)), f(ϕ(s1)), f(ϕ(s2)), f(ϕ(s3))});
     }
 
-    // fused_mul_sub is s1 * s2 - s3, corresponding to fnmsub in aarch64
-    // and vmsub... in amd64
+    // fused_mul_sub is s1 * s2 - s3, corresponding to fnmsub in aarch64,
+    // vmsub... in amd64 and fmsub in risc v
     fn fused_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        todo!();
+        self.emit(rvv! {fmsub.d f(ϕ(dst)), f(ϕ(s1)), f(ϕ(s2)), f(ϕ(s3))});
     }
 
-    // fused_neg_mul_add is s3 - s1 * s2, corresponding to fmsub in aarch64
-    // and vnmadd... in amd64
+    // fused_neg_mul_add is s3 - s1 * s2, corresponding to fmsub in aarch64,
+    // vnmadd... in amd64 and fnmsub in risc v
     fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        todo!();
+        self.emit(rvv! {fnmsub.d f(ϕ(dst)), f(ϕ(s1)), f(ϕ(s2)), f(ϕ(s3))});
     }
 
-    // fused_neg_mul_sub is -s3 - s1 * s2, corresponding to fnmadd in aarch64
-    // and vnmsub... in amd64
+    // fused_neg_mul_sub is -s3 - s1 * s2, corresponding to fnmadd in aarch64,
+    // vnmsub... in amd64 and fnmadd in risc v
     fn fused_neg_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        todo!();
+        self.emit(rvv! {fnmadd.d f(ϕ(dst)), f(ϕ(s1)), f(ϕ(s2)), f(ϕ(s3))});
     }
 
     fn add_consts(&mut self, consts: &[f64]) {

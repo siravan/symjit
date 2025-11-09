@@ -12,6 +12,22 @@ macro_rules! rtype {
     }};
 }
 
+macro_rules! r4type {
+    ($rd:expr, $rs1:expr, $rs2:expr, $rs3:expr, $code:expr) => {{
+        let rd = $rd as u32;
+        let rs1 = $rs1 as u32;
+        let rs2 = $rs2 as u32;
+        let rs3 = $rs3 as u32;
+
+        assert!(rd < 32);
+        assert!(rs1 < 32);
+        assert!(rs2 < 32);
+        assert!(rs3 < 32);
+
+        $code | (rd << 7) | (rs1 << 15) | (rs2 << 20) | (rs3 << 27)
+    }};
+}
+
 macro_rules! itype {
     ($rd:expr, $rs1:expr, $imm:expr, $code:expr) => {{
         let rd = $rd as u32;
@@ -343,4 +359,24 @@ macro_rules! rvv {
     (fmv.d.x f($rd:expr), x($rs1:expr)) => {{
         itype!($rd, $rs1, 0, 0xf2000053)
     }};
+
+    // rs1 * rs2 + rs3
+    (fmadd.d f($rd:expr), f($rs1:expr), f($rs2:expr), f($rs3:expr)) => {
+        r4type!($rd, $rs1, $rs2, $rs3, 0x02007043)
+    };
+
+    // rs1 * rs2 - rs3
+    (fmsub.d f($rd:expr), f($rs1:expr), f($rs2:expr), f($rs3:expr)) => {
+        r4type!($rd, $rs1, $rs2, $rs3, 0x02007047)
+    };
+
+    // -rs1 * rs2 - rs3
+    (fnmadd.d f($rd:expr), f($rs1:expr), f($rs2:expr), f($rs3:expr)) => {
+        r4type!($rd, $rs1, $rs2, $rs3, 0x0200704f)
+    };
+
+    // -rs1 * rs2 + rs3
+    (fnmsub.d f($rd:expr), f($rs1:expr), f($rs2:expr), f($rs3:expr)) => {
+        r4type!($rd, $rs1, $rs2, $rs3, 0x0200704b)
+    };
 }
