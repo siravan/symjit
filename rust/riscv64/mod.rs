@@ -461,7 +461,7 @@ impl Generator for RiscV {
         self.jump(
             label.as_str(),
             0,
-            |offset, r| rvv! {auipc x(Self::a0), hi(offset as u32)},
+            |offset, _| rvv! {auipc x(Self::a0), hi(offset as u32)},
         );
 
         self.jump(

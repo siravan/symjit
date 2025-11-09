@@ -3,7 +3,7 @@ mod macros;
 
 use crate::assembler::Assembler;
 use crate::generator::Generator;
-use crate::utils::{align_stack, reg, Reg};
+use crate::utils::{align_stack, Reg};
 
 const SP: u8 = 31;
 const MEM: u8 = 19; // first arg = mem if direct mode, otherwise null
@@ -20,11 +20,17 @@ pub struct ArmGenerator {
 
 fn ϕ(r: Reg) -> u8 {
     match r {
-        Reg::Ret => 0,
-        Reg::Temp => 1,
+        Reg::Ret => 0,  // d0
+        Reg::Temp => 1, // d1
         Reg::Left => 0,
         Reg::Right => 1,
-        Reg::Gen(dst) => dst + 2,
+        Reg::Gen(dst) => {
+            if dst < 6 {
+                dst + 2 // d2-d7
+            } else {
+                dst + 10 // d16-d23
+            }
+        }
         Reg::Static(..) => panic!("passing static registers to codegen"),
     }
 }
@@ -115,7 +121,7 @@ impl Generator for ArmGenerator {
     }
 
     fn count_shadows(&self) -> u8 {
-        6
+        14
     }
 
     fn seal(&mut self) {
@@ -327,17 +333,13 @@ impl Generator for ArmGenerator {
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {
         if true_val == false_val {
             self.fmov(dst, true_val);
-        } else if dst != false_val {
-            self.load_stack(Reg::Temp, idx);
-            self.and(dst, Reg::Temp, true_val);
-            self.andnot(Reg::Temp, Reg::Temp, false_val);
-            self.or(dst, dst, Reg::Temp);
+        } else if dst != true_val && dst != false_val {
+            self.load_stack(dst, idx);
+            self.emit(arm! {bsl v(ϕ(dst)).8b, v(ϕ(true_val)).8b, v(ϕ(false_val)).8b});
         } else {
-            // dst == false_val && dst != true_val
             self.load_stack(Reg::Temp, idx);
-            self.andnot(dst, Reg::Temp, false_val);
-            self.and(Reg::Temp, Reg::Temp, true_val);
-            self.or(dst, dst, Reg::Temp);
+            self.emit(arm! {bsl v(ϕ(Reg::Temp)).8b, v(ϕ(true_val)).8b, v(ϕ(false_val)).8b});
+            self.fmov(dst, Reg::Temp);
         }
     }
 
@@ -444,23 +446,7 @@ impl Generator for ArmGenerator {
         self.emit(arm! {ret});
     }
 
-    fn save_used_registers(&mut self, used: &[u8]) {
-        let count_shadows = self.count_shadows();
+    fn save_used_registers(&mut self, _used: &[u8]) {}
 
-        for r in used {
-            if *r >= count_shadows {
-                self.save_stack(reg(*r), *r as u32);
-            }
-        }
-    }
-
-    fn load_used_registers(&mut self, used: &[u8]) {
-        let count_shadows = self.count_shadows();
-
-        for r in used {
-            if *r >= count_shadows {
-                self.load_stack(reg(*r), *r as u32);
-            }
-        }
-    }
+    fn load_used_registers(&mut self, _used: &[u8]) {}
 }
