@@ -3,13 +3,17 @@
 
 *Symjit* is a lightweight just-in-time (JIT) compiler that directly translates *sympy* expressions into machine code without using a separate library such as LLVM. Its main utility is to generate fast numerical functions to feed into various numerical solvers provided by the NumPy/SciPy ecosystem, including numerical integration routines, ordinary differential equation (ODE) solvers, and image filtering functions. It is also able to generate `LowLevelCallable` functions for better coupling to certain fast Scipy numerical functions.
 
-*Symjit* has two different code-generating backends. The default is a Rust library with minimum external dependencies. The second backend is written in plain Python, relying solely on the Python standard library and NumPy. Both backends generate AMD64 (also known as x86-64) and ARM64 (also known as aarch64) machine code on Linux, Windows, and Darwin (MacOS) platforms. Further architectures (e.g., RISC V) are planned.
+*Symjit* has two different code-generating backends. The default is a Rust library with minimum external dependencies. The second backend is written in plain Python, relying solely on the Python standard library and NumPy. The Rust backend generates **AMD64** (also known as x86-64), **ARM64** (also known as aarch64), and 64-bit **RISC-V** (riscv64) machine code on Linux, Windows, and Darwin (MacOS) platforms (RISC-V support is new in version 2.7). The Python backend supports AMD64 and ARM64.
 
-As of version 2.0, the Rust backend generates AVX-compatible code by default for x86-64/AMD64 processors but can downgrade to SSE2 instructions if the processor does not support AVX or if explicitly requested by passing `ty='amd-sse'` to compile functions (see below). In version 1, the default was SSE instructions. Note that SSE2 instructions were introduced in 2000, meaning that virtually all current 64-bit x86-64 processors support them. Intel introduced the AVX instruction set in 2011; therefore, most processors support it. The Python backend uses only AVX instructions.
+The Rust backend generates AVX-compatible code by default for x86-64/AMD64 processors but can downgrade to SSE2 instructions if the processor does not support AVX or if explicitly requested by passing `ty='amd-sse'` to compile functions (see below). SSE2 instructions were introduced in 2000, meaning that virtually all current 64-bit x86-64 processors support them. Intel introduced the AVX instruction set in 2011; therefore, most processors support it. The Python backend uses only AVX instructions. Note that the Python backend is not actively maintained and may be removed in version 3.
 
 On ARM64 processors, both the Rust and Python backends generate code for the aarch64 instruction set. ARM32 and IA32 are not supported.
 
-[FuncBuilder](https://github.com/siravan/funcbuilder) is a companion package that provides a more general code generator akin to [llvmlite](https://github.com/numba/llvmlite). It is currently in the early stages of development.
+*Symjit* has three companion packages:
+
+* [FuncBuilder](https://github.com/siravan/funcbuilder) provides a more general code generator akin to [llvmlite](https://github.com/numba/llvmlite). It is currently in the early stages of development.
+* [SymJit.jl](https://github.com/siravan/SymJit.jl) is a Julia wrapper around the *Symjit*'s Rust library and works with Julia [Symbolics](https://docs.sciml.ai/Symbolics/stable/).
+* [JitEngine.jl](https://github.com/siravan/JitEngine.jl) is a port of the Symjit's code generator to Julia with no binary dependecy. Similar to SymJit.jl, it works and uses Julia [Symbolics](https://docs.sciml.ai/Symbolics/stable/).
 
 # Installing symjit
 
@@ -26,7 +30,13 @@ Once the `conda-forge` channel has been enabled, `symjit` can be installed with 
 conda install symjit
 ```
 
-or with `mamba`:
+After installation, you can update to the latest version by:
+
+```
+conda update -c conda-forge symjit
+```
+
+Another way to install *Symjit* is to use `mamba`:
 
 ```
 mamba install symjit
@@ -63,7 +73,9 @@ You can also install symjit from pypi using pip:
 python -m pip install symjit
 ```
 
-However, the pip install may not include the correct binary Rust backend for different platforms and the conda-forge install is preferable. In addition, you can install *symjit* from the source by cloning [symjit](https://github.com/siravan/symjit) into `symjit` folder and then running
+However, the pip install may not include the correct binary Rust backend for different platforms and the conda-forge install is preferable.
+
+Currently, **RISC-V binaries are not available from conda-forge**. If you want to use *Symjit* on a RISC-V computer, you need to compile it from the source. See [Compilation](./docs/COMPILATION.md) for details.
 
 ```
 cd symjit
@@ -289,6 +301,7 @@ All `compile_*` functions accept an optional parameter `ty`, which defines the t
 * `amd-avx`: generates 64-bit AMD64/x86-64 AVX code.
 * `amd-sse`: generates 64-bit AMD64/x86-64 SSE code. It requires a minimum SSE2.1 specification, which should be easily fulfilled by all except the most ancient processors.
 * `arm` generates 64-bit ARM64/aarch64 code. This option is mainly tested on Apple Silicon.
+* `riscv` generates 64-bit RISC-V code. This option is tested on a computer running XuanTie C910 RISC-V with an RV64GC architecture.
 * `bytecode`: this option uses a generic and simple bytecode evaluator as a fallback option in case of unsupported instruction sets. The utility is to test correctness (see option `debug` below), not speed.
 * `native` (**default**): selects the correct instruction set based on the current processor.
 * `debug`: is useful for debugging the generated code. It runs both `native` and `bytecode` versions, compares the results,

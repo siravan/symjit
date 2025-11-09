@@ -5,17 +5,10 @@ args = util.process_argv()
 from sympy import symbols
 from symjit import compile_func
 
-N = 100
+X = symbols("x[0:100]")
 
-X = symbols(f"x[0:{N}]")
-
-p = 0
-
-for i in range(N):
-    p += X[i]
-
-print(p)
-
-f = compile_func(list(X), p, **args)
-
-print(f(*range(0, N)))
+for i in range(1, 100):
+    f = compile_func(X[:i], sum(X[:i]), **args)
+    y0 = f(*range(0, i))
+    y1 = i * (i - 1) / 2
+    print(i, y0, y0 == y1)

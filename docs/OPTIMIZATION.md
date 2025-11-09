@@ -18,7 +18,7 @@ In version 2.6, the `opt_level` option is added to `compile_*` functions. `opt_l
 The result of different `compile` functions is a Python object, say `f`, that encapsulates the underlying compiled code. When we call `f(...)`,  `f.__call__` is called with the arguments. Then, `__call__` checks the type of arguments (scalar vs. vector), packages the inputs accordingly, calls the correct compiled routine via the respective Rust routines, and finally, formats the return values. All these actions have an overhead. The overhead is acceptable if the compiled function is large and complex, but it becomes relatively too expensive if the function is simple and lightweight. In this situation, it is faster to call the underlying compiled code directly. If the following conditions hold, it is possible to do so:
 
 1. The output is a single **scalar** expression.
-2. There are zero to eight **scalar** input arguments.
+2. There are zero to eight **scalar** input arguments (only up to four in Windows).
 3. There is no parameter.
 
 In most cases, *Symjit* can automatically switch a function to a fast one. However, there are situations when using the fast function directly improves performance. For example, this applies when passing functions to Scipy integration functions (`quad`, `nquad`, `dbpquad`, `tplquad`). To assist this, we can access the fast function by calling `f.fast_func()`. The result is a `ctypes.CFUNCTYPE`-generated foreign function. For example, we can rewrite the integration example above as

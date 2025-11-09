@@ -12,6 +12,7 @@ N = 5
 
 x = symbols("x")
 
+
 def viete(x):
     p = 1
 

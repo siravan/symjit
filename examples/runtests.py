@@ -305,13 +305,14 @@ def test_model(f, label, pyback=True, bytecode=True):
         "use_simd": True,
         "use_threads": True,
         "cse": True,
+        "fastmath": False,
         "opt_level": 1,
     }
 
     print("\tlambdify.......\t", end="")
     args["backend"] = "sympy"
-    X0, dt = f(args)
-    print(f"\tdone in {1e-6 * dt:.3f} ms")
+    X0, dt0 = f(args)
+    print(f"\tdone in {1e-6 * dt0:.3f} ms")
 
     args["backend"] = "rust"
     args["ty"] = arch()
@@ -320,6 +321,8 @@ def test_model(f, label, pyback=True, bytecode=True):
     X, dt = f(args)
     np.testing.assert_array_almost_equal(X0, X)
     print(f"\tpass in {1e-6 * dt:.3f} ms")
+
+    print(f"\t\033[92mspeed-up ratio {dt0 / dt:.1f}\033[0m")
 
     print("\tno CSE.........\t", end="")
     args["cse"] = False
