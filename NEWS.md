@@ -1,3 +1,10 @@
+# Version 2.7.0
+
+* RISC-V machine code is supported (64-bit only).
+* `IfElse` explicitely supported in the low-level code genetators.
+* Improvement in register usage in the Arm64 backend.
+* A bug in Windows fast-func fixed.
+
 # Version 2.6.0
 
 * `flush()` removed and replaced with `used_registers` in the preamble code.
