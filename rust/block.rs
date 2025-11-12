@@ -16,6 +16,7 @@ use crate::COUNT_SCRATCH;
 
 #[derive(Debug, Clone)]
 pub struct Block {
+    pub label: String,
     pub stmts: Vec<Statement>,
     pub sym_table: SymbolTable,
     pub num_tmp: usize,
@@ -24,27 +25,18 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new(cse: bool) -> Block {
+    pub fn new(label: String, cse: bool) -> Block {
         Block {
             stmts: Vec::new(),
             sym_table: SymbolTable::new(),
             num_tmp: 0,
             cse,
             calls: HashMap::new(),
+            label,
         }
     }
 
-    pub fn add_tmp(&mut self) -> Node {
-        let name = format!("ψ{}", self.num_tmp);
-        self.num_tmp += 1;
-        self.sym_table.add_stack(name.as_str());
-        let sym = self.sym_table.find_sym(name.as_str()).unwrap();
-
-        Node::Var {
-            sym,
-            status: VarStatus::Unknown,
-        }
-    }
+    // add_* functions create a new Statement
 
     pub fn add_assign(&mut self, lhs: Node, rhs: Node) {
         let rhs = self.process(rhs);
@@ -62,7 +54,7 @@ impl Block {
 
         let arg = self.create_unary("_call_", arg);
         let arg = self.process(arg);
-        let lhs = self.add_tmp();
+        let lhs = self.create_tmp();
         self.stmts.push(Statement::call(op, lhs.clone(), arg, 1));
         self.calls.insert(n, lhs.clone());
         lhs
@@ -79,17 +71,35 @@ impl Block {
 
         let arg = self.create_binary("_call_", left, right);
         let arg = self.process(arg);
-        let lhs = self.add_tmp();
+        let lhs = self.create_tmp();
         self.stmts.push(Statement::call(op, lhs.clone(), arg, 2));
         self.calls.insert(n, lhs.clone());
         lhs
     }
 
+    // **************** Compile the Block! *********************
+
     pub fn compile(&mut self, ir: &mut Mir) -> Result<()> {
+        ir.set_label(&self.label);
+
         for stmt in self.stmts.iter_mut() {
             stmt.compile(ir)?;
         }
         Ok(())
+    }
+
+    // create_* functions create a new Node
+
+    pub fn create_tmp(&mut self) -> Node {
+        let name = format!("ψ{}", self.num_tmp);
+        self.num_tmp += 1;
+        self.sym_table.add_stack(name.as_str());
+        let sym = self.sym_table.find_sym(name.as_str()).unwrap();
+
+        Node::Var {
+            sym,
+            status: VarStatus::Unknown,
+        }
     }
 
     pub fn create_void(&mut self) -> Node {
@@ -112,10 +122,6 @@ impl Block {
         Node::create_binary(op, left, right, 1, None)
     }
 
-    pub fn create_ifelse(&mut self, cond: &Node, left: Node, right: Node) -> Node {
-        Node::create_ifelse(cond, left, right)
-    }
-
     pub fn create_powi(&mut self, arg: Node, power: i32) -> Node {
         Node::create_powi(arg, power)
     }
@@ -124,6 +130,13 @@ impl Block {
         Node::create_modular_powi(left, right, power)
     }
 
+    pub fn create_ifelse(&mut self, cond: Node, left: Node, right: Node) -> Node {
+        let tmp = self.create_tmp();
+        self.add_assign(tmp.clone(), cond);
+        Node::create_ifelse(&tmp, left, right)
+    }
+
+    //******************* Tree Processing ***************************/
     fn process(&mut self, node: Node) -> Node {
         self.trim(node)
     }
@@ -176,7 +189,7 @@ impl Block {
         let right = if left.ershov_number() == COUNT_SCRATCH - 1
             && right.ershov_number() == COUNT_SCRATCH - 1
         {
-            let lhs = self.add_tmp();
+            let lhs = self.create_tmp();
             self.stmts.push(Statement::assign(lhs.clone(), right));
             lhs
         } else {
@@ -271,7 +284,7 @@ impl Block {
             if hs.contains(&h) {
                 // collision detected!
                 cs.entry(h).or_insert_with(|| {
-                    let lhs = self.add_tmp();
+                    let lhs = self.create_tmp();
                     (lhs, node.clone())
                 });
             } else {

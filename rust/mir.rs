@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt;
 use std::fs;
 use std::io::Write;
@@ -97,6 +98,13 @@ pub enum Instruction {
         false_val: Reg,
         cond: Loc,
     },
+    Label {
+        label: String,
+    },
+    Branch {
+        cond: Reg,
+        label: String,
+    },
 }
 
 impl fmt::Debug for Instruction {
@@ -128,6 +136,8 @@ impl fmt::Debug for Instruction {
                 "{:?} := {:?} ? {:?} : {:?}",
                 &dst, cond, &true_val, &false_val
             ),
+            Self::Label { label } => write!(f, "{:?}:", &label),
+            Self::Branch { cond, label } => write!(f, "if {:?} goto {:?}", &cond, label),
         }
     }
 }
@@ -138,6 +148,7 @@ pub struct Mir {
     pub consts: Vec<f64>,
     pub opt_level: u8,
     pub fastmath: bool,
+    pub labels: HashMap<String, usize>,
 }
 
 impl fmt::Debug for Mir {
@@ -156,6 +167,7 @@ impl Mir {
             consts: Vec::new(),
             opt_level,
             fastmath,
+            labels: HashMap::new(),
         }
     }
 
@@ -212,6 +224,21 @@ impl Mir {
 
         used
     }
+
+    pub fn populate_labels(&mut self) {
+        let mut labels: HashMap<String, usize> = HashMap::new();
+
+        for (ip, ins) in self.code.iter().enumerate() {
+            match ins {
+                Instruction::Label { label } => {
+                    labels.insert(label.clone(), ip);
+                }
+                _ => {}
+            }
+        }
+
+        self.labels = labels;
+    }
 }
 
 impl Mir {
@@ -225,6 +252,19 @@ impl Mir {
 
     pub fn nop(&mut self) {
         self.push(Instruction::Nop);
+    }
+
+    pub fn set_label(&mut self, label: &str) {
+        self.push(Instruction::Label {
+            label: label.to_string(),
+        })
+    }
+
+    pub fn branch_if(&mut self, cond: Reg, label: &str) {
+        self.push(Instruction::Branch {
+            cond,
+            label: label.to_string(),
+        });
     }
 
     pub fn fmov(&mut self, dst: Reg, s1: Reg) {
@@ -710,7 +750,12 @@ impl Mir {
         regs: &mut [f64],
         params: &[f64],
     ) {
-        for ins in self.code.iter() {
+        let mut ip: usize = 0;
+        let n = self.code.len();
+
+        while ip < n {
+            let ins = &self.code[ip];
+
             match ins {
                 Instruction::Nop => {}
                 Instruction::Uni { op, dst, s1 } => {
@@ -780,7 +825,15 @@ impl Mir {
                         },
                     )
                 }
+                Instruction::Label { .. } => {}
+                Instruction::Branch { cond, label } => {
+                    if Self::get(regs, *cond) != 0.0 {
+                        ip = self.labels.get(label).unwrap() - 1
+                    }
+                }
             }
+
+            ip += 1;
         }
     }
 }
@@ -873,6 +926,8 @@ impl Mir {
                         panic!("IfElse condition should be stored in the stack");
                     }
                 }
+                Instruction::Label { label } => ir.set_label(label),
+                Instruction::Branch { cond, label } => ir.branch_if(*cond, label),
             }
         }
     }

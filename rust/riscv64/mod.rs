@@ -139,10 +139,6 @@ impl RiscV {
         self.a.append_quad(u);
     }
 
-    fn set_label(&mut self, label: &str) {
-        self.a.set_label(label);
-    }
-
     fn apply_jumps(&mut self) {
         self.a.apply_jumps();
     }
@@ -231,6 +227,16 @@ impl Generator for RiscV {
     }
 
     fn align(&mut self) {}
+
+    fn set_label(&mut self, label: &str) {
+        self.a.set_label(label);
+    }
+
+    fn branch_if(&mut self, cond: Reg, label: &str) {
+        self.emit(rvv! {fmv.x.d x(Self::t0), f(ϕ(cond))});
+        self.emit(rvv! {beq x(Self::t0), x(Self::zero), 8});
+        self.jump(label, 0, |offset, _| rvv! {j offset});
+    }
 
     //***********************************/
     fn fmov(&mut self, dst: Reg, s1: Reg) {

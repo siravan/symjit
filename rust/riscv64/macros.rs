@@ -94,9 +94,9 @@ macro_rules! jtype {
 
         $code
             | (rd << 7)
-            | (imm & 0x0000f000) as u32
-            | ((imm & 0x00000800) << 9) as u32
             | ((imm & 0x000007fe) << 20) as u32
+            | ((imm & 0x00000800) << 9) as u32
+            | ((imm & 0x000ff000) << 0) as u32
             | ((imm & 0x00100000) << 11) as u32
     }};
 }

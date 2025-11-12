@@ -7,34 +7,59 @@ use crate::code::{Func, VirtualTable};
 use crate::generator::Generator;
 use crate::mir::Mir;
 use crate::node::Node;
-use crate::utils::reg;
 use crate::COUNT_SCRATCH;
 
 //****************************************************//
 
 #[derive(Debug, Clone)]
 pub struct Builder {
-    pub block: Block,
+    pub blocks: Vec<Block>,
     pub consts: Vec<f64>,
     pub ft: HashSet<String>, // function table (the name of functions),
+    pub cse: bool,
 }
 
 impl Builder {
     pub fn new(cse: bool) -> Builder {
+        let mut blocks: Vec<Block> = Vec::new();
+        blocks.push(Block::new("@begin".to_string(), cse));
+
         Builder {
-            block: Block::new(cse),
+            blocks,
             consts: Vec::new(),
             ft: HashSet::new(),
+            cse,
         }
     }
 
+    pub fn block(&mut self) -> &mut Block {
+        let n = self.blocks.len();
+        &mut self.blocks[n - 1]
+    }
+
+    pub fn block_shared(&self) -> &Block {
+        let n = self.blocks.len();
+        &self.blocks[n - 1]
+    }
+
+    pub fn add_block(&mut self) -> String {
+        let label = format!("@block_{}", self.blocks.len());
+        self.add_block_named(&label);
+        label
+    }
+
+    pub fn add_block_named(&mut self, label: &str) {
+        let label = label.to_string();
+        self.blocks.push(Block::new(label.clone(), self.cse));
+    }
+
     pub fn add_assign(&mut self, lhs: Node, rhs: Node) -> Result<Node> {
-        self.block.add_assign(lhs.clone(), rhs);
+        self.block().add_assign(lhs.clone(), rhs);
         Ok(lhs)
     }
 
     pub fn add_call_unary(&mut self, op: &str, arg: Node) -> Result<Node> {
-        let lhs = self.block.add_call_unary(op, arg);
+        let lhs = self.block().add_call_unary(op, arg);
         let f = VirtualTable::from_str(op)?; // check to see if op is defined
         if !matches!(f, Func::Unary(_)) {
             return Err(anyhow!("{} is not a unary function", op));
@@ -81,7 +106,7 @@ impl Builder {
             }
         }
 
-        let lhs = self.block.add_call_binary(op, left, right);
+        let lhs = self.block().add_call_binary(op, left, right);
         let f = VirtualTable::from_str(op)?; // check to see if op is defined
         if !matches!(f, Func::Binary(_)) {
             return Err(anyhow!("{} is not a binary function", op));
@@ -90,14 +115,12 @@ impl Builder {
         Ok(lhs)
     }
 
-    pub fn add_ifelse(&mut self, cond: Node, true_val: Node, false_val: Node) -> Result<Node> {
-        let tmp = self.block.add_tmp();
-        let tmp = self.add_assign(tmp, cond)?;
-        self.create_ifelse(&tmp, true_val, false_val)
+    pub fn create_ifelse(&mut self, cond: Node, true_val: Node, false_val: Node) -> Result<Node> {
+        Ok(self.block().create_ifelse(cond, true_val, false_val))
     }
 
     pub fn create_void(&mut self) -> Result<Node> {
-        Ok(self.block.create_void())
+        Ok(self.block().create_void())
     }
 
     pub fn create_const(&mut self, val: f64) -> Result<Node> {
@@ -112,61 +135,62 @@ impl Builder {
 
         self.consts.push(val);
 
-        Ok(self.block.create_const(val, (self.consts.len() - 1) as u32))
+        let n = self.consts.len();
+        Ok(self.block().create_const(val, (n - 1) as u32))
     }
 
     pub fn create_var(&mut self, name: &str) -> Result<Node> {
         let sym = self
-            .block
+            .block()
             .sym_table
             .find_sym(name)
             .ok_or_else(|| anyhow!("variable {} not found", name))?;
 
-        Ok(self.block.create_var(sym))
+        Ok(self.block().create_var(sym))
     }
 
     pub fn create_unary(&mut self, op: &str, arg: Node) -> Result<Node> {
-        let node = self.block.create_unary(op, arg);
+        let node = self.block().create_unary(op, arg);
         Ok(node)
     }
 
     pub fn create_powi(&mut self, arg: Node, power: i32) -> Result<Node> {
-        Ok(self.block.create_powi(arg, power))
+        Ok(self.block().create_powi(arg, power))
     }
 
     pub fn create_binary(&mut self, op: &str, left: Node, right: Node) -> Result<Node> {
         let node = match op {
-            "times" if left.is_const(-1.0) => self.block.create_unary("neg", right),
-            "times" if right.is_const(-1.0) => self.block.create_unary("neg", left),
+            "times" if left.is_const(-1.0) => self.block().create_unary("neg", right),
+            "times" if right.is_const(-1.0) => self.block().create_unary("neg", left),
             "times" if left.is_const(1.0) => right,
             "times" if right.is_const(1.0) => left,
             "times" if left.is_unary("recip") => {
-                self.block
+                self.block()
                     .create_binary("divide", right, left.arg().unwrap())
             }
             "times" if right.is_unary("recip") => {
-                self.block
+                self.block()
                     .create_binary("divide", left, right.arg().unwrap())
             }
             "plus" if left.is_unary("neg") => {
-                self.block
+                self.block()
                     .create_binary("minus", right, left.arg().unwrap())
             }
             "plus" if right.is_unary("neg") => {
-                self.block
+                self.block()
                     .create_binary("minus", left, right.arg().unwrap())
             }
             "rem" if left.is_unary("_powi_") => {
                 let (arg, power) = left.arg_power().unwrap();
-                self.block.create_modular_powi(arg, right, power)
+                self.block().create_modular_powi(arg, right, power)
             }
             "min" => {
                 let cond = self.create_binary("leq", left.clone(), right.clone())?;
-                self.add_ifelse(cond, left, right)?
+                self.create_ifelse(cond, left, right)?
             }
             "max" => {
                 let cond = self.create_binary("geq", left.clone(), right.clone())?;
-                self.add_ifelse(cond, left, right)?
+                self.create_ifelse(cond, left, right)?
             }
             "heaviside" => {
                 /*
@@ -177,25 +201,24 @@ impl Builder {
                 let one = self.create_const(1.0)?;
 
                 let c0 = self.create_binary("eq", left.clone(), zero.clone())?;
-                let x0 = self.add_ifelse(c0, right, one)?;
+                let x0 = self.create_ifelse(c0, right, one)?;
 
                 let c1 = self.create_binary("geq", left, zero.clone())?;
-                self.add_ifelse(c1, x0, zero)?
+                self.create_ifelse(c1, x0, zero)?
             }
-            _ => self.block.create_binary(op, left, right),
+            _ => self.block().create_binary(op, left, right),
         };
 
         Ok(node)
     }
 
-    pub fn create_ifelse(&mut self, cond: &Node, left: Node, right: Node) -> Result<Node> {
-        Ok(self.block.create_ifelse(cond, left, right))
-    }
-
-    pub fn create_mir(&mut self, fastmath: bool, opt_level: u8) -> Result<Mir> {
-        self.block.eliminate();
+    pub fn compile_mir(&mut self, fastmath: bool, opt_level: u8) -> Result<Mir> {
         let mut mir = Mir::new(opt_level, fastmath);
-        self.block.compile(&mut mir)?;
+
+        for block in self.blocks.iter_mut() {
+            block.eliminate();
+            block.compile(&mut mir)?;
+        }
 
         if opt_level >= 1 {
             mir.optimize_peephole();
@@ -206,6 +229,8 @@ impl Builder {
         }
 
         mir.add_consts(&self.consts);
+        mir.populate_labels();
+
         Ok(mir)
     }
 
@@ -231,7 +256,7 @@ impl Builder {
         count_obs: usize,
     ) -> Result<()> {
         // println!("{:#?}", mir.used_registers());
-        let cap = self.block.sym_table.num_stack as u32;
+        let cap = self.block().sym_table.num_stack as u32;
         ir.prologue_indirect(cap, count_states, count_obs);
 
         Self::save_registers(mir, ir);
@@ -243,7 +268,7 @@ impl Builder {
         self.append_const_section(ir);
         self.append_vt_section(ir);
         ir.seal();
-        // println!("{:#?}", &self.block.stmts);
+        // println!("{:#?}", &self.block().stmts);
         // println!("{:02x?}", ir.bytes());
 
         Ok(())
@@ -256,9 +281,9 @@ impl Builder {
         num_args: u32,
         idx_ret: i32,
     ) -> Result<()> {
-        self.block.eliminate();
-        // println!("{:#?}", &self.block.stmts);
-        let cap = self.block.sym_table.num_stack as u32;
+        self.block().eliminate();
+        // println!("{:#?}", &self.block().stmts);
+        let cap = self.block().sym_table.num_stack as u32;
         ir.prologue_fast(cap, num_args);
 
         Self::save_registers(mir, ir);
@@ -270,7 +295,7 @@ impl Builder {
         self.append_const_section(ir);
         self.append_vt_section(ir);
         ir.seal();
-        // println!("{:#?}", &self.block.stmts);
+        // println!("{:#?}", &self.block().stmts);
         // println!("{:02x?}", ir.bytes());
 
         Ok(())

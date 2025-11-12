@@ -50,10 +50,6 @@ impl ArmGenerator {
         self.a.append_quad(u);
     }
 
-    fn set_label(&mut self, label: &str) {
-        self.a.set_label(label);
-    }
-
     fn jump(&mut self, label: &str, code: u32) {
         self.a
             .jump(label, code, |offset, code| code | (offset << 3) as u32);
@@ -129,6 +125,15 @@ impl Generator for ArmGenerator {
     }
 
     fn align(&mut self) {}
+
+    fn set_label(&mut self, label: &str) {
+        self.a.set_label(label);
+    }
+
+    fn branch_if(&mut self, cond: Reg, label: &str) {
+        self.emit(arm! {fcmp d(ϕ(cond)), #0.0});
+        self.jump(label, arm! {b.ne label});
+    }
 
     //***********************************
 

@@ -75,18 +75,18 @@ impl Program {
         let mut builder = Builder::new(cse);
 
         for v in &ml.states {
-            builder.block.sym_table.add_mem(&v.name);
+            builder.block().sym_table.add_mem(&v.name);
         }
 
-        builder.block.sym_table.add_mem(&ml.iv.name);
+        builder.block().sym_table.add_mem(&ml.iv.name);
 
         for v in &ml.params {
-            builder.block.sym_table.add_param(&v.name);
+            builder.block().sym_table.add_param(&v.name);
         }
 
         for eq in &ml.obs {
             if let Some(name) = eq.lhs.var() {
-                builder.block.sym_table.add_mem(&name);
+                builder.block().sym_table.add_mem(&name);
             } else {
                 return Err(anyhow!("lhs var not found"));
             }
@@ -95,7 +95,7 @@ impl Program {
         for eq in &ml.odes {
             if let Some(name) = eq.lhs.diff_var() {
                 let name = format!("δ{}", name);
-                builder.block.sym_table.add_mem(&name);
+                builder.block().sym_table.add_mem(&name);
             } else {
                 return Err(anyhow!("lhs diff var not found"));
             }
@@ -192,7 +192,7 @@ impl Expr {
         let true_val = args[1].transform(builder)?;
         let false_val = args[2].transform(builder)?;
 
-        builder.add_ifelse(cond, true_val, false_val)
+        builder.create_ifelse(cond, true_val, false_val)
     }
 
     /// Addition and Multiplication can haev multiple arguments

@@ -219,10 +219,6 @@ impl Allocator {
                     let (dst, s1) = self.subs_uni(dst, s1);
                     self.push(Instruction::Mov { dst, s1 });
                 }
-                Instruction::Call { .. } => {
-                    self.push(ins.clone());
-                    self.reset();
-                }
                 Instruction::Fused { op, dst, a, b, c } => {
                     let (dst, a, b, c) = self.subs_tri(dst, a, b, c);
                     self.push(Instruction::Fused { op, dst, a, b, c });
@@ -240,6 +236,17 @@ impl Allocator {
                         false_val,
                         cond,
                     });
+                }
+                Instruction::Branch { .. } => {
+                    if let Instruction::Branch { cond, label } = ins.clone() {
+                        let cond = self.consume_static(cond);
+                        self.push(Instruction::Branch { cond, label });
+                    }
+                }
+                _ => {
+                    // Call and Label, both should reset
+                    self.push(ins.clone());
+                    self.reset();
                 }
             }
         }
@@ -304,10 +311,6 @@ impl Allocator {
                     dst: self.alloc(dst),
                     s1: self.alloc(s1),
                 }),
-                Instruction::Call { .. } => {
-                    self.push(ins.clone());
-                    self.reset();
-                }
                 Instruction::Fused { op, dst, a, b, c } => {
                     self.push(Instruction::Fused {
                         op,
@@ -328,6 +331,15 @@ impl Allocator {
                     false_val: self.alloc(false_val),
                     cond,
                 }),
+                Instruction::Branch { .. } => {
+                    if let Instruction::Branch { cond, label } = ins.clone() {
+                        let cond = self.alloc(cond);
+                        self.push(Instruction::Branch { cond, label });
+                    }
+                }
+                _ => {
+                    self.push(ins.clone());
+                }
             }
         }
 

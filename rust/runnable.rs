@@ -91,7 +91,7 @@ impl Runnable {
 
         let fastmath = opt & FASTMATH != 0;
         let opt_level = ((opt & OPT_LEVEL_MASK) >> OPT_LEVEL_SHIFT) as u8;
-        let mir = prog.builder.create_mir(fastmath, opt_level)?;
+        let mir = prog.builder.compile_mir(fastmath, opt_level)?;
 
         let compiled = match ty {
             CompilerType::ByteCode => Self::compile_debugger(&mir, &mut prog, size, false)?,
@@ -242,7 +242,7 @@ impl Runnable {
     ) -> Result<Box<dyn Compiled<f64>>> {
         // println!("{:#?}", &mir);
         let mem: Vec<f64> = vec![0.0; size];
-        let stack: Vec<f64> = vec![0.0; prog.builder.block.sym_table.num_stack];
+        let stack: Vec<f64> = vec![0.0; prog.builder.block().sym_table.num_stack];
         let code = CompiledMir::new(mir.clone(), mem, stack);
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
         Ok(compiled)
@@ -560,7 +560,7 @@ impl Debugger {
         // accept if the difference is less that 1e-15 to count for rounding error
         // because of different operation order
         if p.iter().zip(q).any(|(x, y)| !(f64::abs(*x - *y) < 1e-6)) {
-            for (key, sym) in self.builder.block.sym_table.syms.iter() {
+            for (key, sym) in self.builder.block_shared().sym_table.syms.iter() {
                 if let Loc::Mem(idx) = sym.borrow().loc {
                     let a = p[idx as usize];
                     let b = q[idx as usize];

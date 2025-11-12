@@ -8,6 +8,8 @@ pub trait Generator {
     fn bytes(&mut self) -> Vec<u8>;
     fn seal(&mut self);
     fn align(&mut self);
+    fn set_label(&mut self, label: &str);
+    fn branch_if(&mut self, cond: Reg, label: &str);
 
     /***********************************/
     fn fmov(&mut self, dst: Reg, s1: Reg);

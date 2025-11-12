@@ -123,10 +123,6 @@ impl AmdGenerator {
         self.amd.a.append_quad(u);
     }
 
-    fn set_label(&mut self, label: &str) {
-        self.amd.a.set_label(label);
-    }
-
     fn apply_jumps(&mut self) {
         self.amd.a.apply_jumps();
     }
@@ -311,6 +307,15 @@ impl Generator for AmdGenerator {
             self.amd.nop();
             n += 1
         }
+    }
+
+    fn set_label(&mut self, label: &str) {
+        self.amd.a.set_label(label);
+    }
+
+    fn branch_if(&mut self, cond: Reg, label: &str) {
+        self.amd.vucomisd(ϕ(cond), ϕ(cond));
+        self.amd.jpe(label);
     }
 
     //***********************************
