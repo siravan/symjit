@@ -7,50 +7,45 @@ use crate::code::{Func, VirtualTable};
 use crate::generator::Generator;
 use crate::mir::Mir;
 use crate::node::Node;
+use crate::symbol::SymbolTable;
 use crate::COUNT_SCRATCH;
 
 //****************************************************//
 
 #[derive(Debug, Clone)]
 pub struct Builder {
-    pub blocks: Vec<Block>,
+    pub primary_block: Block,
     pub consts: Vec<f64>,
     pub ft: HashSet<String>, // function table (the name of functions),
     pub cse: bool,
+    pub count_loops: usize,
 }
 
 impl Builder {
     pub fn new(cse: bool) -> Builder {
-        let mut blocks: Vec<Block> = Vec::new();
-        blocks.push(Block::new("@begin".to_string(), cse));
-
         Builder {
-            blocks,
+            primary_block: Block::new(cse),
             consts: Vec::new(),
             ft: HashSet::new(),
             cse,
+            count_loops: 0,
         }
     }
 
+    pub fn symbol_table(&mut self) -> &mut SymbolTable {
+        &mut self.block().sym_table
+    }
+
     pub fn block(&mut self) -> &mut Block {
-        let n = self.blocks.len();
-        &mut self.blocks[n - 1]
+        &mut self.primary_block
     }
 
     pub fn block_shared(&self) -> &Block {
-        let n = self.blocks.len();
-        &self.blocks[n - 1]
+        &self.primary_block
     }
 
-    pub fn add_block(&mut self) -> String {
-        let label = format!("@block_{}", self.blocks.len());
-        self.add_block_named(&label);
-        label
-    }
-
-    pub fn add_block_named(&mut self, label: &str) {
-        let label = label.to_string();
-        self.blocks.push(Block::new(label.clone(), self.cse));
+    pub fn add_label(&mut self, label: &str) {
+        self.block().add_label(label);
     }
 
     pub fn add_assign(&mut self, lhs: Node, rhs: Node) -> Result<Node> {
@@ -115,6 +110,45 @@ impl Builder {
         Ok(lhs)
     }
 
+    pub fn add_loop(
+        &mut self,
+        op: &str,
+        eq: Node,
+        var: Node,
+        start: Node,
+        end: Node,
+    ) -> Result<Node> {
+        assert!(op == "Sum" || op == "Product");
+        let is_sum = op == "Sum";
+
+        let loop_var = var;
+        let accum_var = self.block().create_tmp();
+
+        self.block().add_assign(loop_var.clone(), start);
+        let init = self.create_const(if is_sum { 0.0 } else { 1.0 })?;
+        let one = self.create_const(1.0)?;
+        self.block().add_assign(accum_var.clone(), init);
+
+        let label = format!(".L{}", self.count_loops);
+        self.count_loops += 1;
+        self.block().add_label(&label);
+
+        let p = if is_sum {
+            self.create_binary("plus", accum_var.clone(), eq)?
+        } else {
+            self.create_binary("times", accum_var.clone(), eq)?
+        };
+
+        self.add_assign(accum_var.clone(), p)?;
+        let q = self.create_binary("plus", loop_var.clone(), one.clone())?;
+        self.add_assign(loop_var.clone(), q)?;
+        let cond = self.create_binary("leq", loop_var.clone(), end.clone())?;
+
+        self.block().add_branch(cond, &label);
+
+        Ok(accum_var)
+    }
+
     pub fn create_ifelse(&mut self, cond: Node, true_val: Node, false_val: Node) -> Result<Node> {
         Ok(self.block().create_ifelse(cond, true_val, false_val))
     }
@@ -141,8 +175,7 @@ impl Builder {
 
     pub fn create_var(&mut self, name: &str) -> Result<Node> {
         let sym = self
-            .block()
-            .sym_table
+            .symbol_table()
             .find_sym(name)
             .ok_or_else(|| anyhow!("variable {} not found", name))?;
 
@@ -150,39 +183,38 @@ impl Builder {
     }
 
     pub fn create_unary(&mut self, op: &str, arg: Node) -> Result<Node> {
-        let node = self.block().create_unary(op, arg);
-        Ok(node)
+        Ok(self.block().create_unary(op, arg))
     }
 
     pub fn create_powi(&mut self, arg: Node, power: i32) -> Result<Node> {
         Ok(self.block().create_powi(arg, power))
     }
 
+    pub fn create_modular_powi(&mut self, left: Node, right: Node, power: i32) -> Result<Node> {
+        Ok(self.block().create_modular_powi(left, right, power))
+    }
+
     pub fn create_binary(&mut self, op: &str, left: Node, right: Node) -> Result<Node> {
         let node = match op {
-            "times" if left.is_const(-1.0) => self.block().create_unary("neg", right),
-            "times" if right.is_const(-1.0) => self.block().create_unary("neg", left),
+            "times" if left.is_const(-1.0) => self.create_unary("neg", right)?,
+            "times" if right.is_const(-1.0) => self.create_unary("neg", left)?,
             "times" if left.is_const(1.0) => right,
             "times" if right.is_const(1.0) => left,
             "times" if left.is_unary("recip") => {
-                self.block()
-                    .create_binary("divide", right, left.arg().unwrap())
+                self.create_binary("divide", right, left.arg().unwrap())?
             }
             "times" if right.is_unary("recip") => {
-                self.block()
-                    .create_binary("divide", left, right.arg().unwrap())
+                self.create_binary("divide", left, right.arg().unwrap())?
             }
             "plus" if left.is_unary("neg") => {
-                self.block()
-                    .create_binary("minus", right, left.arg().unwrap())
+                self.create_binary("minus", right, left.arg().unwrap())?
             }
             "plus" if right.is_unary("neg") => {
-                self.block()
-                    .create_binary("minus", left, right.arg().unwrap())
+                self.create_binary("minus", left, right.arg().unwrap())?
             }
             "rem" if left.is_unary("_powi_") => {
                 let (arg, power) = left.arg_power().unwrap();
-                self.block().create_modular_powi(arg, right, power)
+                self.create_modular_powi(arg, right, power)?
             }
             "min" => {
                 let cond = self.create_binary("leq", left.clone(), right.clone())?;
@@ -206,6 +238,7 @@ impl Builder {
                 let c1 = self.create_binary("geq", left, zero.clone())?;
                 self.create_ifelse(c1, x0, zero)?
             }
+            // note: block() is needed here to prevent a infinite loop
             _ => self.block().create_binary(op, left, right),
         };
 
@@ -215,10 +248,8 @@ impl Builder {
     pub fn compile_mir(&mut self, fastmath: bool, opt_level: u8) -> Result<Mir> {
         let mut mir = Mir::new(opt_level, fastmath);
 
-        for block in self.blocks.iter_mut() {
-            block.eliminate();
-            block.compile(&mut mir)?;
-        }
+        self.block().eliminate();
+        self.block().compile(&mut mir)?;
 
         if opt_level >= 1 {
             mir.optimize_peephole();
@@ -256,7 +287,7 @@ impl Builder {
         count_obs: usize,
     ) -> Result<()> {
         // println!("{:#?}", mir.used_registers());
-        let cap = self.block().sym_table.num_stack as u32;
+        let cap = self.symbol_table().num_stack as u32;
         ir.prologue_indirect(cap, count_states, count_obs);
 
         Self::save_registers(mir, ir);
@@ -283,7 +314,7 @@ impl Builder {
     ) -> Result<()> {
         self.block().eliminate();
         // println!("{:#?}", &self.block().stmts);
-        let cap = self.block().sym_table.num_stack as u32;
+        let cap = self.symbol_table().num_stack as u32;
         ir.prologue_fast(cap, num_args);
 
         Self::save_registers(mir, ir);

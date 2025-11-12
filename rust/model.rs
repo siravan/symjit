@@ -75,13 +75,13 @@ impl Program {
         let mut builder = Builder::new(cse);
 
         for v in &ml.states {
-            builder.block().sym_table.add_mem(&v.name);
+            builder.symbol_table().add_mem(&v.name);
         }
 
-        builder.block().sym_table.add_mem(&ml.iv.name);
+        builder.symbol_table().add_mem(&ml.iv.name);
 
         for v in &ml.params {
-            builder.block().sym_table.add_param(&v.name);
+            builder.symbol_table().add_param(&v.name);
         }
 
         for eq in &ml.obs {
@@ -95,7 +95,7 @@ impl Program {
         for eq in &ml.odes {
             if let Some(name) = eq.lhs.diff_var() {
                 let name = format!("δ{}", name);
-                builder.block().sym_table.add_mem(&name);
+                builder.symbol_table().add_mem(&name);
             } else {
                 return Err(anyhow!("lhs diff var not found"));
             }
@@ -198,6 +198,10 @@ impl Expr {
     /// Addition and Multiplication can haev multiple arguments
     /// The intermediate tree has only unary and binary nodes
     fn transform_poly(&self, builder: &mut Builder, op: &str, args: &[Expr]) -> Result<Node> {
+        if op == "Sum" || op == "Product" {
+            return self.transform_loop(builder, op, args);
+        }
+
         if !(op == "plus" || op == "times" || op == "min" || op == "max") {
             return Err(anyhow!("missing poly op: {}", op));
         }
@@ -210,6 +214,15 @@ impl Expr {
         }
 
         Ok(x)
+    }
+
+    fn transform_loop(&self, builder: &mut Builder, op: &str, args: &[Expr]) -> Result<Node> {
+        let var = builder.block().create_tmp_named(&args[1].var().unwrap());
+        let eq = args[0].transform(builder)?;
+        let start = args[2].transform(builder)?;
+        let end = args[3].transform(builder)?;
+
+        builder.add_loop(op, eq, var, start, end)
     }
 }
 

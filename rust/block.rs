@@ -16,7 +16,6 @@ use crate::COUNT_SCRATCH;
 
 #[derive(Debug, Clone)]
 pub struct Block {
-    pub label: String,
     pub stmts: Vec<Statement>,
     pub sym_table: SymbolTable,
     pub num_tmp: usize,
@@ -25,18 +24,30 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new(label: String, cse: bool) -> Block {
+    pub fn new(cse: bool) -> Block {
         Block {
             stmts: Vec::new(),
             sym_table: SymbolTable::new(),
             num_tmp: 0,
             cse,
             calls: HashMap::new(),
-            label,
         }
     }
 
     // add_* functions create a new Statement
+
+    pub fn add_label(&mut self, label: &str) {
+        self.stmts.push(Statement::Label {
+            label: label.to_string(),
+        });
+    }
+
+    pub fn add_branch(&mut self, cond: Node, label: &str) {
+        self.stmts.push(Statement::Branch {
+            cond,
+            label: label.to_string(),
+        })
+    }
 
     pub fn add_assign(&mut self, lhs: Node, rhs: Node) {
         let rhs = self.process(rhs);
@@ -80,8 +91,6 @@ impl Block {
     // **************** Compile the Block! *********************
 
     pub fn compile(&mut self, ir: &mut Mir) -> Result<()> {
-        ir.set_label(&self.label);
-
         for stmt in self.stmts.iter_mut() {
             stmt.compile(ir)?;
         }
@@ -93,6 +102,17 @@ impl Block {
     pub fn create_tmp(&mut self) -> Node {
         let name = format!("ψ{}", self.num_tmp);
         self.num_tmp += 1;
+        self.sym_table.add_stack(name.as_str());
+        let sym = self.sym_table.find_sym(name.as_str()).unwrap();
+
+        Node::Var {
+            sym,
+            status: VarStatus::Unknown,
+        }
+    }
+
+    pub fn create_tmp_named(&mut self, name: &str) -> Node {
+        let name = name.to_string();
         self.sym_table.add_stack(name.as_str());
         let sym = self.sym_table.find_sym(name.as_str()).unwrap();
 
@@ -225,13 +245,28 @@ impl Block {
         let mut hs: HashSet<u64> = HashSet::new(); // hash-value-set to find collision
         let mut cs: HashMap<u64, (Node, Node)> = HashMap::new(); // collision set as (lhs, rhs)
 
+        let mut depth: i32 = 0;
+
         for s in stmts.iter_mut() {
             match s {
                 Statement::Assign { rhs, .. } => {
-                    self.find_cse(&mut hs, &mut cs, rhs);
+                    if depth == 0 {
+                        self.find_cse(&mut hs, &mut cs, rhs);
+                    }
                 }
                 Statement::Call { arg, .. } => {
-                    self.find_cse(&mut hs, &mut cs, arg);
+                    if depth == 0 {
+                        self.find_cse(&mut hs, &mut cs, arg);
+                    }
+                }
+                Statement::Label { .. } => {
+                    // The logic here with depth works for Sum/Product
+                    // but needs improvement for general multi-block situation
+                    depth += 1;
+                }
+                Statement::Branch { .. } => {
+                    assert!(depth > 0);
+                    depth -= 1;
                 }
             }
         }
@@ -265,6 +300,13 @@ impl Block {
                         arg,
                         num_args,
                     });
+                }
+                Statement::Label { label } => {
+                    // TODO: Just copying here, may need to change the logic
+                    self.stmts.push(Statement::Label { label });
+                }
+                Statement::Branch { cond, label } => {
+                    self.stmts.push(Statement::Branch { cond, label });
                 }
             }
         }

@@ -1,6 +1,7 @@
+from sympy import symbols
 from sympy import asin, acos, atan, log, sqrt
 from sympy import asinh, acosh, atanh
-from sympy import Xor, And, Or, Abs, Mod, Min, Max, Heaviside
+from sympy import Xor, And, Or, Abs, Mod, Min, Max, Heaviside, Sum, Product
 from sympy import (
     Equality,
     Unequality,
@@ -126,13 +127,42 @@ def piecewise(args):
     return tree_node("ifelse", [cond, x1, x2])
 
 
+count_dummy = 0
+
+
+def reset_dummy():
+    global count_dummy
+    count_dummy = 0
+
+
+def loops(y):
+    args = [y.args[0]]
+    args.extend(y.args[1])
+
+    global count_dummy
+
+    v = symbols(f"Σ{count_dummy}")
+    count_dummy += 1
+    d = {args[1]: v}
+    args = [eq.subs(d) for eq in args]
+
+    if isinstance(y, Sum):
+        return tree_node("Sum", args)
+    elif isinstance(y, Product):
+        return tree_node("Product", args)
+    else:
+        raise ValueError("only Sum and Product loops are supported")
+
+
 def var(sym, val=0.0):
     return {"name": sym.name, "val": float(val)}
 
 
 def expr(y):
     try:
-        if isinstance(y, numbers.Number) or y.is_number:
+        if isinstance(y, Sum) or isinstance(y, Product):
+            return loops(y)
+        elif isinstance(y, numbers.Number) or y.is_number:
             return {"type": "Const", "val": float(y)}
         elif y.is_Symbol:
             return {"type": "Var", "name": y.name}
@@ -161,6 +191,8 @@ def ode(y):
 
 
 def model(states, eqs, params=None, obs=None):
+    reset_dummy()
+
     if not hasattr(states, "__iter__"):
         states = [states]
 
@@ -186,6 +218,8 @@ def model(states, eqs, params=None, obs=None):
 
 
 def model_ode(iv, states, odes, params=None):
+    reset_dummy()
+
     if not hasattr(states, "__iter__"):
         states = [states]
 
@@ -210,6 +244,8 @@ def model_ode(iv, states, odes, params=None):
 
 
 def model_jac(iv, states, odes, params=None):
+    reset_dummy()
+
     if not hasattr(states, "__iter__"):
         states = [states]
 

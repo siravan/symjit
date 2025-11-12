@@ -17,6 +17,13 @@ pub enum Statement {
         arg: Node,
         num_args: usize,
     },
+    Label {
+        label: String,
+    },
+    Branch {
+        cond: Node,
+        label: String,
+    },
 }
 
 impl Statement {
@@ -48,6 +55,13 @@ impl Statement {
                 let _ = arg.compile_tree(ir)?;
                 ir.call(op.as_str(), *num_args);
                 Self::save_result(ir, lhs);
+            }
+            Statement::Label { label } => {
+                ir.set_label(label);
+            }
+            Statement::Branch { cond, label } => {
+                let cond = cond.compile_tree(ir)?;
+                ir.branch_if(reg(cond), label);
             }
         };
 
