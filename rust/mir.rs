@@ -209,8 +209,8 @@ impl Mir {
         for ins in self.code.iter() {
             let r = Self::get_dst(ins);
 
-            if r.is_some() {
-                mask |= 1 << r.unwrap();
+            if let Some(r) = r {
+                mask |= 1 << r;
             }
         }
 
@@ -229,11 +229,8 @@ impl Mir {
         let mut labels: HashMap<String, usize> = HashMap::new();
 
         for (ip, ins) in self.code.iter().enumerate() {
-            match ins {
-                Instruction::Label { label } => {
-                    labels.insert(label.clone(), ip);
-                }
-                _ => {}
+            if let Instruction::Label { label } = ins {
+                labels.insert(label.clone(), ip);
             }
         }
 

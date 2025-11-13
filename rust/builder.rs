@@ -10,6 +10,37 @@ use crate::node::Node;
 use crate::symbol::SymbolTable;
 use crate::COUNT_SCRATCH;
 
+// the list of intrinsic unary ops, i.e., operations that can be implemented directly in
+// machine code
+pub const UNARY: &[&str] = &[
+    "abs", "not", "neg", "root", "square", "cube", "recip", "round", "floor", "ceiling", "trunc",
+    "frac", "_powi_", "_call_",
+];
+// the list of intrinsic binary ops, i.e., operations that can be implemented directly in
+// machine code
+pub const BINARY: &[&str] = &[
+    "plus",
+    "minus",
+    "times",
+    "divide",
+    "rem",
+    "gt",
+    "geq",
+    "lt",
+    "leq",
+    "eq",
+    "neq",
+    "and",
+    "or",
+    "xor",
+    "_ifelse_",
+    "_powi_mod_",
+    "_call_",
+    "min",
+    "max",
+    "heaviside",
+];
+
 //****************************************************//
 
 #[derive(Debug, Clone)]
@@ -17,7 +48,6 @@ pub struct Builder {
     pub primary_block: Block,
     pub consts: Vec<f64>,
     pub ft: HashSet<String>, // function table (the name of functions),
-    pub cse: bool,
     pub count_loops: usize,
 }
 
@@ -27,7 +57,6 @@ impl Builder {
             primary_block: Block::new(cse),
             consts: Vec::new(),
             ft: HashSet::new(),
-            cse,
             count_loops: 0,
         }
     }
@@ -44,8 +73,8 @@ impl Builder {
         &self.primary_block
     }
 
-    pub fn add_label(&mut self, label: &str) {
-        self.block().add_label(label);
+    pub fn has_loop(&self) -> bool {
+        self.count_loops > 0
     }
 
     pub fn add_assign(&mut self, lhs: Node, rhs: Node) -> Result<Node> {
@@ -53,17 +82,19 @@ impl Builder {
         Ok(lhs)
     }
 
-    pub fn add_call_unary(&mut self, op: &str, arg: Node) -> Result<Node> {
-        let lhs = self.block().add_call_unary(op, arg);
-        let f = VirtualTable::from_str(op)?; // check to see if op is defined
-        if !matches!(f, Func::Unary(_)) {
-            return Err(anyhow!("{} is not a unary function", op));
+    pub fn add_unary(&mut self, op: &str, arg: Node) -> Result<Node> {
+        if !UNARY.contains(&op) {
+            let f = VirtualTable::from_str(op)?; // check to see if op is defined
+            if !matches!(f, Func::Unary(_)) {
+                return Err(anyhow!("{} is not a unary function", op));
+            }
+            self.ft.insert(op.to_string());
         }
-        self.ft.insert(op.to_string());
-        Ok(lhs)
+
+        self.create_unary(op, arg)
     }
 
-    pub fn add_call_binary(&mut self, op: &str, left: Node, right: Node) -> Result<Node> {
+    pub fn add_binary(&mut self, op: &str, left: Node, right: Node) -> Result<Node> {
         if op == "power" {
             if let Some(val) = right.as_int_const() {
                 match val {
@@ -91,7 +122,7 @@ impl Builder {
 
                 match val {
                     0.5 => return self.create_unary("root", left),
-                    ONE_THIRD => return self.add_call_unary("cbrt", left),
+                    ONE_THIRD => return self.add_unary("cbrt", left),
                     1.5 => {
                         let arg = self.create_unary("cube", left)?;
                         return self.create_unary("root", arg);
@@ -101,13 +132,15 @@ impl Builder {
             }
         }
 
-        let lhs = self.block().add_call_binary(op, left, right);
-        let f = VirtualTable::from_str(op)?; // check to see if op is defined
-        if !matches!(f, Func::Binary(_)) {
-            return Err(anyhow!("{} is not a binary function", op));
+        if !BINARY.contains(&op) {
+            let f = VirtualTable::from_str(op)?; // check to see if op is defined
+            if !matches!(f, Func::Binary(_)) {
+                return Err(anyhow!("{} is not a binary function", op));
+            }
+            self.ft.insert(op.to_string());
         }
-        self.ft.insert(op.to_string());
-        Ok(lhs)
+
+        self.create_binary(op, left, right)
     }
 
     pub fn add_loop(
@@ -246,7 +279,7 @@ impl Builder {
     }
 
     pub fn compile_mir(&mut self, fastmath: bool, opt_level: u8) -> Result<Mir> {
-        println!("{:#?}", self.block().stmts);
+        // println!("{:#?}", self.block().stmts);
 
         let mut mir = Mir::new(opt_level, fastmath);
 

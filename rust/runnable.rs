@@ -110,6 +110,7 @@ impl Runnable {
 
         let use_simd = (opt & USE_SIMD != 0)
             && Platform::has_avx()
+            && !prog.builder.has_loop()
             && (matches!(ty, CompilerType::Amd)
                 | matches!(ty, CompilerType::AmdAVX)
                 | matches!(ty, CompilerType::Native));

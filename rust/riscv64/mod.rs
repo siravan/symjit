@@ -121,9 +121,6 @@ const STATES: u8 = RiscV::fs1; // second arg = states+obs if indirect mode, othe
 const IDX: u8 = RiscV::fs2; // third arg = index if indirect mode
 const PARAMS: u8 = RiscV::fs3; // fourth arg = params
 
-const RET: u8 = RiscV::fa0;
-const TEMP: u8 = RiscV::fa1;
-
 impl RiscV {
     pub fn new() -> RiscV {
         RiscV {
@@ -182,7 +179,7 @@ impl RiscV {
     }
 
     fn li(&mut self, dst: u8, val: i32) {
-        if val >= 2048 || val < -2048 {
+        if !(-2048..2048).contains(&val) {
             self.emit(rvv! {lui x(dst), hi(val as u32)});
             self.emit(rvv! {addi x(dst), x(dst), lo(val as u32)});
         } else {

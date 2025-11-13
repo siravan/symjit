@@ -9,35 +9,6 @@ pub trait Transformer {
     fn transform(&self, builder: &mut Builder) -> Result<Node>;
 }
 
-// the list of intrinsic unary ops, i.e., operations that can be implemented directly in
-// machine code
-const UNARY: &[&str] = &[
-    "abs", "not", "root", "square", "cube", "recip", "round", "floor", "ceiling", "trunc", "frac",
-];
-// the list of intrinsic binary ops, i.e., operations that can be implemented directly in
-// machine code
-const BINARY: &[&str] = &[
-    "plus",
-    "minus",
-    "times",
-    "divide",
-    "rem",
-    "gt",
-    "geq",
-    "lt",
-    "leq",
-    "eq",
-    "neq",
-    "and",
-    "or",
-    "xor",
-    "if_pos",
-    "if_neg",
-    "min",
-    "max",
-    "heaviside",
-];
-
 /// Collects the intermediate code (builder) and interface variables
 #[derive(Debug)]
 pub struct Program {
@@ -163,23 +134,13 @@ impl Expr {
 
     fn transform_unary(&self, builder: &mut Builder, op: &str, args: &[Expr]) -> Result<Node> {
         let x = args[0].transform(builder)?;
-
-        if UNARY.contains(&op) {
-            builder.create_unary(op, x)
-        } else {
-            builder.add_call_unary(op, x)
-        }
+        builder.add_unary(op, x)
     }
 
     fn transform_binary(&self, builder: &mut Builder, op: &str, args: &[Expr]) -> Result<Node> {
         let l = args[0].transform(builder)?;
         let r = args[1].transform(builder)?;
-
-        if BINARY.contains(&op) {
-            builder.create_binary(op, l, r)
-        } else {
-            builder.add_call_binary(op, l, r)
-        }
+        builder.add_binary(op, l, r)
     }
 
     /// Ternary operator is the conditional select operator

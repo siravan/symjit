@@ -12,6 +12,8 @@ use crate::statement::Statement;
 use crate::symbol::{Loc, Symbol, SymbolTable};
 use crate::COUNT_SCRATCH;
 
+use crate::builder::{BINARY, UNARY};
+
 //****************************************************//
 
 #[derive(Debug, Clone)]
@@ -54,40 +56,6 @@ impl Block {
         self.stmts.push(Statement::assign(lhs, rhs));
     }
 
-    pub fn add_call_unary(&mut self, op: &str, arg: Node) -> Node {
-        let n = (op.to_string(), arg.hashof());
-
-        if self.cse {
-            if let Some(lhs) = self.calls.get(&n) {
-                return lhs.clone();
-            }
-        }
-
-        let arg = self.create_unary("_call_", arg);
-        let arg = self.process(arg);
-        let lhs = self.create_tmp();
-        self.stmts.push(Statement::call(op, lhs.clone(), arg, 1));
-        self.calls.insert(n, lhs.clone());
-        lhs
-    }
-
-    pub fn add_call_binary(&mut self, op: &str, left: Node, right: Node) -> Node {
-        let n = (op.to_string(), left.hashof() ^ (right.hashof() + 1));
-
-        if self.cse {
-            if let Some(lhs) = self.calls.get(&n) {
-                return lhs.clone();
-            }
-        }
-
-        let arg = self.create_binary("_call_", left, right);
-        let arg = self.process(arg);
-        let lhs = self.create_tmp();
-        self.stmts.push(Statement::call(op, lhs.clone(), arg, 2));
-        self.calls.insert(n, lhs.clone());
-        lhs
-    }
-
     // **************** Compile the Block! *********************
 
     pub fn compile(&mut self, ir: &mut Mir) -> Result<()> {
@@ -102,19 +70,12 @@ impl Block {
     pub fn create_tmp(&mut self) -> Node {
         let name = format!("ψ{}", self.num_tmp);
         self.num_tmp += 1;
-        self.sym_table.add_stack(name.as_str());
-        let sym = self.sym_table.find_sym(name.as_str()).unwrap();
-
-        Node::Var {
-            sym,
-            status: VarStatus::Unknown,
-        }
+        self.create_tmp_named(&name)
     }
 
     pub fn create_tmp_named(&mut self, name: &str) -> Node {
-        let name = name.to_string();
-        self.sym_table.add_stack(name.as_str());
-        let sym = self.sym_table.find_sym(name.as_str()).unwrap();
+        self.sym_table.add_stack(name);
+        let sym = self.sym_table.find_sym(name).unwrap();
 
         Node::Var {
             sym,
@@ -168,17 +129,11 @@ impl Block {
      * Note that two registers (XMM0 and XMM1) are needed as temporary and for function calls
      */
     fn trim(&mut self, node: Node) -> Node {
-        if node.ershov_number() < COUNT_SCRATCH {
-            return node;
-        }
-
-        // println!("ershov {}", node.ershov_number());
-
         match node {
             Node::Void => Node::Void,
             Node::Const { val, idx } => Node::Const { val, idx },
             Node::Var { sym, status } => Node::Var { sym, status },
-            Node::Unary { op, arg, power, .. } => self.trim_unary(op, *arg, power),
+            Node::Unary { op, arg, power, .. } => self.trim_unary(&op, *arg, power),
             Node::Binary {
                 op,
                 left,
@@ -186,18 +141,39 @@ impl Block {
                 power,
                 cond,
                 ..
-            } => self.trim_binary(op, *left, *right, power, cond),
+            } => self.trim_binary(&op, *left, *right, power, cond),
         }
     }
 
-    fn trim_unary(&mut self, op: String, arg: Node, power: i32) -> Node {
+    fn trim_unary(&mut self, op: &str, arg: Node, power: i32) -> Node {
         let arg = self.trim(arg);
-        Node::create_unary(op.as_str(), arg, power)
+
+        if !UNARY.contains(&op) {
+            self.break_call_unary(&op, arg)
+        } else {
+            Node::create_unary(op, arg, power)
+        }
+    }
+
+    fn break_call_unary(&mut self, op: &str, arg: Node) -> Node {
+        let n = (op.to_string(), arg.hashof());
+
+        if self.cse {
+            if let Some(lhs) = self.calls.get(&n) {
+                return lhs.clone();
+            }
+        }
+
+        let arg = self.create_unary("_call_", arg);
+        let lhs = self.create_tmp();
+        self.stmts.push(Statement::call(op, lhs.clone(), arg, 1));
+        self.calls.insert(n, lhs.clone());
+        lhs
     }
 
     fn trim_binary(
         &mut self,
-        op: String,
+        op: &str,
         left: Node,
         right: Node,
         power: i32,
@@ -205,6 +181,10 @@ impl Block {
     ) -> Node {
         let left = self.trim(left);
         let right = self.trim(right);
+
+        if !BINARY.contains(&op) {
+            return self.break_call_binary(&op, left, right);
+        }
 
         let right = if left.ershov_number() == COUNT_SCRATCH - 1
             && right.ershov_number() == COUNT_SCRATCH - 1
@@ -216,7 +196,23 @@ impl Block {
             right
         };
 
-        Node::create_binary(op.as_str(), left, right, power, cond)
+        Node::create_binary(op, left, right, power, cond)
+    }
+
+    pub fn break_call_binary(&mut self, op: &str, left: Node, right: Node) -> Node {
+        let n = (op.to_string(), left.hashof() ^ (right.hashof() + 1));
+
+        if self.cse {
+            if let Some(lhs) = self.calls.get(&n) {
+                return lhs.clone();
+            }
+        }
+
+        let arg = self.create_binary("_call_", left, right);
+        let lhs = self.create_tmp();
+        self.stmts.push(Statement::call(op, lhs.clone(), arg, 2));
+        self.calls.insert(n, lhs.clone());
+        lhs
     }
 
     /*
@@ -261,7 +257,7 @@ impl Block {
                 }
                 Statement::Label { .. } => {
                     // The logic here with depth works for Sum/Product
-                    // but needs improvement for general multi-block situation
+                    // but needs improvement for general multi-block situations
                     depth += 1;
                 }
                 Statement::Branch { .. } => {
