@@ -208,6 +208,9 @@ impl Block {
             }
         }
 
+        let left = self.process(left);
+        let right = self.process(right);
+
         let arg = self.create_binary("_call_", left, right);
         let lhs = self.create_tmp();
         self.stmts.push(Statement::call(op, lhs.clone(), arg, 2));

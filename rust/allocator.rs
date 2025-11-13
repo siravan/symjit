@@ -230,6 +230,7 @@ impl Allocator {
                     cond,
                 } => {
                     let (dst, true_val, false_val) = self.subs_bi(dst, true_val, false_val);
+                    self.loads.insert(cond);
                     self.push(Instruction::IfElse {
                         dst,
                         true_val,
