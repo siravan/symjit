@@ -66,14 +66,6 @@ impl Assembler {
             let target = self.labels.get(label).expect("label not found");
             let offset = (*target as i32) - (*ip as i32);
 
-            // TODO: we need a better place for this check
-            // assembler is supposed to be arch agnostic
-            #[cfg(target_arch = "aarch64")]
-            assert!(
-                offset >= 0 && offset < (1 << 20),
-                "the code segment is too large!"
-            );
-
             let x = f(offset, *code);
 
             self.buf[*ip] |= (x & 0xff) as u8;

@@ -3,8 +3,9 @@ import util
 args = util.process_argv()
 
 import math
-from sympy import symbols, sqrt
+
 from symjit import compile_func
+from sympy import sqrt, symbols
 
 # calculating pi using Viète's formula (https://en.wikipedia.org/wiki/Vi%C3%A8te%27s_formula)
 
