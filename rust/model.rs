@@ -11,12 +11,13 @@ pub trait Transformer {
 
 // the list of intrinsic unary ops, i.e., operations that can be implemented directly in
 // machine code
-const UNARY: &[&str] = &[
-    "abs", "not", "root", "square", "cube", "recip", "round", "floor", "ceiling", "trunc", "frac",
+pub const UNARY: &[&str] = &[
+    "abs", "not", "neg", "root", "square", "cube", "recip", "round", "floor", "ceiling", "trunc",
+    "frac", "_powi_", "_call_",
 ];
 // the list of intrinsic binary ops, i.e., operations that can be implemented directly in
 // machine code
-const BINARY: &[&str] = &[
+pub const BINARY: &[&str] = &[
     "plus",
     "minus",
     "times",
@@ -31,8 +32,9 @@ const BINARY: &[&str] = &[
     "and",
     "or",
     "xor",
-    "if_pos",
-    "if_neg",
+    "_ifelse_",
+    "_powi_mod_",
+    "_call_",
     "min",
     "max",
     "heaviside",
