@@ -8,7 +8,7 @@ from symjit import compile_func
 
 # calculating pi using Viète's formula (https://en.wikipedia.org/wiki/Vi%C3%A8te%27s_formula)
 
-N = 5
+N = 21
 
 x = symbols("x")
 
