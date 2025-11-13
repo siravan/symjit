@@ -246,6 +246,8 @@ impl Builder {
     }
 
     pub fn compile_mir(&mut self, fastmath: bool, opt_level: u8) -> Result<Mir> {
+        println!("{:#?}", self.block().stmts);
+
         let mut mir = Mir::new(opt_level, fastmath);
 
         self.block().eliminate();
