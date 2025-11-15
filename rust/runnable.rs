@@ -12,11 +12,11 @@ use crate::model::Program;
 use crate::riscv64::RiscV;
 use crate::symbol::Loc;
 use crate::{utils::*, OPT_LEVEL_MASK, OPT_LEVEL_SHIFT};
-use crate::{FASTMATH, USE_SIMD, USE_THREADS};
+use crate::{FASTMATH, SANITIZE, USE_SIMD, USE_THREADS};
 
 use rayon::prelude::*;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Copy, Clone)]
 pub enum CompilerType {
     ByteCode,
     Native,
@@ -91,8 +91,9 @@ impl Runnable {
         let params = vec![0.0; count_params + 1];
 
         let fastmath = opt & FASTMATH != 0;
-        let opt_level = ((opt & OPT_LEVEL_MASK) >> OPT_LEVEL_SHIFT) as u8;
-        let mir = prog.builder.compile_mir(fastmath, opt_level, df)?;
+        let mir = prog
+            .builder
+            .compile_mir(fastmath, Self::opt_level(ty, opt), df)?;
 
         let compiled = match ty {
             CompilerType::ByteCode => Self::compile_debugger(&mir, &mut prog, size, false)?,
@@ -154,6 +155,26 @@ impl Runnable {
             count_diffs,
             size,
         })
+    }
+
+    fn opt_level(ty: CompilerType, opt: u32) -> u8 {
+        let level: u8 = ((opt & OPT_LEVEL_MASK) >> OPT_LEVEL_SHIFT) as u8;
+
+        if opt & SANITIZE == 0 {
+            return level;
+        }
+
+        match ty {
+            CompilerType::AmdSSE => 0,
+            CompilerType::Native => {
+                if Platform::is_amd64() && !Platform::has_avx() {
+                    0
+                } else {
+                    level
+                }
+            }
+            _ => level,
+        }
     }
 
     /********************* compile_* functions *************************/

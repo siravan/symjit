@@ -1,12 +1,21 @@
 import math
 import platform
 import time
-from random import randint
+from random import randint, random
 
 import numpy as np
 from scipy import integrate
 from symjit import compile_func
-from sympy import Piecewise, cos, lambdify, sin, sqrt, symbols
+from sympy import (
+    Function,
+    Piecewise,
+    Product,
+    Sum,
+    cos,
+    sin,
+    sqrt,
+    symbols,
+)
 
 L = 1000
 
@@ -243,6 +252,21 @@ def fact(**args):
     return u[randint(0, L - 1)], t1 - t0
 
 
+def sumprod(**args):
+    if args["backend"] == "sympy":
+        return sum([math.exp(i / L) for i in range(L)]), 0
+
+    fact = compile_func([z], Product(y, (y, 1, z)), **args)
+    F = Function("F")
+    f = compile_func([x], Sum(x**z / F(z), (z, 0, 50)), **args, defuns={F: fact})
+
+    t0 = time.perf_counter_ns()
+    u = [f(i / L) for i in range(L)]
+    t1 = time.perf_counter_ns()
+
+    return sum(u), t1 - t0
+
+
 def triple(**args):
     p = 1 / (1 - cos(x) * cos(y) * cos(z))
     f = func([x, y, z], p, **args)
@@ -321,6 +345,7 @@ def cases():
                                     "cse": cse,
                                     "fastmath": fastmath,
                                     "opt_level": opt_level,
+                                    "sanitize": False,
                                 }
                                 s = f"y={abbr_ty(ty)}:s={Ω(use_simd)}:t={Ω(use_threads)}:c={Ω(cse)}:f={Ω(fastmath)},O={opt_level}"
                                 cases.append((s, args))
@@ -338,6 +363,7 @@ def cases():
                                 "cse": cse,
                                 "fastmath": fastmath,
                                 "opt_level": opt_level,
+                                "sanitize": False,
                             }
                             s = f"y={abbr_ty(ty)}:s=F:t={Ω(use_threads)}:c={Ω(cse)}:f={Ω(fastmath)},O={opt_level}"
                             cases.append((s, args))
@@ -387,4 +413,5 @@ test_model(binom, "stress")
 test_model(power, "power")
 test_model(powi_mod, "powi_mod", pyback=False)
 test_model(fact, "fact")
+test_model(sumprod, "sumprod", pyback=False)
 test_model(triple_callable, "triple_callable", pyback=False, bytecode=False)

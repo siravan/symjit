@@ -1,8 +1,9 @@
-import os
-import sys
-import json
 import ctypes
+import json
+import os
 import platform
+import sys
+
 import numpy as np
 
 
@@ -265,8 +266,11 @@ class Defuns:
                     lib._add_func(self.p, sym.name.encode("utf8"), p, 2)
 
     def find_degree(self, sym, eqs):
-        L = [{len(y.args) for y in eq.find(sym)} for eq in eqs]
-        S = set().union(*L)
+        if isinstance(eqs, list):
+            L = [{len(y.args) for y in eq.find(sym)} for eq in eqs]
+            S = set().union(*L)
+        else:
+            S = {len(y.args) for y in eqs.find(sym)}
 
         if len(S) == 0:
             return 0
@@ -292,6 +296,7 @@ class RustyCompiler:
         opt_level=1,
         convert=True,
         defuns=None,
+        sanitize=True,
     ):
         if convert:
             model = json.dumps(model)
@@ -300,6 +305,7 @@ class RustyCompiler:
             | (0x02 if use_threads else 0)
             | (0x04 if cse else 0)
             | (0x08 if fastmath else 0)
+            | (0x10 if sanitize else 0)
             | ((opt_level & 0x0F) << 8)
         )
 

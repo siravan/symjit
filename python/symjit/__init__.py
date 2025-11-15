@@ -1,10 +1,6 @@
 # from engine import Matrix
 import numbers
-<<<<<<< HEAD
-from sympy import lambdify
-=======
 import os
->>>>>>> 0cfa9ec (Defuns rewritten)
 
 import numpy as np
 from sympy import lambdify
@@ -226,6 +222,7 @@ def compile_func(
     backend="rust",
     opt_level=1,
     defuns=None,
+    sanitize=True,
 ):
     """Compile a list of symbolic expression into an executable form.
     compile_func tries to mimic sympy lambdify, but instead of generating
@@ -288,6 +285,7 @@ def compile_func(
             fastmath=fastmath,
             opt_level=opt_level,
             defuns=defuns,
+            sanitize=sanitize,
         )
     elif can_use_python(backend):
         model = pyengine.tree.model(states, eqs, params, obs)
@@ -311,6 +309,7 @@ def compile_ode(
     backend="rust",
     opt_level=1,
     defuns=None,
+    sanitize=True,
 ):
     """Compile a symbolic ODE model into an executable form suitable for
     passung to scipy.integrate.solve_ivp.
@@ -369,6 +368,7 @@ def compile_ode(
             fastmath=fastmath,
             opt_level=opt_level,
             defuns=defuns,
+            sanitize=sanitize,
         )
     elif can_use_python(backend):
         model = pyengine.tree.model_ode(iv, states, odes, params)
@@ -392,6 +392,7 @@ def compile_jac(
     backend="rust",
     opt_level=1,
     defuns=None,
+    sanitize=True,
 ):
     """Genenrates and compiles Jacobian for an ODE system.
         iv: a single symbol, the independent variable.
@@ -432,6 +433,7 @@ def compile_jac(
             fastmath=fastmath,
             opt_level=opt_level,
             defuns=defuns,
+            sanitize=sanitize,
         )
     elif can_use_python(backend):
         model = pyengine.tree.model_jac(iv, states, odes, params)
@@ -451,6 +453,7 @@ def compile_json(
     fastmath=False,
     opt_level=1,
     backend="rust",
+    sanitize=True,
 ):
     """Compiles CellML models
     CellML json files are extracted using CellMLToolkit.jl
@@ -466,6 +469,7 @@ def compile_json(
             opt_level=opt_level,
             convert=False,
             defuns=defuns,
+            sanitize=sanitize,
         )
         return OdeFunc(compiler)
     else:
