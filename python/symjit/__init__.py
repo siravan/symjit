@@ -2,6 +2,7 @@
 import os
 import numpy as np
 import numbers
+from sympy import lambdify
 
 from . import engine
 from . import structure
@@ -268,6 +269,9 @@ def compile_func(
     >>> assert(np.all(f(3, 5) == [8., 15.]))
     >>> assert(np.all(f.apply([3, 5]) == [8., 15.]))
     """
+    if ty == "sympy":
+        return lambdify(states, eqs)
+
     if can_use_rust(backend):
         model = structure.model(states, eqs, params=params, obs=obs)
         compiler = engine.RustyCompiler(

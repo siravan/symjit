@@ -143,40 +143,44 @@ impl Builder {
         self.create_binary(op, left, right)
     }
 
-    pub fn add_loop(
-        &mut self,
-        op: &str,
-        eq: Node,
-        var: Node,
-        start: Node,
-        end: Node,
-    ) -> Result<Node> {
+    pub fn add_loop_prefix(&mut self, op: &str, var: Node, start: Node) -> Result<(Node, usize)> {
         assert!(op == "Sum" || op == "Product");
-        let is_sum = op == "Sum";
 
-        let loop_var = var;
         let accum_var = self.block().create_tmp();
 
-        self.block().add_assign(loop_var.clone(), start);
-        let init = self.create_const(if is_sum { 0.0 } else { 1.0 })?;
-        let one = self.create_const(1.0)?;
+        self.block().add_assign(var, start);
+        let init = self.create_const(if op == "Sum" { 0.0 } else { 1.0 })?;
         self.block().add_assign(accum_var.clone(), init);
 
         let label = format!(".L{}", self.count_loops);
         self.count_loops += 1;
         self.block().add_label(&label);
 
-        let p = if is_sum {
+        Ok((accum_var, self.count_loops - 1))
+    }
+
+    pub fn add_loop_body(
+        &mut self,
+        op: &str,
+        eq: Node,
+        var: Node,
+        end: Node,
+        accum_var: Node,
+        loop_id: usize,
+    ) -> Result<Node> {
+        let p = if op == "Sum" {
             self.create_binary("plus", accum_var.clone(), eq)?
         } else {
             self.create_binary("times", accum_var.clone(), eq)?
         };
 
         self.add_assign(accum_var.clone(), p)?;
-        let q = self.create_binary("plus", loop_var.clone(), one.clone())?;
-        self.add_assign(loop_var.clone(), q)?;
-        let cond = self.create_binary("leq", loop_var.clone(), end.clone())?;
+        let one = self.create_const(1.0)?;
+        let q = self.create_binary("plus", var.clone(), one)?;
+        self.add_assign(var.clone(), q)?;
+        let cond = self.create_binary("leq", var, end)?;
 
+        let label = format!(".L{}", loop_id);
         self.block().add_branch(cond, &label);
 
         Ok(accum_var)
@@ -332,7 +336,7 @@ impl Builder {
         ir.epilogue_indirect(cap, count_states, count_obs);
         ir.align();
         self.append_const_section(ir);
-        self.append_vt_section(ir);
+        self.append_vt_section(mir, ir);
         ir.seal();
         // println!("{:#?}", &self.block().stmts);
         // println!("{:02x?}", ir.bytes());
@@ -359,7 +363,7 @@ impl Builder {
         ir.epilogue_fast(cap, idx_ret);
         ir.align();
         self.append_const_section(ir);
-        self.append_vt_section(ir);
+        self.append_vt_section(mir, ir);
         ir.seal();
         // println!("{:#?}", &self.block().stmts);
         // println!("{:02x?}", ir.bytes());
@@ -371,10 +375,10 @@ impl Builder {
         ir.add_consts(&self.consts);
     }
 
-    fn append_vt_section(&self, ir: &mut impl Generator) {
-        for f in self.ft.iter() {
-            let p = VirtualTable::from_str(f).expect("func not found");
-            ir.add_func(f, p);
+    fn append_vt_section(&self, mir: &Mir, ir: &mut impl Generator) {
+        for op in self.ft.iter() {
+            let p = mir.find_op(op).expect("func not found");
+            ir.add_func(op, p);
         }
     }
 }

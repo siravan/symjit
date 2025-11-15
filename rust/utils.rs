@@ -131,6 +131,12 @@ mod simd {
         }
     }
 
+    impl Default for f64x4 {
+        fn default() -> Self {
+            Self::splat(0.0)
+        }
+    }
+
     #[test]
     fn test_simd() {
         let x = f64x4::splat(2.0);

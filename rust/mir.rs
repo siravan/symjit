@@ -3,6 +3,7 @@ use std::fmt;
 use std::fs;
 use std::io::Write;
 
+use anyhow::Result;
 use petgraph::matrix_graph::Zero;
 
 use crate::code::{Func, VirtualTable};
@@ -644,7 +645,7 @@ impl Mir {
     }
 
     pub fn call(&mut self, op: &str, num_args: usize) {
-        let f = VirtualTable::from_str(op).expect("func not found");
+        let f = self.find_op(op).expect("func not found");
 
         match f {
             Func::Unary(_) => assert!(num_args == 1),
@@ -655,6 +656,10 @@ impl Mir {
             f,
             label: op.to_string(),
         });
+    }
+
+    pub fn find_op(&self, op: &str) -> Result<Func> {
+        VirtualTable::from_str(op)
     }
 }
 

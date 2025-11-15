@@ -12,7 +12,7 @@ from sympy import Product, Sum, symbols
 x, y, k = symbols("x y k")
 
 # f = compile_func([x], [2 / viete(x), 2 / lemniscate(x)], **args)
-f = compile_func([x], [Sum(x**k / Product(y, (y, 1, k)), (k, 0, 10))], **args)
+f = compile_func([x], [Sum(x**k / Product(y, (y, 1, k)), (k, 0, 20))], **args)
 
 # print(f.dumps())
 

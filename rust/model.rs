@@ -179,11 +179,11 @@ impl Expr {
 
     fn transform_loop(&self, builder: &mut Builder, op: &str, args: &[Expr]) -> Result<Node> {
         let var = builder.block().create_tmp_named(&args[1].var().unwrap());
-        let eq = args[0].transform(builder)?;
         let start = args[2].transform(builder)?;
+        let (accum_var, loop_id) = builder.add_loop_prefix(op, var.clone(), start)?;
+        let eq = args[0].transform(builder)?;
         let end = args[3].transform(builder)?;
-
-        builder.add_loop(op, eq, var, start, end)
+        builder.add_loop_body(op, eq, var, end, accum_var, loop_id)
     }
 }
 
