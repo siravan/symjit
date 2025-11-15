@@ -6,6 +6,7 @@ use std::ffi::{c_char, CStr, CString};
 // mod analyzer;
 mod block;
 mod code;
+mod defuns;
 mod machine;
 mod matrix;
 mod memory;
@@ -28,6 +29,7 @@ mod arm;
 #[allow(non_upper_case_globals)]
 mod riscv64;
 
+use defuns::Defuns;
 use matrix::Matrix;
 use model::{CellModel, Program};
 use runnable::{CompilerType, Runnable};
@@ -68,6 +70,7 @@ pub unsafe extern "C" fn compile(
     model: *const c_char,
     ty: *const c_char,
     opt: u32,
+    df: *const Defuns,
 ) -> *const CompilerResult {
     let mut res = CompilerResult {
         func: None,
@@ -114,15 +117,17 @@ pub unsafe extern "C" fn compile(
         }
     };
 
+    let df: &Defuns = unsafe { &*df };
+
     let func = match ty {
-        "bytecode" => Runnable::new(prog, CompilerType::ByteCode, opt),
-        "arm" => Runnable::new(prog, CompilerType::Arm, opt),
-        "riscv" => Runnable::new(prog, CompilerType::RiscV, opt),
-        "amd" => Runnable::new(prog, CompilerType::Amd, opt),
-        "amd-avx" => Runnable::new(prog, CompilerType::AmdAVX, opt),
-        "amd-sse" => Runnable::new(prog, CompilerType::AmdSSE, opt),
-        "native" => Runnable::new(prog, CompilerType::Native, opt),
-        "debug" => Runnable::new(prog, CompilerType::Debug, opt),
+        "bytecode" => Runnable::new(prog, CompilerType::ByteCode, opt, df),
+        "arm" => Runnable::new(prog, CompilerType::Arm, opt, df),
+        "riscv" => Runnable::new(prog, CompilerType::RiscV, opt, df),
+        "amd" => Runnable::new(prog, CompilerType::Amd, opt, df),
+        "amd-avx" => Runnable::new(prog, CompilerType::AmdAVX, opt, df),
+        "amd-sse" => Runnable::new(prog, CompilerType::AmdSSE, opt, df),
+        "native" => Runnable::new(prog, CompilerType::Native, opt, df),
+        "debug" => Runnable::new(prog, CompilerType::Debug, opt, df),
         _ => Err(anyhow!("invalid ty")),
     };
 
@@ -607,4 +612,52 @@ pub unsafe extern "C" fn execute_matrix(
     } else {
         false
     }
+}
+
+/************************************************/
+
+/// Creates an empty Defun (a list of Defined-Functions)
+///
+/// # Safety
+///     It returns a pointer to the allocated Defun, which needs to be
+///     deallocated eventually.
+///
+#[no_mangle]
+pub unsafe extern "C" fn create_defuns() -> *const Defuns {
+    let df = Defuns::new();
+    Box::into_raw(Box::new(df)) as *const Defuns
+}
+
+/// Finalized (deallocates) a Defun
+///
+/// # Safety
+///     1, mat should point to a valid Defun object created by create_matrix
+///     2. After finalize_defun is called, df is invalid.
+///
+#[no_mangle]
+pub unsafe extern "C" fn finalize_defuns(df: *mut Defuns) {
+    if !df.is_null() {
+        let _ = unsafe { Box::from_raw(df) };
+    }
+}
+
+/// Adds a new function to a Defun
+///
+/// # Safety
+///     1, df should point to a valid Defun object created by create_defun
+///     2. name should be a valid utf8 string
+///     3. p should point to a valid C-styple function pointer that accepts
+///         num_args double arguments
+///
+#[no_mangle]
+pub unsafe extern "C" fn add_func(
+    df: *mut Defuns,
+    name: *const c_char,
+    p: *const usize,
+    num_args: usize,
+) {
+    let df: &mut Defuns = unsafe { &mut *df };
+    let name = unsafe { CStr::from_ptr(name).to_str().unwrap() };
+    df.add_func(name, p, num_args);
+    let addr: usize = unsafe { *p };
 }

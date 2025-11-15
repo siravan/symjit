@@ -86,7 +86,12 @@ class Engine:
         self._execute_vectorized.restype = ctypes.c_bool
 
         self._compile = self.dll.compile
-        self._compile.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint32]
+        self._compile.argtypes = [
+            ctypes.c_char_p,
+            ctypes.c_char_p,
+            ctypes.c_uint32,
+            ctypes.c_void_p,
+        ]
         self._compile.restype = ctypes.c_void_p
 
         self._dump = self.dll.dump
@@ -168,6 +173,23 @@ class Engine:
         ]
         self._callable_filter.restype = ctypes.c_int64
 
+        self._create_defuns = self.dll.create_defuns
+        self._create_defuns.argtypes = []
+        self._create_defuns.restype = ctypes.c_void_p
+
+        self._add_func = self.dll.add_func
+        self._add_func.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_char_p,
+            ctypes.c_void_p,
+            ctypes.c_size_t,
+        ]
+        self._add_func.restype = None
+
+        self._finalize_defuns = self.dll.finalize_defuns
+        self._finalize_defuns.argtypes = [ctypes.c_void_p]
+        self._finalize_defuns.restype = None
+
     def info(self):
         return self._info()
 
@@ -213,6 +235,51 @@ class Matrix:
         lib._add_row(self.p, ptr, n)
 
 
+class Defuns:
+    def __init__(self, defuns, eqs):
+        self.p = lib._create_defuns()
+        self.funcs = {}
+
+        fac1 = ctypes.CFUNCTYPE(ctypes.c_double, ctypes.c_double)
+        fac2 = ctypes.CFUNCTYPE(ctypes.c_double, ctypes.c_double, ctypes.c_double)
+
+        if defuns is not None:
+            for sym, f in defuns.items():
+                degree = self.find_degree(sym, eqs)
+
+                if degree == 1:
+                    if hasattr(f, "fast_func"):
+                        p = lib._fast_func(f.compiler.p)
+                    else:
+                        p = fac1(f)
+
+                    self.funcs[sym.name] = (p, 1)
+                    lib._add_func(self.p, sym.name.encode("utf8"), p, 1)
+                elif degree == 2:
+                    if hasattr(f, "fast_func"):
+                        p = lib._fast_func(f.compiler.p)
+                    else:
+                        p = fac2(f)
+
+                    self.funcs[sym.name] = (p, 2)
+                    lib._add_func(self.p, sym.name.encode("utf8"), p, 2)
+
+    def find_degree(self, sym, eqs):
+        L = [{len(y.args) for y in eq.find(sym)} for eq in eqs]
+        S = set().union(*L)
+
+        if len(S) == 0:
+            return 0
+        elif len(S) == 1:
+            return list(S)[0]
+        else:
+            raise ValueError(f"inconsistent use of defun {sym}")
+
+    def __del__(self):
+        if hasattr(self, "p"):
+            lib._finalize_defuns(self.p)
+
+
 class RustyCompiler:
     def __init__(
         self,
@@ -224,6 +291,7 @@ class RustyCompiler:
         fastmath=False,
         opt_level=1,
         convert=True,
+        defuns=None,
     ):
         if convert:
             model = json.dumps(model)
@@ -234,7 +302,11 @@ class RustyCompiler:
             | (0x08 if fastmath else 0)
             | ((opt_level & 0x0F) << 8)
         )
-        self.p = lib._compile(model.encode("utf-8"), ty.encode("utf8"), opt)
+
+        self.defuns = defuns
+        self.p = lib._compile(
+            model.encode("utf-8"), ty.encode("utf8"), opt, self.defuns.p
+        )
         status = lib._check_status(self.p)
         if status != b"Success":
             raise ValueError(status.decode())

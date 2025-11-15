@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use crate::allocator::Allocator;
 use crate::block::Block;
 use crate::code::{Func, VirtualTable};
+use crate::defuns::Defuns;
 use crate::generator::Generator;
 use crate::mir::Mir;
 use crate::node::Node;
@@ -84,10 +85,10 @@ impl Builder {
 
     pub fn add_unary(&mut self, op: &str, arg: Node) -> Result<Node> {
         if !UNARY.contains(&op) {
-            let f = VirtualTable::from_str(op)?; // check to see if op is defined
-            if !matches!(f, Func::Unary(_)) {
-                return Err(anyhow!("{} is not a unary function", op));
-            }
+            // let f = VirtualTable::from_str(op)?; // check to see if op is defined
+            // if !matches!(f, Func::Unary(_)) {
+            //     return Err(anyhow!("{} is not a unary function", op));
+            // }
             self.ft.insert(op.to_string());
         }
 
@@ -133,10 +134,10 @@ impl Builder {
         }
 
         if !BINARY.contains(&op) {
-            let f = VirtualTable::from_str(op)?; // check to see if op is defined
-            if !matches!(f, Func::Binary(_)) {
-                return Err(anyhow!("{} is not a binary function", op));
-            }
+            // let f = VirtualTable::from_str(op)?; // check to see if op is defined
+            // if !matches!(f, Func::Binary(_)) {
+            //     return Err(anyhow!("{} is not a binary function", op));
+            // }
             self.ft.insert(op.to_string());
         }
 
@@ -282,10 +283,10 @@ impl Builder {
         Ok(node)
     }
 
-    pub fn compile_mir(&mut self, fastmath: bool, opt_level: u8) -> Result<Mir> {
+    pub fn compile_mir(&mut self, fastmath: bool, opt_level: u8, df: &Defuns) -> Result<Mir> {
         // println!("{:#?}", self.block().stmts);
 
-        let mut mir = Mir::new(opt_level, fastmath);
+        let mut mir = Mir::new(opt_level, fastmath, df);
 
         self.block().eliminate();
         self.block().compile(&mut mir)?;

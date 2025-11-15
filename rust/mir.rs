@@ -7,6 +7,7 @@ use anyhow::Result;
 use petgraph::matrix_graph::Zero;
 
 use crate::code::{Func, VirtualTable};
+use crate::defuns::Defuns;
 use crate::generator::Generator;
 use crate::symbol::Loc;
 use crate::utils::{bool_to_f64, Compiled, CompiledFunc, Reg};
@@ -150,6 +151,7 @@ pub struct Mir {
     pub opt_level: u8,
     pub fastmath: bool,
     pub labels: HashMap<String, usize>,
+    pub df: Defuns,
 }
 
 impl fmt::Debug for Mir {
@@ -162,13 +164,14 @@ impl fmt::Debug for Mir {
 }
 
 impl Mir {
-    pub fn new(opt_level: u8, fastmath: bool) -> Mir {
+    pub fn new(opt_level: u8, fastmath: bool, df: &Defuns) -> Mir {
         Mir {
             code: Vec::new(),
             consts: Vec::new(),
             opt_level,
             fastmath,
             labels: HashMap::new(),
+            df: df.clone(),
         }
     }
 
@@ -659,7 +662,11 @@ impl Mir {
     }
 
     pub fn find_op(&self, op: &str) -> Result<Func> {
-        VirtualTable::from_str(op)
+        if let Some(f) = self.df.funcs.get(op) {
+            Ok(f.clone())
+        } else {
+            VirtualTable::from_str(op)
+        }
     }
 }
 

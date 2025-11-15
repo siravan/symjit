@@ -216,13 +216,13 @@ def compile_func(
     params=None,
     obs=None,
     ty="native",
-    signature="lambdify",
     use_simd=True,
     use_threads=True,
     cse=True,
     fastmath=False,
     backend="rust",
     opt_level=1,
+    defuns=None,
 ):
     """Compile a list of symbolic expression into an executable form.
     compile_func tries to mimic sympy lambdify, but instead of generating
@@ -256,6 +256,7 @@ def compile_func(
     opt_level (default 1): optimization level (0, 1, or 2). Broadly the numbers are parallel to -O0, -O1, -O2
         options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
         Level-2 uses an improved graph-coloring algorithm for better register allocation.
+    defuns (default None): a dictionary of Symbol => Definition to pass external Python or Symjit-generated functions.
 
     ==> returns a Func object, is a callable object `f` with signature `f(x_1,...,x_n,p_1,...,p_m)`,
         where `x`s are the state variables and `p`s are the parameters.
@@ -274,6 +275,7 @@ def compile_func(
 
     if can_use_rust(backend):
         model = structure.model(states, eqs, params=params, obs=obs)
+        defuns = engine.Defuns(defuns, eqs)
         compiler = engine.RustyCompiler(
             model,
             ty=ty,
@@ -282,6 +284,7 @@ def compile_func(
             cse=cse,
             fastmath=fastmath,
             opt_level=opt_level,
+            defuns=defuns,
         )
     elif can_use_python(backend):
         model = pyengine.tree.model(states, eqs, params, obs)
@@ -304,6 +307,7 @@ def compile_ode(
     fastmath=False,
     backend="rust",
     opt_level=1,
+    defuns=None,
 ):
     """Compile a symbolic ODE model into an executable form suitable for
     passung to scipy.integrate.solve_ivp.
@@ -328,6 +332,7 @@ def compile_ode(
     opt_level (default 1): optimization level (0, 1, or 2). Broadly the numbers are parallel to -O0, -O1, -O2
         options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
         Level-2 uses an improved graph-coloring algorithm for better register allocation.
+    defuns (default None): a dictionary of Symbol => Definition to pass external Python or Symjit-generated functions.
 
     Note that compile_ode accepts use_simd and use_threads but in practice ingores them,
         because compile_ode is usually called on scalars only.
@@ -352,6 +357,7 @@ def compile_ode(
     """
     if can_use_rust(backend):
         model = structure.model_ode(iv, states, odes, params)
+        defuns = engine.Defuns(defuns, odes)
         compiler = engine.RustyCompiler(
             model,
             ty=ty,
@@ -359,6 +365,7 @@ def compile_ode(
             cse=cse,
             fastmath=fastmath,
             opt_level=opt_level,
+            defuns=defuns
         )
     elif can_use_python(backend):
         model = pyengine.tree.model_ode(iv, states, odes, params)
@@ -381,6 +388,7 @@ def compile_jac(
     fastmath=False,
     backend="rust",
     opt_level=1,
+    defuns=None,
 ):
     """Genenrates and compiles Jacobian for an ODE system.
         iv: a single symbol, the independent variable.
@@ -400,6 +408,7 @@ def compile_jac(
         opt_level (default 1): optimization level (0, 1, or 2). Broadly the numbers are parallel to -O0, -O1, -O2
             options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
             Level-2 uses an improved graph-coloring algorithm for better register allocation.
+        defuns (default None): a dictionary of Symbol => Definition to pass external Python or Symjit-generated functions.
 
         Note that similar to compile_ode, compile_jac accepts use_simd and use_threads but in
             practice ingores them, because compile_ode is usually called on scalars only.
@@ -411,6 +420,7 @@ def compile_jac(
     """
     if can_use_rust(backend):
         model = structure.model_jac(iv, states, odes, params)
+        defuns = engine.Defuns(defuns, odes)
         compiler = engine.RustyCompiler(
             model,
             ty=ty,
@@ -418,6 +428,7 @@ def compile_jac(
             cse=cse,
             fastmath=fastmath,
             opt_level=opt_level,
+            defuns=defuns
         )
     elif can_use_python(backend):
         model = pyengine.tree.model_jac(iv, states, odes, params)
@@ -443,6 +454,7 @@ def compile_json(
     model is already in Json format; hence, `convert = False`
     """
     if can_use_rust("rust"):
+        defuns = engine.Defuns(None, [])
         compiler = engine.RustyCompiler(
             model,
             ty=ty,
@@ -450,6 +462,7 @@ def compile_json(
             fastmath=fastmath,
             opt_level=opt_level,
             convert=False,
+            defuns=defuns,
         )
         return OdeFunc(compiler)
     else:

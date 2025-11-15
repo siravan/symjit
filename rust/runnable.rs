@@ -3,6 +3,7 @@ use anyhow::Result;
 use crate::amd::{AmdFamily, AmdGenerator};
 use crate::arm::ArmGenerator;
 use crate::builder::Builder;
+use crate::defuns::Defuns;
 use crate::generator::Generator;
 use crate::machine::MachineCode;
 use crate::matrix::{combine_matrixes, Matrix};
@@ -73,7 +74,7 @@ pub struct Runnable {
 }
 
 impl Runnable {
-    pub fn new(mut prog: Program, ty: CompilerType, opt: u32) -> Result<Runnable> {
+    pub fn new(mut prog: Program, ty: CompilerType, opt: u32, df: &Defuns) -> Result<Runnable> {
         let first_state = 0;
         let first_param = 0;
         let idx_iv = prog.count_states;
@@ -91,7 +92,7 @@ impl Runnable {
 
         let fastmath = opt & FASTMATH != 0;
         let opt_level = ((opt & OPT_LEVEL_MASK) >> OPT_LEVEL_SHIFT) as u8;
-        let mir = prog.builder.compile_mir(fastmath, opt_level)?;
+        let mir = prog.builder.compile_mir(fastmath, opt_level, df)?;
 
         let compiled = match ty {
             CompilerType::ByteCode => Self::compile_debugger(&mir, &mut prog, size, false)?,
