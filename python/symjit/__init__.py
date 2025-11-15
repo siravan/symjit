@@ -1,12 +1,15 @@
 # from engine import Matrix
-import os
-import numpy as np
 import numbers
+<<<<<<< HEAD
+from sympy import lambdify
+=======
+import os
+>>>>>>> 0cfa9ec (Defuns rewritten)
+
+import numpy as np
 from sympy import lambdify
 
-from . import engine
-from . import structure
-from . import pyengine
+from . import engine, pyengine, structure
 
 
 class Func:
@@ -270,7 +273,7 @@ def compile_func(
     >>> assert(np.all(f(3, 5) == [8., 15.]))
     >>> assert(np.all(f.apply([3, 5]) == [8., 15.]))
     """
-    if ty == "sympy":
+    if backend == "sympy":
         return lambdify(states, eqs)
 
     if can_use_rust(backend):
@@ -365,7 +368,7 @@ def compile_ode(
             cse=cse,
             fastmath=fastmath,
             opt_level=opt_level,
-            defuns=defuns
+            defuns=defuns,
         )
     elif can_use_python(backend):
         model = pyengine.tree.model_ode(iv, states, odes, params)
@@ -428,7 +431,7 @@ def compile_jac(
             cse=cse,
             fastmath=fastmath,
             opt_level=opt_level,
-            defuns=defuns
+            defuns=defuns,
         )
     elif can_use_python(backend):
         model = pyengine.tree.model_jac(iv, states, odes, params)
