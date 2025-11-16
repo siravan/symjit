@@ -175,6 +175,12 @@ mod simd {
             }
         }
     }
+
+    impl Default for f64x4 {
+        fn default() -> Self {
+            Self::splat(0.0)
+        }
+    }
 }
 
 #[allow(non_camel_case_types)]

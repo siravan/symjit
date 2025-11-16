@@ -1,6 +1,7 @@
 # from engine import Matrix
 import numbers
 import os
+import warnings
 
 import numpy as np
 from sympy import lambdify
@@ -206,6 +207,10 @@ def can_use_rust(backend):
 def can_use_python(backend):
     if not backend in ["python", "rust"]:
         raise ValueError(f"invalide backend: {backend}")
+    warnings.warn(
+        "The Python codegen backend is deprecated and will be removed in a future version.",
+        DeprecationWarning,
+    )
     return pyengine.can_compile()
 
 
