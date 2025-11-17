@@ -660,5 +660,4 @@ pub unsafe extern "C" fn add_func(
     let df: &mut Defuns = unsafe { &mut *df };
     let name = unsafe { CStr::from_ptr(name).to_str().unwrap() };
     df.add_func(name, p, num_args);
-    let addr: usize = unsafe { *p };
 }

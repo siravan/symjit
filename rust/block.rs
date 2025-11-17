@@ -149,7 +149,7 @@ impl Block {
         let arg = self.trim(arg);
 
         if !UNARY.contains(&op) {
-            self.break_call_unary(&op, arg)
+            self.break_call_unary(op, arg)
         } else {
             Node::create_unary(op, arg, power)
         }
@@ -183,7 +183,7 @@ impl Block {
         let right = self.trim(right);
 
         if !BINARY.contains(&op) {
-            return self.break_call_binary(&op, left, right);
+            return self.break_call_binary(op, left, right);
         }
 
         let right = if left.ershov_number() == COUNT_SCRATCH - 1

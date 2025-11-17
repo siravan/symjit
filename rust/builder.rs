@@ -3,7 +3,6 @@ use std::collections::HashSet;
 
 use crate::allocator::Allocator;
 use crate::block::Block;
-use crate::code::{Func, VirtualTable};
 use crate::defuns::Defuns;
 use crate::generator::Generator;
 use crate::mir::Mir;

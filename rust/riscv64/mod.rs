@@ -243,7 +243,7 @@ impl Generator for RiscV {
         self.emit(rvv! {fmv.d f(ϕ(dst)), f(ϕ(s1))});
     }
 
-    fn fxchg(&mut self, s1: Reg, s2: Reg) {
+    fn fxchg(&mut self, _s1: Reg, _s2: Reg) {
         todo!();
     }
 

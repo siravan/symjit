@@ -38,7 +38,7 @@ def func(states, p, **args):
     t0 = time.perf_counter_ns()
     f = compile_func(states, p, **args)
     t1 = time.perf_counter_ns()
-    print(f"compile in {(t1 - t0) * 1e-6:.1f} ms\t", end="")
+    print(f"compiled in {(t1 - t0) * 1e-6:.1f} ms\t", end="")
     return f
 
 
@@ -258,7 +258,7 @@ def sumprod(**args):
 
     fact = compile_func([z], Product(y, (y, 1, z)), **args)
     F = Function("F")
-    f = compile_func([x], Sum(x**z / F(z), (z, 0, 50)), **args, defuns={F: fact})
+    f = func([x], Sum(x**z / F(z), (z, 0, 50)), **args, defuns={F: fact})
 
     t0 = time.perf_counter_ns()
     u = [f(i / L) for i in range(L)]
