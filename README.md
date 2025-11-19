@@ -293,9 +293,9 @@ The output of the stiff system is
 
 ![non-stiff Van der Pol](./figures/van_der_pol_stiff.png)
 
-## Advanced Features
+# Advanced Features
 
-# Explicit Looping
+## Explicit Looping
 
 *Symjit* supports construction of explicit loops using `Sum` and `Procudct` operators. The syntax follows *sympy*'s syntax. For example, we can define the factorial function as
 
@@ -316,7 +316,7 @@ assert(my_exp(2.0) == math.exp(2.0))
 
 Note that `Sum` and `Procudct`, the range follows the mathematical convention of including the last expression.
 
-# Calling Other Functions
+## Calling Other Functions
 
 *Symjit* also allows calling other simple *Symjit* or Python functions. Currently, only functions that accept one or two double arguments and return a double result are supported; therefore, only *Symjit* fnctions defined as fast as allowed, see [Optimization](./docs/OPTIMIZATION.md). To do so, we need to define a placeholder symbol using Sympy's `Function` constructor. Then, we pass a dictionary of`Function`s to their definition as an argument `defuns` to `compile_*` functions. For example, we can rewrite `my_exp` function above as
 
