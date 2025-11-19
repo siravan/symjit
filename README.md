@@ -293,6 +293,67 @@ The output of the stiff system is
 
 ![non-stiff Van der Pol](./figures/van_der_pol_stiff.png)
 
+## Advanced Features
+
+# Explicit Looping
+
+*Symjit* supports construction of explicit loops using `Sum` and `Procudct` operators. The syntax follows *sympy*'s syntax. For example, we can define the factorial function as
+
+```python
+x, y = symbols('x y')
+fact = compile_func([x], Product(y, (y, 1, x)))
+assert(fact(5) == 120)
+```
+
+The looping operators can be nested:
+
+```python
+import math 
+x, y, k = symbols('x y k')
+my_exp = compile_func([x], Sum(x**k / Product(y, (y, 1, k)), (k, 0, 20)))
+assert(my_exp(2.0) == math.exp(2.0))
+```
+
+Note that `Sum` and `Procudct`, the range follows the mathematical convention of including the last expression.
+
+# Calling Other Functions
+
+*Symjit* also allows calling other simple *Symjit* or Python functions. Currently, only functions that accept one or two double arguments and return a double result are supported; therefore, only *Symjit* fnctions defined as fast as allowed, see [Optimization](./docs/OPTIMIZATION.md). To do so, we need to define a placeholder symbol using Sympy's `Function` constructor. Then, we pass a dictionary of`Function`s to their definition as an argument `defuns` to `compile_*` functions. For example, we can rewrite `my_exp` function above as
+
+```python
+import math 
+from sympy import Function 
+
+x, y, k = symbols('x y k')
+fact = compile_func([x], Product(y, (y, 1, x)))
+F = Function('F')
+my_exp = compile_func([x], Sum(x**k / F(k), (k, 0, 20)), defuns={F: fact})
+assert(my_exp(2.0) == math.exp(2.0))
+```
+
+It is also possible to pass Python functions:
+
+```python
+def print_res(x, y):
+    print(x, ': ', y)
+    return x
+
+P = Function('P')
+f = compile_func([x], Sum(P(y, sin(y)), (y, 1, x)), defuns={P: print_res})
+
+f(5)    # returns
+# 1.0 :  0.8414709848078965
+# 2.0 :  0.9092974268256817
+# 3.0 :  0.1411200080598672
+# 4.0 :  -0.7568024953079282
+# 5.0 :  -0.9589242746631385
+# 15.0
+```
+
+Warning! When `use_threads` option is set to `True` (which is the default), *Symjit* uses multi-threading for array inputs. Calling a Python function 
+in this situation can cause all sort of problems because of the Global Inteerpreter Lock (GIL). Python 3.14 has removed GIL. Therefore, multi-threading
+is possible, but still needs extreme caution due to various race conditions. Used correctly, *Symjit* multi-threading can be useful as a dispatcher, but preventing race condition is the responsibility of the user.
+
 # Code Generation
 
 All `compile_*` functions accept an optional parameter `ty`, which defines the type of the code to generate. Currently, the possible values are:

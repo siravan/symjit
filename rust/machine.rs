@@ -29,7 +29,9 @@ impl<T> MachineCode<T> {
         code.set_readable_and_executable().unwrap();
 
         let f: CompiledFunc<T> = if valid {
-            unsafe { std::mem::transmute(p) }
+            unsafe {
+                std::mem::transmute::<*mut u8, fn(*const T, *const *mut f64, usize, *const f64)>(p)
+            }
         } else {
             Self::invalid
         };
