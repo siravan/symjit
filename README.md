@@ -297,7 +297,7 @@ The output of the stiff system is
 
 ## Explicit Looping
 
-*Symjit* supports construction of explicit loops using `Sum` and `Procudct` operators. The syntax follows *sympy*'s syntax. For example, we can define the factorial function as
+*Symjit* supports construction of explicit loops using `Sum` and `Product` operators. The syntax follows *sympy*'s syntax. For example, we can define the factorial function as
 
 ```python
 x, y = symbols('x y')
@@ -314,11 +314,11 @@ my_exp = compile_func([x], Sum(x**k / Product(y, (y, 1, k)), (k, 0, 20)))
 assert(my_exp(2.0) == math.exp(2.0))
 ```
 
-Note that `Sum` and `Procudct`, the range follows the mathematical convention of including the last expression.
+Note that for `Sum` and `Product`, the range follows the mathematical convention of including the last expression, i.e., `(x, 1, 3)` means `x` assumes values of `1, 2, 3`.
 
 ## Calling Other Functions
 
-*Symjit* also allows calling other simple *Symjit* or Python functions. Currently, only functions that accept one or two double arguments and return a double result are supported; therefore, only *Symjit* fnctions defined as fast as allowed, see [Optimization](./docs/OPTIMIZATION.md). To do so, we need to define a placeholder symbol using Sympy's `Function` constructor. Then, we pass a dictionary of`Function`s to their definition as an argument `defuns` to `compile_*` functions. For example, we can rewrite `my_exp` function above as
+*Symjit* also allows calling other simple *Symjit* or Python functions. Currently, only functions that accept one or two double arguments and return a double result are supported; therefore, only *Symjit* functions defined as *fast* as allowed, see [Optimization](./docs/OPTIMIZATION.md). To pass a function, we need to define a placeholder symbol using Sympy's `Function` constructor. Then, we pass a dictionary of `Function`s and their definitions as an argument `defuns` to `compile_*` functions. For example, we can rewrite `my_exp` function above as
 
 ```python
 import math 
@@ -351,8 +351,8 @@ f(5)    # returns
 ```
 
 Warning! When `use_threads` option is set to `True` (which is the default), *Symjit* uses multi-threading for array inputs. Calling a Python function 
-in this situation can cause all sort of problems because of the Global Inteerpreter Lock (GIL). Python 3.14 has removed GIL. Therefore, multi-threading
-is possible, but still needs extreme caution due to various race conditions. Used correctly, *Symjit* multi-threading can be useful as a dispatcher, but preventing race condition is the responsibility of the user.
+in this situation can cause all sort of problems because of the Global Interpreter Lock (GIL). Python 3.14 has removed GIL; therefore, multi-threading
+is possible, but still needs extreme caution due to various race conditions. Used correctly, *Symjit* multi-threading can be useful as a thread-dispatcher; however, preventing race condition is the responsibility of the user.
 
 # Code Generation
 
