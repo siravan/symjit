@@ -1,4 +1,4 @@
-use crate::utils::f64x4;
+// use crate::utils::f64x4;
 
 pub struct Matrix {
     pub p: Vec<*mut f64>,
@@ -38,20 +38,20 @@ impl Matrix {
         u[col]
     }
 
-    pub fn get_simd(&self, row: usize, col: usize) -> f64x4 {
-        let u: &[f64] = unsafe { std::slice::from_raw_parts(self.p[row], self.ncols) };
-        f64x4::from_slice(&u[col..col + 4])
-    }
+    // pub fn get_simd(&self, row: usize, col: usize) -> f64x4 {
+    //     let u: &[f64] = unsafe { std::slice::from_raw_parts(self.p[row], self.ncols) };
+    //     f64x4::from_slice(&u[col..col + 4])
+    // }
 
     pub fn set(&self, row: usize, col: usize, val: f64) {
         let u: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(self.p[row], self.ncols) };
         u[col] = val;
     }
 
-    pub fn set_simd(&self, row: usize, col: usize, val: f64x4) {
-        let u: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(self.p[row], self.ncols) };
-        val.copy_to_slice(&mut u[col..col + 4]);
-    }
+    // pub fn set_simd(&self, row: usize, col: usize, val: f64x4) {
+    //     let u: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(self.p[row], self.ncols) };
+    //     val.copy_to_slice(&mut u[col..col + 4]);
+    // }
 }
 
 pub fn combine_matrixes(a: &Matrix, b: &Matrix) -> Matrix {

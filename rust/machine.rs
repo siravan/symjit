@@ -30,7 +30,7 @@ impl<T> MachineCode<T> {
 
         let f: CompiledFunc<T> = if valid {
             unsafe {
-                std::mem::transmute::<*mut u8, fn(*const T, *const *mut f64, usize, *const f64)>(p)
+                std::mem::transmute::<*mut u8, fn(*const T, *const *mut T, usize, *const T)>(p)
             }
         } else {
             Self::invalid
@@ -44,7 +44,7 @@ impl<T> MachineCode<T> {
         }
     }
 
-    fn invalid(_a: *const T, _b: *const *mut f64, _c: usize, _d: *const f64) {
+    fn invalid(_a: *const T, _b: *const *mut T, _c: usize, _d: *const T) {
         if cfg!(target_arch = "x86_64") {
             panic!("invalid processor architecture; expect x86_64");
         } else if cfg!(target_arch = "aarch64") {
@@ -59,7 +59,7 @@ impl<T> MachineCode<T> {
 
 impl<T> Compiled<T> for MachineCode<T> {
     #[inline]
-    fn exec(&mut self, params: &[f64]) {
+    fn exec(&mut self, params: &[T]) {
         let p = self._mem.as_ptr();
         let q = params.as_ptr();
         (self.f)(p, std::ptr::null(), 0, q);

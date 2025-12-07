@@ -198,29 +198,29 @@ impl Runnable {
         }
     }
 
-    fn compile<G: Generator, T: Default + Clone + Copy + 'static>(
+    fn compile<G: Generator>(
         mir: &Mir,
         prog: &mut Program,
         mut generator: G,
         size: usize,
         arch: &str,
-    ) -> Result<Box<dyn Compiled<T>>> {
-        let mem: Vec<T> = vec![T::default(); size];
+    ) -> Result<Box<dyn Compiled<f64>>> {
+        let mem: Vec<f64> = vec![0.0; size];
         prog.builder
             .compile_from_mir(mir, &mut generator, prog.count_states, prog.count_obs)?;
         let code = MachineCode::new(arch, generator.bytes(), mem);
-        let compiled: Box<dyn Compiled<T>> = Box::new(code);
+        let compiled: Box<dyn Compiled<f64>> = Box::new(code);
         Ok(compiled)
     }
 
-    fn compile_fast<G: Generator, T: Default + Clone + Copy + 'static>(
+    fn compile_fast<G: Generator>(
         mir: &Mir,
         prog: &mut Program,
         mut generator: G,
         idx_ret: u32,
         arch: &str,
-    ) -> Result<Box<dyn Compiled<T>>> {
-        let mem: Vec<T> = Vec::new();
+    ) -> Result<Box<dyn Compiled<f64>>> {
+        let mem: Vec<f64> = Vec::new();
         prog.builder.compile_fast_from_mir(
             mir,
             &mut generator,
@@ -228,13 +228,13 @@ impl Runnable {
             idx_ret as i32,
         )?;
         let code = MachineCode::new(arch, generator.bytes(), mem);
-        let compiled: Box<dyn Compiled<T>> = Box::new(code);
+        let compiled: Box<dyn Compiled<f64>> = Box::new(code);
 
         Ok(compiled)
     }
 
     fn compile_sse(mir: &Mir, prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
-        Self::compile::<AmdGenerator, f64>(
+        Self::compile::<AmdGenerator>(
             mir,
             prog,
             AmdGenerator::new(AmdFamily::SSEScalar),
@@ -244,7 +244,7 @@ impl Runnable {
     }
 
     fn compile_avx(mir: &Mir, prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
-        Self::compile::<AmdGenerator, f64>(
+        Self::compile::<AmdGenerator>(
             mir,
             prog,
             AmdGenerator::new(AmdFamily::AvxScalar),
@@ -254,7 +254,7 @@ impl Runnable {
     }
 
     fn compile_simd(mir: &Mir, prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
-        Self::compile::<AmdGenerator, f64>(
+        Self::compile::<AmdGenerator>(
             mir,
             prog,
             AmdGenerator::new(AmdFamily::AvxVector),
@@ -264,11 +264,11 @@ impl Runnable {
     }
 
     fn compile_arm(mir: &Mir, prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
-        Self::compile::<ArmGenerator, f64>(mir, prog, ArmGenerator::new(), size, "aarch64")
+        Self::compile::<ArmGenerator>(mir, prog, ArmGenerator::new(), size, "aarch64")
     }
 
     fn compile_riscv(mir: &Mir, prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
-        Self::compile::<RiscV, f64>(mir, prog, RiscV::new(), size, "riscv64")
+        Self::compile::<RiscV>(mir, prog, RiscV::new(), size, "riscv64")
     }
 
     fn compile_avx_fast(
@@ -425,7 +425,7 @@ impl Runnable {
         }
     }
 
-    fn exec_single<T>(t: usize, v: &Matrix, params: &[f64], f: CompiledFunc<T>) {
+    fn exec_single(t: usize, v: &Matrix, params: &[f64], f: CompiledFunc<f64>) {
         f(std::ptr::null(), v.p.as_ptr(), t, params.as_ptr());
     }
 
