@@ -55,7 +55,7 @@ pub struct Runnable {
     pub prog: Program,
     pub mir: Mir,
     pub compiled: Box<dyn Compiled<f64>>,
-    pub compiled_simd: Option<Box<dyn Compiled<f64x4>>>,
+    pub compiled_simd: Option<Box<dyn Compiled<f64>>>,
     pub compiled_fast: Option<Box<dyn Compiled<f64>>>,
     pub params: Vec<f64>,
     pub use_simd: bool,
@@ -99,7 +99,7 @@ impl Runnable {
             CompilerType::ByteCode => Self::compile_debugger(&mir, &mut prog, size, false)?,
             CompilerType::Native => Self::compile_native(&mir, &mut prog, size)?,
             CompilerType::Amd if Platform::has_avx() => Self::compile_avx(&mir, &mut prog, size)?,
-            CompilerType::Amd if !Platform::has_avx() => Self::compile_avx(&mir, &mut prog, size)?,
+            CompilerType::Amd if !Platform::has_avx() => Self::compile_sse(&mir, &mut prog, size)?,
             CompilerType::AmdAVX => Self::compile_avx(&mir, &mut prog, size)?,
             CompilerType::AmdSSE => Self::compile_sse(&mir, &mut prog, size)?,
             CompilerType::Arm => Self::compile_arm(&mir, &mut prog, size)?,
@@ -253,16 +253,12 @@ impl Runnable {
         )
     }
 
-    fn compile_simd(
-        mir: &Mir,
-        prog: &mut Program,
-        size: usize,
-    ) -> Result<Box<dyn Compiled<f64x4>>> {
-        Self::compile::<AmdGenerator, f64x4>(
+    fn compile_simd(mir: &Mir, prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
+        Self::compile::<AmdGenerator, f64>(
             mir,
             prog,
             AmdGenerator::new(AmdFamily::AvxVector),
-            size,
+            size * 4,
             "x86_64",
         )
     }
@@ -280,13 +276,23 @@ impl Runnable {
         prog: &mut Program,
         idx_ret: u32,
     ) -> Result<Box<dyn Compiled<f64>>> {
-        Self::compile_fast(
-            mir,
-            prog,
-            AmdGenerator::new(AmdFamily::AvxScalar),
-            idx_ret,
-            "x86_64",
-        )
+        if Platform::has_avx() {
+            Self::compile_fast(
+                mir,
+                prog,
+                AmdGenerator::new(AmdFamily::AvxScalar),
+                idx_ret,
+                "x86_64",
+            )
+        } else {
+            Self::compile_fast(
+                mir,
+                prog,
+                AmdGenerator::new(AmdFamily::SSEScalar),
+                idx_ret,
+                "x86_64",
+            )
+        }
     }
 
     fn compile_arm_fast(
