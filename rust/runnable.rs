@@ -18,13 +18,22 @@ use rayon::prelude::*;
 
 #[derive(PartialEq, Copy, Clone)]
 pub enum CompilerType {
+    /// generates bytecode (interpreter).
     ByteCode,
+    /// generates code for the detected CPU (default)
     Native,
+    /// generates x86-64 (AMD64) code.
     Amd,
+    /// generates AVX code for x86-64 architecture.
     AmdAVX,
+    /// generates SSE2 code for x86-64 architecture.
     AmdSSE,
+    /// generates aarch64 (ARM64) code.
     Arm,
+    /// generates riscv64 (RISC V) code.
     RiscV,
+    /// debug mode, generates both bytecode and native codes
+    /// and compares the outputs.
     Debug,
 }
 
@@ -357,7 +366,7 @@ impl Runnable {
         self.compiled.mem()[self.first_obs]
     }
 
-    fn prepare_simd(&mut self) {
+    pub fn prepare_simd(&mut self) {
         // SIMD compilation is lazy!
         if self.compiled_simd.is_none() && self.use_simd {
             self.compiled_simd = Self::compile_simd(&self.mir, &mut self.prog, self.size).ok();
@@ -481,23 +490,23 @@ impl Runnable {
     }
 
     // call interface to Julia ODESolver
-    pub fn call(&mut self, du: &mut [f64], u: &[f64], p: &[f64], t: f64) {
-        {
-            let mem = self.compiled.mem_mut();
-            mem[self.idx_iv] = t;
-            let _ =
-                &mut mem[self.first_state..self.first_state + self.count_states].copy_from_slice(u);
-            let _ =
-                &mut mem[self.first_param..self.first_param + self.count_params].copy_from_slice(p);
-        }
+    // pub fn call(&mut self, du: &mut [f64], u: &[f64], p: &[f64], t: f64) {
+    //     {
+    //         let mem = self.compiled.mem_mut();
+    //         mem[self.idx_iv] = t;
+    //         let _ =
+    //             &mut mem[self.first_state..self.first_state + self.count_states].copy_from_slice(u);
+    //         let _ =
+    //             &mut mem[self.first_param..self.first_param + self.count_params].copy_from_slice(p);
+    //     }
 
-        self.compiled.exec(&self.params[..]);
+    //     self.compiled.exec(&self.params[..]);
 
-        {
-            let mem = self.compiled.mem();
-            du.copy_from_slice(&mem[self.first_diff..self.first_diff + self.count_diffs]);
-        }
-    }
+    //     {
+    //         let mem = self.compiled.mem();
+    //         du.copy_from_slice(&mem[self.first_diff..self.first_diff + self.count_diffs]);
+    //     }
+    // }
 
     pub fn dump(&mut self, name: &str, what: &str) -> bool {
         match what {

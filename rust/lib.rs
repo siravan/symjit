@@ -1,12 +1,54 @@
 #![allow(uncommon_codepoints)]
 
+//! Symjit (https://github.com/siravan/symjit) is a lightweight just-in-time (JIT) optimizer compiler for mathematical expressions.
+//! Its main utility is to directly translate SymPy (Python’s symbolic algebra package) expressions into machine code.
+//!
+//! In addition, symjit crate exposes the JIT functionality to the Rust ecosystem and allows Rust applications to generate code dynamically.
+//! Symjit emits AMD64 (x86-64), ARM64 (aarch64), and 64-bit RISC-V (riscv64) machine codes on Linux, Windows, and Darwin (MacOS) platforms.
+//!
+//! # Examples
+//! A basic Python/Sympy example:
+//!
+//! ```python//!
+//! from symjit import compile_func
+//! from sympy import symbols
+//!
+//! x, y = symbols('x y')
+//! f = compile_func([x, y], [x+y, x*y])
+//! print(f(3.0, 5.0))  # prints [8.0, 15.0]
+//! ```
+//!
+//! Same code in Rust:
+//!
+//! ```rust
+//! use anyhow::Result;
+//! use symjit::{Compiler, Expr};
+//!
+//! pub fn main() -> Result<()> {
+//!     let x = Expr::var("x");
+//!     let y = Expr::var("y");
+//!     let p = &x + &y;
+//!     let q = &x * &y;
+//!
+//!     let mut comp = Compiler::new();
+//!     comp.opt_level(2);  # optional (opt_level 0 to 2; default 1)
+//!     let mut func = comp.compile(&[x, y], &[p, q])?;
+//!     let v = func.call(&[3.0, 5.0]);
+//!     println!("{:?}", &v);
+//!
+//!     Ok(())
+//! }
+//! ```
+
 use anyhow::anyhow;
 use std::ffi::{c_char, CStr, CString};
 
 // mod analyzer;
 mod block;
 mod code;
+pub mod compiler;
 mod defuns;
+pub mod expr;
 mod machine;
 mod matrix;
 mod memory;
@@ -32,7 +74,11 @@ mod riscv64;
 use defuns::Defuns;
 use matrix::Matrix;
 use model::{CellModel, Program};
-use runnable::{CompilerType, Runnable};
+use runnable::Runnable;
+
+pub use compiler::Compiler;
+pub use expr::Expr;
+pub use runnable::CompilerType;
 
 pub const COUNT_SCRATCH: u8 = 14;
 
@@ -59,12 +105,12 @@ pub struct CompilerResult {
     status: CompilerStatus,
 }
 
-/// Compiles a model (a json string encoding the func model)
-/// ty is the requested arch (amd, arm, native, or bytecode)
+/// Compiles a model (a json string encoding the func model).
+/// ty is the requested arch (amd, arm, native, or bytecode).
 ///
 /// # Safety
 ///     both model and ty are pointers to null-terminated strings
-///     the output is a raw pointer to a CompilerResults
+///     the output is a raw pointer to a CompilerResults.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn compile(
@@ -146,12 +192,12 @@ pub unsafe extern "C" fn compile(
     Box::into_raw(Box::new(res)) as *const _
 }
 
-/// Checks the status of a CompilerResult
-/// returns a null-terminated string representing the status message
+/// Checks the status of a CompilerResult.
+/// Returns a null-terminated string representing the status message.
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that q points to a valid CompilerResult
+///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn check_status(q: *const CompilerResult) -> *const c_char {
@@ -167,11 +213,11 @@ pub unsafe extern "C" fn check_status(q: *const CompilerResult) -> *const c_char
     msg.as_ptr() as *const _
 }
 
-/// Returns the number of states (dependent variables)
+/// Returns the number of states (dependent variables).
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that q points to a valid CompilerResult
+///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn count_states(q: *const CompilerResult) -> usize {
@@ -183,11 +229,11 @@ pub unsafe extern "C" fn count_states(q: *const CompilerResult) -> usize {
     }
 }
 
-/// Returns the number of parameters
+/// Returns the number of parameters.
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that q points to a valid CompilerResult
+///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn count_params(q: *const CompilerResult) -> usize {
@@ -199,11 +245,11 @@ pub unsafe extern "C" fn count_params(q: *const CompilerResult) -> usize {
     }
 }
 
-/// Returns the number of observables (output)
+/// Returns the number of observables (output).
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that q points to a valid CompilerResult
+///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn count_obs(q: *const CompilerResult) -> usize {
@@ -215,12 +261,13 @@ pub unsafe extern "C" fn count_obs(q: *const CompilerResult) -> usize {
     }
 }
 
-/// Returns the number of differential equations
-/// Generally, it should be the same as the number of states
+/// Returns the number of differential equations.
+///
+/// Generally, it should be the same as the number of states.
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that q points to a valid CompilerResult
+///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn count_diffs(q: *const CompilerResult) -> usize {
@@ -249,31 +296,33 @@ pub unsafe extern "C" fn run(
     np: usize,
     t: f64,
 ) -> bool {
-    let q: &mut CompilerResult = unsafe { &mut *q };
+    // let q: &mut CompilerResult = unsafe { &mut *q };
 
-    if let Some(func) = &mut q.func {
-        if func.count_states != ns || func.count_params != np {
-            return false;
-        }
+    // if let Some(func) = &mut q.func {
+    //     if func.count_states != ns || func.count_params != np {
+    //         return false;
+    //     }
 
-        let du: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(du, ns) };
-        let u: &[f64] = unsafe { std::slice::from_raw_parts(u, ns) };
-        let p: &[f64] = unsafe { std::slice::from_raw_parts(p, np) };
-        func.call(du, u, p, t);
-        true
-    } else {
-        false
-    }
+    //     let du: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(du, ns) };
+    //     let u: &[f64] = unsafe { std::slice::from_raw_parts(u, ns) };
+    //     let p: &[f64] = unsafe { std::slice::from_raw_parts(p, np) };
+    //     func.call(du, u, p, t);
+    //     true
+    // } else {
+    //     false
+    // }
+    false
 }
 
-/// Executes the compiled function
+/// Executes the compiled function.
+///
 /// The calling routine should fill the states and parameters before
-/// calling execute
-/// The result populates obs or diffs (as defined in model passed to compile)
+/// calling execute. The result populates obs or diffs (as defined in
+/// model passed to compile).
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that q points to a valid CompilerResult
+///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn execute(q: *mut CompilerResult, t: f64) -> bool {
@@ -287,16 +336,18 @@ pub unsafe extern "C" fn execute(q: *mut CompilerResult, t: f64) -> bool {
     }
 }
 
-/// Executes the compiled function n times (vectorized)
+/// Executes the compiled function n times (vectorized).
+///
 /// The calling function provides buf, which is a k x n matrix of doubles
-/// k is equal to maximum(count_states, count_obs)
-/// The calling funciton fills the first count_states rows of buf
-/// The result is returned in the first count_obs rows of buf
+/// k is equal to maximum(count_states, count_obs). The calling funciton
+/// fills the first count_states rows of buf. The result is returned in
+/// the first count_obs rows of buf.
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that q points to a valid CompilerResult
-///     In addition, buf should points to a valid matrix of correct size
+///     that q points to a valid CompilerResult.
+///
+///     In addition, buf should points to a valid matrix of correct size.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn execute_vectorized(
@@ -318,12 +369,13 @@ pub unsafe extern "C" fn execute_vectorized(
     }
 }
 
-/// Returns a pointer to the state variables (count_states doubles)
-/// The function calling execute should write the state variables in this area
+/// Returns a pointer to the state variables (count_states doubles).
+///
+/// The function calling execute should write the state variables in this area.
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that q points to a valid CompilerResult
+///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn ptr_states(q: *mut CompilerResult) -> *mut f64 {
@@ -335,12 +387,13 @@ pub unsafe extern "C" fn ptr_states(q: *mut CompilerResult) -> *mut f64 {
     }
 }
 
-/// Returns a pointer to the parameters (count_params doubles)
-/// The function calling execute should write the parameters in this area
+/// Returns a pointer to the parameters (count_params doubles).
+///
+/// The function calling execute should write the parameters in this area.
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that q points to a valid CompilerResult
+///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn ptr_params(q: *mut CompilerResult) -> *mut f64 {
@@ -353,12 +406,13 @@ pub unsafe extern "C" fn ptr_params(q: *mut CompilerResult) -> *mut f64 {
     }
 }
 
-/// Returns a pointer to the observables (count_obs doubles)
-/// The function calling execute reads the observables from this area
+/// Returns a pointer to the observables (count_obs doubles).
+///
+/// The function calling execute reads the observables from this area.
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that q points to a valid CompilerResult
+///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn ptr_obs(q: *mut CompilerResult) -> *const f64 {
@@ -370,14 +424,16 @@ pub unsafe extern "C" fn ptr_obs(q: *mut CompilerResult) -> *const f64 {
     }
 }
 
-/// Returns a pointer to the differentials (count_diffs doubles)
-/// The function calling execute reads the differentials from this area
-/// note: whether the output is returned as observables or differentials is
-/// defined in the model
+/// Returns a pointer to the differentials (count_diffs doubles).
+///
+/// The function calling execute reads the differentials from this area.
+///
+/// Note: whether the output is returned as observables or differentials is
+/// defined in the model.
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that q points to a valid CompilerResult
+///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn ptr_diffs(q: *mut CompilerResult) -> *const f64 {
@@ -389,12 +445,14 @@ pub unsafe extern "C" fn ptr_diffs(q: *mut CompilerResult) -> *const f64 {
     }
 }
 
-/// Dumps the compiled binary code to a file (name)
-/// This function is useful for debugging but is not necessary for normal operations
+/// Dumps the compiled binary code to a file (name).
+///
+/// This function is useful for debugging but is not necessary for
+/// normal operations.
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that q points to a valid CompilerResult
+///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn dump(
@@ -412,13 +470,13 @@ pub unsafe extern "C" fn dump(
     }
 }
 
-/// Deallocates the CompilerResult pointed by q
+/// Deallocates the CompilerResult pointed by q.
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
 ///     that q points to a valid CompilerResult and that after
 ///     calling this function, q is invalid and should not
-///     be used anymore
+///     be used anymore.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn finalize(q: *mut CompilerResult) {
@@ -427,12 +485,13 @@ pub unsafe extern "C" fn finalize(q: *mut CompilerResult) {
     }
 }
 
-/// Returns a null-terminated string representing the version
-/// Used for debugging
+/// Returns a null-terminated string representing the version.
+///
+/// Used for debugging.
 ///
 /// # Safety
 ///     the return value is a null-terminated string that should not
-///     be freed
+///     be freed.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn info() -> *const c_char {
@@ -441,7 +500,7 @@ pub unsafe extern "C" fn info() -> *const c_char {
     msg.into_raw() as *const _
 }
 
-/// Returns a pointer to the fast function if one can be compiled
+/// Returns a pointer to the fast function if one can be compiled.
 ///
 /// # Safety
 ///     1. If the model cannot be compiled to a fast function, NULL is returned.
@@ -461,6 +520,8 @@ pub unsafe extern "C" fn fast_func(q: *mut CompilerResult) -> *const usize {
     }
 }
 
+/// Interface for Sympy's LowLevelCallable.
+///
 /// # Safety
 ///     1. If the model cannot be compiled to a fast function, NULL is returned.
 ///     2. The resulting function lives as long as q does and should not be stored
@@ -478,6 +539,8 @@ pub unsafe extern "C" fn callable_quad(n: usize, xx: *const f64, q: *mut Compile
     }
 }
 
+/// Interface for Sympy's LowLevelCallable.
+///
 /// # Safety
 ///     1. If the model cannot be compiled to a fast function, NULL is returned.
 ///     2. The resulting function lives as long as q does and should not be stored
@@ -526,6 +589,8 @@ pub unsafe extern "C" fn callable_quad_fast(n: usize, xx: *const f64, f: *const 
     }
 }
 
+/// Interface for Sympy's LowLevelCallable (image filtering).
+///
 /// # Safety
 ///     1. If the model cannot be compiled to a fast function, NULL is returned.
 ///     2. The resulting function lives as long as q does and should not be stored
@@ -552,7 +617,7 @@ pub unsafe extern "C" fn callable_filter(
 
 /************************************************/
 
-/// Creates an empty Matrix (a 2d array)
+/// Creates an empty Matrix (a 2d array).
 ///
 /// # Safety
 ///     It returns a pointer to the allocated Matrix, which needs to be
@@ -564,7 +629,7 @@ pub unsafe extern "C" fn create_matrix() -> *const Matrix {
     Box::into_raw(Box::new(mat)) as *const Matrix
 }
 
-/// Finalized (deallocates) a Matrix
+/// Finalized (deallocates) the Matrix.
 ///
 /// # Safety
 ///     1, mat should point to a valid Matrix object created by create_matrix
@@ -577,7 +642,7 @@ pub unsafe extern "C" fn finalize_matrix(mat: *mut Matrix) {
     }
 }
 
-/// Adds a row to a Matrix
+/// Adds a row to the Matrix.
 ///
 /// # Safety
 ///     1, mat should point to a valid Matrix object created by create_matrix
@@ -590,7 +655,7 @@ pub unsafe extern "C" fn add_row(mat: *mut Matrix, v: *mut f64, n: usize) {
     mat.add_row(v, n);
 }
 
-/// Executes (runs) the model encoded by q
+/// Executes (runs) the model encoded by q.
 ///
 /// # Safety
 ///     1, q should point to a valid CompilerResult object
@@ -617,7 +682,10 @@ pub unsafe extern "C" fn execute_matrix(
 
 /************************************************/
 
-/// Creates an empty Defun (a list of Defined-Functions)
+/// Creates an empty Defun (a list of Defined-Functions).
+///
+/// Defuns are used to pass functions (either Python functions or
+/// other symjit-compiled functions).
 ///
 /// # Safety
 ///     It returns a pointer to the allocated Defun, which needs to be
@@ -629,7 +697,7 @@ pub unsafe extern "C" fn create_defuns() -> *const Defuns {
     Box::into_raw(Box::new(df)) as *const Defuns
 }
 
-/// Finalized (deallocates) a Defun
+/// Finalized (deallocates) a Defun.
 ///
 /// # Safety
 ///     1, mat should point to a valid Defun object created by create_matrix
@@ -642,7 +710,7 @@ pub unsafe extern "C" fn finalize_defuns(df: *mut Defuns) {
     }
 }
 
-/// Adds a new function to a Defun
+/// Adds a new function to a Defun.
 ///
 /// # Safety
 ///     1, df should point to a valid Defun object created by create_defun

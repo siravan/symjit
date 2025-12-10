@@ -3,6 +3,7 @@ use anyhow::{anyhow, Result};
 use serde::Deserialize;
 
 use crate::builder::Builder;
+use crate::expr::Expr;
 use crate::node::Node;
 
 pub trait Transformer {
@@ -56,7 +57,7 @@ impl Program {
         }
 
         for eq in &ml.obs {
-            if let Some(name) = eq.lhs.var() {
+            if let Some(name) = eq.lhs.normal_var() {
                 builder.block().sym_table.add_mem(&name);
             } else {
                 return Err(anyhow!("lhs var not found"));
@@ -100,13 +101,13 @@ impl Transformer for Variable {
 }
 
 /// Expr tree
-#[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "type")]
-pub enum Expr {
-    Tree { op: String, args: Vec<Expr> },
-    Const { val: f64 },
-    Var { name: String },
-}
+// #[derive(Debug, Clone, Deserialize)]
+// #[serde(tag = "type")]
+// pub enum Expr {
+//     Tree { op: String, args: Vec<Expr> },
+//     Const { val: f64 },
+//     Var { name: String },
+// }
 
 impl Expr {
     /// Extracts the differentiated variable from the lhs of a diff eq
@@ -123,7 +124,7 @@ impl Expr {
     }
 
     /// Extracts the regular variable from the lhs of an observable eq
-    pub fn var(&self) -> Option<String> {
+    pub fn normal_var(&self) -> Option<String> {
         if let Expr::Var { name } = self {
             return Some(name.clone());
         };
@@ -178,7 +179,9 @@ impl Expr {
     }
 
     fn transform_loop(&self, builder: &mut Builder, op: &str, args: &[Expr]) -> Result<Node> {
-        let var = builder.block().create_tmp_named(&args[1].var().unwrap());
+        let var = builder
+            .block()
+            .create_tmp_named(&args[1].normal_var().unwrap());
         let start = args[2].transform(builder)?;
         let (accum_var, loop_id) = builder.add_loop_prefix(op, var.clone(), start)?;
         let eq = args[0].transform(builder)?;
@@ -214,7 +217,7 @@ impl Transformer for Equation {
     fn transform(&self, builder: &mut Builder) -> Result<Node> {
         let var = if let Some(var) = self.lhs.diff_var() {
             format!("δ{}", var)
-        } else if let Some(var) = self.lhs.var() {
+        } else if let Some(var) = self.lhs.normal_var() {
             var
         } else {
             return Err(anyhow!("lhs should be a variable"));
