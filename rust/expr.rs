@@ -54,14 +54,14 @@ impl From<i32> for Expr {
 }
 
 impl Expr {
-    /// Creates a new variable named `name`
+    /// Creates a new variable named `name`.
     pub fn var(name: &str) -> Expr {
         Expr::Var {
             name: name.to_string(),
         }
     }
 
-    /// Create an unary operation: `op(arg)`
+    /// Create a unary operation: `op(arg)`.
     pub fn unary(op: &str, arg: &Expr) -> Expr {
         Expr::Tree {
             op: op.to_string(),
@@ -69,7 +69,7 @@ impl Expr {
         }
     }
 
-    /// Creates a binary operations `op(l, r)`
+    /// Creates a binary operations `op(l, r)`.
     pub fn binary(op: &str, l: &Expr, r: &Expr) -> Expr {
         Expr::Tree {
             op: op.to_string(),
@@ -77,7 +77,7 @@ impl Expr {
         }
     }
 
-    /// Creates a ternary operation: `op(l, c, r)`
+    /// Creates a ternary operation: `op(l, c, r)`.
     pub fn ternary(op: &str, l: &Expr, c: &Expr, r: &Expr) -> Expr {
         Expr::Tree {
             op: op.to_string(),
@@ -85,7 +85,15 @@ impl Expr {
         }
     }
 
-    /// Creates an equation lhs ~ rhs
+    /// Creates an n-ary operation: `op(args...)`.
+    pub fn nary(op: &str, args: &[&Expr]) -> Expr {
+        Expr::Tree {
+            op: op.to_string(),
+            args: args.iter().map(|x| (*x).clone()).collect::<Vec<Expr>>(),
+        }
+    }
+
+    /// Creates an equation lhs ~ rhs.
     pub fn equation(lhs: &Expr, rhs: &Expr) -> Equation {
         Equation {
             lhs: lhs.clone(),
@@ -93,7 +101,7 @@ impl Expr {
         }
     }
 
-    /// Converts a variable Expr to a Variable type needed by the next stage
+    /// Converts a variable Expr to a Variable type needed by the next stage.
     pub fn to_variable(&self) -> Result<Variable> {
         if let Expr::Var { name } = self {
             Ok(Variable {
@@ -187,6 +195,50 @@ impl Expr {
     /// Note that this is not a short-circuited operation.
     pub fn ifelse(&self, true_val: &Expr, false_val: &Expr) -> Expr {
         Self::ternary("ifelse", self, true_val, false_val)
+    }
+
+    /// Sums `self` for `var` in `start`..=`end`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let x = Expr::var("x");
+    /// let i = Expr::var("i");
+    /// let p = i.sum(&i, &Expr::from(1), &x);
+    /// let mut comp = Compiler::new();
+    /// let mut func = comp.compile(&[x], &[p])?;
+    /// println!("{}", func.call([5]))  // prints [15.0]
+    /// ```
+    ///
+    /// Note that the range is `start` to `end` inclusive to remain
+    /// consistent with SymPy usage.
+    ///
+    /// # Warning
+    ///
+    /// `var` should be a unique variable over the whole model.
+    pub fn sum(&self, var: &Expr, start: &Expr, end: &Expr) -> Expr {
+        Self::nary("Sum", &[self, var, start, end])
+    }
+
+    /// Calculates the product of `self` for `var` in `start`..=`end`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let x = Expr::var("x");
+    /// let i = Expr::var("i");
+    /// let p = i.prod(&i, &Expr::from(1), &x); // this is the factorial function
+    /// let mut comp = Compiler::new();
+    /// let mut func = comp.compile(&[x], &[p])?;
+    /// println!("{}", func.call([5]))  // prints [120.0]
+    /// ```
+    ///
+    /// Note that the range is `start` to `end` inclusive to remain
+    /// consistent with SymPy usage.
+    ///
+    /// `var` should be a unique variable over the whole model.
+    pub fn prod(&self, var: &Expr, start: &Expr, end: &Expr) -> Expr {
+        Self::nary("Product", &[self, var, start, end])
     }
 
     // unary operations

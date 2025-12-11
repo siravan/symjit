@@ -1,10 +1,18 @@
 #![allow(uncommon_codepoints)]
 
-//! Symjit (https://github.com/siravan/symjit) is a lightweight just-in-time (JIT) optimizer compiler for mathematical expressions.
-//! Its main utility is to directly translate SymPy (Python’s symbolic algebra package) expressions into machine code.
+//! Symjit (<https://github.com/siravan/symjit>) is a lightweight just-in-time (JIT)
+//! optimizer compiler for mathematical expressions. It was originally designed to
+//! directly translate SymPy (Python’s symbolic algebra package) expressions into
+//! machine code.
 //!
-//! In addition, symjit crate exposes the JIT functionality to the Rust ecosystem and allows Rust applications to generate code dynamically.
-//! Symjit emits AMD64 (x86-64), ARM64 (aarch64), and 64-bit RISC-V (riscv64) machine codes on Linux, Windows, and Darwin (MacOS) platforms.
+//! Symjit crate is the core compiler coupled to Rust interface classes to expose
+//! the JIT functionality to the Rust ecosystem and allows Rust applications to
+//! generate code dynamically. Considering its origin, symjit is geared toward
+//! compiling mathematical expressions instead of being a general-purpose JIT
+//! compiler.
+//!
+//! Symjit emits AMD64 (x86-64), ARM64 (aarch64), and 64-bit RISC-V (riscv64) machine
+//! codes on Linux, Windows, and Darwin (MacOS) platforms.
 //!
 //! # Examples
 //! A basic Python/Sympy example:
@@ -31,7 +39,7 @@
 //!     let q = &x * &y;
 //!
 //!     let mut comp = Compiler::new();
-//!     comp.opt_level(2);  # optional (opt_level 0 to 2; default 1)
+//!     comp.opt_level(2);  // optional (opt_level 0 to 2; default 1)
 //!     let mut func = comp.compile(&[x, y], &[p, q])?;
 //!     let v = func.call(&[3.0, 5.0]);
 //!     println!("{:?}", &v);

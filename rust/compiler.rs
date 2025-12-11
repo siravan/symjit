@@ -58,21 +58,21 @@ pub struct Compiler {
 /// }
 /// ```
 impl Compiler {
-    pub const USE_SIMD: u32 = 0x01;
-    pub const USE_THREADS: u32 = 0x02;
-    pub const CSE: u32 = 0x04;
-    pub const FASTMATH: u32 = 0x08;
-    pub const SANITIZE: u32 = 0x10;
+    const USE_SIMD: u32 = 0x01;
+    const USE_THREADS: u32 = 0x02;
+    const CSE: u32 = 0x04;
+    const FASTMATH: u32 = 0x08;
+    const SANITIZE: u32 = 0x10;
 
-    pub const OPT_LEVEL_0: u32 = 0x0000;
-    pub const OPT_LEVEL_1: u32 = 0x0100;
-    pub const OPT_LEVEL_2: u32 = 0x0200;
+    const OPT_LEVEL_0: u32 = 0x0000;
+    const OPT_LEVEL_1: u32 = 0x0100;
+    const OPT_LEVEL_2: u32 = 0x0200;
     const OPT_LEVEL_MASK: u32 = 0x0f00;
     const OPT_LEVEL_SHIFT: usize = 8;
 
     pub const DEFAULT: u32 = Self::CSE | Self::SANITIZE | Self::OPT_LEVEL_1 | Self::USE_SIMD;
 
-    /// Creates a new `Compiler` object with a default setting.
+    /// Creates a new `Compiler` object with default settings.
     pub fn new() -> Compiler {
         Compiler {
             opt: Self::DEFAULT,
@@ -83,14 +83,14 @@ impl Compiler {
 
     /// Creates a new `Compiler` object based on `ty`:
     ///
-    /// `CompilerType::Native`: generates code for the detected CPU (default)
-    /// `CompilerType::Amd`: generates x86-64 (AMD64) code.
-    /// `CompilerType::AmdAVX`: generates AVX code for x86-64 architecture.
-    /// `CompilerType::AmdSSE`: generates SSE2 code for x86-64 architecture.
-    /// `CompilerType::Arm`: generates aarch64 (ARM64) code.
-    /// `CompilerType::RiscV`: generates riscv64 (RISC V) code.
-    /// `CompilerType::ByteCode`: generates bytecode (interpreter).
-    /// `CompilerType::Debug`: debug mode, generates both bytecode and native codes
+    /// * `CompilerType::Native`: generates code for the detected CPU (default)
+    /// * `CompilerType::Amd`: generates x86-64 (AMD64) code.
+    /// * `CompilerType::AmdAVX`: generates AVX code for x86-64 architecture.
+    /// * `CompilerType::AmdSSE`: generates SSE2 code for x86-64 architecture.
+    /// * `CompilerType::Arm`: generates aarch64 (ARM64) code.
+    /// * `CompilerType::RiscV`: generates riscv64 (RISC V) code.
+    /// * `CompilerType::ByteCode`: generates bytecode (interpreter).
+    /// * `CompilerType::Debug`: debug mode, generates both bytecode and native codes
     ///     and compares the outputs.
     ///
     pub fn with_compiler_type(ty: CompilerType) -> Compiler {
@@ -101,9 +101,7 @@ impl Compiler {
         }
     }
 
-    /// Sets of optimization level.
-    ///
-    /// The valid values are 0, 1, 2, which roughly correspond to gcc O0, O1, and O2 levels.
+    /// Sets of optimization level. The valid values are 0, 1, 2, which roughly correspond to gcc O0, O1, and O2 levels.
     pub fn opt_level(&mut self, opt_level: u8) {
         self.opt =
             (self.opt & !Self::OPT_LEVEL_MASK) | ((opt_level as u32) << Self::OPT_LEVEL_SHIFT);
@@ -187,6 +185,20 @@ unsafe fn simd_slice_mut(a: &mut [f64]) -> &mut [__m256d] {
     let v: &mut [__m256d] =
         unsafe { std::slice::from_raw_parts_mut(p as *mut __m256d, a.len() >> 2) };
     v
+}
+
+pub enum FastFunc<'a> {
+    F1(fn(f64) -> f64, &'a Runnable),
+    F2(fn(f64, f64) -> f64, &'a Runnable),
+    F3(fn(f64, f64, f64) -> f64, &'a Runnable),
+    F4(fn(f64, f64, f64, f64) -> f64, &'a Runnable),
+    F5(fn(f64, f64, f64, f64, f64) -> f64, &'a Runnable),
+    F6(fn(f64, f64, f64, f64, f64, f64) -> f64, &'a Runnable),
+    F7(fn(f64, f64, f64, f64, f64, f64, f64) -> f64, &'a Runnable),
+    F8(
+        fn(f64, f64, f64, f64, f64, f64, f64, f64) -> f64,
+        &'a Runnable,
+    ),
 }
 
 impl Runnable {
@@ -338,5 +350,52 @@ impl Runnable {
         params: &[f64],
     ) -> Option<Vec<__m256d>> {
         None
+    }
+
+    pub fn fast_func<'a>(&'a mut self) -> Option<FastFunc<'a>> {
+        let f = self.get_fast();
+
+        if let Some(f) = f {
+            match self.count_states {
+                1 => {
+                    let g: fn(f64) -> f64 = unsafe { std::mem::transmute(f) };
+                    Some(FastFunc::F1(g, self))
+                }
+                2 => {
+                    let g: fn(f64, f64) -> f64 = unsafe { std::mem::transmute(f) };
+                    Some(FastFunc::F2(g, self))
+                }
+                3 => {
+                    let g: fn(f64, f64, f64) -> f64 = unsafe { std::mem::transmute(f) };
+                    Some(FastFunc::F3(g, self))
+                }
+                4 => {
+                    let g: fn(f64, f64, f64, f64) -> f64 = unsafe { std::mem::transmute(f) };
+                    Some(FastFunc::F4(g, self))
+                }
+                5 => {
+                    let g: fn(f64, f64, f64, f64, f64) -> f64 = unsafe { std::mem::transmute(f) };
+                    Some(FastFunc::F5(g, self))
+                }
+                6 => {
+                    let g: fn(f64, f64, f64, f64, f64, f64) -> f64 =
+                        unsafe { std::mem::transmute(f) };
+                    Some(FastFunc::F6(g, self))
+                }
+                7 => {
+                    let g: fn(f64, f64, f64, f64, f64, f64, f64) -> f64 =
+                        unsafe { std::mem::transmute(f) };
+                    Some(FastFunc::F7(g, self))
+                }
+                8 => {
+                    let g: fn(f64, f64, f64, f64, f64, f64, f64, f64) -> f64 =
+                        unsafe { std::mem::transmute(f) };
+                    Some(FastFunc::F8(g, self))
+                }
+                _ => None,
+            }
+        } else {
+            None
+        }
     }
 }

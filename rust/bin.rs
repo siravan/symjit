@@ -1,5 +1,5 @@
-use anyhow::Result;
-use symjit::{Compiler, CompilerType, Expr};
+use anyhow::{anyhow, Result};
+use symjit::{compiler::FastFunc, Compiler, CompilerType, Expr};
 
 fn test_simple() -> Result<()> {
     let x = Expr::var("x");
@@ -58,9 +58,46 @@ pub fn test_simd() -> Result<()> {
     Ok(())
 }
 
+fn test_fast() -> Result<()> {
+    let x = Expr::var("x");
+    let y = Expr::var("y");
+    let z = Expr::var("z");
+    let p = &x * &(&y - &z).pow(&Expr::from(2));
+
+    let mut comp = Compiler::new();
+    let mut func = comp.compile(&[x, y, z], &[p])?;
+    let f = func.fast_func().ok_or(anyhow!("not a fast function"))?;
+
+    if let FastFunc::F3(f, _) = f {
+        let v = f(3.0, 5.0, 9.0);
+        println!("{:?}", &v);
+    }
+
+    Ok(())
+}
+
+fn test_fact() -> Result<()> {
+    let x = Expr::var("x");
+    let i = Expr::var("i");
+    let p = i.prod(&i, &Expr::from(1), &x);
+
+    let mut comp = Compiler::new();
+    let mut func = comp.compile(&[x], &[p])?;
+    let f = func.fast_func().ok_or(anyhow!("not a fast function"))?;
+
+    if let FastFunc::F1(f, _) = f {
+        let v = f(6.0);
+        println!("6! = {:?}", &v);
+    }
+
+    Ok(())
+}
+
 pub fn main() -> Result<()> {
     test_simple()?;
     test_pi()?;
+    test_fast()?;
+    test_fact()?;
 
     if cfg!(target_arch = "x86_64") {
         test_simd()?;
