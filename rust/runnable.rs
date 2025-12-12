@@ -60,7 +60,7 @@ impl Platform {
     }
 }
 
-pub struct Runnable {
+pub struct Application {
     pub prog: Program,
     pub mir: Mir,
     pub compiled: Box<dyn Compiled<f64>>,
@@ -82,8 +82,8 @@ pub struct Runnable {
     pub size: usize,
 }
 
-impl Runnable {
-    pub fn new(mut prog: Program, ty: CompilerType, opt: u32, df: &Defuns) -> Result<Runnable> {
+impl Application {
+    pub fn new(mut prog: Program, ty: CompilerType, opt: u32, df: &Defuns) -> Result<Application> {
         let first_state = 0;
         let first_param = 0;
         let idx_iv = prog.count_states;
@@ -143,7 +143,7 @@ impl Runnable {
             && !matches!(ty, CompilerType::ByteCode)
             && !matches!(ty, CompilerType::Debug);
 
-        Ok(Runnable {
+        Ok(Application {
             prog,
             mir,
             compiled,

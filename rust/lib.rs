@@ -14,7 +14,25 @@
 //! Symjit emits AMD64 (x86-64), ARM64 (aarch64), and 64-bit RISC-V (riscv64) machine
 //! codes on Linux, Windows, and Darwin (MacOS) platforms.
 //!
+//! # Workflow
+//!
+//! 1. Create variables and expressions using `Expr` methods.
+//! 2. Create a new `Compiler` object (say, `comp`) using one of its constructors: `new`
+//!     and `with_compile_type`, where `ty` is of type `CompilerType`.
+//! 3. Fine-tune the optimization passes using methods `opt_level`, `simd`, `fastmath`,
+//!     and `cse` (optional).
+//! 4. Generate JIT code (say, `app`) by calling `comp.compile`. The result is of type `Application`.
+//! 5. Change parameters by writing directly to `app.params` (optional).
+//! 6. Call the compiled code using one of the `app`'s `call` functions:
+//!     * `call(&[f64])`: scalar call.
+//!     * `call_params(&[f64], &[f64])`: scalar call with parameters.
+//!     * `call_simd(&[__m256d])`: simd call.
+//!     * `call_simd_params(&[__m256d], &[f64])`: simd call with parameters.
+//!
+//! Currently, SIMD is only supported on x86-64 CPUs with AVX instruction sets.
+//!
 //! # Examples
+//!
 //! A basic Python/Sympy example:
 //!
 //! ```python//!
@@ -32,7 +50,7 @@
 //! use anyhow::Result;
 //! use symjit::{Compiler, Expr};
 //!
-//! pub fn main() -> Result<()> {
+//! pub fn test_scalar() -> Result<()> {
 //!     let x = Expr::var("x");
 //!     let y = Expr::var("y");
 //!     let p = &x + &y;
@@ -40,18 +58,36 @@
 //!
 //!     let mut comp = Compiler::new();
 //!     comp.opt_level(2);  // optional (opt_level 0 to 2; default 1)
-//!     let mut func = comp.compile(&[x, y], &[p, q])?;
-//!     let v = func.call(&[3.0, 5.0]);
+//!     let mut app = comp.compile(&[x, y], &[p, q])?;
+//!     let v = app.call(&[3.0, 5.0]);
 //!     println!("{:?}", &v);
 //!
 //!     Ok(())
 //! }
 //! ```
+//!
+//! A combined SIMD and parameter use example:
+//!
+//! pub fn test_simd() -> Result<()> {
+//!     use std::arch::x86_64::_mm256_loadu_pd;
+//!
+//!     let x = Expr::var("x");
+//!     let p = Expr::var("p"); // parameter
+//!
+//!     let expr = &x.square() * &p;    // x^2 * p
+//!     let mut comp = Compiler::new();
+//!     let mut app = comp.compile_params(&[x], &[expr], &[p])?;
+//!
+//!     let v = vec![1.0, 2.0, 3.0, 4.0];
+//!     let p = unsafe { vec![_mm256_loadu_pd(v.as_ptr())] };
+//!     let q = app.call_simd_params(&p, &[5.0])?;
+//!     println!("{:?}", &q);   // prints [__m256d(5.0, 20.0, 45.0, 80.0)]
+//!     Ok(())
+//! }
 
 use anyhow::anyhow;
 use std::ffi::{c_char, CStr, CString};
 
-// mod analyzer;
 mod block;
 mod code;
 pub mod compiler;
@@ -82,11 +118,10 @@ mod riscv64;
 use defuns::Defuns;
 use matrix::Matrix;
 use model::{CellModel, Program};
-use runnable::Runnable;
 
 pub use compiler::Compiler;
 pub use expr::Expr;
-pub use runnable::CompilerType;
+pub use runnable::{Application, CompilerType};
 
 pub const COUNT_SCRATCH: u8 = 14;
 
@@ -109,7 +144,7 @@ pub enum CompilerStatus {
 }
 
 pub struct CompilerResult {
-    func: Option<Runnable>,
+    func: Option<Application>,
     status: CompilerStatus,
 }
 
@@ -175,14 +210,14 @@ pub unsafe extern "C" fn compile(
     let df: &Defuns = unsafe { &*df };
 
     let func = match ty {
-        "bytecode" => Runnable::new(prog, CompilerType::ByteCode, opt, df),
-        "arm" => Runnable::new(prog, CompilerType::Arm, opt, df),
-        "riscv" => Runnable::new(prog, CompilerType::RiscV, opt, df),
-        "amd" => Runnable::new(prog, CompilerType::Amd, opt, df),
-        "amd-avx" => Runnable::new(prog, CompilerType::AmdAVX, opt, df),
-        "amd-sse" => Runnable::new(prog, CompilerType::AmdSSE, opt, df),
-        "native" => Runnable::new(prog, CompilerType::Native, opt, df),
-        "debug" => Runnable::new(prog, CompilerType::Debug, opt, df),
+        "bytecode" => Application::new(prog, CompilerType::ByteCode, opt, df),
+        "arm" => Application::new(prog, CompilerType::Arm, opt, df),
+        "riscv" => Application::new(prog, CompilerType::RiscV, opt, df),
+        "amd" => Application::new(prog, CompilerType::Amd, opt, df),
+        "amd-avx" => Application::new(prog, CompilerType::AmdAVX, opt, df),
+        "amd-sse" => Application::new(prog, CompilerType::AmdSSE, opt, df),
+        "native" => Application::new(prog, CompilerType::Native, opt, df),
+        "debug" => Application::new(prog, CompilerType::Debug, opt, df),
         _ => Err(anyhow!("invalid ty")),
     };
 

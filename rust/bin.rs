@@ -9,8 +9,8 @@ fn test_simple() -> Result<()> {
 
     let mut comp = Compiler::new();
     comp.opt_level(2); // optional
-    let mut func = comp.compile(&[x, y], &[p, q])?;
-    let v = func.call(&[3.0, 5.0]);
+    let mut app = comp.compile(&[x, y], &[p, q])?;
+    let v = app.call(&[3.0, 5.0]);
     println!("{:?}", &v);
 
     Ok(())
@@ -35,8 +35,8 @@ pub fn test_pi() -> Result<()> {
     let p = viete(x.clone(), 20);
 
     let mut comp = Compiler::new();
-    let mut func = comp.compile(&[x], &[&Expr::from(2) / &p])?;
-    let v = func.call(&[0.5]);
+    let mut app = comp.compile(&[x], &[&Expr::from(2) / &p])?;
+    let v = app.call(&[0.5]);
     println!("{:?}", &v);
 
     Ok(())
@@ -47,13 +47,15 @@ pub fn test_simd() -> Result<()> {
     use std::arch::x86_64::_mm256_loadu_pd;
 
     let x = Expr::var("x");
-    let p = x.square();
+    let p = Expr::var("p"); // parameter
+
+    let expr = &x.square() * &p;
     let mut comp = Compiler::new();
-    let mut func = comp.compile(&[x], &[p])?;
+    let mut app = comp.compile_params(&[x], &[expr], &[p])?;
 
     let v = vec![1.0, 2.0, 3.0, 4.0];
     let p = unsafe { vec![_mm256_loadu_pd(v.as_ptr())] };
-    let q = unsafe { func.call_simd(&p).unwrap() };
+    let q = app.call_simd_params(&p, &[5.0])?;
     println!("{:?}", &q);
     Ok(())
 }
@@ -65,8 +67,8 @@ fn test_fast() -> Result<()> {
     let p = &x * &(&y - &z).pow(&Expr::from(2));
 
     let mut comp = Compiler::new();
-    let mut func = comp.compile(&[x, y, z], &[p])?;
-    let f = func.fast_func().ok_or(anyhow!("not a fast function"))?;
+    let mut app = comp.compile(&[x, y, z], &[p])?;
+    let f = app.fast_func().ok_or(anyhow!("not a fast function"))?;
 
     if let FastFunc::F3(f, _) = f {
         let v = f(3.0, 5.0, 9.0);
@@ -82,8 +84,8 @@ fn test_fact() -> Result<()> {
     let p = i.prod(&i, &Expr::from(1), &x);
 
     let mut comp = Compiler::new();
-    let mut func = comp.compile(&[x], &[p])?;
-    let f = func.fast_func().ok_or(anyhow!("not a fast function"))?;
+    let mut app = comp.compile(&[x], &[p])?;
+    let f = app.fast_func().ok_or(anyhow!("not a fast function"))?;
 
     if let FastFunc::F1(f, _) = f {
         let v = f(6.0);
@@ -99,8 +101,8 @@ fn test() -> Option<fn(f64) -> f64> {
     let p = i.prod(&i, &Expr::from(1), &x);
 
     let mut comp = Compiler::new();
-    let mut func = comp.compile(&[x], &[p]).unwrap();
-    let f = func.fast_func().unwrap();
+    let mut app = comp.compile(&[x], &[p]).unwrap();
+    let f = app.fast_func().unwrap();
 
     if let FastFunc::F1(f, _) = f {
         Some(f)

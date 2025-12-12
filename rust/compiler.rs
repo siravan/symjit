@@ -1,40 +1,38 @@
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::{__m256d, _mm256_setzero_pd};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 use crate::defuns::Defuns;
 use crate::expr::Expr;
 use crate::model::{CellModel, Equation, Program, Variable};
-use crate::{CompilerType, Runnable};
+use crate::{Application, CompilerType};
 
 // #[derive(Debug)]
 pub struct Compiler {
     opt: u32,
     ty: CompilerType,
-    params: Vec<Expr>,
 }
 
 /// The central hub of the Rust interface. It compiles a list of
-/// variables and expressions into a callable object (of type `Runnable`).
+/// variables and expressions into a callable object (of type `Application`).
 ///
 /// # Workflow
 ///
 /// 1. Create variables and expressions using `Expr` methods.
-/// 2. Create a new `Compiler` object  using one of the constructors: `new` and `with_compile_type`,
-/// which accepts a `ty` argument of type `CompilerType`.
-/// 3. Optionally, fine-tune the optimization passes using functions `opt_level`, `simd`, `fastmath`,
-///     and `cse`.
-/// 4. Generate the JIT code (say, `comp`) by calling `compile`.
-/// 5. Optionally, change parameters by writing directly to `comp.params`.
-/// 6. Call the compiled code using one of the `call` functions:
-///     * `call`: for scalar function without rewriting parames.
-///     * `call_params`: for scalar function with rewriting parames.
-///     * `call_simd`: for simd (__m256d, i.e., packed f64 x 4) function without rewriting parames.
-///     * `call_simd_params`: for simd (__m256d, i.e., packed f64 x 4) function with rewriting parames.
+/// 2. Create a new `Compiler` object (say, `comp`) using one of its constructors: `new`
+///     and `with_compile_type`, where `ty` is of type `CompilerType`.
+/// 3. Fine-tune the optimization passes using methods `opt_level`, `simd`, `fastmath`,
+///     and `cse` (optional).
+/// 4. Generate JIT code (say, `app`) by calling `comp.compile`. The result is of type `Application`.
+/// 5. Change parameters by writing directly to `app.params` (optional).
+/// 6. Call the compiled code using one of the `app`'s `call` functions:
+///     * `call(&[f64])`: scalar call.
+///     * `call_params(&[f64], &[f64])`: scalar call with parameters.
+///     * `call_simd(&[__m256d])`: simd call.
+///     * `call_simd_params(&[__m256d], &[f64])`: simd call with parameters.
 ///
-///
-/// Note that the simd functions are marked as unsafe.
+/// Currently, SIMD is only supported on x86-64 CPUs with AVX instruction sets.
 ///
 /// # Examples
 ///
@@ -50,8 +48,8 @@ pub struct Compiler {
 ///
 ///     let mut comp = Compiler::new();
 ///     comp.opt_level(2);  # optional (opt_level 0 to 2; default 1)
-///     let mut func = comp.compile(&[x, y], &[p, q])?;
-///     let v = func.call(&[3.0, 5.0]);
+///     let mut app = comp.compile(&[x, y], &[p, q])?;
+///     let v = app.call(&[3.0, 5.0]);
 ///     println!("{:?}", &v);
 ///
 ///     Ok(())
@@ -77,7 +75,6 @@ impl Compiler {
         Compiler {
             opt: Self::DEFAULT,
             ty: CompilerType::Native,
-            params: Vec::new(),
         }
     }
 
@@ -97,7 +94,6 @@ impl Compiler {
         Compiler {
             opt: Self::DEFAULT,
             ty,
-            params: Vec::new(),
         }
     }
 
@@ -123,16 +119,29 @@ impl Compiler {
         self.opt = (self.opt & !Self::USE_SIMD) | if enabled { Self::USE_SIMD } else { 0 };
     }
 
-    /// Sets params. The argument is a list of variables, created by `Expr::var`.
-    pub fn def_params(&mut self, params: Vec<Expr>) {
-        self.params = params;
-    }
-
-    /// Compiles the model.
+    /// Compiles a model.
     ///
     /// `states` is a list of variables, created by `Expr::var`.
     /// `obs` is a list of expressions.
-    pub fn compile(&mut self, states: &[Expr], obs: &[Expr]) -> Result<Runnable> {
+    pub fn compile(&mut self, states: &[Expr], obs: &[Expr]) -> Result<Application> {
+        self.compile_params(states, obs, &[])
+    }
+
+    /// Compiles a model with parameters.
+    ///
+    /// `states` is a list of variables, created by `Expr::var`.
+    /// `obs` is a list of expressions.
+    /// `params` is a list of parameters, created by `Expr::var`.
+    ///
+    /// Note: for scalar functions, the difference between states and params
+    ///     is mostly by convenion. However, they are different in SIMD cases,
+    ///     as params are always f64.
+    pub fn compile_params(
+        &mut self,
+        states: &[Expr],
+        obs: &[Expr],
+        params: &[Expr],
+    ) -> Result<Application> {
         let mut vars: Vec<Variable> = Vec::new();
 
         for state in states.iter() {
@@ -140,11 +149,11 @@ impl Compiler {
             vars.push(v);
         }
 
-        let mut params: Vec<Variable> = Vec::new();
+        let mut ps: Vec<Variable> = Vec::new();
 
-        for p in self.params.iter() {
+        for p in params.iter() {
             let v = p.to_variable()?;
-            params.push(v);
+            ps.push(v);
         }
 
         let mut eqs: Vec<Equation> = Vec::new();
@@ -157,7 +166,7 @@ impl Compiler {
 
         let ml = CellModel {
             iv: Expr::var("$_").to_variable()?,
-            params,
+            params: ps,
             states: vars,
             algs: Vec::new(),
             odes: Vec::new(),
@@ -166,7 +175,7 @@ impl Compiler {
 
         let prog = Program::new(&ml, false)?;
         let df = Defuns::new();
-        Runnable::new(prog, self.ty, self.opt, &df)
+        Application::new(prog, self.ty, self.opt, &df)
     }
 }
 
@@ -188,20 +197,23 @@ unsafe fn simd_slice_mut(a: &mut [f64]) -> &mut [__m256d] {
 }
 
 pub enum FastFunc<'a> {
-    F1(fn(f64) -> f64, &'a Runnable),
-    F2(fn(f64, f64) -> f64, &'a Runnable),
-    F3(fn(f64, f64, f64) -> f64, &'a Runnable),
-    F4(fn(f64, f64, f64, f64) -> f64, &'a Runnable),
-    F5(fn(f64, f64, f64, f64, f64) -> f64, &'a Runnable),
-    F6(fn(f64, f64, f64, f64, f64, f64) -> f64, &'a Runnable),
-    F7(fn(f64, f64, f64, f64, f64, f64, f64) -> f64, &'a Runnable),
+    F1(fn(f64) -> f64, &'a Application),
+    F2(fn(f64, f64) -> f64, &'a Application),
+    F3(fn(f64, f64, f64) -> f64, &'a Application),
+    F4(fn(f64, f64, f64, f64) -> f64, &'a Application),
+    F5(fn(f64, f64, f64, f64, f64) -> f64, &'a Application),
+    F6(fn(f64, f64, f64, f64, f64, f64) -> f64, &'a Application),
+    F7(
+        fn(f64, f64, f64, f64, f64, f64, f64) -> f64,
+        &'a Application,
+    ),
     F8(
         fn(f64, f64, f64, f64, f64, f64, f64, f64) -> f64,
-        &'a Runnable,
+        &'a Application,
     ),
 }
 
-impl Runnable {
+impl Application {
     /// Calls the compiled function.
     ///
     /// `args` is a slice of f64 values, corresponding to the states.
@@ -262,13 +274,15 @@ impl Runnable {
     /// introduced the AVX instruction set in 2011; therefore, most intel and AMD processors
     /// support it. If SIMD is not supported, this function returns `None`.
     #[cfg(target_arch = "x86_64")]
-    pub unsafe fn call_simd(&mut self, args: &[__m256d]) -> Option<Vec<__m256d>> {
+    pub fn call_simd(&mut self, args: &[__m256d]) -> Result<Vec<__m256d>> {
         if let Some(f) = &mut self.compiled_simd {
             {
                 let mem = f.mem_mut();
-                let states = simd_slice_mut(
-                    &mut mem[self.first_state * 4..(self.first_state + self.count_states) * 4],
-                );
+                let states = unsafe {
+                    simd_slice_mut(
+                        &mut mem[self.first_state * 4..(self.first_state + self.count_states) * 4],
+                    )
+                };
                 states.copy_from_slice(args);
             }
 
@@ -276,18 +290,19 @@ impl Runnable {
 
             {
                 let mem = f.mem();
-                let obs =
-                    simd_slice(&mem[self.first_obs * 4..(self.first_obs + self.count_obs) * 4]);
-                let mut res = vec![_mm256_setzero_pd(); self.count_obs];
+                let obs = unsafe {
+                    simd_slice(&mem[self.first_obs * 4..(self.first_obs + self.count_obs) * 4])
+                };
+                let mut res = unsafe { vec![_mm256_setzero_pd(); self.count_obs] };
                 res.copy_from_slice(obs);
-                Some(res)
+                Ok(res)
             }
         } else {
             self.prepare_simd();
             if self.compiled_simd.is_some() {
                 self.call_simd(args)
             } else {
-                None
+                Err(anyhow!("cannot compile SIMD"))
             }
         }
     }
@@ -309,17 +324,15 @@ impl Runnable {
     /// introduced the AVX instruction set in 2011; therefore, most intel and AMD processors
     /// support it. If SIMD is not supported, this function returns `None`.
     #[cfg(target_arch = "x86_64")]
-    pub unsafe fn call_simd_params(
-        &mut self,
-        args: &[__m256d],
-        params: &[f64],
-    ) -> Option<Vec<__m256d>> {
+    pub fn call_simd_params(&mut self, args: &[__m256d], params: &[f64]) -> Result<Vec<__m256d>> {
         if let Some(f) = &mut self.compiled_simd {
             {
                 let mem = f.mem_mut();
-                let states = simd_slice_mut(
-                    &mut mem[self.first_state * 4..(self.first_state + self.count_states) * 4],
-                );
+                let states = unsafe {
+                    simd_slice_mut(
+                        &mut mem[self.first_state * 4..(self.first_state + self.count_states) * 4],
+                    )
+                };
                 states.copy_from_slice(args);
             }
 
@@ -327,18 +340,19 @@ impl Runnable {
 
             {
                 let mem = f.mem();
-                let obs =
-                    simd_slice(&mem[self.first_obs * 4..(self.first_obs + self.count_obs) * 4]);
-                let mut res = vec![_mm256_setzero_pd(); self.count_obs];
+                let obs = unsafe {
+                    simd_slice(&mem[self.first_obs * 4..(self.first_obs + self.count_obs) * 4])
+                };
+                let mut res = unsafe { vec![_mm256_setzero_pd(); self.count_obs] };
                 res.copy_from_slice(obs);
-                Some(res)
+                Ok(res)
             }
         } else {
             self.prepare_simd();
             if self.compiled_simd.is_some() {
-                self.call_simd(args)
+                self.call_simd_params(args, params)
             } else {
-                None
+                Err(anyhow!("cannot compile SIMD"))
             }
         }
     }
