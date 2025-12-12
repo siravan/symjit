@@ -308,8 +308,8 @@ impl Application {
     }
 
     #[cfg(not(target_arch = "x86_64"))]
-    pub unsafe fn call_simd(&mut self, args: &[__m256d]) -> Option<Vec<__m256d>> {
-        None
+    pub unsafe fn call_simd(&mut self, args: &[__m256d]) -> Result<Vec<__m256d>> {
+        Err(anyhow!("cannot compile SIMD"))
     }
 
     /// Sets the params and calls the compiled SIMD function.
@@ -362,8 +362,8 @@ impl Application {
         &mut self,
         args: &[__m256d],
         params: &[f64],
-    ) -> Option<Vec<__m256d>> {
-        None
+    ) -> Result<Vec<__m256d>> {
+        Err(anyhow!("cannot compile SIMD"))
     }
 
     pub fn fast_func<'a>(&'a mut self) -> Option<FastFunc<'a>> {
