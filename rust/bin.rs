@@ -93,11 +93,32 @@ fn test_fact() -> Result<()> {
     Ok(())
 }
 
+fn test() -> Option<fn(f64) -> f64> {
+    let x = Expr::var("x");
+    let i = Expr::var("i");
+    let p = i.prod(&i, &Expr::from(1), &x);
+
+    let mut comp = Compiler::new();
+    let mut func = comp.compile(&[x], &[p]).unwrap();
+    let f = func.fast_func().unwrap();
+
+    if let FastFunc::F1(f, _) = f {
+        Some(f)
+    } else {
+        None
+    }
+}
+
 pub fn main() -> Result<()> {
-    test_simple()?;
-    test_pi()?;
-    test_fast()?;
-    test_fact()?;
+    for _ in 0..2000 {
+        test_simple()?;
+        test_pi()?;
+        test_fast()?;
+        test_fact()?;
+    }
+
+    let f = test().unwrap();
+    println!("{}", f(8.0));
 
     if cfg!(target_arch = "x86_64") {
         test_simd()?;

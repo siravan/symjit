@@ -10,10 +10,11 @@ pub struct MachineCode<T> {
     code: Memory, // code needs to be here for f to stay valid
     f: CompiledFunc<T>,
     _mem: Vec<T>,
+    leaky: bool,
 }
 
 impl<T> MachineCode<T> {
-    pub fn new(arch: &str, machine_code: Vec<u8>, _mem: Vec<T>) -> MachineCode<T> {
+    pub fn new(arch: &str, machine_code: Vec<u8>, _mem: Vec<T>, leaky: bool) -> MachineCode<T> {
         let valid = (cfg!(target_arch = "x86_64") && arch == "x86_64")
             || (cfg!(target_arch = "aarch64") && arch == "aarch64")
             || (cfg!(target_arch = "riscv64") && arch == "riscv64");
@@ -41,6 +42,7 @@ impl<T> MachineCode<T> {
             code,
             f,
             _mem,
+            leaky,
         }
     }
 
@@ -53,6 +55,16 @@ impl<T> MachineCode<T> {
             panic!("invalid processor architecture; expect riscv64");
         } else {
             panic!("invalid processor architecture; unknown");
+        }
+    }
+}
+
+impl<T> Drop for MachineCode<T> {
+    fn drop(&mut self) {
+        if !self.leaky {
+            unsafe {
+                self.code.free_memory();
+            }
         }
     }
 }

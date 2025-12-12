@@ -217,7 +217,7 @@ impl Runnable {
         let mem: Vec<f64> = vec![0.0; size];
         prog.builder
             .compile_from_mir(mir, &mut generator, prog.count_states, prog.count_obs)?;
-        let code = MachineCode::new(arch, generator.bytes(), mem);
+        let code = MachineCode::new(arch, generator.bytes(), mem, false);
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
         Ok(compiled)
     }
@@ -236,7 +236,7 @@ impl Runnable {
             prog.count_states as u32,
             idx_ret as i32,
         )?;
-        let code = MachineCode::new(arch, generator.bytes(), mem);
+        let code = MachineCode::new(arch, generator.bytes(), mem, true);
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
 
         Ok(compiled)
