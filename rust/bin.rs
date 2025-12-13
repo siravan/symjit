@@ -135,9 +135,8 @@ pub fn main() -> Result<()> {
     test_fact()?;
     test_external()?;
 
-    if cfg!(target_arch = "x86_64") {
-        test_simd()?;
-    }
+    #[cfg(target_arch = "x86_64")]
+    test_simd()?;
 
     print!("testing memory leaks...");
     test_memory(10000)?;

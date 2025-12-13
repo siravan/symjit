@@ -15,6 +15,9 @@ pub struct Compiler {
     df: Defuns,
 }
 
+#[cfg(not(target_arch = "x86_64"))]
+type __m256d = [f64; 4];
+
 /// The central hub of the Rust interface. It compiles a list of
 /// variables and expressions into a callable object (of type `Application`).
 ///
