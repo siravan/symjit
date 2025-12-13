@@ -12,6 +12,7 @@ use crate::{Application, CompilerType};
 pub struct Compiler {
     opt: u32,
     ty: CompilerType,
+    df: Defuns,
 }
 
 /// The central hub of the Rust interface. It compiles a list of
@@ -19,14 +20,23 @@ pub struct Compiler {
 ///
 /// # Workflow
 ///
-/// 1. Create variables and expressions using `Expr` methods.
-/// 2. Create a new `Compiler` object (say, `comp`) using one of its constructors: `new`
-///     and `with_compile_type`, where `ty` is of type `CompilerType`.
+/// 1. Create variables and constants and compose expressions using the following
+///      `Expr` methods:
+///     * Constructors: `var`, `from`, `unary`, `binary`, ...
+///     * Standard operators `+`, `-`, `*`, `/`, `%`, `&`, `|`, `^`, `!`.
+///     * Unary functions such as `sin`, `exp`, and other standard mathematical functions.
+///     * Binary functions such as `pow`, `min`, ...
+///     * IfElse operation `ifelse(cond, true_val, false_val)`.
+///     * Comparison methods `eq`, `ne`, `lt`, `le`, `gt`, and `ge`.
+/// 2. Create a new `Compiler` object (say, `comp`) using one of its constructors:
+///     `new` and `with_compile_type`, where `ty` is of type `CompilerType`.
 /// 3. Fine-tune the optimization passes using methods `opt_level`, `simd`, `fastmath`,
 ///     and `cse` (optional).
-/// 4. Generate JIT code (say, `app`) by calling `comp.compile`. The result is of type `Application`.
-/// 5. Change parameters by writing directly to `app.params` (optional).
-/// 6. Call the compiled code using one of the `app`'s `call` functions:
+/// 4. Define user-defined functions by called `comp.def_unary` and `comp.def_binary`
+///     (optional).
+/// 5. Generate JIT code by calling `comp.compile` or `comp.compile_params`. The result
+///     is of type `Application` (say, `app`).
+/// 6. Execute the compiled code using one of the `app`'s `call` functions:
 ///     * `call(&[f64])`: scalar call.
 ///     * `call_params(&[f64], &[f64])`: scalar call with parameters.
 ///     * `call_simd(&[__m256d])`: simd call.
@@ -75,6 +85,7 @@ impl Compiler {
         Compiler {
             opt: Self::DEFAULT,
             ty: CompilerType::Native,
+            df: Defuns::new(),
         }
     }
 
@@ -94,6 +105,7 @@ impl Compiler {
         Compiler {
             opt: Self::DEFAULT,
             ty,
+            df: Defuns::new(),
         }
     }
 
@@ -174,8 +186,18 @@ impl Compiler {
         };
 
         let prog = Program::new(&ml, false)?;
-        let df = Defuns::new();
-        Application::new(prog, self.ty, self.opt, &df)
+        // let df = Defuns::new();
+        Application::new(prog, self.ty, self.opt, &self.df)
+    }
+
+    /// Registers a user-defined unary function.
+    pub fn def_unary(&mut self, op: &str, f: extern "C" fn(f64) -> f64) {
+        self.df.add_unary(&op, f)
+    }
+
+    /// Registers a user-defined binary function.
+    pub fn def_binary(&mut self, op: &str, f: extern "C" fn(f64, f64) -> f64) {
+        self.df.add_binary(&op, f)
     }
 }
 
@@ -197,18 +219,24 @@ unsafe fn simd_slice_mut(a: &mut [f64]) -> &mut [__m256d] {
 }
 
 pub enum FastFunc<'a> {
-    F1(fn(f64) -> f64, &'a Application),
-    F2(fn(f64, f64) -> f64, &'a Application),
-    F3(fn(f64, f64, f64) -> f64, &'a Application),
-    F4(fn(f64, f64, f64, f64) -> f64, &'a Application),
-    F5(fn(f64, f64, f64, f64, f64) -> f64, &'a Application),
-    F6(fn(f64, f64, f64, f64, f64, f64) -> f64, &'a Application),
+    F1(extern "C" fn(f64) -> f64, &'a Application),
+    F2(extern "C" fn(f64, f64) -> f64, &'a Application),
+    F3(extern "C" fn(f64, f64, f64) -> f64, &'a Application),
+    F4(extern "C" fn(f64, f64, f64, f64) -> f64, &'a Application),
+    F5(
+        extern "C" fn(f64, f64, f64, f64, f64) -> f64,
+        &'a Application,
+    ),
+    F6(
+        extern "C" fn(f64, f64, f64, f64, f64, f64) -> f64,
+        &'a Application,
+    ),
     F7(
-        fn(f64, f64, f64, f64, f64, f64, f64) -> f64,
+        extern "C" fn(f64, f64, f64, f64, f64, f64, f64) -> f64,
         &'a Application,
     ),
     F8(
-        fn(f64, f64, f64, f64, f64, f64, f64, f64) -> f64,
+        extern "C" fn(f64, f64, f64, f64, f64, f64, f64, f64) -> f64,
         &'a Application,
     ),
 }
@@ -366,50 +394,91 @@ impl Application {
         Err(anyhow!("cannot compile SIMD"))
     }
 
-    pub fn fast_func<'a>(&'a mut self) -> Option<FastFunc<'a>> {
+    /// Returns a fast function.
+    ///
+    /// `Application` call functions need to copy the input argument slice into
+    /// the function memory area and then copy the output to a `Vec`. This process
+    /// is acceptable for large and complex functions but incurs a penalty for
+    /// small functions. Therefore, for a certain subset of applications, Symjit
+    /// can compile a fast funcction and return a function pointer. Examples:
+    ///
+    /// ```rust
+    /// fn test_fast() -> Result<()> {
+    ///     let x = Expr::var("x");
+    ///     let y = Expr::var("y");
+    ///     let z = Expr::var("z");
+    ///     let p = &x * &(&y - &z).pow(&Expr::from(2));
+    ///
+    ///     let mut comp = Compiler::new();
+    ///     let mut app = comp.compile(&[x, y, z], &[p])?;
+    ///     let f = app.fast_func()?;
+    ///
+    ///     if let FastFunc::F3(f, _) = f {
+    ///         let v = f(3.0, 5.0, 9.0);
+    ///         println!("fast\t{:?}", &v);
+    ///     }
+    ///
+    ///     Ok(())
+    /// }
+    /// ```
+    ///
+    /// The conditions for a fast function are:
+    ///
+    /// * A fast function can have 1 to 8 arguments.
+    /// * No SIMD and no parameters.
+    /// * It returns only a single value.
+    ///
+    /// If these conditions are met, you can generate a fast functin by calling
+    /// `app.fast_func()`, with a return type of `Result<FastFunc>`. `FastFunc` is an
+    /// enum with eight variants `F1, `F2`, to `F8`, corresponding to functions with
+    /// 1 to 8 arguments.
+    ///
+    pub fn fast_func<'a>(&'a mut self) -> Result<FastFunc<'a>> {
         let f = self.get_fast();
 
         if let Some(f) = f {
             match self.count_states {
                 1 => {
-                    let g: fn(f64) -> f64 = unsafe { std::mem::transmute(f) };
-                    Some(FastFunc::F1(g, self))
+                    let g: extern "C" fn(f64) -> f64 = unsafe { std::mem::transmute(f) };
+                    Ok(FastFunc::F1(g, self))
                 }
                 2 => {
-                    let g: fn(f64, f64) -> f64 = unsafe { std::mem::transmute(f) };
-                    Some(FastFunc::F2(g, self))
+                    let g: extern "C" fn(f64, f64) -> f64 = unsafe { std::mem::transmute(f) };
+                    Ok(FastFunc::F2(g, self))
                 }
                 3 => {
-                    let g: fn(f64, f64, f64) -> f64 = unsafe { std::mem::transmute(f) };
-                    Some(FastFunc::F3(g, self))
+                    let g: extern "C" fn(f64, f64, f64) -> f64 = unsafe { std::mem::transmute(f) };
+                    Ok(FastFunc::F3(g, self))
                 }
                 4 => {
-                    let g: fn(f64, f64, f64, f64) -> f64 = unsafe { std::mem::transmute(f) };
-                    Some(FastFunc::F4(g, self))
+                    let g: extern "C" fn(f64, f64, f64, f64) -> f64 =
+                        unsafe { std::mem::transmute(f) };
+                    Ok(FastFunc::F4(g, self))
                 }
                 5 => {
-                    let g: fn(f64, f64, f64, f64, f64) -> f64 = unsafe { std::mem::transmute(f) };
-                    Some(FastFunc::F5(g, self))
+                    let g: extern "C" fn(f64, f64, f64, f64, f64) -> f64 =
+                        unsafe { std::mem::transmute(f) };
+                    Ok(FastFunc::F5(g, self))
                 }
                 6 => {
-                    let g: fn(f64, f64, f64, f64, f64, f64) -> f64 =
+                    let g: extern "C" fn(f64, f64, f64, f64, f64, f64) -> f64 =
                         unsafe { std::mem::transmute(f) };
-                    Some(FastFunc::F6(g, self))
+                    Ok(FastFunc::F6(g, self))
                 }
                 7 => {
-                    let g: fn(f64, f64, f64, f64, f64, f64, f64) -> f64 =
+                    let g: extern "C" fn(f64, f64, f64, f64, f64, f64, f64) -> f64 =
                         unsafe { std::mem::transmute(f) };
-                    Some(FastFunc::F7(g, self))
+                    Ok(FastFunc::F7(g, self))
                 }
                 8 => {
-                    let g: fn(f64, f64, f64, f64, f64, f64, f64, f64) -> f64 =
+                    let g: extern "C" fn(f64, f64, f64, f64, f64, f64, f64, f64) -> f64 =
                         unsafe { std::mem::transmute(f) };
-                    Some(FastFunc::F8(g, self))
+                    Ok(FastFunc::F8(g, self))
                 }
-                _ => None,
+                _ => Err(anyhow!("not a fast function")),
             }
         } else {
-            None
+            Err(anyhow!("not a fast function"))
         }
     }
 }

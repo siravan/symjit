@@ -1,5 +1,5 @@
-use anyhow::{anyhow, Result};
-use symjit::{compiler::FastFunc, Compiler, CompilerType, Expr};
+use anyhow::Result;
+use symjit::{Compiler, Expr, FastFunc};
 
 fn test_simple() -> Result<()> {
     let x = Expr::var("x");
@@ -11,7 +11,7 @@ fn test_simple() -> Result<()> {
     comp.opt_level(2); // optional
     let mut app = comp.compile(&[x, y], &[p, q])?;
     let v = app.call(&[3.0, 5.0]);
-    println!("{:?}", &v);
+    println!("simple\t{:?}", &v);
 
     Ok(())
 }
@@ -30,14 +30,17 @@ fn viete(x: Expr, n: usize) -> Expr {
     p
 }
 
-pub fn test_pi() -> Result<()> {
+pub fn test_pi(silent: bool) -> Result<()> {
     let x = Expr::var("x");
     let p = viete(x.clone(), 20);
 
     let mut comp = Compiler::new();
     let mut app = comp.compile(&[x], &[&Expr::from(2) / &p])?;
     let v = app.call(&[0.5]);
-    println!("{:?}", &v);
+
+    if !silent {
+        println!("pi\t{:?}", &v);
+    }
 
     Ok(())
 }
@@ -56,7 +59,7 @@ pub fn test_simd() -> Result<()> {
     let v = vec![1.0, 2.0, 3.0, 4.0];
     let p = unsafe { vec![_mm256_loadu_pd(v.as_ptr())] };
     let q = app.call_simd_params(&p, &[5.0])?;
-    println!("{:?}", &q);
+    println!("simd\t{:?}", &q);
     Ok(())
 }
 
@@ -68,11 +71,11 @@ fn test_fast() -> Result<()> {
 
     let mut comp = Compiler::new();
     let mut app = comp.compile(&[x, y, z], &[p])?;
-    let f = app.fast_func().ok_or(anyhow!("not a fast function"))?;
+    let f = app.fast_func()?;
 
     if let FastFunc::F3(f, _) = f {
         let v = f(3.0, 5.0, 9.0);
-        println!("{:?}", &v);
+        println!("fast\t{:?}", &v);
     }
 
     Ok(())
@@ -85,46 +88,60 @@ fn test_fact() -> Result<()> {
 
     let mut comp = Compiler::new();
     let mut app = comp.compile(&[x], &[p])?;
-    let f = app.fast_func().ok_or(anyhow!("not a fast function"))?;
+    let f = app.fast_func()?;
 
     if let FastFunc::F1(f, _) = f {
         let v = f(6.0);
-        println!("6! = {:?}", &v);
+        println!("fact\t6! = {:?}", &v);
     }
 
     Ok(())
 }
 
-fn test() -> Option<fn(f64) -> f64> {
+extern "C" fn f(x: f64) -> f64 {
+    x.exp()
+}
+
+extern "C" fn g(x: f64, y: f64) -> f64 {
+    x.ln() * y
+}
+
+fn test_external() -> Result<()> {
     let x = Expr::var("x");
-    let i = Expr::var("i");
-    let p = i.prod(&i, &Expr::from(1), &x);
+    let p = Expr::unary("f_", &x);
+    let q = &x * &Expr::binary("g_", &p, &x);
 
     let mut comp = Compiler::new();
-    let mut app = comp.compile(&[x], &[p]).unwrap();
-    let f = app.fast_func().unwrap();
+    comp.def_unary("f_", f);
+    comp.def_binary("g_", g);
+    let mut app = comp.compile(&[x], &[q])?;
+    let v = app.call(&[5.0]);
+    println!("funs\t{:?}", &v); // it should be 5.0 ^ 3
 
-    if let FastFunc::F1(f, _) = f {
-        Some(f)
-    } else {
-        None
+    Ok(())
+}
+
+fn test_memory(n: usize) -> Result<()> {
+    for _ in 0..n {
+        test_pi(true)?;
     }
+    Ok(())
 }
 
 pub fn main() -> Result<()> {
-    for _ in 0..2000 {
-        test_simple()?;
-        test_pi()?;
-        test_fast()?;
-        test_fact()?;
-    }
-
-    let f = test().unwrap();
-    println!("{}", f(8.0));
+    test_simple()?;
+    test_pi(false)?;
+    test_fast()?;
+    test_fact()?;
+    test_external()?;
 
     if cfg!(target_arch = "x86_64") {
         test_simd()?;
     }
+
+    print!("testing memory leaks...");
+    test_memory(10000)?;
+    println!("pass!");
 
     Ok(())
 }

@@ -62,6 +62,9 @@ impl Expr {
     }
 
     /// Create a unary operation: `op(arg)`.
+    ///
+    /// To create a user-defined unary function, you need to register
+    /// the function with `Compiler` using `def_unary`.
     pub fn unary(op: &str, arg: &Expr) -> Expr {
         Expr::Tree {
             op: op.to_string(),
@@ -70,6 +73,9 @@ impl Expr {
     }
 
     /// Creates a binary operations `op(l, r)`.
+    ///
+    /// To create a user-defined binary function, you need to register
+    /// the function with `Compiler` using `def_binary`.
     pub fn binary(op: &str, l: &Expr, r: &Expr) -> Expr {
         Expr::Tree {
             op: op.to_string(),

@@ -28,4 +28,16 @@ impl Defuns {
             }
         }
     }
+
+    pub fn add_unary(&mut self, name: &str, f: UnaryFunc) {
+        self.funcs.insert(name.to_string(), Func::Unary(f));
+    }
+
+    pub fn add_binary(&mut self, name: &str, f: BinaryFunc) {
+        self.funcs.insert(name.to_string(), Func::Binary(f));
+    }
+
+    pub fn len(&self) -> usize {
+        self.funcs.len()
+    }
 }

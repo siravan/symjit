@@ -5,37 +5,46 @@
 //! directly translate SymPy (Python’s symbolic algebra package) expressions into
 //! machine code.
 //!
-//! Symjit crate is the core compiler coupled to Rust interface classes to expose
-//! the JIT functionality to the Rust ecosystem and allows Rust applications to
+//! Symjit crate is the core compiler coupled to a Rust interface to expose the
+//! JIT functionality to the Rust ecosystem and allow Rust applications to
 //! generate code dynamically. Considering its origin, symjit is geared toward
 //! compiling mathematical expressions instead of being a general-purpose JIT
-//! compiler.
+//! compiler. Therefore, currently the only types for variables are `f64`,
+//! `__m256d` (SIMD), and implicitely, `bool` and `i32`.
 //!
 //! Symjit emits AMD64 (x86-64), ARM64 (aarch64), and 64-bit RISC-V (riscv64) machine
-//! codes on Linux, Windows, and Darwin (MacOS) platforms.
+//! codes on Linux, Windows, and MacOS platforms. SIMD is only supported on x86-64
+//! CPUs with AVX instruction sets.
 //!
 //! # Workflow
 //!
-//! 1. Create variables and expressions using `Expr` methods.
+//! 1. Create variables and constants and compose expressions using the following
+//!      `Expr` methods:
+//!     * Constructors: `var`, `from`, `unary`, `binary`, ...
+//!     * Standard operators `+`, `-`, `*`, `/`, `%`, `&`, `|`, `^`, `!`.
+//!     * Unary functions such as `sin`, `exp`, and other standard mathematical functions.
+//!     * Binary functions such as `pow`, `min`, ...
+//!     * IfElse operation `ifelse(cond, true_val, false_val)`.
+//!     * Comparison methods `eq`, `ne`, `lt`, `le`, `gt`, and `ge`.
 //! 2. Create a new `Compiler` object (say, `comp`) using one of its constructors: `new`
 //!     and `with_compile_type`, where `ty` is of type `CompilerType`.
 //! 3. Fine-tune the optimization passes using methods `opt_level`, `simd`, `fastmath`,
 //!     and `cse` (optional).
-//! 4. Generate JIT code (say, `app`) by calling `comp.compile`. The result is of type `Application`.
-//! 5. Change parameters by writing directly to `app.params` (optional).
-//! 6. Call the compiled code using one of the `app`'s `call` functions:
+//! 4. Define user-defined functions by called `comp.def_unary` and `comp.def_binary`
+//!     (optional).
+//! 5. Generate JIT code by calling `comp.compile` or `comp.compile_params`. The result
+//!     is of type `Application` (say, `app`).
+//! 6. Execute the compiled code using one of the `app`'s `call` functions:
 //!     * `call(&[f64])`: scalar call.
 //!     * `call_params(&[f64], &[f64])`: scalar call with parameters.
 //!     * `call_simd(&[__m256d])`: simd call.
 //!     * `call_simd_params(&[__m256d], &[f64])`: simd call with parameters.
 //!
-//! Currently, SIMD is only supported on x86-64 CPUs with AVX instruction sets.
-//!
 //! # Examples
 //!
 //! A basic Python/Sympy example:
 //!
-//! ```python//!
+//! ```python
 //! from symjit import compile_func
 //! from sympy import symbols
 //!
@@ -60,7 +69,7 @@
 //!     comp.opt_level(2);  // optional (opt_level 0 to 2; default 1)
 //!     let mut app = comp.compile(&[x, y], &[p, q])?;
 //!     let v = app.call(&[3.0, 5.0]);
-//!     println!("{:?}", &v);
+//!     println!("{:?}", &v);   // prints [8.0, 15.0]
 //!
 //!     Ok(())
 //! }
@@ -84,6 +93,82 @@
 //!     println!("{:?}", &q);   // prints [__m256d(5.0, 20.0, 45.0, 80.0)]
 //!     Ok(())
 //! }
+//!
+//! # Fast Functions
+//!
+//! `Application` call functions need to copy the input argument slice into
+//! the function memory area and then copy the output to a `Vec`. This process
+//! is acceptable for large and complex functions but incurs a penalty for
+//! small functions. Therefore, for a certain subset of applications, Symjit
+//! can compile a *fast funcction* and return a function pointer. Examples:
+//!
+//! ```rust
+//! fn test_fast() -> Result<()> {
+//!     let x = Expr::var("x");
+//!     let y = Expr::var("y");
+//!     let z = Expr::var("z");
+//!     let p = &x * &(&y - &z).pow(&Expr::from(2));    // x * (y - z)^2
+//!
+//!     let mut comp = Compiler::new();
+//!     let mut app = comp.compile(&[x, y, z], &[p])?;
+//!     let f = app.fast_func()?;
+//!
+//!     if let FastFunc::F3(f, _) = f {
+//!         let v = f(3.0, 5.0, 9.0);
+//!         println!("fast\t{:?}", &v);
+//!     }
+//!
+//!     Ok(())
+//! }
+//! ```
+//!
+//! The conditions for a fast function are:
+//!
+//! * A fast function can have 1 to 8 arguments.
+//! * No SIMD and no parameters.
+//! * It returns only a single value.
+//!
+//! If these conditions are met, you can generate a fast functin by calling
+//! `app.fast_func()`, with a return type of `Result<FastFunc>`. `FastFunc` is an
+//! enum with eight variants `F1, `F2`, to `F8`, corresponding to functions with
+//! 1 to 8 arguments.
+//!
+//! # User-Defined Functions
+//!
+//! Symjit functions can call into user-defined functions. Currently, only the
+//! following function signatures are accepted:
+//!
+//! ```rust
+//! pub type UnaryFunc = extern "C" fn(f64) -> f64;
+//! pub type BinaryFunc = extern "C" fn(f64, f64) -> f64;
+//! ```
+//!
+//! For example:
+//!
+//! ```rust
+//! extern "C" fn f(x: f64) -> f64 {
+//!     x.exp()
+//! }
+//!
+//! extern "C" fn g(x: f64, y: f64) -> f64 {
+//!     x.ln() * y
+//! }
+//!
+//! fn test_external() -> Result<()> {
+//!     let x = Expr::var("x");
+//!     let p = Expr::unary("f_", &x);
+//!     let q = &x * &Expr::binary("g_", &p, &x);
+//!
+//!     let mut comp = Compiler::new();
+//!     comp.def_unary("f_", f);
+//!     comp.def_binary("g_", g);
+//!     let mut app = comp.compile(&[x], &[q])?;
+//!     let v = app.call(&[5.0]);
+//!     println!("funs\t{:?}", &v); // it should be 5.0 ^ 3
+//!
+//!     Ok(())
+//! }
+//! ```
 
 use anyhow::anyhow;
 use std::ffi::{c_char, CStr, CString};
@@ -119,7 +204,7 @@ use defuns::Defuns;
 use matrix::Matrix;
 use model::{CellModel, Program};
 
-pub use compiler::Compiler;
+pub use compiler::{Compiler, FastFunc};
 pub use expr::Expr;
 pub use runnable::{Application, CompilerType};
 
