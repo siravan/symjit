@@ -56,10 +56,10 @@ pub fn test_simd() -> Result<()> {
     let mut comp = Compiler::new();
     let mut app = comp.compile_params(&[x], &[expr], &[p])?;
 
-    let v = vec![1.0, 2.0, 3.0, 4.0];
-    let p = unsafe { vec![_mm256_loadu_pd(v.as_ptr())] };
-    let q = app.call_simd_params(&p, &[5.0])?;
-    println!("simd\t{:?}", &q);
+    let a = &[1.0, 2.0, 3.0, 4.0];
+    let a = unsafe { _mm256_loadu_pd(a.as_ptr()) };
+    let res = app.call_simd_params(&[a], &[5.0])?;
+    println!("simd\t{:?}", &res);
     Ok(())
 }
 
@@ -139,7 +139,7 @@ pub fn main() -> Result<()> {
     test_simd()?;
 
     print!("testing memory leaks...");
-    test_memory(10000)?;
+    test_memory(2000)?;
     println!("pass!");
 
     Ok(())

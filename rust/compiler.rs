@@ -23,8 +23,8 @@ type __m256d = [f64; 4];
 ///
 /// # Workflow
 ///
-/// 1. Create variables and constants and compose expressions using the following
-///      `Expr` methods:
+/// 1. Create terminals (variables and constants) and compose expressions using the
+///     following `Expr` methods:
 ///     * Constructors: `var`, `from`, `unary`, `binary`, ...
 ///     * Standard operators `+`, `-`, `*`, `/`, `%`, `&`, `|`, `^`, `!`.
 ///     * Unary functions such as `sin`, `exp`, and other standard mathematical functions.
@@ -33,18 +33,19 @@ type __m256d = [f64; 4];
 ///     * Comparison methods `eq`, `ne`, `lt`, `le`, `gt`, and `ge`.
 ///     * Looping constructs `sum` and `prod`.
 /// 2. Create a new `Compiler` object (say, `comp`) using one of its constructors:
-///     `new` and `with_compile_type`, where `ty` is of type `CompilerType`.
+///     `new()` and `with_compile_type(ty: CompilerType)`.
 /// 3. Fine-tune the optimization passes using methods `opt_level`, `simd`, `fastmath`,
 ///     and `cse` (optional).
 /// 4. Define user-defined functions by called `comp.def_unary` and `comp.def_binary`
 ///     (optional).
-/// 5. Generate JIT code by calling `comp.compile` or `comp.compile_params`. The result
-///     is of type `Application` (say, `app`).
+/// 5. Compile by calling `comp.compile` or `comp.compile_params`. The result is of
+///     type `Application` (say, `app`).
 /// 6. Execute the compiled code using one of the `app`'s `call` functions:
 ///     * `call(&[f64])`: scalar call.
 ///     * `call_params(&[f64], &[f64])`: scalar call with parameters.
 ///     * `call_simd(&[__m256d])`: simd call.
 ///     * `call_simd_params(&[__m256d], &[f64])`: simd call with parameters.
+/// 7. Optionally, generate standalone fast functions to execute.
 ///
 /// Currently, SIMD is only supported on x86-64 CPUs with AVX instruction sets.
 ///
@@ -57,14 +58,14 @@ type __m256d = [f64; 4];
 /// pub fn main() -> Result<()> {
 ///     let x = Expr::var("x");
 ///     let y = Expr::var("y");
-///     let p = &x + &y;
-///     let q = &x * &y;
+///     let u = &x + &y;
+///     let v = &x * &y;
 ///
 ///     let mut comp = Compiler::new();
-///     comp.opt_level(2);  # optional (opt_level 0 to 2; default 1)
-///     let mut app = comp.compile(&[x, y], &[p, q])?;
-///     let v = app.call(&[3.0, 5.0]);
-///     println!("{:?}", &v);
+///     comp.opt_level(2);  // optional (opt_level 0 to 2; default 1)
+///     let mut app = comp.compile(&[x, y], &[u, v])?;
+///     let res = app.call(&[3.0, 5.0]);
+///     println!("{:?}", &res);
 ///
 ///     Ok(())
 /// }
@@ -299,12 +300,13 @@ impl Application {
     ///
     /// `args` is a slice of __m256d values, corresponding to the states.
     ///
-    /// The output is an `Option` wrapped `Vec<__m256d>`, corresponding to the observables (the expressions passed
-    /// to `compile`).
+    /// The output is an `Result` wrapping `Vec<__m256d>`, corresponding to the observables
+    /// (the expressions passed to `compile`).
     ///
     /// Note: currently, this function only works on X86-64 CPUs with the AVX extension. Intel
     /// introduced the AVX instruction set in 2011; therefore, most intel and AMD processors
     /// support it. If SIMD is not supported, this function returns `None`.
+    ///
     #[cfg(target_arch = "x86_64")]
     pub fn call_simd(&mut self, args: &[__m256d]) -> Result<Vec<__m256d>> {
         if let Some(f) = &mut self.compiled_simd {
@@ -347,14 +349,16 @@ impl Application {
     /// Sets the params and calls the compiled SIMD function.
     ///
     /// `args` is a slice of __m256d values, corresponding to the states.
+    ///
     /// `params` is a slice of f64 values.
     ///
-    /// The output is an `Option` wrapped `Vec<__m256d>`, corresponding to the observables (the expressions passed
-    /// to `compile`).
+    /// The output is a `Result` wrapping a `Vec<__m256d>`, corresponding to the observables
+    /// (the expressions passed to `compile`).
     ///
     /// Note: currently, this function only works on X86-64 CPUs with the AVX extension. Intel
     /// introduced the AVX instruction set in 2011; therefore, most intel and AMD processors
     /// support it. If SIMD is not supported, this function returns `None`.
+    ///
     #[cfg(target_arch = "x86_64")]
     pub fn call_simd_params(&mut self, args: &[__m256d], params: &[f64]) -> Result<Vec<__m256d>> {
         if let Some(f) = &mut self.compiled_simd {
@@ -411,15 +415,15 @@ impl Application {
     ///     let x = Expr::var("x");
     ///     let y = Expr::var("y");
     ///     let z = Expr::var("z");
-    ///     let p = &x * &(&y - &z).pow(&Expr::from(2));
+    ///     let u = &x * &(&y - &z).pow(&Expr::from(2));
     ///
     ///     let mut comp = Compiler::new();
-    ///     let mut app = comp.compile(&[x, y, z], &[p])?;
+    ///     let mut app = comp.compile(&[x, y, z], &[u])?;
     ///     let f = app.fast_func()?;
     ///
     ///     if let FastFunc::F3(f, _) = f {
-    ///         let v = f(3.0, 5.0, 9.0);
-    ///         println!("fast\t{:?}", &v);
+    ///         let res = f(3.0, 5.0, 9.0);
+    ///         println!("fast\t{:?}", &res);
     ///     }
     ///
     ///     Ok(())
@@ -434,8 +438,8 @@ impl Application {
     ///
     /// If these conditions are met, you can generate a fast functin by calling
     /// `app.fast_func()`, with a return type of `Result<FastFunc>`. `FastFunc` is an
-    /// enum with eight variants `F1, `F2`, to `F8`, corresponding to functions with
-    /// 1 to 8 arguments.
+    /// enum with eight variants `F1, `F2`, ..., `F8`, corresponding to
+    /// functions with 1 to 8 arguments.
     ///
     pub fn fast_func<'a>(&'a mut self) -> Result<FastFunc<'a>> {
         let f = self.get_fast();
