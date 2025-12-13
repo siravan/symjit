@@ -1,9 +1,10 @@
 #![allow(uncommon_codepoints)]
 
 //! Symjit (<https://github.com/siravan/symjit>) is a lightweight just-in-time (JIT)
-//! optimizer compiler for mathematical expressions. It was originally designed to
-//! directly translate SymPy (Python’s symbolic algebra package) expressions into
-//! machine code.
+//! optimizer compiler for mathematical expressions written in Rust. It was originally
+//! designed to directly translate SymPy (Python’s symbolic algebra package) expressions
+//! into machine code as a bridge between SymPy and numerical routines provides by
+//! Numpy amd Scipy libraries.
 //!
 //! Symjit crate is the core compiler coupled to a Rust interface to expose the
 //! JIT functionality to the Rust ecosystem and allow Rust applications to
@@ -26,6 +27,7 @@
 //!     * Binary functions such as `pow`, `min`, ...
 //!     * IfElse operation `ifelse(cond, true_val, false_val)`.
 //!     * Comparison methods `eq`, `ne`, `lt`, `le`, `gt`, and `ge`.
+//!     * Looping constructs `sum` and `prod`.
 //! 2. Create a new `Compiler` object (say, `comp`) using one of its constructors: `new`
 //!     and `with_compile_type`, where `ty` is of type `CompilerType`.
 //! 3. Fine-tune the optimization passes using methods `opt_level`, `simd`, `fastmath`,
@@ -77,6 +79,7 @@
 //!
 //! A combined SIMD and parameter use example:
 //!
+//! ```rust
 //! pub fn test_simd() -> Result<()> {
 //!     use std::arch::x86_64::_mm256_loadu_pd;
 //!
@@ -93,6 +96,7 @@
 //!     println!("{:?}", &q);   // prints [__m256d(5.0, 20.0, 45.0, 80.0)]
 //!     Ok(())
 //! }
+//! ```
 //!
 //! # Fast Functions
 //!
@@ -128,7 +132,7 @@
 //! * No SIMD and no parameters.
 //! * It returns only a single value.
 //!
-//! If these conditions are met, you can generate a fast functin by calling
+//! If these conditions are met, you can generate a fast function by calling
 //! `app.fast_func()`, with a return type of `Result<FastFunc>`. `FastFunc` is an
 //! enum with eight variants `F1, `F2`, to `F8`, corresponding to functions with
 //! 1 to 8 arguments.

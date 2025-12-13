@@ -28,6 +28,7 @@ pub struct Compiler {
 ///     * Binary functions such as `pow`, `min`, ...
 ///     * IfElse operation `ifelse(cond, true_val, false_val)`.
 ///     * Comparison methods `eq`, `ne`, `lt`, `le`, `gt`, and `ge`.
+///     * Looping constructs `sum` and `prod`.
 /// 2. Create a new `Compiler` object (say, `comp`) using one of its constructors:
 ///     `new` and `with_compile_type`, where `ty` is of type `CompilerType`.
 /// 3. Fine-tune the optimization passes using methods `opt_level`, `simd`, `fastmath`,
