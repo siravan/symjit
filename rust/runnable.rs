@@ -537,6 +537,10 @@ impl Application {
             _ => false,
         }
     }
+
+    pub fn dumps(&self) -> Vec<u8> {
+        self.compiled.dumps()
+    }
 }
 
 /***************************************************/
@@ -609,6 +613,10 @@ impl Compiled<f64> for Debugger {
 
     fn dump(&self, name: &str) {
         self.bytecode.dump(name);
+    }
+
+    fn dumps(&self) -> Vec<u8> {
+        self.bytecode.dumps()
     }
 
     fn func(&self) -> CompiledFunc<f64> {

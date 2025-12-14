@@ -1360,6 +1360,11 @@ impl Compiled<f64> for CompiledMir {
         let _ = write!(fs, "{:?}", self.mir);
     }
 
+    fn dumps(&self) -> Vec<u8> {
+        let s = format!("{:?}", self.mir);
+        s.into_bytes()
+    }
+
     fn func(&self) -> CompiledFunc<f64> {
         unreachable!()
     }

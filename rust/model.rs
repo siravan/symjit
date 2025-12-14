@@ -100,7 +100,7 @@ impl Transformer for Variable {
     }
 }
 
-/// Expr tree
+// Expr tree
 // #[derive(Debug, Clone, Deserialize)]
 // #[serde(tag = "type")]
 // pub enum Expr {

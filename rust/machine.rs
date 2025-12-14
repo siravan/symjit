@@ -92,6 +92,10 @@ impl<T> Compiled<T> for MachineCode<T> {
         let _ = fs.write(&self.machine_code[..]);
     }
 
+    fn dumps(&self) -> Vec<u8> {
+        self.machine_code.clone()
+    }
+
     fn func(&self) -> CompiledFunc<T> {
         self.f
     }

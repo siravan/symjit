@@ -16,6 +16,7 @@ pub struct Compiler {
 }
 
 #[cfg(not(target_arch = "x86_64"))]
+#[allow(non_camel_case_types)]
 type __m256d = [f64; 4];
 
 /// The central hub of the Rust interface. It compiles a list of
@@ -178,7 +179,7 @@ impl Compiler {
         for (i, expr) in obs.iter().enumerate() {
             let name = format!("${}", i);
             let lhs = Expr::var(&name);
-            eqs.push(Expr::equation(&lhs, &expr));
+            eqs.push(Expr::equation(&lhs, expr));
         }
 
         let ml = CellModel {
@@ -192,17 +193,26 @@ impl Compiler {
 
         let prog = Program::new(&ml, false)?;
         // let df = Defuns::new();
-        Application::new(prog, self.ty, self.opt, &self.df)
+        let mut app = Application::new(prog, self.ty, self.opt, &self.df);
+
+        #[cfg(target_arch = "aarch64")]
+        if let Ok(app) = &mut app {
+            // this is a hack to give enough delay to prevent a bus error
+            app.dump("dump.bin", "scalar");
+            std::fs::remove_file("dump.bin")?;
+        };
+
+        app
     }
 
     /// Registers a user-defined unary function.
     pub fn def_unary(&mut self, op: &str, f: extern "C" fn(f64) -> f64) {
-        self.df.add_unary(&op, f)
+        self.df.add_unary(op, f)
     }
 
     /// Registers a user-defined binary function.
     pub fn def_binary(&mut self, op: &str, f: extern "C" fn(f64, f64) -> f64) {
-        self.df.add_binary(&op, f)
+        self.df.add_binary(op, f)
     }
 }
 
@@ -441,7 +451,7 @@ impl Application {
     /// enum with eight variants `F1, `F2`, ..., `F8`, corresponding to
     /// functions with 1 to 8 arguments.
     ///
-    pub fn fast_func<'a>(&'a mut self) -> Result<FastFunc<'a>> {
+    pub fn fast_func(&mut self) -> Result<FastFunc<'_>> {
         let f = self.get_fast();
 
         if let Some(f) = f {

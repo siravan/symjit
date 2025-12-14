@@ -1,5 +1,5 @@
 use anyhow::Result;
-use symjit::{int, var, Compiler, Expr, FastFunc};
+use symjit::{double, int, var, Compiler, Expr, FastFunc};
 
 fn test_simple() -> Result<()> {
     let x = Expr::var("x");
@@ -14,20 +14,6 @@ fn test_simple() -> Result<()> {
     println!("simple\t{:?}", &v);
 
     Ok(())
-}
-
-fn viete(x: Expr, n: usize) -> Expr {
-    let mut p = int(1);
-
-    for i in 0..n {
-        let mut t = x.clone();
-        for j in 0..i {
-            t = &x + &(&x * &t.sqrt());
-        }
-        p = &p * &t.sqrt();
-    }
-
-    p
 }
 
 fn test_pi_viete(silent: bool) -> Result<()> {
@@ -144,17 +130,18 @@ extern "C" fn g(x: f64, y: f64) -> f64 {
     x.ln() * y
 }
 
-fn test_external() -> Result<()> {
+fn test_external(p: i32) -> Result<()> {
     let x = Expr::var("x");
-    let p = Expr::unary("f_", &x);
-    let q = &x * &Expr::binary("g_", &p, &x);
+    let u = Expr::unary("f_", &x);
+    let v = &x * &Expr::binary("g_", &u, &double(5.0));
+    //let v = &x * &Expr::binary("g_", &int(p).exp(), &x);
 
     let mut comp = Compiler::new();
     comp.def_unary("f_", f);
     comp.def_binary("g_", g);
-    let mut app = comp.compile(&[x], &[q])?;
-    let v = app.call(&[5.0]);
-    println!("funs\t{:?}", &v); // it should be 5.0 ^ 3
+    let mut app = comp.compile(&[x], &[&v / &int(5)])?;
+    let v = app.call(&[p as f64]);
+    println!("funs {}:\t{:?}", p, &v); // it should be 5.0 ^ 3
 
     Ok(())
 }
@@ -172,7 +159,10 @@ pub fn main() -> Result<()> {
     test_loops()?;
     test_fast()?;
     test_fact()?;
-    test_external()?;
+
+    for p in 0..50 {
+        test_external(p)?;
+    }
 
     #[cfg(target_arch = "x86_64")]
     test_simd()?;
