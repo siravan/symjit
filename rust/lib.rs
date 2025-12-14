@@ -30,8 +30,8 @@
 //!     * Looping constructs `sum` and `prod`.
 //! 2. Create a new `Compiler` object (say, `comp`) using one of its constructors: `new()`
 //!     or `with_compile_type(ty: CompilerType)`.
-//! 3. Fine-tune the optimization passes using methods `opt_level`, `simd`, `fastmath`,
-//!     and `cse` (optional).
+//! 3. Fine-tune the optimization passes using `opt_level`, `simd`, `fastmath`,
+//!     and `cse` methods (optional).
 //! 4. Define user-defined functions by called `comp.def_unary` and `comp.def_binary`
 //!     (optional).
 //! 5. Compile by calling `comp.compile` or `comp.compile_params`. The result is of
@@ -41,7 +41,10 @@
 //!     * `call_params(&[f64], &[f64])`: scalar call with parameters.
 //!     * `call_simd(&[__m256d])`: simd call.
 //!     * `call_simd_params(&[__m256d], &[f64])`: simd call with parameters.
-//! 7. Optionally, generate standalone fast functions to execute.
+//! 7. Optionally, generate a standalone fast function to execute.
+//!
+//! Note that you can use the helper functions `var`, `int`, `double` instead of
+//! `Expr::var`, `Expr::from(i32)`, and `Expr::from(f64)` to reduce formula clutter.
 //!
 //! # Examples
 //!
@@ -81,11 +84,14 @@
 //! An example using a parameter and SIMD variables:
 //!
 //! ```rust
+//! use anyhow::Result;
+//! use symjit::{var, Compiler, Expr};
+//!
 //! pub fn test_simd() -> Result<()> {
 //!     use std::arch::x86_64::_mm256_loadu_pd;
 //!
-//!     let x = Expr::var("x");
-//!     let p = Expr::var("p"); // the parameter
+//!     let x = var("x");   // note var instead of Expr::var
+//!     let p = var("p");   // the parameter
 //!
 //!     let u = &x.square() * &p;    // x^2 * p
 //!     let mut comp = Compiler::new();
@@ -99,6 +105,58 @@
 //! }
 //! ```
 //!
+//! # Conditional Expression and Loops
+//!
+//! Many mathematical formulas need conditional expressions (`ifelse`) and loops.
+//! Following SymPy, Symjit uses reduction loops such as `sum` and `prod`. The following
+//! example returns the exponential functions:
+//!
+//! ```rust
+//! use symjit::{int, var, Compiler};
+//!
+//! fn test_exp() -> Result<()> {
+//!     let x = var("x");
+//!     let i = var("i");
+//!     let j = var("j");
+//!
+//!     // u = x^j / factorial(j) for j in j in 0..=50
+//!     let u = x
+//!         .pow(&j)
+//!         .div(&i.prod(&i, &int(1), &j))
+//!         .sum(&j, &int(0), &int(50));
+//!
+//!     let mut app = Compiler::new().compile(&[x], &[u])?;
+//!     println!("{:?}", app(&[2.0])[0]); // returns exp(2.0) = 7.38905...
+//!     Ok(())
+//! }
+//! ```
+//!
+//! A more complicated example is calculating pi using the Leibniz formula:
+//!
+//! ```rust
+//! use symjit::{int, var, Compiler};
+//!
+//! fn test_pi() -> Result<()> {
+//!     let n = var("n");
+//!     let i = var("i");
+//!     let j = var("j");
+//!
+//!     // numer = if j % 2 == 0 { 4 } else { -4 }
+//!     let numer = j.rem(&int(2)).eq(&int(0)).ifelse(&int(4), &int(-4));
+//!     // denom = j * 2 + 1
+//!     let denom = j.mul(&int(2)).add(&int(1));
+//!     // v = numer / denom for j in 0..=n
+//!     let v = (&numer / &denom).sum(&j, &int(0), &int(&n));
+//!
+//!     let mut app = Compiler::new().compile(&[x], &[v])?;
+//!     println!("{:?}", app(&[100000000])[0]); // returns pi
+//!     Ok(())
+//! }
+//! ```
+//!
+//! Note that here we are using explicit functions (`add`, `mul`, ...) instead of
+//! the overloaded operators for clarity.
+//!
 //! # Fast Functions
 //!
 //! `Application`'s call functions need to copy the input slice into the function
@@ -108,17 +166,21 @@
 //! *fast funcction* and return a function pointer. Examples:
 //!
 //! ```rust
+//! use anyhow::Result;
+//! use symjit::{int, var, Compiler, FastFunc};
+//!
 //! fn test_fast() -> Result<()> {
-//!     let x = Expr::var("x");
-//!     let y = Expr::var("y");
-//!     let z = Expr::var("z");
-//!     let u = &x * &(&y - &z).pow(&Expr::from(2));    // x * (y - z)^2
+//!     let x = var("x");
+//!     let y = var("y");
+//!     let z = var("z");
+//!     let u = &x * &(&y - &z).pow(&int(2));    // x * (y - z)^2
 //!
 //!     let mut comp = Compiler::new();
 //!     let mut app = comp.compile(&[x, y, z], &[u])?;
 //!     let f = app.fast_func()?;
 //!
 //!     if let FastFunc::F3(f, _) = f {
+//!         // f is of type extern "C" fn(f64, f64, f64) -> f64
 //!         let res = f(3.0, 5.0, 9.0);
 //!         println!("fast\t{:?}", &res);
 //!     }
@@ -135,7 +197,7 @@
 //!
 //! If these conditions are met, you can generate a fast function by calling
 //! `app.fast_func()`, which returns a `Result<FastFunc>`. `FastFunc` is an
-//! enum with eight variants `F1, `F2`, ..., `F8`, corresponding to functions
+//! enum with eight variants `F1`, `F2`, ..., `F8`, corresponding to functions
 //! with 1 to 8 arguments.
 //!
 //! # User-Defined Functions
@@ -175,13 +237,43 @@
 //! }
 //! ```
 //!
-//! C-Interface
+//! # Dynamic Expressions
 //!
-//! In addition to `Compiler`, the Symjit code has a c-style interface
-//! used by Python <https://github.com/siravan/symjit> and Julia
+//! All the examples up this point use static expressions. Of course, it
+//! would have been easier to just use Rust expressions for these examples!
+//! The main utility of Symjit for Rust is for dynamic code generations. Here,
+//! we provide a simple example to calculate pi using the Viete method:
+//!
+//! ```rust
+//! fn test_pi_viete(silent: bool) -> Result<()> {
+//!     let x = var("x");
+//!     let mut u = int(1);
+//!
+//!     for i in 0..50 {
+//!         let mut t = x.clone();
+//!
+//!         for _ in 0..i {
+//!             t = &x + &(&x * &t.sqrt());
+//!         }
+//!
+//!         u = &u * &t.sqrt();
+//!     }
+//!
+//!     // u has 1275 sqrt operations
+//!     let mut app = Compiler::new().compile(&[x], &[&int(2) / &u])?;
+//!     println!("pi = \t{:?}", app.call(&[0.5])[0]);
+//!     Ok(())
+//! }
+//! ```
+//!
+//! # C-Interface
+//!
+//! In addition to `Compiler`, this crate has a c-style interface
+//! used by Python (<https://github.com/siravan/symjit>) and Julia
 //! (<https://github.com/siravan/Symjit.jl>) packages. This interface
 //! is composed of crate functions like `compile`, `execute` and
-//! `ptr_states`,..., and is not used by the Rust interface.
+//! `ptr_states`,..., and is not needed by the Rust interface, but can be
+//! used to link symjit to other programming languages.
 //!
 
 use anyhow::anyhow;
@@ -219,7 +311,7 @@ use matrix::Matrix;
 use model::{CellModel, Program};
 
 pub use compiler::{Compiler, FastFunc};
-pub use expr::Expr;
+pub use expr::{double, int, var, Expr};
 pub use runnable::{Application, CompilerType};
 
 pub const COUNT_SCRATCH: u8 = 14;
@@ -251,12 +343,12 @@ pub struct CompilerResult {
 ///
 /// * `model` is a json string encoding the model.
 /// * `ty` is the requested arch (amd, arm, native, or bytecode).
-/// * `opt': compilation options.
+/// * `opt`: compilation options.
 /// * `df`: user-defined functions.
 ///
 /// # Safety
-///     * both `model` and `ty` are pointers to null-terminated strings.
-///     * The output is a raw pointer to a `CompilerResults`.
+///     * both model and ty are pointers to null-terminated strings.
+///     * The output is a raw pointer to a CompilerResults.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn compile(
@@ -344,7 +436,7 @@ pub unsafe extern "C" fn compile(
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that `q` points to a valid `CompilerResult`.
+///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn check_status(q: *const CompilerResult) -> *const c_char {
@@ -364,7 +456,7 @@ pub unsafe extern "C" fn check_status(q: *const CompilerResult) -> *const c_char
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that `q` points to a valid `CompilerResult`.
+///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn count_states(q: *const CompilerResult) -> usize {
@@ -380,7 +472,7 @@ pub unsafe extern "C" fn count_states(q: *const CompilerResult) -> usize {
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that `q` points to a valid `CompilerResult`.
+///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn count_params(q: *const CompilerResult) -> usize {
@@ -396,7 +488,7 @@ pub unsafe extern "C" fn count_params(q: *const CompilerResult) -> usize {
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that `q` points to a valid `CompilerResult`.
+///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn count_obs(q: *const CompilerResult) -> usize {
@@ -414,7 +506,7 @@ pub unsafe extern "C" fn count_obs(q: *const CompilerResult) -> usize {
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that `q` points to a valid `CompilerResult`.
+///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn count_diffs(q: *const CompilerResult) -> usize {
@@ -487,9 +579,9 @@ pub unsafe extern "C" fn execute(q: *mut CompilerResult, t: f64) -> bool {
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that `q` points to a valid `CompilerResult`.
+///     that q points to a valid CompilerResult.
 ///
-///     In addition, `buf` should points to a valid matrix of correct size.
+///     In addition, buf should points to a valid matrix of correct size.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn execute_vectorized(
@@ -517,7 +609,7 @@ pub unsafe extern "C" fn execute_vectorized(
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that `q` points to a valid `CompilerResult`.
+///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn ptr_states(q: *mut CompilerResult) -> *mut f64 {
@@ -535,7 +627,7 @@ pub unsafe extern "C" fn ptr_states(q: *mut CompilerResult) -> *mut f64 {
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that `q` points to a valid `CompilerResult`.
+///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn ptr_params(q: *mut CompilerResult) -> *mut f64 {
@@ -554,7 +646,7 @@ pub unsafe extern "C" fn ptr_params(q: *mut CompilerResult) -> *mut f64 {
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that `q` points to a valid `CompilerResult`.
+///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn ptr_obs(q: *mut CompilerResult) -> *const f64 {
@@ -575,7 +667,7 @@ pub unsafe extern "C" fn ptr_obs(q: *mut CompilerResult) -> *const f64 {
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that `q` points to a valid `CompilerResult`.
+///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn ptr_diffs(q: *mut CompilerResult) -> *const f64 {
@@ -594,7 +686,7 @@ pub unsafe extern "C" fn ptr_diffs(q: *mut CompilerResult) -> *const f64 {
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that `q` points to a valid `CompilerResult`.
+///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn dump(
@@ -616,8 +708,8 @@ pub unsafe extern "C" fn dump(
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
-///     that `q` points to a valid CompilerResult and that after
-///     calling this function, `q` is invalid and should not
+///     that q points to a valid CompilerResult and that after
+///     calling this function, q is invalid and should not
 ///     be used anymore.
 ///
 #[no_mangle]
@@ -773,7 +865,7 @@ pub unsafe extern "C" fn create_matrix() -> *const Matrix {
 /// Finalizes (deallocates) the Matrix.
 ///
 /// # Safety
-///     1, mat should point to a valid Matrix object created by create_matrix
+///     1, mat should point to a valid Matrix object created by create_matrix.
 ///     2. After finalize_matrix is called, mat is invalid.
 ///
 #[no_mangle]
@@ -786,9 +878,9 @@ pub unsafe extern "C" fn finalize_matrix(mat: *mut Matrix) {
 /// Adds a row to the Matrix.
 ///
 /// # Safety
-///     1, mat should point to a valid Matrix object created by create_matrix
-///     2. v should point to a valid array of doubles of length at least n
-///     3. v should remains valid for the lifespan of mat
+///     1, mat should point to a valid Matrix object created by create_matrix.
+///     2. v should point to a valid array of doubles of length at least n.
+///     3. v should remains valid for the lifespan of mat.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn add_row(mat: *mut Matrix, v: *mut f64, n: usize) {
@@ -799,9 +891,9 @@ pub unsafe extern "C" fn add_row(mat: *mut Matrix, v: *mut f64, n: usize) {
 /// Executes (runs) the matrix model encoded by `q`.
 ///
 /// # Safety
-///     1, `q` should point to a valid CompilerResult object
-///     2. `states` should point to a valid Matrix of at least count_states rows
-///     3. `obs` should point to a valid Matrix of at least count_obs rows
+///     1, q should point to a valid CompilerResult object.
+///     2. states should point to a valid Matrix of at least count_states rows.
+///     3. obs should point to a valid Matrix of at least count_obs rows.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn execute_matrix(
@@ -829,7 +921,7 @@ pub unsafe extern "C" fn execute_matrix(
 /// functions or symjit-compiled functions).
 ///
 /// # Safety
-///     It returns a pointer to the allocated `Defun`, which needs to be
+///     It returns a pointer to the allocated Defun, which needs to be
 ///     deallocated eventually.
 ///
 #[no_mangle]
@@ -841,8 +933,8 @@ pub unsafe extern "C" fn create_defuns() -> *const Defuns {
 /// Finalizes (deallocates) a `Defun`.
 ///
 /// # Safety
-///     1, `df` should point to a valid `Defun` object created by `create_defuns`
-///     2. After `finalize_defun` is called, `df` is invalid.
+///     1, df should point to a valid Defun object created by create_defuns.
+///     2. After finalize_defun is called, df is invalid.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn finalize_defuns(df: *mut Defuns) {
@@ -854,10 +946,10 @@ pub unsafe extern "C" fn finalize_defuns(df: *mut Defuns) {
 /// Adds a new function to a `Defun`.
 ///
 /// # Safety
-///     1. `df` should point to a valid `Defun` object created by `create_defun`
-///     2. `name` should be a valid utf8 string
-///     3. `p` should point to a valid C-styple function pointer that accepts
-///         `num_args` double arguments
+///     1, df should point to a valid Defun object created by create_defun.
+///     2. name should be a valid utf8 string.
+///     3. p should point to a valid C-styple function pointer that accepts
+///         num_args double arguments.
 ///
 #[no_mangle]
 pub unsafe extern "C" fn add_func(

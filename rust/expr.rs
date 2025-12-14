@@ -529,3 +529,15 @@ impl Not for &Expr {
         Expr::neg(self)
     }
 }
+
+pub fn var(name: &str) -> Expr {
+    Expr::var(name)
+}
+
+pub fn double(val: f64) -> Expr {
+    Expr::from(val)
+}
+
+pub fn int(val: i32) -> Expr {
+    Expr::from(val)
+}

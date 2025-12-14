@@ -2,6 +2,13 @@
 name = "symjit"
 version = "2.9.0"
 edition = "2021"
+authors = ["Shahriar Iravanian <siravan@svtsim.com>"]
+license = "MIT"
+description = "a lightweight just-in-time (JIT) optimizer compiler"
+readme = "README.md"
+repository = "https://github.com/siravan/symjit"
+keywords = ["compiler", "just-in-time compilation", "computer algebra system"]
+categories = ["compilers", "hardware-support", "mathematics"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
@@ -22,7 +29,7 @@ hashbrown = "0.16.0"
 windows-sys = { version = "0.61", features = ["Win32_System_Memory"] }
 
 [features]
-selinux-fix = ['memmap2']
+selinux-fix = ["memmap2"]
 default = []
 
 [lib]

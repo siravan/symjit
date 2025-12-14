@@ -34,7 +34,7 @@ type __m256d = [f64; 4];
 ///     * Looping constructs `sum` and `prod`.
 /// 2. Create a new `Compiler` object (say, `comp`) using one of its constructors:
 ///     `new()` and `with_compile_type(ty: CompilerType)`.
-/// 3. Fine-tune the optimization passes using methods `opt_level`, `simd`, `fastmath`,
+/// 3. Fine-tune the optimization passes using `opt_level`, `simd`, `fastmath`,
 ///     and `cse` (optional).
 /// 4. Define user-defined functions by called `comp.def_unary` and `comp.def_binary`
 ///     (optional).
@@ -45,7 +45,7 @@ type __m256d = [f64; 4];
 ///     * `call_params(&[f64], &[f64])`: scalar call with parameters.
 ///     * `call_simd(&[__m256d])`: simd call.
 ///     * `call_simd_params(&[__m256d], &[f64])`: simd call with parameters.
-/// 7. Optionally, generate standalone fast functions to execute.
+/// 7. Optionally, generate a standalone fast function to execute.
 ///
 /// Currently, SIMD is only supported on x86-64 CPUs with AVX instruction sets.
 ///

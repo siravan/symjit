@@ -1,5 +1,5 @@
 use anyhow::Result;
-use symjit::{Compiler, Expr, FastFunc};
+use symjit::{int, var, Compiler, Expr, FastFunc};
 
 fn test_simple() -> Result<()> {
     let x = Expr::var("x");
@@ -17,7 +17,7 @@ fn test_simple() -> Result<()> {
 }
 
 fn viete(x: Expr, n: usize) -> Expr {
-    let mut p = Expr::from(1);
+    let mut p = int(1);
 
     for i in 0..n {
         let mut t = x.clone();
@@ -30,23 +30,61 @@ fn viete(x: Expr, n: usize) -> Expr {
     p
 }
 
-pub fn test_pi(silent: bool) -> Result<()> {
-    let x = Expr::var("x");
-    let p = viete(x.clone(), 20);
+fn test_pi_viete(silent: bool) -> Result<()> {
+    let x = var("x");
+    let mut u = int(1);
 
-    let mut comp = Compiler::new();
-    let mut app = comp.compile(&[x], &[&Expr::from(2) / &p])?;
-    let v = app.call(&[0.5]);
+    for i in 0..50 {
+        let mut t = x.clone();
+
+        for _ in 0..i {
+            t = &x + &(&x * &t.sqrt());
+        }
+
+        u = &u * &t.sqrt();
+    }
+
+    let mut app = Compiler::new().compile(&[x], &[&int(2) / &u])?;
+    let res = app.call(&[0.5]);
 
     if !silent {
-        println!("pi\t{:?}", &v);
+        // println!("{:?}", &u);
+        println!("pi = \t{:?}", res[0]);
     }
 
     Ok(())
 }
 
+fn test_loops() -> Result<()> {
+    let x = var("x");
+    let n = var("n");
+    let i = var("i");
+    let j = var("j");
+
+    // u = x^j / factorial(j) for j in j in 0..=50
+    let u = x
+        .pow(&j)
+        .div(&i.prod(&i, &int(1), &j))
+        .sum(&j, &int(0), &int(50));
+
+    // numer = if j % 2 == 0 { 4 } else { -4 }
+    let numer = j.rem(&int(2)).eq(&int(0)).ifelse(&int(4), &int(-4));
+    // denom = j * 2 + 1
+    let denom = j.mul(&int(2)).add(&int(1));
+    // v = numer / denom for j in 0..=100000000
+    let v = (&numer / &denom).sum(&j, &int(0), &n);
+
+    let mut app = Compiler::new().compile(&[x, n], &[u, v])?;
+    let res = app.call(&[2.0, 100000000.0]);
+
+    println!("e^2 = \t{:?}", res[0]);
+    println!("pi = \t{:?}", res[1]);
+
+    Ok(())
+}
+
 #[cfg(target_arch = "x86_64")]
-pub fn test_simd() -> Result<()> {
+fn test_simd() -> Result<()> {
     use std::arch::x86_64::_mm256_loadu_pd;
 
     let x = Expr::var("x");
@@ -123,14 +161,15 @@ fn test_external() -> Result<()> {
 
 fn test_memory(n: usize) -> Result<()> {
     for _ in 0..n {
-        test_pi(true)?;
+        test_pi_viete(true)?;
     }
     Ok(())
 }
 
 pub fn main() -> Result<()> {
     test_simple()?;
-    test_pi(false)?;
+    test_pi_viete(false)?;
+    test_loops()?;
     test_fast()?;
     test_fact()?;
     test_external()?;
@@ -139,7 +178,7 @@ pub fn main() -> Result<()> {
     test_simd()?;
 
     print!("testing memory leaks...");
-    test_memory(2000)?;
+    test_memory(1000)?;
     println!("pass!");
 
     Ok(())
