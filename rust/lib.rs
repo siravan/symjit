@@ -2,9 +2,9 @@
 
 //! Symjit (<https://github.com/siravan/symjit>) is a lightweight just-in-time (JIT)
 //! optimizer compiler for mathematical expressions written in Rust. It was originally
-//! designed to directly translate SymPy (Python’s symbolic algebra package) expressions
-//! into machine code as a bridge between SymPy and numerical routines provides by
-//! Numpy amd Scipy libraries.
+//! designed to compile SymPy (Python’s symbolic algebra package) expressions
+//! into machine code and to serve as a bridge between SymPy and numerical routines
+//! provided by NumPy amd SciPy libraries.
 //!
 //! Symjit crate is the core compiler coupled to a Rust interface to expose the
 //! JIT functionality to the Rust ecosystem and allow Rust applications to
@@ -14,18 +14,19 @@
 //! `__m256d` (packed f64x4), and implicitely, `bool` and `i32`.
 //!
 //! Symjit emits AMD64 (x86-64), ARM64 (aarch64), and 64-bit RISC-V (riscv64) machine
-//! codes on Linux, Windows, and MacOS platforms. SIMD is only supported on x86-64
+//! codes on Linux, Windows, and MacOS platforms. SIMD is supported on x86-64
 //! CPUs with AVX instruction sets.
 //!
 //! # Workflow
 //!
-//! 1. Create terminals (variables and constants) and compose expressions using the
-//!     following `Expr` methods:
+//! 1. Create terminals (variables and constants) and compose expressions using `Expr` methods:
 //!     * Constructors: `var`, `from`, `unary`, `binary`, ...
+//!     * Standard algebraic operations: `add`, `mul`, ...
 //!     * Standard operators `+`, `-`, `*`, `/`, `%`, `&`, `|`, `^`, `!`.
 //!     * Unary functions such as `sin`, `exp`, and other standard mathematical functions.
 //!     * Binary functions such as `pow`, `min`, ...
 //!     * IfElse operation `ifelse(cond, true_val, false_val)`.
+//!     * Heavide function: `heaviside(x)`, which returns 1 if `x >= 0`; otherwise 0.
 //!     * Comparison methods `eq`, `ne`, `lt`, `le`, `gt`, and `ge`.
 //!     * Looping constructs `sum` and `prod`.
 //! 2. Create a new `Compiler` object (say, `comp`) using one of its constructors: `new()`
@@ -43,23 +44,10 @@
 //!     * `call_simd_params(&[__m256d], &[f64])`: simd call with parameters.
 //! 7. Optionally, generate a standalone fast function to execute.
 //!
-//! Note that you can use the helper functions `var`, `int`, `double` instead of
-//! `Expr::var`, `Expr::from(i32)`, and `Expr::from(f64)` to reduce formula clutter.
+//! Note that you can use the helper functions `var(&str) -> Expr`, `int(i32) -> Expr`,
+//! `double(f64) -> Expr`, and `boolean(bool) -> f64` to reduce clutter.
 //!
 //! # Examples
-//!
-//! A basic Python/Sympy example:
-//!
-//! ```python
-//! from symjit import compile_func
-//! from sympy import symbols
-//!
-//! x, y = symbols('x y')
-//! f = compile_func([x, y], [x+y, x*y])
-//! print(f(3.0, 5.0))  # prints [8.0, 15.0]
-//! ```
-//!
-//! Same code in Rust:
 //!
 //! ```rust
 //! use anyhow::Result;
@@ -72,7 +60,6 @@
 //!     let v = &x * &y;
 //!
 //!     let mut comp = Compiler::new();
-//!     comp.opt_level(2);  // optional (opt_level 0 to 2; default 1)
 //!     let mut app = comp.compile(&[x, y], &[u, v])?;
 //!     let res = app.call(&[3.0, 5.0]);
 //!     println!("{:?}", &res);   // prints [8.0, 15.0]
@@ -81,7 +68,19 @@
 //! }
 //! ```
 //!
-//! An example using a parameter and SIMD variables:
+//! `test_scalar` is similar to the following basic example in Python/SymPy:
+//!
+//! ```python
+//! from symjit import compile_func
+//! from sympy import symbols
+//!
+//! x, y = symbols('x y')
+//! f = compile_func([x, y], [x+y, x*y])
+//! print(f(3.0, 5.0))  # prints [8.0, 15.0]
+//! ```
+//!
+//! A more elaborate example, showcasing having a parameter, changing the
+//! optimization level, and using SIMD:
 //!
 //! ```rust
 //! use anyhow::Result;
@@ -95,6 +94,7 @@
 //!
 //!     let u = &x.square() * &p;    // x^2 * p
 //!     let mut comp = Compiler::new();
+//!     comp.opt_level(2);  // optional (opt_level 0 to 2; default 1)
 //!     let mut app = comp.compile_params(&[x], &[u], &[p])?;
 //!
 //!     let a = &[1.0, 2.0, 3.0, 4.0];
@@ -116,8 +116,8 @@
 //!
 //! fn test_exp() -> Result<()> {
 //!     let x = var("x");
-//!     let i = var("i");
-//!     let j = var("j");
+//!     let i = var("i");   // loop variable
+//!     let j = var("j");   // loop variable
 //!
 //!     // u = x^j / factorial(j) for j in j in 0..=50
 //!     let u = x
@@ -131,15 +131,15 @@
 //! }
 //! ```
 //!
-//! A more complicated example is calculating pi using the Leibniz formula:
+//! An example showing how to calculate pi using the Leibniz formula:
 //!
 //! ```rust
 //! use symjit::{int, var, Compiler};
 //!
 //! fn test_pi() -> Result<()> {
 //!     let n = var("n");
-//!     let i = var("i");
-//!     let j = var("j");
+//!     let i = var("i");   // loop variable
+//!     let j = var("j");   // loop variable
 //!
 //!     // numer = if j % 2 == 0 { 4 } else { -4 }
 //!     let numer = j.rem(&int(2)).eq(&int(0)).ifelse(&int(4), &int(-4));
@@ -226,12 +226,13 @@
 //!     let u = Expr::unary("f_", &x);
 //!     let v = &x * &Expr::binary("g_", &u, &x);
 //!
+//!     // v(x) = x * (ln(exp(x)) * x) = x ^ 3
+//!
 //!     let mut comp = Compiler::new();
 //!     comp.def_unary("f_", f);
 //!     comp.def_binary("g_", g);
 //!     let mut app = comp.compile(&[x], &[v])?;
-//!     let res = app.call(&[5.0]);
-//!     println!("funs\t{:?}", &res); // it should be 5.0 ^ 3
+//!     println!("{:?}", app.call(&[5.0])[0]);
 //!
 //!     Ok(())
 //! }
@@ -242,7 +243,8 @@
 //! All the examples up this point use static expressions. Of course, it
 //! would have been easier to just use Rust expressions for these examples!
 //! The main utility of Symjit for Rust is for dynamic code generations. Here,
-//! we provide a simple example to calculate pi using the Viete method:
+//! we provide a simple example to calculate pi using the Viete's formula
+//! (<https://en.wikipedia.org/wiki/Vi%C3%A8te%27s_formula>):
 //!
 //! ```rust
 //! fn test_pi_viete(silent: bool) -> Result<()> {
@@ -259,7 +261,7 @@
 //!         u = &u * &t.sqrt();
 //!     }
 //!
-//!     // u has 1275 sqrt operations
+//!     // u has 1275 = 50 * 51 / 2 sqrt operations
 //!     let mut app = Compiler::new().compile(&[x], &[&int(2) / &u])?;
 //!     println!("pi = \t{:?}", app.call(&[0.5])[0]);
 //!     Ok(())

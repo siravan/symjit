@@ -133,15 +133,14 @@ extern "C" fn g(x: f64, y: f64) -> f64 {
 fn test_external(p: i32) -> Result<()> {
     let x = Expr::var("x");
     let u = Expr::unary("f_", &x);
-    let v = &x * &Expr::binary("g_", &u, &double(5.0));
-    //let v = &x * &Expr::binary("g_", &int(p).exp(), &x);
+    let v = &x * &Expr::binary("g_", &u, &x);
 
     let mut comp = Compiler::new();
     comp.def_unary("f_", f);
     comp.def_binary("g_", g);
-    let mut app = comp.compile(&[x], &[&v / &int(5)])?;
-    let v = app.call(&[p as f64]);
-    println!("funs {}:\t{:?}", p, &v); // it should be 5.0 ^ 3
+    let mut app = comp.compile(&[x], &[v])?;
+    let res = app.call(&[p as f64]);
+    println!("f({}) = \t{:?}", p, &res); // it should be 5.0 ^ 3
 
     Ok(())
 }

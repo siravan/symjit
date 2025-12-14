@@ -6,6 +6,7 @@ use std::ops::{Neg, Not};
 use anyhow::{anyhow, Result};
 
 use crate::model::{Equation, Variable};
+use crate::utils::bool_to_f64;
 
 /// The elements of the top-level expression trees
 ///
@@ -540,4 +541,8 @@ pub fn double(val: f64) -> Expr {
 
 pub fn int(val: i32) -> Expr {
     Expr::from(val)
+}
+
+pub fn boolean(val: bool) -> Expr {
+    Expr::from(bool_to_f64(val))
 }
