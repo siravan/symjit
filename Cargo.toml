@@ -1,6 +1,6 @@
 [package]
 name = "symjit"
-version = "2.9.0"
+version = "2.9.2"
 edition = "2021"
 authors = ["Shahriar Iravanian <siravan@svtsim.com>"]
 license = "MIT"
@@ -35,8 +35,6 @@ default = []
 [lib]
 # name = "_lib"
 path = "rust/lib.rs"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib"]
 
-[[bin]]
-name = "symjit"
-path = "rust/bin.rs"
+

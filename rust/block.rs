@@ -62,6 +62,7 @@ impl Block {
         for stmt in self.stmts.iter_mut() {
             stmt.compile(ir)?;
         }
+
         Ok(())
     }
 

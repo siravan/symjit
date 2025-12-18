@@ -4,17 +4,17 @@
 //! optimizer compiler for mathematical expressions written in Rust. It was originally
 //! designed to compile SymPy (Python’s symbolic algebra package) expressions
 //! into machine code and to serve as a bridge between SymPy and numerical routines
-//! provided by NumPy amd SciPy libraries.
+//! provided by NumPy and SciPy libraries.
 //!
 //! Symjit crate is the core compiler coupled to a Rust interface to expose the
 //! JIT functionality to the Rust ecosystem and allow Rust applications to
 //! generate code dynamically. Considering its origin, symjit is geared toward
 //! compiling mathematical expressions instead of being a general-purpose JIT
 //! compiler. Therefore, the only supported types for variables are `f64`,
-//! `__m256d` (packed f64x4), and implicitely, `bool` and `i32`.
+//! `__m256d` (packed f64x4), and implicitly, `bool` and `i32`.
 //!
 //! Symjit emits AMD64 (x86-64), ARM64 (aarch64), and 64-bit RISC-V (riscv64) machine
-//! codes on Linux, Windows, and MacOS platforms. SIMD is supported on x86-64
+//! codes on Linux, Windows, and macOS platforms. SIMD is supported on x86-64
 //! CPUs with AVX instruction sets.
 //!
 //! # Workflow
@@ -26,14 +26,14 @@
 //!     * Unary functions such as `sin`, `exp`, and other standard mathematical functions.
 //!     * Binary functions such as `pow`, `min`, ...
 //!     * IfElse operation `ifelse(cond, true_val, false_val)`.
-//!     * Heavide function: `heaviside(x)`, which returns 1 if `x >= 0`; otherwise 0.
+//!     * Heaviside function: `heaviside(x)`, which returns 1 if `x >= 0`; otherwise 0.
 //!     * Comparison methods `eq`, `ne`, `lt`, `le`, `gt`, and `ge`.
 //!     * Looping constructs `sum` and `prod`.
 //! 2. Create a new `Compiler` object (say, `comp`) using one of its constructors: `new()`
 //!     or `with_compile_type(ty: CompilerType)`.
 //! 3. Fine-tune the optimization passes using `opt_level`, `simd`, `fastmath`,
 //!     and `cse` methods (optional).
-//! 4. Define user-defined functions by called `comp.def_unary` and `comp.def_binary`
+//! 4. Define user-defined functions by calling `comp.def_unary` and `comp.def_binary`
 //!     (optional).
 //! 5. Compile by calling `comp.compile` or `comp.compile_params`. The result is of
 //!     type `Application` (say, `app`).
@@ -161,9 +161,9 @@
 //!
 //! `Application`'s call functions need to copy the input slice into the function
 //! memory area and then copy the output to a `Vec`. This process is acceptable
-//! for large and complex functions but incurs a penalty for small functions.
+//! for large and complex functions but incurs a penalty for small ones.
 //! Therefore, for a certain subset of applications, Symjit can compile to a
-//! *fast funcction* and return a function pointer. Examples:
+//! *fast function* and return a function pointer. Examples:
 //!
 //! ```rust
 //! use anyhow::Result;
@@ -240,10 +240,10 @@
 //!
 //! # Dynamic Expressions
 //!
-//! All the examples up this point use static expressions. Of course, it
-//! would have been easier to just use Rust expressions for these examples!
-//! The main utility of Symjit for Rust is for dynamic code generations. Here,
-//! we provide a simple example to calculate pi using the Viete's formula
+//! All the examples up to this point use static expressions. Of course, it
+//! would have been easier just to use Rust expressions for these examples!
+//! The main utility of Symjit for Rust is for dynamic code generation. Here,
+//! we provide a simple example to calculate pi using Viete's formula
 //! (<https://en.wikipedia.org/wiki/Vi%C3%A8te%27s_formula>):
 //!
 //! ```rust
@@ -270,11 +270,11 @@
 //!
 //! # C-Interface
 //!
-//! In addition to `Compiler`, this crate has a c-style interface
-//! used by Python (<https://github.com/siravan/symjit>) and Julia
+//! In addition to `Compiler`, this crate provides a C-style interface
+//! used by the Python (<https://github.com/siravan/symjit>) and Julia
 //! (<https://github.com/siravan/Symjit.jl>) packages. This interface
-//! is composed of crate functions like `compile`, `execute` and
-//! `ptr_states`,..., and is not needed by the Rust interface, but can be
+//! is composed of crate functions like `compile`, `execute`, and
+//! `ptr_states`,..., and is not needed by the Rust interface but can be
 //! used to link symjit to other programming languages.
 //!
 

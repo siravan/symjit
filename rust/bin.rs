@@ -1,5 +1,5 @@
 use anyhow::Result;
-use symjit::{double, int, var, Compiler, Expr, FastFunc};
+use symjit::{int, var, Compiler, Expr, FastFunc};
 
 fn test_simple() -> Result<()> {
     let x = Expr::var("x");

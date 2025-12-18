@@ -470,6 +470,8 @@ def compile_json(
             model,
             ty=ty,
             use_simd=use_simd,
+            use_threads=use_threads,
+            cse=cse,
             fastmath=fastmath,
             opt_level=opt_level,
             convert=False,

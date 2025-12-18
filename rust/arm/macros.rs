@@ -105,6 +105,18 @@ macro_rules! arm {
     (movz x($rd:expr), #$imm16:expr) => {
         0xd2800000 | rd!($rd) | imm16!($imm16)
     };
+    // movk x(rd), #imm16, lsl #16
+    (movk_lsl16 x($rd:expr), #$imm16:expr) => {
+        0xf2a00000 | rd!($rd) | imm16!($imm16)
+    };
+    // movk x(rd), #imm16, lsl #32
+    (movk_lsl32 x($rd:expr), #$imm16:expr) => {
+        0xf2c00000 | rd!($rd) | imm16!($imm16)
+    };
+    // movk x(rd), #imm16, lsl #48
+    (movk_lsl48 x($rd:expr), #$imm16:expr) => {
+        0xf2e00000 | rd!($rd) | imm16!($imm16)
+    };
 
     // single register load/store instructions
     (ldr d($rd:expr), [x($rn:expr), #$ofs:expr]) => {

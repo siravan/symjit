@@ -168,14 +168,29 @@ impl Expr {
             return Err(anyhow!("missing poly op: {}", op));
         }
 
-        let mut x = args[0].transform(builder)?;
+        let n = args.len();
 
-        for arg in args.iter().skip(1) {
-            let y = arg.transform(builder)?;
-            x = builder.create_binary(op, x, y)?;
+        if n == 1 {
+            let x = args[0].transform(builder)?;
+            Ok(x)
+        } else if n == 2 {
+            let x = args[0].transform(builder)?;
+            let y = args[1].transform(builder)?;
+            let z = builder.create_binary(op, x, y)?;
+            Ok(z)
+        } else {
+            let x = self.transform_poly(builder, op, &args[..n >> 1])?;
+            let y = self.transform_poly(builder, op, &args[n >> 1..])?;
+            let z = builder.create_binary(op, x, y)?;
+            Ok(z)
         }
 
-        Ok(x)
+        // for arg in args.iter().skip(1) {
+        //     let y = arg.transform(builder)?;
+        //     x = builder.create_binary(op, x, y)?;
+        // }
+
+        // Ok(x)
     }
 
     fn transform_loop(&self, builder: &mut Builder, op: &str, args: &[Expr]) -> Result<Node> {

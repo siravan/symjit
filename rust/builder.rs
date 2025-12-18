@@ -283,8 +283,6 @@ impl Builder {
     }
 
     pub fn compile_mir(&mut self, fastmath: bool, opt_level: u8, df: &Defuns) -> Result<Mir> {
-        // println!("{:#?}", self.block().stmts);
-
         let mut mir = Mir::new(opt_level, fastmath, df);
 
         self.block().eliminate();
@@ -297,6 +295,44 @@ impl Builder {
         if opt_level >= 2 {
             Allocator::optimize(&mut mir);
         }
+
+        mir.add_consts(&self.consts);
+        mir.populate_labels();
+
+        Ok(mir)
+    }
+
+    pub fn compile_mir_chunks(
+        &mut self,
+        fastmath: bool,
+        opt_level: u8,
+        df: &Defuns,
+    ) -> Result<Mir> {
+        let mut mir = Mir::new(opt_level, fastmath, df);
+
+        self.block().eliminate();
+
+        for (i, clique) in self.block().stmts.chunks_mut(5).enumerate() {
+            let mut ir = Mir::new(opt_level, fastmath, df);
+            let label = format!(".Q{}", i);
+            ir.set_label(&label);
+
+            for stmt in clique {
+                stmt.compile(&mut ir)?;
+            }
+
+            if opt_level >= 1 {
+                ir.optimize_peephole();
+            }
+
+            if opt_level >= 2 {
+                Allocator::optimize(&mut ir);
+            }
+
+            mir.code.append(&mut ir.code);
+        }
+
+        //self.block().compile(&mut mir)?;
 
         mir.add_consts(&self.consts);
         mir.populate_labels();
