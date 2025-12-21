@@ -647,8 +647,8 @@ impl Mir {
         };
     }
 
-    pub fn call(&mut self, op: &str, num_args: usize) {
-        let f = self.find_op(op).expect("func not found");
+    pub fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
+        let f = self.find_op(op)?;
 
         match f {
             Func::Unary(_) => assert!(num_args == 1),
@@ -659,6 +659,8 @@ impl Mir {
             f,
             label: op.to_string(),
         });
+
+        Ok(())
     }
 
     pub fn find_op(&self, op: &str) -> Result<Func> {
@@ -881,7 +883,7 @@ impl Mir {
         };
     }
 
-    pub fn rerun(&self, ir: &mut dyn Generator) {
+    pub fn rerun(&self, ir: &mut dyn Generator) -> Result<()> {
         for ins in self.code.iter() {
             match ins {
                 Instruction::Nop => {}
@@ -939,6 +941,8 @@ impl Mir {
                 Instruction::Branch { cond, label } => ir.branch_if(*cond, label),
             }
         }
+
+        Ok(())
     }
 }
 

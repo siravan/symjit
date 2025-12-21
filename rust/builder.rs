@@ -302,44 +302,6 @@ impl Builder {
         Ok(mir)
     }
 
-    pub fn compile_mir_chunks(
-        &mut self,
-        fastmath: bool,
-        opt_level: u8,
-        df: &Defuns,
-    ) -> Result<Mir> {
-        let mut mir = Mir::new(opt_level, fastmath, df);
-
-        self.block().eliminate();
-
-        for (i, clique) in self.block().stmts.chunks_mut(5).enumerate() {
-            let mut ir = Mir::new(opt_level, fastmath, df);
-            let label = format!(".Q{}", i);
-            ir.set_label(&label);
-
-            for stmt in clique {
-                stmt.compile(&mut ir)?;
-            }
-
-            if opt_level >= 1 {
-                ir.optimize_peephole();
-            }
-
-            if opt_level >= 2 {
-                Allocator::optimize(&mut ir);
-            }
-
-            mir.code.append(&mut ir.code);
-        }
-
-        //self.block().compile(&mut mir)?;
-
-        mir.add_consts(&self.consts);
-        mir.populate_labels();
-
-        Ok(mir)
-    }
-
     fn save_registers(mir: &Mir, ir: &mut impl Generator) {
         if ir.count_shadows() < COUNT_SCRATCH {
             let used = mir.used_registers();
@@ -366,7 +328,7 @@ impl Builder {
         ir.prologue_indirect(cap, count_states, count_obs);
 
         Self::save_registers(mir, ir);
-        mir.rerun(ir);
+        mir.rerun(ir)?;
         Self::restore_registers(mir, ir);
 
         ir.epilogue_indirect(cap, count_states, count_obs);
@@ -393,7 +355,7 @@ impl Builder {
         ir.prologue_fast(cap, num_args);
 
         Self::save_registers(mir, ir);
-        mir.rerun(ir);
+        mir.rerun(ir)?;
         Self::restore_registers(mir, ir);
 
         ir.epilogue_fast(cap, idx_ret);

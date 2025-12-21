@@ -246,38 +246,25 @@ class Defuns:
 
         if defuns is not None:
             for sym, f in defuns.items():
-                degree = self.find_degree(sym, eqs)
+                if hasattr(f, "fast_func"):
+                    f = f.fast_func()
 
-                if degree == 1:
-                    if hasattr(f, "fast_func"):
-                        p = lib._fast_func(f.compiler.p)
+                if hasattr(f, "argtypes"):  # f is a CFUNCTION
+                    degree = len(f.argtypes)
+                else:  # f is a Python bytecode function (normal or lambda)
+                    degree = f.__code__.co_argcount
+                    if degree == 1:
+                        f = fac1(f)
+                    elif degree == 2:
+                        f = fac2(f)
                     else:
-                        p = fac1(f)
+                        raise ValueError(
+                            "User-defined functions can have only 1 or 2 arguments"
+                        )
 
-                    self.funcs[sym.name] = (p, 1)
-                    lib._add_func(self.p, sym.name.encode("utf8"), p, 1)
-                elif degree == 2:
-                    if hasattr(f, "fast_func"):
-                        p = lib._fast_func(f.compiler.p)
-                    else:
-                        p = fac2(f)
-
-                    self.funcs[sym.name] = (p, 2)
-                    lib._add_func(self.p, sym.name.encode("utf8"), p, 2)
-
-    def find_degree(self, sym, eqs):
-        if isinstance(eqs, list):
-            L = [{len(y.args) for y in eq.find(sym)} for eq in eqs]
-            S = set().union(*L)
-        else:
-            S = {len(y.args) for y in eqs.find(sym)}
-
-        if len(S) == 0:
-            return 0
-        elif len(S) == 1:
-            return list(S)[0]
-        else:
-            raise ValueError(f"inconsistent use of defun {sym}")
+                name = str(sym)
+                self.funcs[name] = (f, degree)
+                lib._add_func(self.p, name.encode("utf8"), f, degree)
 
     def __del__(self):
         if hasattr(self, "p"):

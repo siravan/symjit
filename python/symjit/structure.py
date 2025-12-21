@@ -1,18 +1,38 @@
-from sympy import symbols
-from sympy import asin, acos, atan, log, sqrt
-from sympy import asinh, acosh, atanh
-from sympy import Xor, And, Or, Abs, Mod, Min, Max, Heaviside, Sum, Product
-from sympy import (
-    Equality,
-    Unequality,
-    LessThan,
-    StrictLessThan,
-    GreaterThan,
-    StrictGreaterThan,
-)
-from sympy import Symbol, diff
-
 import numbers
+from ast import Expression
+
+from sympy import (
+    Abs,
+    And,
+    Equality,
+    GreaterThan,
+    Heaviside,
+    LessThan,
+    Max,
+    Min,
+    Mod,
+    Or,
+    Product,
+    StrictGreaterThan,
+    StrictLessThan,
+    Sum,
+    Symbol,
+    Unequality,
+    Xor,
+    acos,
+    acosh,
+    asin,
+    asinh,
+    atan,
+    atanh,
+    diff,
+    log,
+    sqrt,
+    symbols,
+)
+from sympy.printing.conventions import Derivative
+
+from . import expression
 
 
 def tree_node(op, args):
@@ -52,6 +72,11 @@ def operation(func):
     return op
 
 
+def process_add(y):
+    assert y.is_Add
+    return tree_node("plus", y.args)
+
+
 def process_mul(y):
     assert y.is_Mul
     return tree_node("times", y.args)
@@ -64,7 +89,7 @@ def process_pow(y):
 
 def tree(y):
     if y.is_Add:
-        return tree_node("plus", y.args)
+        return process_add(y)
     elif y.is_Mul:
         return process_mul(y)
     elif y.is_Pow:
@@ -72,7 +97,7 @@ def tree(y):
     elif y.is_Function:
         return tree_node(operation(y.func), y.args)
     else:
-        raise ValueError("unreognized tree type")
+        raise ValueError("unrecognized tree type")
 
 
 def relational(y):
@@ -127,23 +152,11 @@ def piecewise(args):
     return tree_node("ifelse", [cond, x1, x2])
 
 
-count_dummy = 0
-
-
-def reset_dummy():
-    global count_dummy
-    count_dummy = 0
-
-
 def loops(y):
     args = [y.args[0]]
     args.extend(y.args[1])
 
-    global count_dummy
-
-    v = symbols(f"Σ{count_dummy}")
-    count_dummy += 1
-    d = {args[1]: v}
+    d = {args[1]: symbols(f"${str(args[1])}")}
     args = [eq.subs(d) for eq in args]
 
     if isinstance(y, Sum):
@@ -155,12 +168,14 @@ def loops(y):
 
 
 def var(sym, val=0.0):
-    return {"name": sym.name, "val": float(val)}
+    return {"name": str(sym), "val": float(val)}
 
 
 def expr(y):
     try:
-        if isinstance(y, Sum) or isinstance(y, Product):
+        if expression.is_expression(y):  # y is a Symbolica Expression?
+            return expression.walk_tree(y)
+        elif isinstance(y, Sum) or isinstance(y, Product):
             return loops(y)
         elif isinstance(y, numbers.Number) or y.is_number:
             return {"type": "Const", "val": float(y)}
@@ -174,7 +189,8 @@ def expr(y):
             return piecewise(y.args)
         else:
             return tree(y)
-    except:
+    except ValueError:
+        print(f"fail to convert {y}")
         return y
 
 
@@ -190,13 +206,15 @@ def ode(y):
     }
 
 
-def model(states, eqs, params=None, obs=None):
-    reset_dummy()
+def is_singular(y):
+    return not hasattr(y, "__iter__") or expression.is_expression(y)
 
-    if not hasattr(states, "__iter__"):
+
+def model(states, eqs, params=None, obs=None):
+    if is_singular(states):
         states = [states]
 
-    if not hasattr(eqs, "__iter__"):
+    if is_singular(eqs):
         eqs = [eqs]
 
     if params is None:
@@ -218,12 +236,10 @@ def model(states, eqs, params=None, obs=None):
 
 
 def model_ode(iv, states, odes, params=None):
-    reset_dummy()
-
-    if not hasattr(states, "__iter__"):
+    if is_singular(states):
         states = [states]
 
-    if not hasattr(odes, "__iter__"):
+    if is_singular(odes):
         odes = [odes]
 
     assert len(states) == len(odes)
@@ -244,12 +260,10 @@ def model_ode(iv, states, odes, params=None):
 
 
 def model_jac(iv, states, odes, params=None):
-    reset_dummy()
-
-    if not hasattr(states, "__iter__"):
+    if is_singular(states):
         states = [states]
 
-    if not hasattr(odes, "__iter__"):
+    if is_singular(odes):
         odes = [odes]
 
     assert len(states) == len(odes)
@@ -257,10 +271,16 @@ def model_jac(iv, states, odes, params=None):
     n = len(states)
     eqs = []
 
-    for i in range(n):
-        for j in range(n):
-            df = diff(odes[i], states[j])
-            eqs.append(df)
+    if expression.is_expression(iv):
+        for i in range(n):
+            for j in range(n):
+                df = odes[i].derivative(states[j])
+                eqs.append(df)
+    else:
+        for i in range(n):
+            for j in range(n):
+                df = diff(odes[i], states[j])
+                eqs.append(df)
 
     if params is None:
         params = []

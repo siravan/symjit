@@ -53,7 +53,7 @@ impl Statement {
                 num_args,
             } => {
                 let _ = arg.compile_tree(ir)?;
-                ir.call(op.as_str(), *num_args);
+                ir.call(op.as_str(), *num_args)?;
                 Self::save_result(ir, lhs);
             }
             Statement::Label { label } => {
