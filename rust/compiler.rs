@@ -194,7 +194,7 @@ impl Compiler {
 
         let prog = Program::new(&ml, false)?;
         // let df = Defuns::new();
-        let app = Application::new(prog, self.ty, self.opt, &self.df);
+        let mut app = Application::new(prog, self.ty, self.opt, &self.df);
 
         #[cfg(target_arch = "aarch64")]
         if let Ok(app) = &mut app {
