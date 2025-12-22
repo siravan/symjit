@@ -20,28 +20,28 @@
 //! # Workflow
 //!
 //! 1. Create terminals (variables and constants) and compose expressions using `Expr` methods:
-//!     * Constructors: `var`, `from`, `unary`, `binary`, ...
-//!     * Standard algebraic operations: `add`, `mul`, ...
-//!     * Standard operators `+`, `-`, `*`, `/`, `%`, `&`, `|`, `^`, `!`.
-//!     * Unary functions such as `sin`, `exp`, and other standard mathematical functions.
-//!     * Binary functions such as `pow`, `min`, ...
-//!     * IfElse operation `ifelse(cond, true_val, false_val)`.
-//!     * Heaviside function: `heaviside(x)`, which returns 1 if `x >= 0`; otherwise 0.
-//!     * Comparison methods `eq`, `ne`, `lt`, `le`, `gt`, and `ge`.
-//!     * Looping constructs `sum` and `prod`.
+//!    * Constructors: `var`, `from`, `unary`, `binary`, ...
+//!    * Standard algebraic operations: `add`, `mul`, ...
+//!    * Standard operators `+`, `-`, `*`, `/`, `%`, `&`, `|`, `^`, `!`.
+//!    * Unary functions such as `sin`, `exp`, and other standard mathematical functions.
+//!    * Binary functions such as `pow`, `min`, ...
+//!    * IfElse operation `ifelse(cond, true_val, false_val)`.
+//!    * Heaviside function: `heaviside(x)`, which returns 1 if `x >= 0`; otherwise 0.
+//!    * Comparison methods `eq`, `ne`, `lt`, `le`, `gt`, and `ge`.
+//!    * Looping constructs `sum` and `prod`.
 //! 2. Create a new `Compiler` object (say, `comp`) using one of its constructors: `new()`
-//!     or `with_compile_type(ty: CompilerType)`.
+//!    or `with_compile_type(ty: CompilerType)`.
 //! 3. Fine-tune the optimization passes using `opt_level`, `simd`, `fastmath`,
-//!     and `cse` methods (optional).
+//!    and `cse` methods (optional).
 //! 4. Define user-defined functions by calling `comp.def_unary` and `comp.def_binary`
-//!     (optional).
+//!    (optional).
 //! 5. Compile by calling `comp.compile` or `comp.compile_params`. The result is of
-//!     type `Application` (say, `app`).
+//!    type `Application` (say, `app`).
 //! 6. Execute the compiled code using one of the `app`'s `call` functions:
-//!     * `call(&[f64])`: scalar call.
-//!     * `call_params(&[f64], &[f64])`: scalar call with parameters.
-//!     * `call_simd(&[__m256d])`: simd call.
-//!     * `call_simd_params(&[__m256d], &[f64])`: simd call with parameters.
+//!    * `call(&[f64])`: scalar call.
+//!    * `call_params(&[f64], &[f64])`: scalar call with parameters.
+//!    * `call_simd(&[__m256d])`: simd call.
+//!    * `call_simd_params(&[__m256d], &[f64])`: simd call with parameters.
 //! 7. Optionally, generate a standalone fast function to execute.
 //!
 //! Note that you can use the helper functions `var(&str) -> Expr`, `int(i32) -> Expr`,
@@ -522,6 +522,10 @@ pub unsafe extern "C" fn count_diffs(q: *const CompilerResult) -> usize {
 
 /// Deprecated. Previously used for interfacing to DifferentialEquation.jl. It is
 /// replaced with <https://github.com/siravan/SymJit.jl>.
+///
+/// # Safety
+///
+/// Deprecated. No effects.
 #[no_mangle]
 pub unsafe extern "C" fn run(
     _q: *mut CompilerResult,

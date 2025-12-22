@@ -25,28 +25,28 @@ type __m256d = [f64; 4];
 /// # Workflow
 ///
 /// 1. Create terminals (variables and constants) and compose expressions using `Expr` methods:
-///     * Constructors: `var`, `from`, `unary`, `binary`, ...
-///     * Standard algebraic operations: `add`, `mul`, ...
-///     * Standard operators `+`, `-`, `*`, `/`, `%`, `&`, `|`, `^`, `!`.
-///     * Unary functions such as `sin`, `exp`, and other standard mathematical functions.
-///     * Binary functions such as `pow`, `min`, ...
-///     * IfElse operation `ifelse(cond, true_val, false_val)`.
-///     * Heavide function: `heaviside(x)`, which returns 1 if `x >= 0`; otherwise 0.
-///     * Comparison methods `eq`, `ne`, `lt`, `le`, `gt`, and `ge`.
-///     * Looping constructs `sum` and `prod`.
+///    * Constructors: `var`, `from`, `unary`, `binary`, ...
+///    * Standard algebraic operations: `add`, `mul`, ...
+///    * Standard operators `+`, `-`, `*`, `/`, `%`, `&`, `|`, `^`, `!`.
+///    * Unary functions such as `sin`, `exp`, and other standard mathematical functions.
+///    * Binary functions such as `pow`, `min`, ...
+///    * IfElse operation `ifelse(cond, true_val, false_val)`.
+///    * Heavide function: `heaviside(x)`, which returns 1 if `x >= 0`; otherwise 0.
+///    * Comparison methods `eq`, `ne`, `lt`, `le`, `gt`, and `ge`.
+///    * Looping constructs `sum` and `prod`.
 /// 2. Create a new `Compiler` object (say, `comp`) using one of its constructors: `new()`
-///     or `with_compile_type(ty: CompilerType)`.
+///    or `with_compile_type(ty: CompilerType)`.
 /// 3. Fine-tune the optimization passes using `opt_level`, `simd`, `fastmath`,
-///     and `cse` methods (optional).
+///    and `cse` methods (optional).
 /// 4. Define user-defined functions by called `comp.def_unary` and `comp.def_binary`
-///     (optional).
+///    (optional).
 /// 5. Compile by calling `comp.compile` or `comp.compile_params`. The result is of
-///     type `Application` (say, `app`).
+///    type `Application` (say, `app`).
 /// 6. Execute the compiled code using one of the `app`'s `call` functions:
-///     * `call(&[f64])`: scalar call.
-///     * `call_params(&[f64], &[f64])`: scalar call with parameters.
-///     * `call_simd(&[__m256d])`: simd call.
-///     * `call_simd_params(&[__m256d], &[f64])`: simd call with parameters.
+///    * `call(&[f64])`: scalar call.
+///    * `call_params(&[f64], &[f64])`: scalar call with parameters.
+///    * `call_simd(&[__m256d])`: simd call.
+///    * `call_simd_params(&[__m256d], &[f64])`: simd call with parameters.
 /// 7. Optionally, generate a standalone fast function to execute.
 ///
 /// Currently, SIMD is only supported on x86-64 CPUs with AVX instruction sets.
@@ -106,7 +106,7 @@ impl Compiler {
     /// * `CompilerType::RiscV`: generates riscv64 (RISC V) code.
     /// * `CompilerType::ByteCode`: generates bytecode (interpreter).
     /// * `CompilerType::Debug`: debug mode, generates both bytecode and native codes
-    ///     and compares the outputs.
+    ///    and compares the outputs.
     ///
     pub fn with_compiler_type(ty: CompilerType) -> Compiler {
         Compiler {
@@ -194,7 +194,7 @@ impl Compiler {
 
         let prog = Program::new(&ml, false)?;
         // let df = Defuns::new();
-        let mut app = Application::new(prog, self.ty, self.opt, &self.df);
+        let app = Application::new(prog, self.ty, self.opt, &self.df);
 
         #[cfg(target_arch = "aarch64")]
         if let Ok(app) = &mut app {

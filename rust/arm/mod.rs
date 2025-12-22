@@ -71,7 +71,7 @@ impl ArmGenerator {
             self.emit(arm! {movz x(SCRATCH1), #idx});
             self.emit(arm! {ldr d(d), [x(base), x(SCRATCH1), lsl #3]});
         } else {
-            self.emit(arm! {movz x(SCRATCH1), #(idx & 0xffff)});
+            self.emit(arm! {movz x(SCRATCH1), #idx & 0xffff});
             self.emit(arm! {movk_lsl16 x(SCRATCH1), #idx >> 16});
             self.emit(arm! {ldr d(d), [x(base), x(SCRATCH1), lsl #3]});
         }
@@ -84,7 +84,7 @@ impl ArmGenerator {
             self.emit(arm! {movz x(SCRATCH1), #idx});
             self.emit(arm! {str d(d), [x(base), x(SCRATCH1), lsl #3]});
         } else {
-            self.emit(arm! {movz x(SCRATCH1), #(idx & 0xffff)});
+            self.emit(arm! {movz x(SCRATCH1), #idx & 0xffff});
             self.emit(arm! {movk_lsl16 x(SCRATCH1), #idx >> 16});
             self.emit(arm! {str d(d), [x(base), x(SCRATCH1), lsl #3]});
         }
@@ -99,7 +99,7 @@ impl ArmGenerator {
             self.emit(arm! {movz x(SCRATCH1), #idx});
             self.emit(arm! {ldr x(r), [x(base), x(SCRATCH1), lsl #3]});
         } else {
-            self.emit(arm! {movz x(SCRATCH1), #(idx & 0xffff)});
+            self.emit(arm! {movz x(SCRATCH1), #idx & 0xffff});
             self.emit(arm! {movk_lsl16 x(SCRATCH1), #idx >> 16});
             self.emit(arm! {ldr x(r), [x(base), x(SCRATCH1), lsl #3]});
         }
