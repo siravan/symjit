@@ -1,6 +1,6 @@
 # How to Compile Symjit from Source?
 
-A quick guide on how to compile *Symjit* from source. As of version 2.7, you need to build from source if you want to use *Symjit* on a RISC-V machine.
+A quick guide on how to compile *SymJit* from source. As of version 2.7, you need to build from source if you want to use *SymJit* on a RISC-V machine.
 
 ## Prerequisites
 
@@ -10,7 +10,7 @@ A quick guide on how to compile *Symjit* from source. As of version 2.7, you nee
 
 ## Download Symjit
 
-Clone *Symjit* by running
+Clone *SymJit* by running
 
 ```bash
 git clone https://github.com/siravan/symjit

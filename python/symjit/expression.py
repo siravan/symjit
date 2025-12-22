@@ -112,7 +112,19 @@ def tree_node(op, a):
 def operation(a):
     op = strip_namespace(a)
 
-    if op == "sqrt":
+    if op == "<":
+        op = "lt"
+    elif op == "<=":
+        op = "leq"
+    elif op == ">":
+        op = "gt"
+    elif op == ">=":
+        op = "geq"
+    elif op == "==":
+        op = "eq"
+    elif op == "!=":
+        op = "neq"
+    elif op == "sqrt":
         op = "root"
     elif op == "mod":
         op = "rem"

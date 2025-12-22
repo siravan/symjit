@@ -21,7 +21,7 @@ The result of different `compile` functions is a Python object, say `f`, that en
 2. There are zero to eight **scalar** input arguments (only up to four in Windows).
 3. There is no parameter.
 
-In most cases, *Symjit* can automatically switch a function to a fast one. However, there are situations when using the fast function directly improves performance. For example, this applies when passing functions to Scipy integration functions (`quad`, `nquad`, `dbpquad`, `tplquad`). To assist this, we can access the fast function by calling `f.fast_func()`. The result is a `ctypes.CFUNCTYPE`-generated foreign function. For example, we can rewrite the integration example above as
+In most cases, *SymJit* can automatically switch a function to a fast one. However, there are situations when using the fast function directly improves performance. For example, this applies when passing functions to Scipy integration functions (`quad`, `nquad`, `dbpquad`, `tplquad`). To assist this, we can access the fast function by calling `f.fast_func()`. The result is a `ctypes.CFUNCTYPE`-generated foreign function. For example, we can rewrite the integration example above as
 
 ```python
 import numpy as np
@@ -64,7 +64,7 @@ Note that the output of `apply` is always a numpy array.
 
 ## Callable
 
-`scipy.LowLevelCallable` is a method to speed up certain Scipy functions by passing a compiled function. Currently, the functions using this feature are mainly doing numerical integration (e.g., `quad`, `dblquad`, `tplquad` in `scipy.integrate`) and image filtering (e.g., `generic_filter` in `scipy.ndimage`). The standard way to create a `scipy.LowLevelCallable` is by wrting the function in C and compile it into a shared library. *Symjit* provides an easier option. As of version 2.5, the object returned by `compile_func` (say, `f` of type `symjit.Func`) has two helper functions that return `LowLevelCallable` objects:
+`scipy.LowLevelCallable` is a method to speed up certain Scipy functions by passing a compiled function. Currently, the functions using this feature are mainly doing numerical integration (e.g., `quad`, `dblquad`, `tplquad` in `scipy.integrate`) and image filtering (e.g., `generic_filter` in `scipy.ndimage`). The standard way to create a `scipy.LowLevelCallable` is by wrting the function in C and compile it into a shared library. *SymJit* provides an easier option. As of version 2.5, the object returned by `compile_func` (say, `f` of type `symjit.Func`) has two helper functions that return `LowLevelCallable` objects:
 
 * `Func.callable_quad`: returns a `LowLevelCallable` with a type signature `double (int, double *, void *)`, suitable to be passed to various integration functions (e.g., see `examples/integrate.py`).
 * `Func.callable_filter`: returns a `LowLevelCallable` with a type signature `int (double *, npy_intp, double *, void *)`, suitable to be passed to image filtering functions (e.g., see `examples/filter.py`).
@@ -88,11 +88,11 @@ As the Scipy ecosystem expands to use `LowLevelCallable` in other applications, 
 
 ## Exponentiation to an Integer Power and Modular Exponentiation
 
-Polynomial manipulation over various finite and infinite fields, such as &Zopf;p and &Zopf;, is the cornerstone of computer algebra systems. *Symjit* is primarily designed as a bridge between Sympy and numerical libraries (NumPy, SciPy, ...) and, as such, focuses on floating-point calculations. However, to assist with sympy integer calculations, version 2 has the capability of detecting and emitting special codes for integer exponentiation and modular exponentiation. IEEE 754 doubles can represent integers accurately up to 2**53 = 9007199254740992.
+Polynomial manipulation over various finite and infinite fields, such as &Zopf;p and &Zopf;, is the cornerstone of computer algebra systems. *SymJit* is primarily designed as a bridge between Sympy and numerical libraries (NumPy, SciPy, ...) and, as such, focuses on floating-point calculations. However, to assist with sympy integer calculations, version 2 has the capability of detecting and emitting special codes for integer exponentiation and modular exponentiation. IEEE 754 doubles can represent integers accurately up to 2**53 = 9007199254740992.
 
-The first special form is `x**n`, where `x` is any variable or expression, and `n` is a constant integer. *Symjit* emits the corresponding code directly in the function byte stream using the exponentiation-by-squaring method. This improves performance by allowing for better register allocations.
+The first special form is `x**n`, where `x` is any variable or expression, and `n` is a constant integer. *SymJit* emits the corresponding code directly in the function byte stream using the exponentiation-by-squaring method. This improves performance by allowing for better register allocations.
 
-The second special form is `x**n % p`, where `p` is any expression. Instead of calculating `x**n` first and then applying `%` (which can easily overflow), *Symjit* incorporates modular reduction at each stage of squaring. For example,
+The second special form is `x**n % p`, where `p` is any expression. Instead of calculating `x**n` first and then applying `%` (which can easily overflow), *SymJit* incorporates modular reduction at each stage of squaring. For example,
 
 ```python
 from sympy import symbols
