@@ -1,3 +1,9 @@
+# Version 2.9.2
+
+* Arm64 supports >2^16 variables.
+* Code-factoring, especially separating `Expr`.
+* Symbolica support added to both Python and Rust. 
+
 # Version 2.8.0
 
 * Explicit looping constructs `Sum` and `Product` implemented.

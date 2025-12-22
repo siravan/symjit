@@ -95,10 +95,10 @@ import math
 ...
 x, F = S('x', 'F')
 f = compile_func([x], E('Sum(x^k/F(k), (k, 0, 100))'), defuns={F: fact})   
-assert(f(2.0) == Math.exp(2.0))   # fact is the factorial function!
+assert(f(2.0) == Math.exp(2.0))   
 ```
 
 ## Auto-Vectorization
 
-If NumPy arrays are passed aas inputs to *SymJit*-generated functions, it does auto-vectorization. Please refer to [README](../README.me)
+If NumPy arrays are passed aas inputs to *SymJit*-generated functions, it does auto-vectorization. Please refer to [README](../README.md)
 for details.
