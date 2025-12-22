@@ -3,6 +3,7 @@
 * Arm64 supports >2^16 variables.
 * Code-factoring, especially separating `Expr`.
 * Symbolica support added to both Python and Rust. 
+* Memory leak for normal compiled code fixed (fast functions still intentionally leak memory).
 
 # Version 2.8.0
 
