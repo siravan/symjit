@@ -22,7 +22,9 @@ impl<T> MachineCode<T> {
         let size = machine_code.len();
 
         let mut code = Memory::new(BranchProtection::None);
-        let p: *mut u8 = code.allocate(size, 64).unwrap();
+
+        // alignment is set to 4096 to allow for using adrp instruction in arm64
+        let p: *mut u8 = code.allocate(size, 4096).unwrap();
 
         let v = unsafe { std::slice::from_raw_parts_mut(p, size) };
         v.copy_from_slice(&machine_code[..]);

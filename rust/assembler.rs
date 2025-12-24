@@ -6,7 +6,7 @@ pub type Jumper = fn(x: i32, code: u32) -> u32;
 pub struct Assembler {
     pub buf: Vec<u8>,
     labels: HashMap<String, usize>,
-    jumps: Vec<(String, usize, u32, Jumper)>,
+    jumps: Vec<(String, usize, u32, Jumper, bool)>,
 }
 
 impl Assembler {
@@ -57,14 +57,21 @@ impl Assembler {
     }
 
     pub fn jump(&mut self, label: &str, code: u32, f: Jumper) {
-        self.jumps.push((label.to_string(), self.ip(), code, f));
+        self.jumps
+            .push((label.to_string(), self.ip(), code, f, true));
+        self.append_word(0);
+    }
+
+    pub fn jump_abs(&mut self, label: &str, code: u32, f: Jumper) {
+        self.jumps
+            .push((label.to_string(), self.ip(), code, f, false));
         self.append_word(0);
     }
 
     pub fn apply_jumps(&mut self) {
-        for (label, ip, code, f) in self.jumps.iter() {
+        for (label, ip, code, f, rel) in self.jumps.iter() {
             let target = self.labels.get(label).expect("label not found");
-            let offset = (*target as i32) - (*ip as i32);
+            let offset = (*target as i32) - if *rel { *ip as i32 } else { 0 };
 
             let x = f(offset, *code);
 

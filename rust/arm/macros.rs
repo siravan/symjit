@@ -54,6 +54,14 @@ macro_rules! imm16 {
     }};
 }
 
+macro_rules! ofs_pc {
+    ($x:expr) => {{
+        let x = $x;
+        assert!(x < 1048576);
+        ((x << 3) & 0x00ffffe0) as u32
+    }};
+}
+
 macro_rules! ofs {
     ($x:expr) => {{
         let x = $x;
@@ -118,6 +126,13 @@ macro_rules! arm {
         0xf2e00000 | rd!($rd) | imm16!($imm16)
     };
 
+    (adrp x($rd:expr), label($offset:expr)) => {
+        {
+            let imm = $offset >> 12;
+            0x90000000 | rd!($rd) | ((imm & 3) << 29) | ((imm & 0x001ffffc) << 3)
+        }
+    };
+
     // single register load/store instructions
     (ldr d($rd:expr), [x($rn:expr), #$ofs:expr]) => {
         0xfd400000 | rd!($rd) | rn!($rn) | ofs!($ofs)
@@ -132,12 +147,12 @@ macro_rules! arm {
         0xf8607800 | rd!($rd) | rn!($rn) | rm!($rm)
     };
 
-    (ldr d($rd:expr), label) => {
-        0x5c000000 | rd!($rd)
+    (ldr d($rd:expr), label($ofs:expr)) => {
+        0x5c000000 | rd!($rd) | ofs_pc!($ofs)
     };
 
-    (ldr x($rd:expr), label) => {
-        0x58000000 | rd!($rd)
+    (ldr x($rd:expr), label($ofs:expr)) => {
+        0x58000000 | rd!($rd) | ofs_pc!($ofs)
     };
 
     (str d($rd:expr), [x($rn:expr), #$ofs:expr]) => {
@@ -289,17 +304,18 @@ macro_rules! arm {
     };
 
     // misc
-    (b.eq label) => { 0x54000000 };
-    (b.ne label) => { 0x54000001 };
-    (b.lt label) => { 0x5400000B };
-    (b.le label) => { 0x5400000D };
-    (b.gt label) => { 0x5400000C };
-    (b.ge label) => { 0x5400000A };
+    (b.eq label($ofs:expr)) => { 0x54000000 | ofs_pc!($ofs) };
+    (b.ne label($ofs:expr)) => { 0x54000001 | ofs_pc!($ofs) };
+    (b.lt label($ofs:expr)) => { 0x5400000B | ofs_pc!($ofs) };
+    (b.le label($ofs:expr)) => { 0x5400000D | ofs_pc!($ofs) };
+    (b.gt label($ofs:expr)) => { 0x5400000C | ofs_pc!($ofs) };
+    (b.ge label($ofs:expr)) => { 0x5400000A | ofs_pc!($ofs) };
     (tst x($rn:expr), x($rm:expr)) => {
         0xea00001f | rn!($rn) | rm!($rm)
     };
     (blr x($rn:expr)) => { 0xd63f0000 | rn!($rn) };
     (ret) => { 0xd65f03c0 };
+    (nop) => { 0x91000000 };
     (fmov d($rd:expr), #0.0) => { 0x9e6703e0 | rd!($rd) };
     (fmov d($rd:expr), #1.0) => { 0x1e6e1000 | rd!($rd) };
     (fmov d($rd:expr), #-1.0) => { 0x1e7e1000 | rd!($rd) };

@@ -1,7 +1,7 @@
 #[macro_use]
 mod macros;
 
-use crate::assembler::Assembler;
+use crate::assembler::{Assembler, Jumper};
 use crate::generator::Generator;
 use crate::utils::{align_stack, Reg};
 
@@ -50,10 +50,16 @@ impl ArmGenerator {
         self.a.append_quad(u);
     }
 
-    fn jump(&mut self, label: &str, code: u32) {
-        self.a.jump(label, code, |offset, code| {
-            code | ((offset << 3) & 0x00ffffe0) as u32
-        });
+    pub fn jump(&mut self, label: &str, code: u32, f: Jumper) {
+        self.a.jump(label, code, f)
+    }
+
+    pub fn jump_abs(&mut self, label: &str, code: u32, f: Jumper) {
+        self.a.jump_abs(label, code, f);
+    }
+
+    pub fn ip(&self) -> usize {
+        self.a.ip()
     }
 
     fn apply_jumps(&mut self) {
@@ -137,7 +143,11 @@ impl Generator for ArmGenerator {
         self.apply_jumps();
     }
 
-    fn align(&mut self) {}
+    fn align(&mut self) {
+        if self.a.ip() & 7 != 0 {
+            self.emit(arm! {nop});
+        }
+    }
 
     fn set_label(&mut self, label: &str) {
         self.a.set_label(label);
@@ -145,7 +155,8 @@ impl Generator for ArmGenerator {
 
     fn branch_if(&mut self, cond: Reg, label: &str) {
         self.emit(arm! {fcmp d(ϕ(cond)), #0.0});
-        self.jump(label, arm! {b.ne label});
+        // self.jump(label, arm! {b.ne label(0)});
+        self.jump(label, 0, |offset, _| arm! {b.ne label(offset)});
     }
 
     //***********************************
@@ -166,7 +177,21 @@ impl Generator for ArmGenerator {
 
     fn load_const(&mut self, dst: Reg, idx: u32) {
         let label = format!("_const_{}_", idx);
-        self.jump(label.as_str(), arm! {ldr d(ϕ(dst)), label});
+        // self.jump(label.as_str(), arm! {ldr d(ϕ(dst)), label(0)});
+        // self.a.jump(
+        //     &label,
+        //     ϕ(dst) as u32,
+        //     |offset, dst| arm! {ldr d(dst), label(offset)},
+        // );
+        self.jump_abs(&label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
+            arm! {adrp x(0), label((offset - pg as i32) as u32)}
+        });
+
+        self.jump_abs(
+            &label,
+            ϕ(dst) as u32,
+            |offset, dst| arm! {ldr d(dst), [x(0), #offset & 0x0fff]},
+        );
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
@@ -329,6 +354,7 @@ impl Generator for ArmGenerator {
     }
 
     fn add_consts(&mut self, consts: &[f64]) {
+        self.align();
         for (idx, val) in consts.iter().enumerate() {
             let label = format!("_const_{}_", idx);
             self.set_label(label.as_str());
@@ -344,7 +370,19 @@ impl Generator for ArmGenerator {
 
     fn call(&mut self, op: &str, _num_args: usize) {
         let label = format!("_func_{}_", op);
-        self.jump(label.as_str(), arm! {ldr x(0), label});
+        //self.a
+        //    .jump(&label, 0, |offset, _code| arm! {ldr x(0), label(offset)});
+
+        self.jump_abs(&label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
+            arm! {adrp x(0), label((offset - pg as i32) as u32)}
+        });
+
+        self.jump_abs(
+            &label,
+            0,
+            |offset, _| arm! {ldr x(0), [x(0), #offset & 0x0fff]},
+        );
+
         self.emit(arm! {blr x(0)});
     }
 
@@ -412,17 +450,15 @@ impl Generator for ArmGenerator {
         self.emit(arm! {mov x(PARAMS), x(3)});
 
         self.emit(arm! {tst x(STATES), x(STATES)});
-        self.jump("@main", arm! {b.eq label});
+        self.jump("@main", 0, |offset, _| arm! {b.eq label(offset)});
 
         let size = align_stack((count_states + count_obs + 1) as u32 * self.reg_size());
         self.sub_stack(size);
         self.emit(arm! {mov x(MEM), sp});
 
         for i in 0..count_states {
-            // self.emit(arm! {ldr x(10), [x(states), #8*i]});
             self.load_x_from_mem(SCRATCH2, STATES, i as u32);
             self.emit(arm! {ldr d(0), [x(SCRATCH2), x(IDX), lsl #3]});
-            // self.emit(arm! {str d(0), [x(mem), #8*i]});
             self.save_d_to_mem(0, MEM, i as u32);
         }
 
@@ -439,13 +475,11 @@ impl Generator for ArmGenerator {
         self.add_stack(stack_size);
 
         self.emit(arm! {tst x(STATES), x(STATES)});
-        self.jump("@done", arm! {b.eq label});
+        self.jump("@done", 0, |offset, _| arm! {b.eq label(offset)});
 
         for i in 0..count_obs {
-            // self.emit(arm! {ldr x(10), [x(states), #8*(count_states+i)]});
             self.load_x_from_mem(SCRATCH2, STATES, (count_states + i) as u32);
             let k = (count_states + i + 1) as u32;
-            //self.emit(arm! {ldr d(0), [x(mem), #8*k]});
             self.load_d_from_mem(0, MEM, k);
             self.emit(arm! {str d(0), [x(SCRATCH2), x(IDX), lsl #3]});
         }
