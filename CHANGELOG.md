@@ -1,3 +1,7 @@
+# Version 2.9.3
+
+* Support for ARM64 code segments > 1 MB (aarch64 adrp instruction).
+
 # Version 2.9.2
 
 * Arm64 supports >2^16 variables.
