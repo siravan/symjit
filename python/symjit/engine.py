@@ -237,7 +237,7 @@ class Matrix:
 
 
 class Defuns:
-    def __init__(self, defuns, eqs):
+    def __init__(self, defuns):
         self.p = lib._create_defuns()
         self.funcs = {}
 

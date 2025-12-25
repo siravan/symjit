@@ -280,7 +280,7 @@ def compile_func(
 
     if can_use_rust(backend):
         model = structure.model(states, eqs, params=params, obs=obs)
-        defuns = engine.Defuns(defuns, eqs)
+        defuns = engine.Defuns(defuns)
         compiler = engine.RustyCompiler(
             model,
             ty=ty,
@@ -364,7 +364,7 @@ def compile_ode(
     """
     if can_use_rust(backend):
         model = structure.model_ode(iv, states, odes, params)
-        defuns = engine.Defuns(defuns, odes)
+        defuns = engine.Defuns(defuns)
         compiler = engine.RustyCompiler(
             model,
             ty=ty,
@@ -429,7 +429,7 @@ def compile_jac(
     """
     if can_use_rust(backend):
         model = structure.model_jac(iv, states, odes, params)
-        defuns = engine.Defuns(defuns, odes)
+        defuns = engine.Defuns(defuns)
         compiler = engine.RustyCompiler(
             model,
             ty=ty,
@@ -465,7 +465,7 @@ def compile_json(
     model is already in Json format; hence, `convert = False`
     """
     if can_use_rust("rust"):
-        defuns = engine.Defuns(None, [])
+        defuns = engine.Defuns(None)
         compiler = engine.RustyCompiler(
             model,
             ty=ty,
@@ -478,6 +478,10 @@ def compile_json(
             defuns=defuns,
             sanitize=sanitize,
         )
-        return OdeFunc(compiler)
+
+        if compiler.count_diffs == 0:
+            return Func(compiler, [])
+        else:
+            return OdeFunc(compiler)
     else:
         raise ValueError("CellML json files only work with the rust backend")

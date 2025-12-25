@@ -107,6 +107,12 @@ macro_rules! arm {
     (fmov d($rd:expr), d($rn:expr)) => {
         0x1e604000 | rd!($rd) | rn!($rn)
     };
+    (fmov d($rd:expr), x($rn:expr)) => {
+        0x9e670000 | rd!($rd) | rn!($rn)
+    };
+    (fmov x($rd:expr), d($rn:expr)) => {
+        0x9e660000 | rd!($rd) | rn!($rn)
+    };
     (mov x($rd:expr), x($rm:expr)) => {
         0xaa0003e0 | rd!($rd) | rm!($rm)
     };
@@ -319,6 +325,110 @@ macro_rules! arm {
     (fmov d($rd:expr), #0.0) => { 0x9e6703e0 | rd!($rd) };
     (fmov d($rd:expr), #1.0) => { 0x1e6e1000 | rd!($rd) };
     (fmov d($rd:expr), #-1.0) => { 0x1e7e1000 | rd!($rd) };
+
+    // *********************** SIMD (2D) *************************/
+
+    // We are using q to denote a 128-bit packed double register,
+    // instead of v.2d to simplift notation.
+
+    // fmov q0, q0 means mov v0.2d, v0.2d
+    (fmov q($rd:expr), q($rn:expr)) => {
+        0x4ea01c00 | rd!($rd) | rn!($rn)
+    };
+
+    (ldr q($rd:expr), [x($rn:expr), #$ofs:expr]) => {
+        0x3dc00000 | rd!($rd) | rn!($rn) | ofs!($ofs)
+    };
+    (ldr q($rd:expr), [x($rn:expr), x($rm:expr), lsl #4]) => {
+        0x3ce07800 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
+    (ldr q($rd:expr), label($ofs:expr)) => {
+        0x9c000000 | rd!($rd) | ofs_pc!($ofs)
+    };
+
+    // broadcast: ldr1 {q(0)}, [x(1)] means ld1r {v0.2d}, [x1]
+    (ld1r {q($rd:expr)}, [x($rn:expr)]) => {
+        0x4d40cc00 | rd!($rd) | rn!($rn)
+    };
+
+    (str q($rd:expr), [x($rn:expr), #$ofs:expr]) => {
+        0x3d800000 | rd!($rd) | rn!($rn) | ofs!($ofs)
+    };
+    (str q($rd:expr), [x($rn:expr), x($rm:expr), lsl #4]) => {
+        0x3ca07800 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
+    // paired-registers load/store instructions
+    (ldp q($rd:expr), q($rd2:expr), [x($rn:expr), #$of7:expr]) => {
+        0xad400000 | rd!($rd) | rd2!($rd2) | rn!($rn) | of7!($of7)
+    };
+    (stp q($rd:expr), q($rd2:expr), [x($rn:expr), #$of7:expr]) => {
+        0xad000000 | rd!($rd) | rd2!($rd2) | rn!($rn) | of7!($of7)
+    };
+
+    (fadd q($rd:expr), q($rn:expr), q($rm:expr)) => {
+        0x4e60d400 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (fsub q($rd:expr), q($rn:expr), q($rm:expr)) => {
+        0x4ee0d400 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (fmul q($rd:expr), q($rn:expr), q($rm:expr)) => {
+        0x6e60dc00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (fdiv q($rd:expr), q($rn:expr), q($rm:expr)) => {
+        0x6e60fc00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
+    (fsqrt q($rd:expr), q($rn:expr)) => {
+        0x6ee1f800 | rd!($rd) | rn!($rn)
+    };
+    (fneg q($rd:expr), q($rn:expr)) => {
+        0x6ee0f800 | rd!($rd) | rn!($rn)
+    };
+    (fabs q($rd:expr), q($rn:expr)) => {
+        0x4ee0f800 | rd!($rd) | rn!($rn)
+    };
+
+    // FMA instructions are not defined for 2d packed-double
+
+    // round double to integral (double-coded integer)
+    (frinti q($rd:expr), q($rn:expr)) => {
+        0x6ee19800 | rd!($rd) | rn!($rn)
+    };
+
+    // floor (round toward minus inf) double to integral (double-coded integer)
+    (frintm q($rd:expr), q($rn:expr)) => {
+        0x4e619800 | rd!($rd) | rn!($rn)
+    };
+
+    // ceiling (round toward positive inf) double to integral (double-coded integer)
+    (frintp q($rd:expr), q($rn:expr)) => {
+        0x4ee18800 | rd!($rd) | rn!($rn)
+    };
+
+    // trunc (round toward zero) double to integral (double-coded integer)
+    (frintz q($rd:expr), q($rn:expr)) => {
+        0x4ee19800 | rd!($rd) | rn!($rn)
+    };
+
+    // comparison
+    (fcmeq q($rd:expr), q($rn:expr), q($rm:expr)) => {
+        0x4e60e400 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    // note that rm and rn are exchanged for fcmlt and fcmle
+    (fcmlt q($rd:expr), q($rm:expr), q($rn:expr)) => {
+        0x6ee0e400 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (fcmle q($rd:expr), q($rm:expr), q($rn:expr)) => {
+        0x6e60e400 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (fcmgt q($rd:expr), q($rn:expr), q($rm:expr)) => {
+        0x6ee0e400 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (fcmge q($rd:expr), q($rn:expr), q($rm:expr)) => {
+        0x6e60e400 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
 }
 
 #[test]
