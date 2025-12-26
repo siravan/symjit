@@ -11,10 +11,17 @@ pub struct MachineCode<T> {
     f: CompiledFunc<T>,
     _mem: Vec<T>,
     leaky: bool,
+    lanes: usize,
 }
 
 impl<T> MachineCode<T> {
-    pub fn new(arch: &str, machine_code: Vec<u8>, _mem: Vec<T>, leaky: bool) -> MachineCode<T> {
+    pub fn new(
+        arch: &str,
+        machine_code: Vec<u8>,
+        _mem: Vec<T>,
+        leaky: bool,
+        lanes: usize,
+    ) -> MachineCode<T> {
         let valid = (cfg!(target_arch = "x86_64") && arch == "x86_64")
             || (cfg!(target_arch = "aarch64") && arch == "aarch64")
             || (cfg!(target_arch = "riscv64") && arch == "riscv64");
@@ -45,6 +52,7 @@ impl<T> MachineCode<T> {
             f,
             _mem,
             leaky,
+            lanes,
         }
     }
 
@@ -104,6 +112,10 @@ impl<T> Compiled<T> for MachineCode<T> {
 
     fn support_indirect(&self) -> bool {
         true
+    }
+
+    fn count_lanes(&self) -> usize {
+        self.lanes
     }
 }
 

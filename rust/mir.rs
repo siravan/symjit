@@ -1376,4 +1376,8 @@ impl Compiled<f64> for CompiledMir {
     fn support_indirect(&self) -> bool {
         false
     }
+
+    fn count_lanes(&self) -> usize {
+        1
+    }
 }

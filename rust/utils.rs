@@ -12,6 +12,7 @@ pub trait Compiled<T> {
     fn dumps(&self) -> Vec<u8>;
     fn func(&self) -> CompiledFunc<T>;
     fn support_indirect(&self) -> bool;
+    fn count_lanes(&self) -> usize;
 }
 
 pub fn bool_to_f64(b: bool) -> f64 {

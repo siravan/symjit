@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 use crate::amd::{AmdFamily, AmdGenerator};
-use crate::arm::ArmGenerator;
+use crate::arm::{ArmGenerator, ArmSimdGenerator};
 use crate::builder::Builder;
 use crate::defuns::Defuns;
 use crate::generator::Generator;
@@ -120,11 +120,12 @@ impl Application {
         };
 
         let use_simd = (opt & USE_SIMD != 0)
-            && Platform::has_avx()
+            && (Platform::has_avx() || Platform::is_arm64())
             && !prog.builder.has_loop()
             && (matches!(ty, CompilerType::Amd)
                 | matches!(ty, CompilerType::AmdAVX)
-                | matches!(ty, CompilerType::Native));
+                | matches!(ty, CompilerType::Native)
+                | matches!(ty, CompilerType::Arm));
 
         let use_threads = opt & USE_THREADS != 0 && size < 128;
 
@@ -213,11 +214,12 @@ impl Application {
         mut generator: G,
         size: usize,
         arch: &str,
+        lanes: usize,
     ) -> Result<Box<dyn Compiled<f64>>> {
         let mem: Vec<f64> = vec![0.0; size];
         prog.builder
             .compile_from_mir(mir, &mut generator, prog.count_states, prog.count_obs)?;
-        let code = MachineCode::new(arch, generator.bytes(), mem, false);
+        let code = MachineCode::new(arch, generator.bytes(), mem, false, lanes);
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
         Ok(compiled)
     }
@@ -236,7 +238,7 @@ impl Application {
             prog.count_states as u32,
             idx_ret as i32,
         )?;
-        let code = MachineCode::new(arch, generator.bytes(), mem, true);
+        let code = MachineCode::new(arch, generator.bytes(), mem, true, 1);
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
 
         Ok(compiled)
@@ -249,6 +251,7 @@ impl Application {
             AmdGenerator::new(AmdFamily::SSEScalar),
             size,
             "x86_64",
+            1,
         )
     }
 
@@ -259,25 +262,46 @@ impl Application {
             AmdGenerator::new(AmdFamily::AvxScalar),
             size,
             "x86_64",
+            1,
         )
     }
 
-    fn compile_simd(mir: &Mir, prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
+    fn compile_avx_simd(
+        mir: &Mir,
+        prog: &mut Program,
+        size: usize,
+    ) -> Result<Box<dyn Compiled<f64>>> {
         Self::compile::<AmdGenerator>(
             mir,
             prog,
             AmdGenerator::new(AmdFamily::AvxVector),
             size * 4,
             "x86_64",
+            4,
         )
     }
 
     fn compile_arm(mir: &Mir, prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
-        Self::compile::<ArmGenerator>(mir, prog, ArmGenerator::new(), size, "aarch64")
+        Self::compile::<ArmGenerator>(mir, prog, ArmGenerator::new(), size, "aarch64", 1)
+    }
+
+    fn compile_arm_simd(
+        mir: &Mir,
+        prog: &mut Program,
+        size: usize,
+    ) -> Result<Box<dyn Compiled<f64>>> {
+        Self::compile::<ArmSimdGenerator>(
+            mir,
+            prog,
+            ArmSimdGenerator::new(),
+            size * 2,
+            "aarch64",
+            2,
+        )
     }
 
     fn compile_riscv(mir: &Mir, prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
-        Self::compile::<RiscV>(mir, prog, RiscV::new(), size, "riscv64")
+        Self::compile::<RiscV>(mir, prog, RiscV::new(), size, "riscv64", 1)
     }
 
     fn compile_avx_fast(
@@ -369,7 +393,13 @@ impl Application {
     pub fn prepare_simd(&mut self) {
         // SIMD compilation is lazy!
         if self.compiled_simd.is_none() && self.use_simd {
-            self.compiled_simd = Self::compile_simd(&self.mir, &mut self.prog, self.size).ok();
+            if Platform::has_avx() {
+                self.compiled_simd =
+                    Self::compile_avx_simd(&self.mir, &mut self.prog, self.size).ok();
+            } else if Platform::is_arm64() {
+                self.compiled_simd =
+                    Self::compile_arm_simd(&self.mir, &mut self.prog, self.size).ok();
+            }
         };
     }
 
@@ -402,10 +432,10 @@ impl Application {
 
         self.prepare_simd();
 
-        if self.compiled_simd.is_none() {
-            self.exec_vectorized_scalar(states, obs, self.use_threads);
+        if let Some(simd) = &self.compiled_simd {
+            self.exec_vectorized_simd(states, obs, self.use_threads, simd.count_lanes());
         } else {
-            self.exec_vectorized_simd(states, obs, self.use_threads);
+            self.exec_vectorized_scalar(states, obs, self.use_threads);
         }
     }
 
@@ -456,23 +486,29 @@ impl Application {
         }
     }
 
-    pub fn exec_vectorized_simd(&mut self, states: &Matrix, obs: &mut Matrix, threads: bool) {
+    pub fn exec_vectorized_simd(
+        &mut self,
+        states: &Matrix,
+        obs: &mut Matrix,
+        threads: bool,
+        l: usize,
+    ) {
         assert!(states.ncols == obs.ncols);
         let n = states.ncols;
         let params = &self.params[..];
-        let n0 = 4 * (n / 4);
+        let n0 = l * (n / l);
         let v = combine_matrixes(states, obs);
 
         if let Some(g) = &mut self.compiled_simd {
             let f = g.func();
             if threads {
-                (0..n / 4)
+                (0..n / l)
                     .into_par_iter()
-                    .for_each(|t| Self::exec_single(4 * t, &v, params, f));
+                    .for_each(|t| Self::exec_single(l * t, &v, params, f));
             } else {
-                (0..n / 4)
+                (0..n / l)
                     //.into_iter()
-                    .for_each(|t| Self::exec_single(4 * t, &v, params, f));
+                    .for_each(|t| Self::exec_single(l * t, &v, params, f));
             }
         }
 
@@ -625,5 +661,9 @@ impl Compiled<f64> for Debugger {
 
     fn support_indirect(&self) -> bool {
         false
+    }
+
+    fn count_lanes(&self) -> usize {
+        1
     }
 }

@@ -70,6 +70,14 @@ macro_rules! ofs {
     }};
 }
 
+macro_rules! ofs2d {
+    ($x:expr) => {{
+        let x = $x;
+        assert!((x & 15 == 0) && (x < 65536));
+        (x as u32) << 6
+    }};
+}
+
 macro_rules! of7 {
     ($x:expr) => {{
         let x = $x;
@@ -337,7 +345,7 @@ macro_rules! arm {
     };
 
     (ldr q($rd:expr), [x($rn:expr), #$ofs:expr]) => {
-        0x3dc00000 | rd!($rd) | rn!($rn) | ofs!($ofs)
+        0x3dc00000 | rd!($rd) | rn!($rn) | ofs2d!($ofs)
     };
     (ldr q($rd:expr), [x($rn:expr), x($rm:expr), lsl #4]) => {
         0x3ce07800 | rd!($rd) | rn!($rn) | rm!($rm)
@@ -352,19 +360,17 @@ macro_rules! arm {
         0x4d40cc00 | rd!($rd) | rn!($rn)
     };
 
+    // duplicate lane 0 to all lanes
+    // dup q(0), q(1)[0] means dup v0.2d, v1.d[0]
+    (dup q($rd:expr), q($rn:expr)[0]) => {
+        0x4e080400 | rd!($rd) | rn!($rn)
+    };
+
     (str q($rd:expr), [x($rn:expr), #$ofs:expr]) => {
-        0x3d800000 | rd!($rd) | rn!($rn) | ofs!($ofs)
+        0x3d800000 | rd!($rd) | rn!($rn) | ofs2d!($ofs)
     };
     (str q($rd:expr), [x($rn:expr), x($rm:expr), lsl #4]) => {
         0x3ca07800 | rd!($rd) | rn!($rn) | rm!($rm)
-    };
-
-    // paired-registers load/store instructions
-    (ldp q($rd:expr), q($rd2:expr), [x($rn:expr), #$of7:expr]) => {
-        0xad400000 | rd!($rd) | rd2!($rd2) | rn!($rn) | of7!($of7)
-    };
-    (stp q($rd:expr), q($rd2:expr), [x($rn:expr), #$of7:expr]) => {
-        0xad000000 | rd!($rd) | rd2!($rd2) | rn!($rn) | of7!($of7)
     };
 
     (fadd q($rd:expr), q($rn:expr), q($rm:expr)) => {
