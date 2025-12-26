@@ -206,6 +206,14 @@ macro_rules! arm {
     (sub x($rd:expr), x($rn:expr), #$imm:expr) => {
         0xd1000000 | rd!($rd) | rn!($rn) | imm!($imm)
     };
+
+    // logical shift right
+    (lsr x($rd:expr), x($rn:expr), #$imm:expr) => {{
+        let shift: u32 = $imm;
+        assert!(shift < 64);
+        0xd340fc00 | rd!($rd) | rn!($rn) | (shift << 16)
+    }};
+
     // floating point ops
     (fadd d($rd:expr), d($rn:expr), d($rm:expr)) => {
         0x1e602800 | rd!($rd) | rn!($rn) | rm!($rm)
@@ -340,9 +348,10 @@ macro_rules! arm {
     // instead of v.2d to simplift notation.
 
     // fmov q0, q0 means mov v0.2d, v0.2d
-    (fmov q($rd:expr), q($rn:expr)) => {
-        0x4ea01c00 | rd!($rd) | rn!($rn)
-    };
+    (fmov q($rd:expr), q($rn:expr)) => {{
+        let r = $rn;
+        0x4ea01c00 | rd!($rd) | rn!(r) | rm!(r)
+    }};
 
     (ldr q($rd:expr), [x($rn:expr), #$ofs:expr]) => {
         0x3dc00000 | rd!($rd) | rn!($rn) | ofs2d!($ofs)

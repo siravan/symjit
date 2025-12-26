@@ -549,7 +549,7 @@ impl ArmSimdGenerator {
 
     fn load_q_from_mem(&mut self, d: u8, base: u8, idx: u32) {
         if idx < 4096 {
-            self.emit(arm! {ldr q(d), [x(base), #16*idx]});
+            self.emit(arm! {ldr q(d), [x(base), #self.reg_size()*idx]});
         } else if idx < 65536 {
             self.emit(arm! {movz x(SCRATCH1), #idx});
             self.emit(arm! {ldr q(d), [x(base), x(SCRATCH1), lsl #4]});
@@ -562,7 +562,7 @@ impl ArmSimdGenerator {
 
     fn save_q_to_mem(&mut self, d: u8, base: u8, idx: u32) {
         if idx < 4096 {
-            self.emit(arm! {str q(d), [x(base), #16*idx]});
+            self.emit(arm! {str q(d), [x(base), #self.reg_size()*idx]});
         } else if idx < 65536 {
             self.emit(arm! {movz x(SCRATCH1), #idx});
             self.emit(arm! {str q(d), [x(base), x(SCRATCH1), lsl #4]});
@@ -971,6 +971,9 @@ impl Generator for ArmSimdGenerator {
         let size = align_stack((count_states + count_obs + 1) as u32 * self.reg_size());
         self.sub_stack(size);
         self.emit(arm! {mov x(MEM), sp});
+
+        // dividing IDX by 2 to convert from indexing f64 to f64x2
+        self.emit(arm! {lsr x(IDX), x(IDX), #1});
 
         for i in 0..count_states {
             self.load_x_from_mem(SCRATCH2, STATES, i as u32);

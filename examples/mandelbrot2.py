@@ -3,10 +3,11 @@ import util
 args = util.process_argv()
 
 import time
-import numpy as np
+
 import matplotlib.pyplot as plt
-from sympy import symbols, expand
+import numpy as np
 from symjit import compile_func
+from sympy import expand, symbols
 
 x, y, a, b = symbols("x y a b")
 
