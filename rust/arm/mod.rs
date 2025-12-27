@@ -973,7 +973,7 @@ impl Generator for ArmSimdGenerator {
         self.emit(arm! {mov x(MEM), sp});
 
         // dividing IDX by 2 to convert from indexing f64 to f64x2
-        self.emit(arm! {lsr x(IDX), x(IDX), #1});
+        // self.emit(arm! {lsr x(IDX), x(IDX), #1});
 
         for i in 0..count_states {
             self.load_x_from_mem(SCRATCH2, STATES, i as u32);

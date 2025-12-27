@@ -504,11 +504,9 @@ impl Application {
             if threads {
                 (0..n / l)
                     .into_par_iter()
-                    .for_each(|t| Self::exec_single(l * t, &v, params, f));
+                    .for_each(|t| Self::exec_single(t, &v, params, f));
             } else {
-                (0..n / l)
-                    //.into_iter()
-                    .for_each(|t| Self::exec_single(l * t, &v, params, f));
+                (0..n / l).for_each(|t| Self::exec_single(t, &v, params, f));
             }
         }
 

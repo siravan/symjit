@@ -726,6 +726,12 @@ impl Generator for AmdGenerator {
         self.chkstk(size);
         self.amd.mov(MEM, Amd::RSP); // in indirect mode, MEM is allocated on the stack
 
+        // multiply IDX by 4 to convert from f64x4 index to f64 index
+        if self.reg_size() == 32 {
+            self.amd.add(IDX, IDX);
+            self.amd.add(IDX, IDX);
+        }
+
         for i in 0..count_states {
             self.amd.mov_reg_mem(Amd::RAX, STATES, 8 * i as i32);
             let k = i as u32 * self.reg_size();
