@@ -68,6 +68,10 @@ impl Block {
 
     // create_* functions create a new Node
 
+    pub fn create_mem(&mut self, name: &str) {
+        self.sym_table.add_mem(name);
+    }
+
     pub fn create_tmp(&mut self) -> Node {
         let name = format!("ψ{}", self.num_tmp);
         self.num_tmp += 1;

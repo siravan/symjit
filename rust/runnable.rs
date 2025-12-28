@@ -517,30 +517,9 @@ impl Application {
                 .into_par_iter()
                 .for_each(|t| Self::exec_single(t, &v, params, f));
         } else {
-            (n0..n)
-                //.into_iter()
-                .for_each(|t| Self::exec_single(t, &v, params, f));
+            (n0..n).for_each(|t| Self::exec_single(t, &v, params, f));
         }
     }
-
-    // call interface to Julia ODESolver
-    // pub fn call(&mut self, du: &mut [f64], u: &[f64], p: &[f64], t: f64) {
-    //     {
-    //         let mem = self.compiled.mem_mut();
-    //         mem[self.idx_iv] = t;
-    //         let _ =
-    //             &mut mem[self.first_state..self.first_state + self.count_states].copy_from_slice(u);
-    //         let _ =
-    //             &mut mem[self.first_param..self.first_param + self.count_params].copy_from_slice(p);
-    //     }
-
-    //     self.compiled.exec(&self.params[..]);
-
-    //     {
-    //         let mem = self.compiled.mem();
-    //         du.copy_from_slice(&mem[self.first_diff..self.first_diff + self.count_diffs]);
-    //     }
-    // }
 
     pub fn dump(&mut self, name: &str, what: &str) -> bool {
         match what {

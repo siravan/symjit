@@ -56,9 +56,16 @@ impl Program {
             builder.symbol_table().add_param(&v.name);
         }
 
+        let mut count_obs = 0;
+
         for eq in &ml.obs {
             if let Some(name) = eq.lhs.normal_var() {
-                builder.block().sym_table.add_mem(&name);
+                if name.starts_with("__") {
+                    builder.block().create_tmp_named(&name);
+                } else {
+                    builder.block().create_mem(&name);
+                    count_obs += 1;
+                }
             } else {
                 return Err(anyhow!("lhs var not found"));
             }
@@ -79,7 +86,7 @@ impl Program {
             builder,
             count_states: ml.states.len(),
             count_params: ml.params.len(),
-            count_obs: ml.obs.len(),
+            count_obs,
             count_diffs: ml.odes.len(),
         };
 
