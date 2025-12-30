@@ -2,7 +2,7 @@
 
 The Rust backend supports different optimization and parallelization methods, which can be controlled using `compile_func` arguments. The options are:
 
-* `use_simd` (default `True`): generates SIMD instructions if possible (currently supports AVX instructions on X86-64 processors). SIMD code should improve the performance up to 4x for certain tasks (using 256-bit registers that encode and operate on four doubles simultaneously).
+* `use_simd` (default `True`): generates SIMD instructions if possible. It currently supports AVX instructions on x86-64 processors (256-bit f64x4) and NEON instructions on aarch64 (128-bit f64x2). Therefore, SIMD code should improve performance up to 2-4x for certain tasks.
 * `use_threads` (default `True`): use multi-threading to speed up parallel processing of array operations using [Rayon rust crate](https://docs.rs/rayon/latest/rayon/).
 * `cse` (default `True`): New to version 2.4. It performs common-subexpression elimination, i.e., factoring common expressions and sub-expressions.
 * `fastmath` (default `False`): New to version 2.5. It rewrites the code to combine multiplication and addition/substraction into various fused-multiply-add instructions.

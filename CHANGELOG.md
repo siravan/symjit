@@ -1,10 +1,17 @@
+# Version 2.10.0
+
+* Adding support for NEON instructions on aarch64 (128-bit f64x2).
+* Adding hidden observables (named observables prefixed with `__`).
+* `compile_json` accepts regular functions in addition to ODE systems.
+* `sanitize` switch is deprecated.
+
 # Version 2.9.3
 
-* Support for ARM64 code segments > 1 MB (aarch64 adrp instruction).
+* Adding support for aarch64 code segments > 1 MB (aarch64 adrp instruction).
 
 # Version 2.9.2
 
-* Arm64 supports >2^16 variables.
+* Can support >2^16 variables on aarch64.
 * Code-factoring, especially separating `Expr`.
 * Symbolica support added to both Python and Rust. 
 * Memory leak for normal compiled code fixed (fast functions still intentionally leak memory).
@@ -36,7 +43,7 @@
 # Version 2.5.1
 
 * Sympy constants accepted (is_number).
-* Riscv compilation (bytecode only).
+* RISC-V compilation (bytecode only).
 
 # Version 2.5.0
 

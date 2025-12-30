@@ -241,27 +241,29 @@ def compile_func(
     eqs: a single symbolic expression or a list/tuple of symbolic expressions.
     params (optional): a list/tuple of additional symbols as parameters to the model.
     ty: target architecture. Options are:
-        * "amd": generates x64 instructions (amd-sse or amd-avx) depending on the processor
-        * "amd-sse": generates x64 SSE2 instructions
-        * "amd-avx": generates x64 AVX instrcutions
-        * "arm": generates arm aarch64 instructions
-        * "bytecode": bytecode interpreter for testing and running on unsupported hardware
-        * "native" (default): selects the correct mode based on the processor
-        * "debug": runs "native" and "bytecode" codes and throws an exception if different
-    obs (optional): a list of symbols to name equations. If obs is not None, its length should
-        be the same as eqs.
+        * "amd": generates x86-64 instructions (amd-sse or amd-avx) depending on the processor.
+        * "amd-sse": generates x86-64 SSE2 instructions.
+        * "amd-avx": generates x86-64 AVX instrcutions.
+        * "arm": generates arm aarch64 instructions.
+        * "riscv": generates 64-bit RISC-V instructions.
+        * "bytecode": bytecode interpreter for testing and running on unsupported hardware.
+        * "native" (default): selects the correct mode based on the processor.
+        * "debug": runs "native" and "bytecode" codes and throws an exception if different.
+    obs (default `None`): a list of symbols to name equations. If obs is not None, its length should
+        be the same as eqs. A named prefixed with `__` is considered a hidden observable (temporary
+        variable).
     backend (default `rust`): the code-generator backend (`rust`: dynamic library coded
         in rust. `python`: pyengine library coded in plain Python.
-    use_simd (default True): generates SIMD code for vectorized operations.
-        Currently only AVX on x86-64 systems is supported.
-    use_threads (default True): use multi-threading to speed up parallel operations when called
+    use_simd (default `True`): generates SIMD code for vectorized operations. Currently supports
+        AVX on x86-64 and NEON on aarch64 systems.
+    use_threads (default `True`): use multi-threading to speed up parallel operations when called
         on numpy arrays.
-    cse (default True): performs common-subexpression elimination.
+    cse (default `True`): performs common-subexpression elimination.
     fastmath (default False): use fastmath floating point operations, especially fused multiply-addition.
     opt_level (default 1): optimization level (0, 1, or 2). Broadly the numbers are parallel to -O0, -O1, -O2
         options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
         Level-2 uses an improved graph-coloring algorithm for better register allocation.
-    defuns (default None): a dictionary of Symbol => Definition to pass external Python or Symjit-generated functions.
+    defuns (default `None`): a dictionary of Symbol => Definition to pass external Python or Symjit-generated functions.
 
     ==> returns a Func object, is a callable object `f` with signature `f(x_1,...,x_n,p_1,...,p_m)`,
         where `x`s are the state variables and `p`s are the parameters.
@@ -326,20 +328,21 @@ def compile_ode(
     states: a single symbol or a list/tuple of symbols.
     odes: a single symbolic expression or a list/tuple of symbolic expressions,
         representing the derivative of the state with respect to iv.
-    params (optional): a list/tuple of additional symbols as parameters to the model
-    ty (default `native`): see compile_func options for details.
+    params (optional): a list/tuple of additional symbols as parameters to the model.
+    ty (default `native`): see `compile_func` options for details.
     backend (default `rust`): the code-generator backend (`rust`: dynamic library coded
         in rust. `python`: pyengine library coded in plain Python.
-    use_simd (default True): generates SIMD code for vectorized operations.
-        Currently only AVX on x86-64 systems is supported.
-    use_threads (default True): use multi-threading to speed up parallel operations when called
-        on numpy arrays.
-    cse (default True): performs common-subexpression elimination.
-    fastmath (default False): use fastmath floating point operations, especially fused multiply-addition.
+    use_simd (default `True`): generates SIMD code for vectorized operations. Currently
+        supports AVX on x86-64 and NEON on aarch64 systems.
+    use_threads (default `True`): use multi-threading to speed up parallel operations
+        when called on numpy arrays.
+    cse (default `True`): performs common-subexpression elimination.
+    fastmath (default `False`): use fastmath floating point operations, especially fused multiply-addition.
     opt_level (default 1): optimization level (0, 1, or 2). Broadly the numbers are parallel to -O0, -O1, -O2
         options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
         Level-2 uses an improved graph-coloring algorithm for better register allocation.
-    defuns (default None): a dictionary of Symbol => Definition to pass external Python or Symjit-generated functions.
+    defuns (default `None`): a dictionary of Symbol => Definition to pass external Python or
+        Symjit-generated functions.
 
     Note that compile_ode accepts use_simd and use_threads but in practice ingores them,
         because compile_ode is usually called on scalars only.
@@ -369,6 +372,7 @@ def compile_ode(
             model,
             ty=ty,
             use_simd=use_simd,
+            use_threads=use_threads,
             cse=cse,
             fastmath=fastmath,
             opt_level=opt_level,
@@ -408,18 +412,19 @@ def compile_jac(
         ty (default `native`): see compile_func options for details.
         backend (default `rust`): the code-generator backend (`rust`: dynamic library coded
             in rust. `python`: pyengine library coded in plain Python.
-        use_simd (default True): generates SIMD code for vectorized operations.
-            Currently only AVX on x86-64 systems is supported.
-        use_threads (default True): use multi-threading to speed up parallel operations when called
+        use_simd (default `True`): generates SIMD code for vectorized operations. Currently
+            supports AVX on x86-64 and NEON on aarch64 systems.
+        use_threads (default `True`): use multi-threading to speed up parallel operations when called
             on numpy arrays.
-        cse (default True): performs common-subexpression elimination.
-        fastmath (default False): use fastmath floating point operations, especially fused multiply-addition.
+        cse (default `True`): performs common-subexpression elimination.
+        fastmath (default `False`): use fastmath floating point operations, especially fused multiply-addition.
         opt_level (default 1): optimization level (0, 1, or 2). Broadly the numbers are parallel to -O0, -O1, -O2
             options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
             Level-2 uses an improved graph-coloring algorithm for better register allocation.
-        defuns (default None): a dictionary of Symbol => Definition to pass external Python or Symjit-generated functions.
+        defuns (default `None`): a dictionary of Symbol => Definition to pass external Python or
+            Symjit-generated functions.
 
-        Note that similar to compile_ode, compile_jac accepts use_simd and use_threads but in
+        Note that similar to `compile_ode`, `compile_jac` accepts use_simd and use_threads but in
             practice ingores them, because compile_ode is usually called on scalars only.
 
     ===> returns an OdeFunc object that has the same signature as
@@ -434,6 +439,7 @@ def compile_jac(
             model,
             ty=ty,
             use_simd=use_simd,
+            use_threads=use_threads,
             cse=cse,
             fastmath=fastmath,
             opt_level=opt_level,

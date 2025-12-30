@@ -1,32 +1,32 @@
 # Introduction
 [Release Notes](NEWS.md)
 
-*SymJit* is a lightweight just-in-time (JIT) compiler that directly translates *SymPy* expressions into machine code without using a separate library such as LLVM. Its main utility is to generate fast numerical functions to feed into various numerical solvers provided by the NumPy/SciPy ecosystem, including numerical integration routines, ordinary differential equation (ODE) solvers, and image filtering functions. It is also able to generate `LowLevelCallable` functions for better coupling to certain fast Scipy numerical functions.
+**SymJit** is a lightweight just-in-time (JIT) compiler that directly translates *SymPy* expressions into machine code without using a separate library such as LLVM. Its main utility is to generate fast numerical functions to feed into various numerical solvers provided by the NumPy/SciPy ecosystem, including numerical integration routines, ordinary differential equation (ODE) solvers, and image filtering functions. It is also able to generate `LowLevelCallable` functions for better coupling to certain fast Scipy numerical functions.
 
-*SymJit* has two different code-generating backends. The default is a Rust library with minimum external dependencies. The second backend is written in plain Python, relying solely on the Python standard library and NumPy. The Rust backend generates **AMD64** (also known as x86-64), **ARM64** (also known as aarch64), and 64-bit **RISC-V** (riscv64) machine code on Linux, Windows, and Darwin (MacOS) platforms (RISC-V support is new in version 2.7). The Python backend supports AMD64 and ARM64.
+SymJit has two different code-generating backends. The default is a Rust library with minimum external dependencies. The second backend is written in plain Python, relying solely on the Python standard library and NumPy. The Rust backend generates **AMD64** (also known as x86-64), **ARM64** (also known as aarch64), and 64-bit **RISC-V** (riscv64) machine code on Linux, Windows, and Darwin (MacOS) platforms (RISC-V support is new in version 2.7). The Python backend supports AMD64 and ARM64.
 
 The Rust backend generates AVX-compatible code by default for x86-64/AMD64 processors but can downgrade to SSE2 instructions if the processor does not support AVX or if explicitly requested by passing `ty='amd-sse'` to compile functions (see below). SSE2 instructions were introduced in 2000, meaning that virtually all current 64-bit x86-64 processors support them. Intel introduced the AVX instruction set in 2011; therefore, most processors support it. The Python backend uses only AVX instructions. Note that the Python backend is not actively maintained and may be removed in version 3.
 
 On ARM64 processors, both the Rust and Python backends generate code for the aarch64 instruction set. ARM32 and IA32 are not supported.
 
-*SymJit* has three companion packages:
+SymJit has three companion packages:
 
 * [FuncBuilder](https://github.com/siravan/funcbuilder) provides a more general code generator akin to [llvmlite](https://github.com/numba/llvmlite). It is currently in the early stages of development.
-* [SymJit.jl](https://github.com/siravan/SymJit.jl) is a Julia wrapper around the *SymJit*'s Rust library and works with Julia [Symbolics](https://docs.sciml.ai/Symbolics/stable/).
+* [SymJit.jl](https://github.com/siravan/SymJit.jl) is a Julia wrapper around the SymJit's Rust library and works with Julia [Symbolics](https://docs.sciml.ai/Symbolics/stable/).
 * [JitEngine.jl](https://github.com/siravan/JitEngine.jl) is a port of the Symjit's code generator to Julia with no binary dependecy. Similar to SymJit.jl, it works and uses Julia [Symbolics](https://docs.sciml.ai/Symbolics/stable/).
 
-Moreover, as of version 2.9.2, *SymJit* can process [Symbolica](./docs/SYMBOLICA.md) expressions. 
+Moreover, as of version 2.9.2, SymJit can process [Symbolica](./docs/SYMBOLICA.md) expressions. 
 
 # Installing symjit
 
-Installing *SymJit* from the `conda-forge` channel can be achieved by adding `conda-forge` to your channels with:
+Installing SymJit from the `conda-forge` channel can be achieved by adding `conda-forge` to your channels with:
 
 ```
 conda config --add channels conda-forge
 conda config --set channel_priority strict
 ```
 
-Once the `conda-forge` channel has been enabled, *SymJit* can be installed with `conda`:
+Once the `conda-forge` channel has been enabled, SymJit can be installed with `conda`:
 
 ```
 conda install symjit
@@ -38,13 +38,13 @@ After installation, you can update to the latest version by:
 conda update -c conda-forge symjit
 ```
 
-Another way to install *SymJit* is to use `mamba`:
+Another way to install SymJit is to use `mamba`:
 
 ```
 mamba install symjit
 ```
 
-It is possible to list all of the versions of *SymJit* available on your platform with `conda`:
+It is possible to list all of the versions of SymJit available on your platform with `conda`:
 
 ```
 conda search symjit --channel conda-forge
@@ -77,7 +77,7 @@ python -m pip install symjit
 
 However, the pip install may not include the correct binary Rust backend for different platforms and the conda-forge install is preferable.
 
-Currently, **RISC-V binaries are not available from conda-forge**. If you want to use *SymJit* on a RISC-V computer, you need to compile it from the source. See [Compilation](./docs/COMPILATION.md) for details.
+Currently, **RISC-V binaries are not available from conda-forge**. If you want to use SymJit on a RISC-V computer, you need to compile it from the source. See [Compilation](./docs/COMPILATION.md) for details.
 
 ```
 cd symjit
@@ -90,7 +90,7 @@ For the last option, you need a working Rust compiler and toolchains.
 
 ## `compile_func`: a fast substitute for `lambdify`
 
-*SymJit* is invoked by calling different `compile_*` functions. The most basic is `compile_func`, which behaves similarly to SymPy `lambdify` function. While `lambdify` translates SymPy expressions into regular Python functions, which in turn call numpy functions, `compile_func` returns a callable object `Func`, which is a thin wrapper over the jit code generated by the backends.
+SymJit is invoked by calling different `compile_*` functions. The most basic is `compile_func`, which behaves similarly to SymPy `lambdify` function. While `lambdify` translates SymPy expressions into regular Python functions, which in turn call numpy functions, `compile_func` returns a callable object `Func`, which is a thin wrapper over the jit code generated by the backends.
 
 A simple example is
 
@@ -299,7 +299,7 @@ The output of the stiff system is
 
 ## Explicit Looping
 
-*SymJit* supports construction of explicit loops using `Sum` and `Product` operators. The syntax follows sympy's syntax. For example, we can define the factorial function as
+SymJit supports construction of explicit loops using `Sum` and `Product` operators. The syntax follows sympy's syntax. For example, we can define the factorial function as
 
 ```python
 x, y = symbols('x y')
@@ -320,7 +320,7 @@ Note that for `Sum` and `Product`, the range follows the mathematical convention
 
 ## Calling Other Functions
 
-*SymJit* also allows calling other simple *SymJit* or Python functions. Currently, only functions that accept one or two double arguments and return a double result are supported; therefore, only *SymJit* functions defined as *fast* as allowed, see [Optimization](./docs/OPTIMIZATION.md). To pass a function, we need to define a placeholder symbol using SymPy's `Function` constructor. Then, we pass a dictionary of `Function`s and their definitions as an argument `defuns` to `compile_*` functions. For example, we can rewrite `my_exp` function above as
+SymJit also allows calling other simple SymJit or Python functions. Currently, only functions that accept one or two double arguments and return a double result are supported; therefore, only SymJit functions defined as *fast* as allowed, see [Optimization](./docs/OPTIMIZATION.md). To pass a function, we need to define a placeholder symbol using SymPy's `Function` constructor. Then, we pass a dictionary of `Function`s and their definitions as an argument `defuns` to `compile_*` functions. For example, we can rewrite `my_exp` function above as
 
 ```python
 import math 
@@ -352,9 +352,9 @@ f(5)    # returns
 # 15.0
 ```
 
-Warning! When `use_threads` option is set to `True` (which is the default), *SymJit* uses multi-threading for array inputs. Calling a Python function 
+Warning! When `use_threads` option is set to `True` (which is the default), SymJit uses multi-threading for array inputs. Calling a Python function 
 in this situation can cause all sort of problems because of the Global Interpreter Lock (GIL). Python 3.14 has removed GIL; therefore, multi-threading
-is possible, but still needs extreme caution due to various race conditions. Used correctly, *SymJit* multi-threading can be useful as a thread-dispatcher; however, preventing race condition is the responsibility of the user.
+is possible, but still needs extreme caution due to various race conditions. Used correctly, SymJit multi-threading can be useful as a thread-dispatcher; however, preventing race condition is the responsibility of the user.
 
 # Code Generation
 
