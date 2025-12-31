@@ -346,8 +346,9 @@ impl Node {
         // registers when generating code for SSE (two-address code).
         // This check may not be actually necessary, but we need to prove its
         // correctness first.
-
-        let mut pool = Pool::new(if ir.opt_level >= 1 && ir.three_address() {
+        // We use the pool registers here if only opt_level is 1, since
+        // GreedyAllocator would take care of this for opt_level >= 2.
+        let mut pool = Pool::new(if ir.opt_level == 1 && ir.three_address() {
             last
         } else {
             COUNT_SCRATCH

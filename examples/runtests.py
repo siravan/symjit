@@ -336,7 +336,7 @@ def cases():
                 for use_threads in [False, True]:
                     for cse in [False, True]:
                         for fastmath in [False, True]:
-                            for opt_level in [0, 1, 2]:
+                            for opt_level in [0, 1, 2, 3]:
                                 args = {
                                     "backend": "rust",
                                     "ty": ty,
@@ -354,7 +354,7 @@ def cases():
             for use_threads in [False, True]:
                 for cse in [False, True]:
                     for fastmath in [False, True]:
-                        for opt_level in [0, 1, 2]:
+                        for opt_level in [0, 1, 2, 3]:
                             args = {
                                 "backend": "rust",
                                 "ty": ty,

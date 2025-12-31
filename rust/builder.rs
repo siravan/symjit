@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 
-use crate::allocator::Allocator;
+use crate::allocator::{ColoringAllocator, GreedyAllocator};
 use crate::block::Block;
 use crate::defuns::Defuns;
 use crate::generator::Generator;
@@ -293,7 +293,11 @@ impl Builder {
         }
 
         if opt_level >= 2 {
-            Allocator::optimize(&mut mir);
+            GreedyAllocator::optimize(&mut mir);
+        }
+
+        if opt_level >= 3 {
+            ColoringAllocator::optimize(&mut mir);
         }
 
         mir.add_consts(&self.consts);

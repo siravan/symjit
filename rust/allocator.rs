@@ -18,16 +18,16 @@ struct Vertex {
 }
 
 #[derive(Clone)]
-pub struct Allocator {
-    pub code: Vec<Instruction>,
+pub struct ColoringAllocator {
+    pub code: Vec<Instruction>, // the revised mir
     regs: Vec<Reg>,
     locs: HashMap<Loc, Reg>,
     loads: HashSet<Loc>,
-    count_statics: u32,
+    count_statics: u32, // number of statis registers
     graph: UnGraph<Vertex, ()>,
 }
 
-impl fmt::Debug for Allocator {
+impl fmt::Debug for ColoringAllocator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (i, ins) in self.code.iter().enumerate() {
             writeln!(f, "{:05}\t{:?}", i, ins)?;
@@ -40,9 +40,9 @@ impl fmt::Debug for Allocator {
     }
 }
 
-impl Allocator {
+impl ColoringAllocator {
     pub fn optimize(mir: &mut Mir) {
-        let mut allocator = Allocator {
+        let mut allocator = ColoringAllocator {
             code: Vec::new(),
             regs: vec![Reg::Ret; COUNT_SCRATCH as usize],
             count_statics: 0,
@@ -116,11 +116,11 @@ impl Allocator {
         s
     }
 
-    // consumes a logical register and returns the corresponding
-    // static register.
+    // consumes a logical register, update the end interval forthe corresponding
+    // static register and then returns the static register.
     // note that the cache (self.regs) is not invalidated and may
     // be used afterward
-    fn consume_static(&mut self, src: Reg) -> Reg {
+    fn consume(&mut self, src: Reg) -> Reg {
         if let Reg::Gen(r) = src {
             let s = self.regs[r as usize];
             if let Reg::Static(k) = s {
@@ -133,7 +133,7 @@ impl Allocator {
     }
 
     // converts a destination logical register to a static one
-    fn subs_dst(&mut self, dst: Reg) -> Reg {
+    fn produce(&mut self, dst: Reg) -> Reg {
         if let Reg::Gen(r) = dst {
             let s = self.create_static();
             self.regs[r as usize] = s;
@@ -143,24 +143,30 @@ impl Allocator {
         }
     }
 
-    fn subs_uni(&mut self, dst: Reg, s1: Reg) -> (Reg, Reg) {
-        let s1 = self.consume_static(s1);
-        let dst = self.subs_dst(dst);
+    // helper function to ease producing dst and consuming s1.
+    fn unary_op(&mut self, dst: Reg, s1: Reg) -> (Reg, Reg) {
+        // note than RHS is consumed before producing LHS
+        let s1 = self.consume(s1);
+        let dst = self.produce(dst);
         (dst, s1)
     }
 
-    fn subs_bi(&mut self, dst: Reg, s1: Reg, s2: Reg) -> (Reg, Reg, Reg) {
-        let s1 = self.consume_static(s1);
-        let s2 = self.consume_static(s2);
-        let dst = self.subs_dst(dst);
+    // helper function to ease producing dst and consuming s1 and s2.
+    fn binary_op(&mut self, dst: Reg, s1: Reg, s2: Reg) -> (Reg, Reg, Reg) {
+        // note than RHS's are consumed before producing LHS
+        let s1 = self.consume(s1);
+        let s2 = self.consume(s2);
+        let dst = self.produce(dst);
         (dst, s1, s2)
     }
 
-    fn subs_tri(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) -> (Reg, Reg, Reg, Reg) {
-        let s1 = self.consume_static(s1);
-        let s2 = self.consume_static(s2);
-        let s3 = self.consume_static(s3);
-        let dst = self.subs_dst(dst);
+    // helper function to ease producing dst and consuming s1, s2, and s3.
+    fn ternary_op(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) -> (Reg, Reg, Reg, Reg) {
+        // note than RHS's are consumed before producing LHS
+        let s1 = self.consume(s1);
+        let s2 = self.consume(s2);
+        let s3 = self.consume(s3);
+        let dst = self.produce(dst);
         (dst, s1, s2, s3)
     }
 
@@ -185,7 +191,7 @@ impl Allocator {
     }
 
     fn save(&mut self, src: Reg, loc: Loc) {
-        let src = self.consume_static(src);
+        let src = self.consume(src);
         self.push(Instruction::Save { src, loc });
 
         if let Reg::Static(..) = src {
@@ -198,15 +204,15 @@ impl Allocator {
             match *ins {
                 Instruction::Nop => self.push(Instruction::Nop),
                 Instruction::Uni { op, dst, s1 } => {
-                    let (dst, s1) = self.subs_uni(dst, s1);
+                    let (dst, s1) = self.unary_op(dst, s1);
                     self.push(Instruction::Uni { op, dst, s1 });
                 }
                 Instruction::Bi { op, dst, s1, s2 } => {
-                    let (dst, s1, s2) = self.subs_bi(dst, s1, s2);
+                    let (dst, s1, s2) = self.binary_op(dst, s1, s2);
                     self.push(Instruction::Bi { op, dst, s1, s2 });
                 }
                 Instruction::LoadConst { dst, idx } => {
-                    let dst = self.subs_dst(dst);
+                    let dst = self.produce(dst);
                     self.push(Instruction::LoadConst { dst, idx });
                 }
                 Instruction::Load { dst, loc } => {
@@ -216,11 +222,11 @@ impl Allocator {
                     self.save(src, loc);
                 }
                 Instruction::Mov { dst, s1 } => {
-                    let (dst, s1) = self.subs_uni(dst, s1);
+                    let (dst, s1) = self.unary_op(dst, s1);
                     self.push(Instruction::Mov { dst, s1 });
                 }
                 Instruction::Fused { op, dst, a, b, c } => {
-                    let (dst, a, b, c) = self.subs_tri(dst, a, b, c);
+                    let (dst, a, b, c) = self.ternary_op(dst, a, b, c);
                     self.push(Instruction::Fused { op, dst, a, b, c });
                 }
                 Instruction::IfElse {
@@ -229,7 +235,7 @@ impl Allocator {
                     false_val,
                     cond,
                 } => {
-                    let (dst, true_val, false_val) = self.subs_bi(dst, true_val, false_val);
+                    let (dst, true_val, false_val) = self.binary_op(dst, true_val, false_val);
                     self.loads.insert(cond);
                     self.push(Instruction::IfElse {
                         dst,
@@ -240,7 +246,7 @@ impl Allocator {
                 }
                 Instruction::Branch { .. } => {
                     if let Instruction::Branch { cond, label } = ins.clone() {
-                        let cond = self.consume_static(cond);
+                        let cond = self.consume(cond);
                         self.push(Instruction::Branch { cond, label });
                     }
                 }
@@ -341,6 +347,429 @@ impl Allocator {
                 _ => {
                     self.push(ins.clone());
                 }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/************************* GreedyAllocator ***************************/
+
+#[derive(Debug, Clone)]
+struct Static {
+    reg: Reg,
+    end: usize,
+    keep: bool,
+}
+
+#[derive(Debug, Clone)]
+struct Alloc {
+    owners: HashSet<usize>,
+    loc: Option<Loc>,
+}
+
+impl Alloc {
+    fn new() -> Alloc {
+        Alloc {
+            owners: HashSet::new(),
+            loc: None,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct GreedyAllocator {
+    pub code: Vec<Instruction>, // the revised mir
+    regs: Vec<Option<usize>>,
+    locs: HashMap<Loc, usize>,
+    count_statics: usize, // number of statis registers
+    statics: Vec<Static>,
+    allocs: Vec<Alloc>,
+}
+
+impl fmt::Debug for GreedyAllocator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (i, ins) in self.code.iter().enumerate() {
+            writeln!(f, "{:05}\t{:?}", i, ins)?;
+        }
+
+        writeln!(f, "...................")?;
+
+        for (i, s) in self.statics.iter().enumerate() {
+            writeln!(f, "σ{} := ({:?})", i, &s)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl GreedyAllocator {
+    pub fn optimize(mir: &mut Mir) {
+        let mut allocator = GreedyAllocator {
+            code: Vec::new(),
+            regs: vec![None; COUNT_SCRATCH as usize],
+            count_statics: 0,
+            locs: HashMap::new(),
+            statics: Vec::new(),
+            allocs: vec![Alloc::new(); COUNT_SCRATCH as usize],
+        };
+
+        // create single-static-assignment form
+        allocator.create(mir);
+
+        // println!("{:?}", &allocator);
+
+        // allocate registers using a coloring algorithm and
+        // replace the static registers with the corresponding
+        // logical (colored) registers
+        let res = allocator.color();
+
+        if res.is_ok() {
+            let res = allocator.contract();
+            if res.is_ok() {
+                mir.code = allocator.code;
+            }
+        } else {
+            println!("Level 2 register allocator requests too many registers ({}), will revert back to level 1.", res.unwrap_err());
+        }
+    }
+
+    fn push(&mut self, ins: Instruction) {
+        self.code.push(ins);
+    }
+
+    // resets cache on call boundaries to account for cobbled registers
+    fn reset_regs(&mut self) {
+        self.regs = vec![None; COUNT_SCRATCH as usize];
+        self.locs.clear();
+    }
+
+    fn reset_allocs(&mut self) {
+        // self.pool = (1 << COUNT_SCRATCH) - 1;
+        self.allocs = vec![Alloc::new(); COUNT_SCRATCH as usize];
+    }
+
+    fn create_static(&mut self, ip: usize, r: Reg) -> usize {
+        let idx = self.count_statics;
+        self.count_statics += 1;
+        self.statics.push(Static {
+            reg: r,
+            end: ip,
+            keep: false,
+        });
+        idx
+    }
+
+    // consumes a logical register, update the end interval forthe corresponding
+    // static register and then returns the static register.
+    // note that the cache (self.regs) is not invalidated and may
+    // be used afterward
+    fn consume(&mut self, ip: usize, src: Reg) -> Reg {
+        if let Reg::Gen(r) = src {
+            let s = self.regs[r as usize].unwrap();
+            self.statics[s].end = ip;
+            Reg::Static(s as u32)
+        } else {
+            src
+        }
+    }
+
+    // converts a destination logical register to a static one
+    fn produce(&mut self, ip: usize, dst: Reg) -> Reg {
+        if let Reg::Gen(r) = dst {
+            let s = self.create_static(ip, dst);
+            self.regs[r as usize] = Some(s);
+            Reg::Static(s as u32)
+        } else {
+            dst
+        }
+    }
+
+    // helper function to ease producing dst and consuming s1.
+    fn unary_op(&mut self, ip: usize, dst: Reg, s1: Reg) -> (Reg, Reg) {
+        // note than RHS is consumed before producing LHS
+        let s1 = self.consume(ip, s1);
+        let dst = self.produce(ip, dst);
+        (dst, s1)
+    }
+
+    // helper function to ease producing dst and consuming s1 and s2.
+    fn binary_op(&mut self, ip: usize, dst: Reg, s1: Reg, s2: Reg) -> (Reg, Reg, Reg) {
+        // note than RHS's are consumed before producing LHS
+        let s1 = self.consume(ip, s1);
+        let s2 = self.consume(ip, s2);
+        let dst = self.produce(ip, dst);
+        (dst, s1, s2)
+    }
+
+    // helper function to ease producing dst and consuming s1, s2, and s3.
+    fn ternary_op(
+        &mut self,
+        ip: usize,
+        dst: Reg,
+        s1: Reg,
+        s2: Reg,
+        s3: Reg,
+    ) -> (Reg, Reg, Reg, Reg) {
+        // note than RHS's are consumed before producing LHS
+        let s1 = self.consume(ip, s1);
+        let s2 = self.consume(ip, s2);
+        let s3 = self.consume(ip, s3);
+        let dst = self.produce(ip, dst);
+        (dst, s1, s2, s3)
+    }
+
+    fn load(&mut self, ip: usize, dst: Reg, loc: Loc) {
+        if let Reg::Gen(r) = dst {
+            let s = self.create_static(ip, dst);
+
+            if let Some(t) = self.locs.get(&loc) {
+                self.statics[*t].keep = true;
+            }
+
+            self.locs.insert(loc, s);
+            self.regs[r as usize] = Some(s);
+
+            self.push(Instruction::Load {
+                dst: Reg::Static(s as u32),
+                loc,
+            });
+        } else {
+            self.push(Instruction::Load { dst, loc });
+        }
+    }
+
+    fn save(&mut self, ip: usize, src: Reg, loc: Loc) {
+        let src = self.consume(ip, src);
+        self.push(Instruction::Save { src, loc });
+
+        if let Reg::Static(s) = src {
+            self.locs.insert(loc, s as usize);
+        }
+    }
+
+    pub fn create(&mut self, mir: &Mir) {
+        for (ip, ins) in mir.code.iter().enumerate() {
+            match *ins {
+                Instruction::Nop => self.push(Instruction::Nop),
+                Instruction::Uni { op, dst, s1 } => {
+                    let (dst, s1) = self.unary_op(ip, dst, s1);
+                    self.push(Instruction::Uni { op, dst, s1 });
+                }
+                Instruction::Bi { op, dst, s1, s2 } => {
+                    let (dst, s1, s2) = self.binary_op(ip, dst, s1, s2);
+                    self.push(Instruction::Bi { op, dst, s1, s2 });
+                }
+                Instruction::LoadConst { dst, idx } => {
+                    let dst = self.produce(ip, dst);
+                    self.push(Instruction::LoadConst { dst, idx });
+                }
+                Instruction::Load { dst, loc } => {
+                    self.load(ip, dst, loc);
+                }
+                Instruction::Save { src, loc } => {
+                    self.save(ip, src, loc);
+                }
+                Instruction::Mov { dst, s1 } => {
+                    let (dst, s1) = self.unary_op(ip, dst, s1);
+                    self.push(Instruction::Mov { dst, s1 });
+                }
+                Instruction::Fused { op, dst, a, b, c } => {
+                    let (dst, a, b, c) = self.ternary_op(ip, dst, a, b, c);
+                    self.push(Instruction::Fused { op, dst, a, b, c });
+                }
+                Instruction::IfElse {
+                    dst,
+                    true_val,
+                    false_val,
+                    cond,
+                } => {
+                    let (dst, true_val, false_val) = self.binary_op(ip, dst, true_val, false_val);
+                    self.push(Instruction::IfElse {
+                        dst,
+                        true_val,
+                        false_val,
+                        cond,
+                    });
+                }
+                Instruction::Branch { .. } => {
+                    if let Instruction::Branch { cond, label } = ins.clone() {
+                        let cond = self.consume(ip, cond);
+                        self.push(Instruction::Branch { cond, label });
+                    }
+                }
+                _ => {
+                    // Call and Label, both should reset
+                    self.push(ins.clone());
+                    self.reset_regs();
+                }
+            }
+        }
+    }
+
+    // returns the logical register corresponding to the static register
+    // dst back to the pool.
+    fn deallocate(&mut self, ip: usize, dst: Reg) -> Reg {
+        if let Reg::Static(s) = dst {
+            let s = s as usize;
+            let reg = self.statics[s].reg;
+            if self.statics[s].end == ip {
+                if let Reg::Gen(r) = reg {
+                    self.allocs[r as usize].owners.remove(&s);
+                }
+            }
+            reg
+        } else {
+            dst
+        }
+    }
+
+    fn assign(&mut self, r: usize, s: usize, loc: Option<Loc>) -> Reg {
+        self.allocs[r].owners.insert(s);
+        self.allocs[r].loc = loc;
+        let reg = Reg::Gen(r as u8);
+        self.statics[s].reg = reg;
+        reg
+    }
+
+    // allocates a new logical register from the pool and assigns it to
+    // the static register dst, optionally with a location.
+    fn allocate(&mut self, dst: Reg, loc: Option<Loc>) -> (Reg, bool) {
+        if let Reg::Static(s) = dst {
+            let s = s as usize;
+
+            if loc.is_some() {
+                if let Some(r) = self.allocs.iter().position(|x| x.loc == loc) {
+                    return (self.assign(r, s, loc), true);
+                }
+            }
+
+            if let Some(r) = self
+                .allocs
+                .iter()
+                .position(|x| x.owners.is_empty() && x.loc.is_none())
+            {
+                return (self.assign(r, s, loc), false);
+            }
+
+            if let Some(r) = self.allocs.iter().position(|x| x.owners.is_empty()) {
+                return (self.assign(r, s, loc), false);
+            }
+
+            panic!("register pool is empty");
+        } else {
+            (dst, false)
+        }
+    }
+
+    fn color(&mut self) -> Result<(), usize> {
+        self.reset_regs();
+        let code = std::mem::take(&mut self.code);
+
+        // replace all static regs with the corresponding logical ones
+        for (ip, ins) in code.iter().enumerate() {
+            match *ins {
+                Instruction::Nop => self.push(Instruction::Nop),
+                Instruction::Uni { op, dst, s1 } => {
+                    let s1 = self.deallocate(ip, s1);
+                    let (dst, _) = self.allocate(dst, None);
+                    self.push(Instruction::Uni { op, dst, s1 })
+                }
+                Instruction::Bi { op, dst, s1, s2 } => {
+                    let s1 = self.deallocate(ip, s1);
+                    let s2 = self.deallocate(ip, s2);
+                    let (dst, _) = self.allocate(dst, None);
+                    self.push(Instruction::Bi { op, dst, s1, s2 })
+                }
+                Instruction::LoadConst { dst, idx } => {
+                    let (dst, _) = self.allocate(dst, None);
+                    self.push(Instruction::LoadConst { dst, idx })
+                }
+                Instruction::Load { dst, loc } => {
+                    let (dst, moved) = self.allocate(dst, Some(loc));
+                    if !moved {
+                        self.push(Instruction::Load { dst, loc });
+                        self.locs.insert(loc, 0);
+                    }
+                }
+                Instruction::Save { src, loc } => {
+                    let src = self.deallocate(ip, src);
+                    self.push(Instruction::Save { src, loc });
+                    if let Reg::Gen(r) = src {
+                        self.allocs[r as usize].loc = Some(loc);
+                    }
+                }
+                Instruction::Mov { dst, s1 } => {
+                    let s1 = self.deallocate(ip, s1);
+
+                    let loc = if let Reg::Gen(r) = s1 {
+                        self.allocs[r as usize].loc
+                    } else {
+                        None
+                    };
+
+                    let (dst, _) = self.allocate(dst, loc);
+                    self.push(Instruction::Mov { dst, s1 })
+                }
+                Instruction::Fused { op, dst, a, b, c } => {
+                    let a = self.deallocate(ip, a);
+                    let b = self.deallocate(ip, b);
+                    let c = self.deallocate(ip, c);
+                    let (dst, _) = self.allocate(dst, None);
+                    self.push(Instruction::Fused { op, dst, a, b, c });
+                }
+                Instruction::IfElse {
+                    dst,
+                    true_val,
+                    false_val,
+                    cond,
+                } => {
+                    let true_val = self.deallocate(ip, true_val);
+                    let false_val = self.deallocate(ip, false_val);
+                    let (dst, _) = self.allocate(dst, None);
+                    self.locs.insert(cond, 0);
+                    self.push(Instruction::IfElse {
+                        dst,
+                        true_val,
+                        false_val,
+                        cond,
+                    })
+                }
+                Instruction::Branch { .. } => {
+                    if let Instruction::Branch { cond, label } = ins.clone() {
+                        let cond = self.deallocate(ip, cond);
+                        self.push(Instruction::Branch { cond, label });
+                        self.reset_allocs();
+                    }
+                }
+                _ => {
+                    self.push(ins.clone());
+                    self.reset_allocs();
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn contract(&mut self) -> Result<(), usize> {
+        let code = std::mem::take(&mut self.code);
+
+        for ins in code {
+            match ins {
+                Instruction::Save { src, loc } => {
+                    if !matches!(loc, Loc::Stack(_)) || self.locs.contains_key(&loc) {
+                        self.push(Instruction::Save { src, loc })
+                    }
+                }
+                Instruction::Mov { dst, s1 } => {
+                    if dst != s1 {
+                        self.push(Instruction::Mov { dst, s1 });
+                    }
+                }
+                Instruction::Nop => {}
+                _ => self.push(ins),
             }
         }
 
