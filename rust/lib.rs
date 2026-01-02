@@ -278,12 +278,12 @@
 //! used to link symjit to other programming languages.
 //!
 
-use anyhow::anyhow;
 use std::ffi::{c_char, CStr, CString};
 
 mod block;
 mod code;
 pub mod compiler;
+mod config;
 mod defuns;
 pub mod expr;
 mod machine;
@@ -316,15 +316,7 @@ pub use compiler::{Compiler, FastFunc};
 pub use expr::{double, int, var, Expr};
 pub use runnable::{Application, CompilerType};
 
-pub const COUNT_SCRATCH: u8 = 14;
-
-pub const USE_SIMD: u32 = 0x01;
-pub const USE_THREADS: u32 = 0x02;
-pub const CSE: u32 = 0x04;
-pub const FASTMATH: u32 = 0x08;
-pub const SANITIZE: u32 = 0x10;
-pub const OPT_LEVEL_MASK: u32 = 0x0f00;
-pub const OPT_LEVEL_SHIFT: usize = 8;
+use crate::config::Config;
 
 #[derive(Debug, Clone, Copy)]
 pub enum CompilerStatus {
@@ -395,38 +387,32 @@ pub unsafe extern "C" fn compile(
         }
     };
 
-    let prog = match Program::new(&ml, opt & CSE != 0) {
-        Ok(prog) => prog,
-        Err(msg) => {
-            println!("{}", msg);
-            res.status = CompilerStatus::CompilationError;
-            return Box::into_raw(Box::new(res)) as *const _;
-        }
-    };
+    if let Ok(config) = Config::from_name(ty, opt) {
+        let prog = match Program::new(&ml, config) {
+            Ok(prog) => prog,
+            Err(msg) => {
+                println!("{}", msg);
+                res.status = CompilerStatus::CompilationError;
+                return Box::into_raw(Box::new(res)) as *const _;
+            }
+        };
 
-    let df: &Defuns = unsafe { &*df };
+        let df: &Defuns = unsafe { &*df };
+        let app = Application::new(prog, df);
 
-    let app = match ty {
-        "bytecode" => Application::new(prog, CompilerType::ByteCode, opt, df),
-        "arm" => Application::new(prog, CompilerType::Arm, opt, df),
-        "riscv" => Application::new(prog, CompilerType::RiscV, opt, df),
-        "amd" => Application::new(prog, CompilerType::Amd, opt, df),
-        "amd-avx" => Application::new(prog, CompilerType::AmdAVX, opt, df),
-        "amd-sse" => Application::new(prog, CompilerType::AmdSSE, opt, df),
-        "native" => Application::new(prog, CompilerType::Native, opt, df),
-        "debug" => Application::new(prog, CompilerType::Debug, opt, df),
-        _ => Err(anyhow!("invalid ty")),
-    };
-
-    match app {
-        Ok(app) => {
-            res.app = Some(app);
-            res.status = CompilerStatus::Ok;
+        match app {
+            Ok(app) => {
+                res.app = Some(app);
+                res.status = CompilerStatus::Ok;
+            }
+            Err(msg) => {
+                println!("{}", msg);
+                res.status = CompilerStatus::InvalidCompiler;
+            }
         }
-        Err(msg) => {
-            println!("{}", msg);
-            res.status = CompilerStatus::InvalidCompiler;
-        }
+    } else {
+        println!("invalid compiler type: {}", ty);
+        res.status = CompilerStatus::InvalidCompiler;
     }
 
     Box::into_raw(Box::new(res)) as *const _

@@ -10,7 +10,6 @@ use std::rc::Rc;
 use crate::mir::Mir;
 use crate::symbol::{Loc, Symbol};
 use crate::utils::reg;
-use crate::COUNT_SCRATCH;
 
 pub struct Pool {
     available: u32,
@@ -18,9 +17,9 @@ pub struct Pool {
 }
 
 impl Pool {
-    fn new(last: u8) -> Pool {
+    fn new(count_scratch: u8, last: u8) -> Pool {
         let mut available = 0;
-        for r in last..COUNT_SCRATCH {
+        for r in last..count_scratch {
             let n = 1 << r;
             available |= n;
         }
@@ -336,11 +335,12 @@ impl Node {
 
     /// The main entry point to compile an expression tree
     /// should be called on the root of the expression tree
-    pub fn compile_tree(&mut self, ir: &mut Mir) -> Result<u8> {
+    pub fn compile_tree(&mut self, mir: &mut Mir) -> Result<u8> {
         self.postorder_forward(Self::mark_first);
         self.postorder_backward(Self::mark_last);
 
         let last = self.ershov_number();
+        let count_scratch = mir.config.count_scratch();
 
         // we check ir.three_address() because AmdGenerator::shrink may swap
         // registers when generating code for SSE (two-address code).
@@ -348,41 +348,44 @@ impl Node {
         // correctness first.
         // We use the pool registers here if only opt_level is 1, since
         // GreedyAllocator would take care of this for opt_level >= 2.
-        let mut pool = Pool::new(if ir.opt_level == 1 && ir.three_address() {
-            last
-        } else {
-            COUNT_SCRATCH
-        });
+        let mut pool = Pool::new(
+            count_scratch,
+            if mir.config.opt_level() == 1 {
+                last
+            } else {
+                count_scratch
+            },
+        );
 
         // println!("{:#?}", &self);
-        self.compile(ir, 0, &mut pool)
+        self.compile(mir, 0, &mut pool)
     }
 
-    pub fn compile(&self, ir: &mut Mir, base: u8, pool: &mut Pool) -> Result<u8> {
+    pub fn compile(&self, mir: &mut Mir, base: u8, pool: &mut Pool) -> Result<u8> {
         match self {
             Node::Void => Ok(0),
-            Node::Const { .. } => self.compile_const(ir, base),
-            Node::Var { .. } => self.compile_var(ir, base, pool),
-            Node::Unary { .. } => self.compile_unary(ir, base, pool),
-            Node::Binary { .. } => self.compile_binary(ir, base, pool),
+            Node::Const { .. } => self.compile_const(mir, base),
+            Node::Var { .. } => self.compile_var(mir, base, pool),
+            Node::Unary { .. } => self.compile_unary(mir, base, pool),
+            Node::Binary { .. } => self.compile_binary(mir, base, pool),
         }
     }
 
-    fn compile_const(&self, ir: &mut Mir, base: u8) -> Result<u8> {
+    fn compile_const(&self, mir: &mut Mir, base: u8) -> Result<u8> {
         if let Node::Const { idx, .. } = &self {
             // let label = format!("_const_{}_", idx);
-            ir.load_const(reg(base), *idx);
+            mir.load_const(reg(base), *idx);
             Ok(base)
         } else {
             unreachable!();
         }
     }
 
-    fn load_var(ir: &mut Mir, dst: u8, loc: &Loc) -> u8 {
+    fn load_var(mir: &mut Mir, dst: u8, loc: &Loc) -> u8 {
         match loc {
-            Loc::Stack(idx) => ir.load_stack(reg(dst), *idx),
-            Loc::Mem(idx) => ir.load_mem(reg(dst), *idx),
-            Loc::Param(idx) => ir.load_param(reg(dst), *idx),
+            Loc::Stack(idx) => mir.load_stack(reg(dst), *idx),
+            Loc::Mem(idx) => mir.load_mem(reg(dst), *idx),
+            Loc::Param(idx) => mir.load_param(reg(dst), *idx),
         };
 
         dst
@@ -393,7 +396,7 @@ impl Node {
     ///     1. At the encounter with a variable, load it into a temporary (cache) register
     ///     2. During the subsequent encounters, use the value in the register
     ///     3. After the last encounter, return the register to the pool of available registers
-    fn compile_var(&self, ir: &mut Mir, base: u8, pool: &mut Pool) -> Result<u8> {
+    fn compile_var(&self, mir: &mut Mir, base: u8, pool: &mut Pool) -> Result<u8> {
         if let Node::Var { sym, status, .. } = &self {
             let mut sym = sym.borrow_mut();
 
@@ -401,13 +404,13 @@ impl Node {
                 VarStatus::First => {
                     sym.reg = pool.pop();
                     // if no pool register is available, just use the standard designated register (home)
-                    Self::load_var(ir, sym.reg.unwrap_or(base), &sym.loc)
+                    Self::load_var(mir, sym.reg.unwrap_or(base), &sym.loc)
                 }
                 VarStatus::Mid => {
                     // if no pool register is available, just use the standard designated register (home)
                     // note that this means reloading the variable at each use
                     sym.reg
-                        .unwrap_or_else(|| Self::load_var(ir, base, &sym.loc))
+                        .unwrap_or_else(|| Self::load_var(mir, base, &sym.loc))
                 }
                 VarStatus::Last => {
                     if let Some(r) = sym.reg {
@@ -416,13 +419,13 @@ impl Node {
                         sym.reg = None;
                         r
                     } else {
-                        Self::load_var(ir, base, &sym.loc)
+                        Self::load_var(mir, base, &sym.loc)
                     }
                 }
                 VarStatus::Singular | VarStatus::Unknown => {
                     // if a variable is Singular, i.e., is used only once, don't
                     // bother with caching
-                    Self::load_var(ir, base, &sym.loc)
+                    Self::load_var(mir, base, &sym.loc)
                 }
             };
 
@@ -432,27 +435,27 @@ impl Node {
         }
     }
 
-    fn compile_unary(&self, ir: &mut Mir, base: u8, pool: &mut Pool) -> Result<u8> {
+    fn compile_unary(&self, mir: &mut Mir, base: u8, pool: &mut Pool) -> Result<u8> {
         if let Node::Unary { op, arg, power, .. } = self {
             let dst = base + self.ershov_number() - 1;
-            let r = arg.compile(ir, base, pool)?;
+            let r = arg.compile(mir, base, pool)?;
             pool.release(r);
 
             match op.as_str() {
-                "neg" => ir.neg(reg(dst), reg(r)),
-                "not" => ir.not(reg(dst), reg(r)),
-                "abs" => ir.abs(reg(dst), reg(r)),
-                "root" => ir.root(reg(dst), reg(r)),
-                "square" => ir.square(reg(dst), reg(r)),
-                "cube" => ir.cube(reg(dst), reg(r)),
-                "recip" => ir.recip(reg(dst), reg(r)),
-                "round" => ir.round(reg(dst), reg(r)),
-                "floor" => ir.floor(reg(dst), reg(r)),
-                "ceiling" => ir.ceiling(reg(dst), reg(r)),
-                "trunc" => ir.trunc(reg(dst), reg(r)),
-                "frac" => ir.frac(reg(dst), reg(r)),
-                "_powi_" => ir.powi(reg(dst), reg(r), *power),
-                "_call_" => ir.setup_call_unary(reg(r)),
+                "neg" => mir.neg(reg(dst), reg(r)),
+                "not" => mir.not(reg(dst), reg(r)),
+                "abs" => mir.abs(reg(dst), reg(r)),
+                "root" => mir.root(reg(dst), reg(r)),
+                "square" => mir.square(reg(dst), reg(r)),
+                "cube" => mir.cube(reg(dst), reg(r)),
+                "recip" => mir.recip(reg(dst), reg(r)),
+                "round" => mir.round(reg(dst), reg(r)),
+                "floor" => mir.floor(reg(dst), reg(r)),
+                "ceiling" => mir.ceiling(reg(dst), reg(r)),
+                "trunc" => mir.trunc(reg(dst), reg(r)),
+                "frac" => mir.frac(reg(dst), reg(r)),
+                "_powi_" => mir.powi(reg(dst), reg(r), *power),
+                "_call_" => mir.setup_call_unary(reg(r)),
                 _ => return Err(anyhow!("unary operator {:?} is not recognized", op)),
             };
 
@@ -462,7 +465,7 @@ impl Node {
         }
     }
 
-    fn compile_binary(&self, ir: &mut Mir, base: u8, pool: &mut Pool) -> Result<u8> {
+    fn compile_binary(&self, mir: &mut Mir, base: u8, pool: &mut Pool) -> Result<u8> {
         if let Node::Binary {
             op,
             left,
@@ -472,28 +475,28 @@ impl Node {
             ..
         } = self
         {
-            let (dst, l, r) = self.alloc(ir, base, left, right, pool)?;
+            let (dst, l, r) = self.alloc(mir, base, left, right, pool)?;
             pool.release(l);
             pool.release(r);
 
             match op.as_str() {
-                "plus" => ir.plus(reg(dst), reg(l), reg(r)),
-                "minus" => ir.minus(reg(dst), reg(l), reg(r)),
-                "times" => ir.times(reg(dst), reg(l), reg(r)),
-                "divide" => ir.divide(reg(dst), reg(l), reg(r)),
-                "rem" => ir.fmod(reg(dst), reg(l), reg(r)),
-                "gt" => ir.gt(reg(dst), reg(l), reg(r)),
-                "geq" => ir.geq(reg(dst), reg(l), reg(r)),
-                "lt" => ir.lt(reg(dst), reg(l), reg(r)),
-                "leq" => ir.leq(reg(dst), reg(l), reg(r)),
-                "eq" => ir.eq(reg(dst), reg(l), reg(r)),
-                "neq" => ir.neq(reg(dst), reg(l), reg(r)),
-                "and" => ir.and(reg(dst), reg(l), reg(r)),
-                "or" => ir.or(reg(dst), reg(l), reg(r)),
-                "xor" => ir.xor(reg(dst), reg(l), reg(r)),
-                "_ifelse_" => ir.ifelse(reg(dst), reg(l), reg(r), cond.unwrap()),
-                "_powi_mod_" => ir.powi_mod(reg(dst), reg(l), *power, reg(r)),
-                "_call_" => ir.setup_call_binary(reg(l), reg(r)),
+                "plus" => mir.plus(reg(dst), reg(l), reg(r)),
+                "minus" => mir.minus(reg(dst), reg(l), reg(r)),
+                "times" => mir.times(reg(dst), reg(l), reg(r)),
+                "divide" => mir.divide(reg(dst), reg(l), reg(r)),
+                "rem" => mir.fmod(reg(dst), reg(l), reg(r)),
+                "gt" => mir.gt(reg(dst), reg(l), reg(r)),
+                "geq" => mir.geq(reg(dst), reg(l), reg(r)),
+                "lt" => mir.lt(reg(dst), reg(l), reg(r)),
+                "leq" => mir.leq(reg(dst), reg(l), reg(r)),
+                "eq" => mir.eq(reg(dst), reg(l), reg(r)),
+                "neq" => mir.neq(reg(dst), reg(l), reg(r)),
+                "and" => mir.and(reg(dst), reg(l), reg(r)),
+                "or" => mir.or(reg(dst), reg(l), reg(r)),
+                "xor" => mir.xor(reg(dst), reg(l), reg(r)),
+                "_ifelse_" => mir.ifelse(reg(dst), reg(l), reg(r), cond.unwrap()),
+                "_powi_mod_" => mir.powi_mod(reg(dst), reg(l), *power, reg(r)),
+                "_call_" => mir.setup_call_binary(reg(l), reg(r)),
                 _ => return Err(anyhow!("binary operator {:?} is not recognized", op)),
             };
 
@@ -505,7 +508,7 @@ impl Node {
 
     fn alloc(
         &self,
-        ir: &mut Mir,
+        mir: &mut Mir,
         base: u8,
         left: &Node,
         right: &Node,
@@ -518,16 +521,16 @@ impl Node {
         let l;
         let r;
 
-        if dst < COUNT_SCRATCH {
+        if dst < mir.config.count_scratch() {
             if el == er {
-                l = left.compile(ir, base + 1, pool)?;
-                r = right.compile(ir, base, pool)?;
+                l = left.compile(mir, base + 1, pool)?;
+                r = right.compile(mir, base, pool)?;
             } else if el > er {
-                l = left.compile(ir, base, pool)?;
-                r = right.compile(ir, base, pool)?;
+                l = left.compile(mir, base, pool)?;
+                r = right.compile(mir, base, pool)?;
             } else {
-                r = right.compile(ir, base, pool)?;
-                l = left.compile(ir, base, pool)?;
+                r = right.compile(mir, base, pool)?;
+                l = left.compile(mir, base, pool)?;
             }
         } else {
             return Err(anyhow!(

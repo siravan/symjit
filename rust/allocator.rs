@@ -4,11 +4,10 @@ use std::fmt;
 use petgraph::algo::coloring::dsatur_coloring;
 use petgraph::graph::{NodeIndex, UnGraph};
 
+use crate::config::Config;
 use crate::mir::{Instruction, Mir};
 use crate::symbol::Loc;
 use crate::utils::Reg;
-
-use crate::COUNT_SCRATCH;
 
 #[derive(Clone, Debug)]
 struct Vertex {
@@ -25,6 +24,7 @@ pub struct ColoringAllocator {
     loads: HashSet<Loc>,
     count_statics: u32, // number of statis registers
     graph: UnGraph<Vertex, ()>,
+    config: Config,
 }
 
 impl fmt::Debug for ColoringAllocator {
@@ -42,13 +42,16 @@ impl fmt::Debug for ColoringAllocator {
 
 impl ColoringAllocator {
     pub fn optimize(mir: &mut Mir) {
+        let count_scratch = mir.config.count_scratch();
+
         let mut allocator = ColoringAllocator {
             code: Vec::new(),
-            regs: vec![Reg::Ret; COUNT_SCRATCH as usize],
+            regs: vec![Reg::Ret; count_scratch as usize],
             count_statics: 0,
             graph: UnGraph::new_undirected(),
             locs: HashMap::new(),
             loads: HashSet::new(),
+            config: mir.config,
         };
 
         // create single-static-assignment form
@@ -66,7 +69,7 @@ impl ColoringAllocator {
         if res.is_ok() {
             mir.code = allocator.code;
         } else {
-            println!("Level 2 register allocator requests too many registers ({}), will revert back to level 1.", res.unwrap_err());
+            println!("Level 3 register allocator requests too many registers ({}), will revert back to level 2.", res.unwrap_err());
         }
     }
 
@@ -80,7 +83,7 @@ impl ColoringAllocator {
 
     // resets cache on call boundaries to account for cobbled registers
     fn reset(&mut self) {
-        self.regs = vec![Reg::Ret; COUNT_SCRATCH as usize];
+        self.regs = vec![Reg::Ret; self.config.count_scratch() as usize];
         self.locs.clear();
     }
 
@@ -273,7 +276,7 @@ impl ColoringAllocator {
     fn color(&mut self) -> Result<(), usize> {
         let (coloring, count_colors) = dsatur_coloring(&self.graph);
 
-        if count_colors > COUNT_SCRATCH as usize {
+        if count_colors > self.config.count_scratch() as usize {
             return Err(count_colors);
         }
 
@@ -360,7 +363,6 @@ impl ColoringAllocator {
 struct Static {
     reg: Reg,
     end: usize,
-    keep: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -381,11 +383,12 @@ impl Alloc {
 #[derive(Clone)]
 pub struct GreedyAllocator {
     pub code: Vec<Instruction>, // the revised mir
-    regs: Vec<Option<usize>>,
-    locs: HashMap<Loc, usize>,
-    count_statics: usize, // number of statis registers
-    statics: Vec<Static>,
-    allocs: Vec<Alloc>,
+    regs: Vec<Option<usize>>,   // map of logical registers to static ones
+    locs: HashMap<Loc, usize>,  // map between locs and statics
+    count_statics: usize,       // number of statis registers
+    statics: Vec<Static>,       // the list of static registers
+    allocs: Vec<Alloc>,         // allocation for logical registers
+    config: Config,
 }
 
 impl fmt::Debug for GreedyAllocator {
@@ -406,13 +409,16 @@ impl fmt::Debug for GreedyAllocator {
 
 impl GreedyAllocator {
     pub fn optimize(mir: &mut Mir) {
+        let count_scratch = mir.config.count_scratch();
+
         let mut allocator = GreedyAllocator {
             code: Vec::new(),
-            regs: vec![None; COUNT_SCRATCH as usize],
+            regs: vec![None; count_scratch as usize],
             count_statics: 0,
             locs: HashMap::new(),
             statics: Vec::new(),
-            allocs: vec![Alloc::new(); COUNT_SCRATCH as usize],
+            allocs: vec![Alloc::new(); count_scratch as usize],
+            config: mir.config,
         };
 
         // create single-static-assignment form
@@ -420,17 +426,19 @@ impl GreedyAllocator {
 
         // println!("{:?}", &allocator);
 
-        // allocate registers using a coloring algorithm and
+        // allocate registers using a greedy algorithm and
         // replace the static registers with the corresponding
         // logical (colored) registers
         let res = allocator.color();
 
         if res.is_ok() {
+            // contract the code by removing unnecessary instructions
             let res = allocator.contract();
             if res.is_ok() {
                 mir.code = allocator.code;
             }
         } else {
+            // this should not happen!
             println!("Level 2 register allocator requests too many registers ({}), will revert back to level 1.", res.unwrap_err());
         }
     }
@@ -439,32 +447,25 @@ impl GreedyAllocator {
         self.code.push(ins);
     }
 
-    // resets cache on call boundaries to account for cobbled registers
+    // reset for the first pass (logical -> static pass)
     fn reset_regs(&mut self) {
-        self.regs = vec![None; COUNT_SCRATCH as usize];
-        self.locs.clear();
+        self.regs = vec![None; self.config.count_scratch() as usize];
     }
 
+    // reset for the second pass (static -> logical pass)
     fn reset_allocs(&mut self) {
-        // self.pool = (1 << COUNT_SCRATCH) - 1;
-        self.allocs = vec![Alloc::new(); COUNT_SCRATCH as usize];
+        self.allocs = vec![Alloc::new(); self.config.count_scratch() as usize];
     }
 
     fn create_static(&mut self, ip: usize, r: Reg) -> usize {
         let idx = self.count_statics;
         self.count_statics += 1;
-        self.statics.push(Static {
-            reg: r,
-            end: ip,
-            keep: false,
-        });
+        self.statics.push(Static { reg: r, end: ip });
         idx
     }
 
-    // consumes a logical register, update the end interval forthe corresponding
+    // consumes a logical register, update the end interval for the corresponding
     // static register and then returns the static register.
-    // note that the cache (self.regs) is not invalidated and may
-    // be used afterward
     fn consume(&mut self, ip: usize, src: Reg) -> Reg {
         if let Reg::Gen(r) = src {
             let s = self.regs[r as usize].unwrap();
@@ -520,35 +521,8 @@ impl GreedyAllocator {
         (dst, s1, s2, s3)
     }
 
-    fn load(&mut self, ip: usize, dst: Reg, loc: Loc) {
-        if let Reg::Gen(r) = dst {
-            let s = self.create_static(ip, dst);
-
-            if let Some(t) = self.locs.get(&loc) {
-                self.statics[*t].keep = true;
-            }
-
-            self.locs.insert(loc, s);
-            self.regs[r as usize] = Some(s);
-
-            self.push(Instruction::Load {
-                dst: Reg::Static(s as u32),
-                loc,
-            });
-        } else {
-            self.push(Instruction::Load { dst, loc });
-        }
-    }
-
-    fn save(&mut self, ip: usize, src: Reg, loc: Loc) {
-        let src = self.consume(ip, src);
-        self.push(Instruction::Save { src, loc });
-
-        if let Reg::Static(s) = src {
-            self.locs.insert(loc, s as usize);
-        }
-    }
-
+    // The first pass.
+    // converts logical to static (SSA-form) registers
     pub fn create(&mut self, mir: &Mir) {
         for (ip, ins) in mir.code.iter().enumerate() {
             match *ins {
@@ -566,10 +540,12 @@ impl GreedyAllocator {
                     self.push(Instruction::LoadConst { dst, idx });
                 }
                 Instruction::Load { dst, loc } => {
-                    self.load(ip, dst, loc);
+                    let dst = self.produce(ip, dst);
+                    self.push(Instruction::Load { dst, loc });
                 }
                 Instruction::Save { src, loc } => {
-                    self.save(ip, src, loc);
+                    let src = self.consume(ip, src);
+                    self.push(Instruction::Save { src, loc });
                 }
                 Instruction::Mov { dst, s1 } => {
                     let (dst, s1) = self.unary_op(ip, dst, s1);
@@ -663,6 +639,8 @@ impl GreedyAllocator {
         }
     }
 
+    // The second pass.
+    // Converts static to logical registers.
     fn color(&mut self) -> Result<(), usize> {
         self.reset_regs();
         let code = std::mem::take(&mut self.code);
@@ -677,10 +655,17 @@ impl GreedyAllocator {
                     self.push(Instruction::Uni { op, dst, s1 })
                 }
                 Instruction::Bi { op, dst, s1, s2 } => {
-                    let s1 = self.deallocate(ip, s1);
-                    let s2 = self.deallocate(ip, s2);
-                    let (dst, _) = self.allocate(dst, None);
-                    self.push(Instruction::Bi { op, dst, s1, s2 })
+                    if self.config.is_sse() {
+                        let (dst, _) = self.allocate(dst, None);
+                        let s1 = self.deallocate(ip, s1);
+                        let s2 = self.deallocate(ip, s2);
+                        self.push(Instruction::Bi { op, dst, s1, s2 })
+                    } else {
+                        let s1 = self.deallocate(ip, s1);
+                        let s2 = self.deallocate(ip, s2);
+                        let (dst, _) = self.allocate(dst, None);
+                        self.push(Instruction::Bi { op, dst, s1, s2 })
+                    }
                 }
                 Instruction::LoadConst { dst, idx } => {
                     let (dst, _) = self.allocate(dst, None);
@@ -725,16 +710,28 @@ impl GreedyAllocator {
                     false_val,
                     cond,
                 } => {
-                    let true_val = self.deallocate(ip, true_val);
-                    let false_val = self.deallocate(ip, false_val);
-                    let (dst, _) = self.allocate(dst, None);
+                    if self.config.is_sse() {
+                        let (dst, _) = self.allocate(dst, None);
+                        let true_val = self.deallocate(ip, true_val);
+                        let false_val = self.deallocate(ip, false_val);
+                        self.push(Instruction::IfElse {
+                            dst,
+                            true_val,
+                            false_val,
+                            cond,
+                        })
+                    } else {
+                        let true_val = self.deallocate(ip, true_val);
+                        let false_val = self.deallocate(ip, false_val);
+                        let (dst, _) = self.allocate(dst, None);
+                        self.push(Instruction::IfElse {
+                            dst,
+                            true_val,
+                            false_val,
+                            cond,
+                        })
+                    }
                     self.locs.insert(cond, 0);
-                    self.push(Instruction::IfElse {
-                        dst,
-                        true_val,
-                        false_val,
-                        cond,
-                    })
                 }
                 Instruction::Branch { .. } => {
                     if let Instruction::Branch { cond, label } = ins.clone() {
@@ -753,6 +750,8 @@ impl GreedyAllocator {
         Ok(())
     }
 
+    // The third pass.
+    // Removes unnessasary instructions.
     fn contract(&mut self) -> Result<(), usize> {
         let code = std::mem::take(&mut self.code);
 

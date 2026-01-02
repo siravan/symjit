@@ -6,11 +6,11 @@ use std::rc::Rc;
 
 // use super::utils::Eval;
 // use crate::generator::Generator;
+use crate::config::Config;
 use crate::mir::Mir;
 use crate::node::{Node, VarStatus};
 use crate::statement::Statement;
 use crate::symbol::{Loc, Symbol, SymbolTable};
-use crate::COUNT_SCRATCH;
 
 use crate::builder::{BINARY, UNARY};
 
@@ -21,18 +21,18 @@ pub struct Block {
     pub stmts: Vec<Statement>,
     pub sym_table: SymbolTable,
     pub num_tmp: usize,
-    pub cse: bool,
     pub calls: HashMap<(String, u64), Node>,
+    pub config: Config,
 }
 
 impl Block {
-    pub fn new(cse: bool) -> Block {
+    pub fn new(config: Config) -> Block {
         Block {
             stmts: Vec::new(),
             sym_table: SymbolTable::new(),
             num_tmp: 0,
-            cse,
             calls: HashMap::new(),
+            config,
         }
     }
 
@@ -129,8 +129,8 @@ impl Block {
 
     /*
      * trim breaks expressions to assure the ershov_number of the root does not
-     * exceed the limit set by COUNT_SCRATCH
-     * By default, COUNT_SCRATCH is 14, which is set because of 16 XMM/YMM registers
+     * exceed the limit set by `count_scratch`.
+     * By default, `count_scratch` is 14, which is set because of 16 XMM/YMM registers
      * Note that two registers (XMM0 and XMM1) are needed as temporary and for function calls
      */
     fn trim(&mut self, node: Node) -> Node {
@@ -163,7 +163,7 @@ impl Block {
     fn break_call_unary(&mut self, op: &str, arg: Node) -> Node {
         let n = (op.to_string(), arg.hashof());
 
-        if self.cse {
+        if self.config.cse() {
             if let Some(lhs) = self.calls.get(&n) {
                 return lhs.clone();
             }
@@ -191,8 +191,10 @@ impl Block {
             return self.break_call_binary(op, left, right);
         }
 
-        let right = if left.ershov_number() == COUNT_SCRATCH - 1
-            && right.ershov_number() == COUNT_SCRATCH - 1
+        let count_scratch = self.config.count_scratch();
+
+        let right = if left.ershov_number() == count_scratch - 1
+            && right.ershov_number() == count_scratch - 1
         {
             let lhs = self.create_tmp();
             self.stmts.push(Statement::assign(lhs.clone(), right));
@@ -207,7 +209,7 @@ impl Block {
     pub fn break_call_binary(&mut self, op: &str, left: Node, right: Node) -> Node {
         let n = (op.to_string(), left.hashof() ^ (right.hashof() + 1));
 
-        if self.cse {
+        if self.config.cse() {
             if let Some(lhs) = self.calls.get(&n) {
                 return lhs.clone();
             }
@@ -239,7 +241,7 @@ impl Block {
     }
 
     pub fn elimination_pass(&mut self) -> bool {
-        if !self.cse {
+        if !self.config.cse() {
             return false;
         }
 

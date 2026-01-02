@@ -7,12 +7,11 @@ use anyhow::Result;
 use petgraph::matrix_graph::Zero;
 
 use crate::code::{Func, VirtualTable};
+use crate::config::Config;
 use crate::defuns::Defuns;
 use crate::generator::Generator;
 use crate::symbol::Loc;
 use crate::utils::{bool_to_f64, Compiled, CompiledFunc, Reg};
-
-use crate::COUNT_SCRATCH;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum UniOp {
@@ -148,10 +147,9 @@ impl fmt::Debug for Instruction {
 pub struct Mir {
     pub code: Vec<Instruction>,
     pub consts: Vec<f64>,
-    pub opt_level: u8,
-    pub fastmath: bool,
     pub labels: HashMap<String, usize>,
     pub df: Defuns,
+    pub config: Config,
 }
 
 impl fmt::Debug for Mir {
@@ -164,14 +162,13 @@ impl fmt::Debug for Mir {
 }
 
 impl Mir {
-    pub fn new(opt_level: u8, fastmath: bool, df: &Defuns) -> Mir {
+    pub fn new(config: Config, df: &Defuns) -> Mir {
         Mir {
             code: Vec::new(),
             consts: Vec::new(),
-            opt_level,
-            fastmath,
             labels: HashMap::new(),
             df: df.clone(),
+            config,
         }
     }
 
@@ -220,7 +217,7 @@ impl Mir {
 
         let mut used: Vec<u8> = Vec::new();
 
-        for i in 0..COUNT_SCRATCH {
+        for i in 0..self.config.count_scratch() {
             if mask & (1 << i) != 0 {
                 used.push(i);
             }
@@ -1286,13 +1283,14 @@ impl Mir {
         q1: &Instruction,
         q2: &Instruction,
     ) -> usize {
-        if self.fuse_save3(code, q0, q1, q2) || (self.fastmath && self.fuse_fma3(code, q0, q1, q2))
-        {
+        let fastmath = self.config.fastmath();
+
+        if self.fuse_save3(code, q0, q1, q2) || (fastmath && self.fuse_fma3(code, q0, q1, q2)) {
             3
         } else if self.fuse_op_mov(code, q0, q1)
             || self.fuse_load(code, q0, q1)
             || self.fuse_save(code, q0, q1)
-            || (self.fastmath && self.fuse_fma(code, q0, q1))
+            || (fastmath && self.fuse_fma(code, q0, q1))
         {
             2
         } else {

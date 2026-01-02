@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 use crate::amd::{AmdFamily, AmdGenerator};
 use crate::arm::{ArmGenerator, ArmSimdGenerator};
@@ -11,12 +11,11 @@ use crate::mir::{CompiledMir, Mir};
 use crate::model::Program;
 use crate::riscv64::RiscV;
 use crate::symbol::Loc;
-use crate::{utils::*, OPT_LEVEL_MASK, OPT_LEVEL_SHIFT};
-use crate::{FASTMATH, USE_SIMD, USE_THREADS};
+use crate::utils::*;
 
 use rayon::prelude::*;
 
-#[derive(PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum CompilerType {
     /// generates bytecode (interpreter).
     ByteCode,
@@ -35,29 +34,6 @@ pub enum CompilerType {
     /// debug mode, generates both bytecode and native codes
     /// and compares the outputs.
     Debug,
-}
-
-pub struct Platform;
-
-impl Platform {
-    pub fn is_amd64() -> bool {
-        cfg!(target_arch = "x86_64")
-    }
-
-    pub fn is_arm64() -> bool {
-        cfg!(target_arch = "aarch64")
-    }
-
-    pub fn is_riscv64() -> bool {
-        cfg!(target_arch = "riscv64")
-    }
-
-    pub fn has_avx() -> bool {
-        #[cfg(target_arch = "x86_64")]
-        return is_x86_feature_detected!("avx");
-        #[cfg(not(target_arch = "x86_64"))]
-        return false;
-    }
 }
 
 pub struct Application {
@@ -83,7 +59,7 @@ pub struct Application {
 }
 
 impl Application {
-    pub fn new(mut prog: Program, ty: CompilerType, opt: u32, df: &Defuns) -> Result<Application> {
+    pub fn new(mut prog: Program, df: &Defuns) -> Result<Application> {
         let first_state = 0;
         let first_param = 0;
         let idx_iv = prog.count_states;
@@ -99,53 +75,23 @@ impl Application {
 
         let params = vec![0.0; count_params + 1];
 
-        let fastmath = (opt & FASTMATH != 0)
-            && (!Platform::is_amd64() || Platform::has_avx())
-            && !matches!(ty, CompilerType::AmdSSE);
+        let mir = prog.builder.compile_mir(df)?;
+        let compiled = Self::compile_ty(prog.config().compiler_type(), &mir, &mut prog)?;
 
-        let mir = prog
-            .builder
-            .compile_mir(fastmath, Self::opt_level(ty, opt), df)?;
+        let use_simd = prog.config().use_simd() && !prog.builder.has_loop();
+        let use_threads = prog.config().use_threads() && size < 128;
 
-        let compiled = match ty {
-            CompilerType::ByteCode => Self::compile_debugger(&mir, &mut prog, size, false)?,
-            CompilerType::Native => Self::compile_native(&mir, &mut prog, size)?,
-            CompilerType::Amd if Platform::has_avx() => Self::compile_avx(&mir, &mut prog, size)?,
-            CompilerType::Amd if !Platform::has_avx() => Self::compile_sse(&mir, &mut prog, size)?,
-            CompilerType::AmdAVX => Self::compile_avx(&mir, &mut prog, size)?,
-            CompilerType::AmdSSE => Self::compile_sse(&mir, &mut prog, size)?,
-            CompilerType::Arm => Self::compile_arm(&mir, &mut prog, size)?,
-            CompilerType::RiscV => Self::compile_riscv(&mir, &mut prog, size)?,
-            CompilerType::Debug => Self::compile_debugger(&mir, &mut prog, size, true)?,
-            _ => {
-                unreachable!()
-            }
-        };
-
-        let use_simd = (opt & USE_SIMD != 0)
-            && (Platform::has_avx() || Platform::is_arm64())
-            && !prog.builder.has_loop()
-            && (matches!(ty, CompilerType::Amd)
-                | matches!(ty, CompilerType::AmdAVX)
-                | matches!(ty, CompilerType::Native)
-                | matches!(ty, CompilerType::Arm));
-
-        let use_threads = opt & USE_THREADS != 0 && size < 128;
-
-        // max_args is the maximum number of arguments that
-        // can be passes directly in registers
-        let max_args = if Platform::is_amd64() && cfg!(target_family = "windows") {
+        let max_args = if prog.config().is_amd64() && cfg!(target_family = "windows") {
             4
         } else {
             8
         };
 
-        let can_fast = count_states < max_args
+        let can_fast = prog.config().may_fast()
+            && count_states < max_args
             && count_params == 0
             && count_obs == 1
-            && count_diffs == 0
-            && !matches!(ty, CompilerType::ByteCode)
-            && !matches!(ty, CompilerType::Debug);
+            && count_diffs == 0;
 
         Ok(Application {
             prog,
@@ -169,29 +115,21 @@ impl Application {
             size,
         })
     }
-
-    fn opt_level(_: CompilerType, opt: u32) -> u8 {
-        ((opt & OPT_LEVEL_MASK) >> OPT_LEVEL_SHIFT) as u8
-    }
-
     /********************* compile_* functions *************************/
 
-    fn compile_native(
+    fn compile_ty(
+        ty: CompilerType,
         mir: &Mir,
         prog: &mut Program,
-        size: usize,
     ) -> Result<Box<dyn Compiled<f64>>> {
-        if Platform::is_amd64() && Platform::has_avx() {
-            Self::compile_avx(mir, prog, size)
-        } else if Platform::is_amd64() && !Platform::has_avx() {
-            Self::compile_sse(mir, prog, size)
-        } else if Platform::is_arm64() {
-            Self::compile_arm(mir, prog, size)
-        } else if Platform::is_riscv64() {
-            Self::compile_riscv(mir, prog, size)
-        } else {
-            println!("cpu not supported, falling back to bytecode.");
-            Self::compile_bytecode(mir, prog, size)
+        match ty {
+            CompilerType::AmdAVX => Self::compile_avx(mir, prog),
+            CompilerType::AmdSSE => Self::compile_sse(mir, prog),
+            CompilerType::Arm => Self::compile_arm(mir, prog),
+            CompilerType::RiscV => Self::compile_riscv(mir, prog),
+            CompilerType::ByteCode => Self::compile_debugger(mir, prog, false),
+            CompilerType::Debug => Self::compile_debugger(mir, prog, true),
+            _ => Err(anyhow!("invalid compiler type")),
         }
     }
 
@@ -231,72 +169,71 @@ impl Application {
         Ok(compiled)
     }
 
-    fn compile_sse(mir: &Mir, prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
+    fn compile_sse(mir: &Mir, prog: &mut Program) -> Result<Box<dyn Compiled<f64>>> {
         Self::compile::<AmdGenerator>(
             mir,
             prog,
             AmdGenerator::new(AmdFamily::SSEScalar),
-            size,
+            prog.mem_size(),
             "x86_64",
             1,
         )
     }
 
-    fn compile_avx(mir: &Mir, prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
+    fn compile_avx(mir: &Mir, prog: &mut Program) -> Result<Box<dyn Compiled<f64>>> {
         Self::compile::<AmdGenerator>(
             mir,
             prog,
             AmdGenerator::new(AmdFamily::AvxScalar),
-            size,
+            prog.mem_size(),
             "x86_64",
             1,
         )
     }
 
-    fn compile_avx_simd(
-        mir: &Mir,
-        prog: &mut Program,
-        size: usize,
-    ) -> Result<Box<dyn Compiled<f64>>> {
+    fn compile_avx_simd(mir: &Mir, prog: &mut Program) -> Result<Box<dyn Compiled<f64>>> {
         Self::compile::<AmdGenerator>(
             mir,
             prog,
             AmdGenerator::new(AmdFamily::AvxVector),
-            size * 4,
+            prog.mem_size() * 4,
             "x86_64",
             4,
         )
     }
 
-    fn compile_arm(mir: &Mir, prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
-        Self::compile::<ArmGenerator>(mir, prog, ArmGenerator::new(), size, "aarch64", 1)
+    fn compile_arm(mir: &Mir, prog: &mut Program) -> Result<Box<dyn Compiled<f64>>> {
+        Self::compile::<ArmGenerator>(
+            mir,
+            prog,
+            ArmGenerator::new(),
+            prog.mem_size(),
+            "aarch64",
+            1,
+        )
     }
 
-    fn compile_arm_simd(
-        mir: &Mir,
-        prog: &mut Program,
-        size: usize,
-    ) -> Result<Box<dyn Compiled<f64>>> {
+    fn compile_arm_simd(mir: &Mir, prog: &mut Program) -> Result<Box<dyn Compiled<f64>>> {
         Self::compile::<ArmSimdGenerator>(
             mir,
             prog,
             ArmSimdGenerator::new(),
-            size * 2,
+            prog.mem_size() * 2,
             "aarch64",
             2,
         )
     }
 
-    fn compile_riscv(mir: &Mir, prog: &mut Program, size: usize) -> Result<Box<dyn Compiled<f64>>> {
-        Self::compile::<RiscV>(mir, prog, RiscV::new(), size, "riscv64", 1)
+    fn compile_riscv(mir: &Mir, prog: &mut Program) -> Result<Box<dyn Compiled<f64>>> {
+        Self::compile::<RiscV>(mir, prog, RiscV::new(), prog.mem_size(), "riscv64", 1)
     }
 
-    fn compile_avx_fast(
+    fn compile_amd_fast(
         mir: &Mir,
         prog: &mut Program,
         idx_ret: u32,
     ) -> Result<Box<dyn Compiled<f64>>> {
-        if Platform::has_avx() {
+        if prog.config().has_avx() {
             Self::compile_fast(
                 mir,
                 prog,
@@ -331,13 +268,9 @@ impl Application {
         Self::compile_fast(mir, prog, RiscV::new(), idx_ret, "riscv64")
     }
 
-    fn compile_bytecode(
-        mir: &Mir,
-        prog: &mut Program,
-        size: usize,
-    ) -> Result<Box<dyn Compiled<f64>>> {
+    fn compile_bytecode(mir: &Mir, prog: &mut Program) -> Result<Box<dyn Compiled<f64>>> {
         // println!("{:#?}", &mir);
-        let mem: Vec<f64> = vec![0.0; size];
+        let mem: Vec<f64> = vec![0.0; prog.mem_size()];
         let stack: Vec<f64> = vec![0.0; prog.builder.block().sym_table.num_stack];
         let code = CompiledMir::new(mir.clone(), mem, stack);
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
@@ -347,11 +280,10 @@ impl Application {
     fn compile_debugger(
         mir: &Mir,
         prog: &mut Program,
-        size: usize,
         debug: bool,
     ) -> Result<Box<dyn Compiled<f64>>> {
-        let compiled = Self::compile_native(mir, prog, size)?;
-        let bytecode = Self::compile_bytecode(mir, prog, size)?;
+        let compiled = Self::compile_ty(prog.config().native_compiler_type(), mir, prog)?;
+        let bytecode = Self::compile_bytecode(mir, prog)?;
         let debugger: Box<dyn Compiled<f64>> = Box::new(Debugger::new(
             prog.builder.clone(),
             compiled,
@@ -380,12 +312,10 @@ impl Application {
     pub fn prepare_simd(&mut self) {
         // SIMD compilation is lazy!
         if self.compiled_simd.is_none() && self.use_simd {
-            if Platform::has_avx() {
-                self.compiled_simd =
-                    Self::compile_avx_simd(&self.mir, &mut self.prog, self.size).ok();
-            } else if Platform::is_arm64() {
-                self.compiled_simd =
-                    Self::compile_arm_simd(&self.mir, &mut self.prog, self.size).ok();
+            if self.prog.config().has_avx() {
+                self.compiled_simd = Self::compile_avx_simd(&self.mir, &mut self.prog).ok();
+            } else if self.prog.config().is_arm64() {
+                self.compiled_simd = Self::compile_arm_simd(&self.mir, &mut self.prog).ok();
             }
         };
     }
@@ -393,13 +323,13 @@ impl Application {
     fn prepare_fast(&mut self) {
         // fast func compilation is lazy!
         if self.compiled_simd.is_none() && self.can_fast {
-            if Platform::is_amd64() && Platform::has_avx() {
+            if self.prog.config().is_amd64() {
                 self.compiled_fast =
-                    Self::compile_avx_fast(&self.mir, &mut self.prog, self.first_obs as u32).ok();
-            } else if Platform::is_arm64() {
+                    Self::compile_amd_fast(&self.mir, &mut self.prog, self.first_obs as u32).ok();
+            } else if self.prog.config().is_arm64() {
                 self.compiled_fast =
                     Self::compile_arm_fast(&self.mir, &mut self.prog, self.first_obs as u32).ok();
-            } else if Platform::is_riscv64() {
+            } else if self.prog.config().is_riscv64() {
                 self.compiled_fast =
                     Self::compile_riscv_fast(&self.mir, &mut self.prog, self.first_obs as u32).ok();
             }

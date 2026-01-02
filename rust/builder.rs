@@ -3,12 +3,12 @@ use std::collections::HashSet;
 
 use crate::allocator::{ColoringAllocator, GreedyAllocator};
 use crate::block::Block;
+use crate::config::Config;
 use crate::defuns::Defuns;
 use crate::generator::Generator;
 use crate::mir::Mir;
 use crate::node::Node;
 use crate::symbol::SymbolTable;
-use crate::COUNT_SCRATCH;
 
 // the list of intrinsic unary ops, i.e., operations that can be implemented directly in
 // machine code
@@ -49,15 +49,17 @@ pub struct Builder {
     pub consts: Vec<f64>,
     pub ft: HashSet<String>, // function table (the name of functions),
     pub count_loops: usize,
+    pub config: Config,
 }
 
 impl Builder {
-    pub fn new(cse: bool) -> Builder {
+    pub fn new(config: Config) -> Builder {
         Builder {
-            primary_block: Block::new(cse),
+            primary_block: Block::new(config),
             consts: Vec::new(),
             ft: HashSet::new(),
             count_loops: 0,
+            config,
         }
     }
 
@@ -282,11 +284,13 @@ impl Builder {
         Ok(node)
     }
 
-    pub fn compile_mir(&mut self, fastmath: bool, opt_level: u8, df: &Defuns) -> Result<Mir> {
-        let mut mir = Mir::new(opt_level, fastmath, df);
+    pub fn compile_mir(&mut self, df: &Defuns) -> Result<Mir> {
+        let mut mir = Mir::new(self.config, df);
 
         self.block().eliminate();
         self.block().compile(&mut mir)?;
+
+        let opt_level = self.config.opt_level();
 
         if opt_level >= 1 {
             mir.optimize_peephole();
@@ -307,14 +311,14 @@ impl Builder {
     }
 
     fn save_registers(mir: &Mir, ir: &mut impl Generator) {
-        if ir.count_shadows() < COUNT_SCRATCH {
+        if ir.count_shadows() < mir.config.count_scratch() {
             let used = mir.used_registers();
             ir.save_used_registers(&used);
         }
     }
 
     fn restore_registers(mir: &Mir, ir: &mut impl Generator) {
-        if ir.count_shadows() < COUNT_SCRATCH {
+        if ir.count_shadows() < mir.config.count_scratch() {
             let used = mir.used_registers();
             ir.load_used_registers(&used);
         }

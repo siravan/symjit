@@ -3,6 +3,7 @@ use anyhow::{anyhow, Result};
 use serde::Deserialize;
 
 use crate::builder::Builder;
+use crate::config::Config;
 use crate::expr::Expr;
 use crate::node::Node;
 
@@ -21,7 +22,7 @@ pub struct Program {
 }
 
 impl Program {
-    pub fn new(ml: &CellModel, cse: bool) -> Result<Program> {
+    pub fn new(ml: &CellModel, config: Config) -> Result<Program> {
         /*
             this section lays the memory format
             the order of different sections is important!
@@ -44,7 +45,7 @@ impl Program {
             ** => => the first observable is the return value for fast functions
         */
 
-        let mut builder = Builder::new(cse);
+        let mut builder = Builder::new(config);
 
         for v in &ml.states {
             builder.symbol_table().add_mem(&v.name);
@@ -91,6 +92,14 @@ impl Program {
         };
 
         Ok(prog)
+    }
+
+    pub fn config(&self) -> &Config {
+        &self.builder.config
+    }
+
+    pub fn mem_size(&self) -> usize {
+        self.count_states + self.count_obs + self.count_params + self.count_diffs + 2
     }
 }
 

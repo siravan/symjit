@@ -3,6 +3,7 @@ use std::arch::x86_64::{__m256d, _mm256_setzero_pd};
 
 use anyhow::{anyhow, Result};
 
+use crate::config::Config;
 use crate::defuns::Defuns;
 use crate::expr::Expr;
 use crate::model::{CellModel, Equation, Program, Variable};
@@ -192,9 +193,9 @@ impl Compiler {
             obs: eqs,
         };
 
-        let prog = Program::new(&ml, false)?;
+        let prog = Program::new(&ml, Config::new(self.ty, self.opt)?)?;
         // let df = Defuns::new();
-        let mut app = Application::new(prog, self.ty, self.opt, &self.df);
+        let app = Application::new(prog, &self.df);
 
         #[cfg(target_arch = "aarch64")]
         if let Ok(app) = &mut app {
