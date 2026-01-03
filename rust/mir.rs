@@ -217,7 +217,8 @@ impl Mir {
 
         let mut used: Vec<u8> = Vec::new();
 
-        for i in 0..self.config.count_scratch() {
+        // 32 is the max possible logical register count
+        for i in 0..32 {
             if mask & (1 << i) != 0 {
                 used.push(i);
             }
