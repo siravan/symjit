@@ -552,11 +552,11 @@ pub unsafe extern "C" fn run(
 ///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
-pub unsafe extern "C" fn execute(q: *mut CompilerResult, t: f64) -> bool {
+pub unsafe extern "C" fn execute(q: *mut CompilerResult) -> bool {
     let q: &mut CompilerResult = unsafe { &mut *q };
 
     if let Some(app) = &mut q.app {
-        app.exec(t);
+        app.exec();
         true
     } else {
         false

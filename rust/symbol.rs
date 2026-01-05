@@ -51,7 +51,7 @@ pub struct SymbolTable {
     pub num_stack: usize,
     pub num_mem: usize,
     pub num_param: usize,
-    pub is_complex: bool,
+    pub slot_size: usize,
 }
 
 impl SymbolTable {
@@ -63,7 +63,7 @@ impl SymbolTable {
             num_stack: 0,
             num_mem: 0,
             num_param: 0,
-            is_complex,
+            slot_size: 1,
         };
 
         /*
@@ -75,6 +75,10 @@ impl SymbolTable {
         */
         for i in 0..SymbolTable::SPILL_AREA {
             s.add_stack(&format!("μ{}", i));
+        }
+
+        if is_complex {
+            s.slot_size = 2;
         }
 
         s
@@ -93,42 +97,24 @@ impl SymbolTable {
     pub fn add_mem(&mut self, name: &str) {
         if self.find_sym(name).is_none() {
             let loc = Loc::Mem(self.num_mem as u32);
-            self.num_mem += 1;
+            self.num_mem += self.slot_size;
             self.add_sym(name, loc);
-
-            if self.is_complex {
-                let loc = Loc::Mem(self.num_mem as u32);
-                self.num_mem += 1;
-                self.add_sym(&format!("{}_i", &name), loc);
-            }
         }
     }
 
     pub fn add_param(&mut self, name: &str) {
         if self.find_sym(name).is_none() {
             let loc = Loc::Param(self.num_param as u32);
-            self.num_param += 1;
+            self.num_param += self.slot_size;
             self.add_sym(name, loc);
-
-            if self.is_complex {
-                let loc = Loc::Param(self.num_mem as u32);
-                self.num_param += 1;
-                self.add_sym(&format!("{}_i", &name), loc);
-            }
         }
     }
 
     pub fn add_stack(&mut self, name: &str) {
         if self.find_sym(name).is_none() {
             let loc = Loc::Stack(self.num_stack as u32);
-            self.num_stack += 1;
+            self.num_stack += self.slot_size;
             self.add_sym(name, loc);
-
-            if self.is_complex {
-                let loc = Loc::Stack(self.num_mem as u32);
-                self.num_stack += 1;
-                self.add_sym(&format!("{}_i", &name), loc);
-            }
         }
     }
 

@@ -74,7 +74,6 @@ class Engine:
         self._execute = self.dll.execute
         self._execute.argtypes = [
             ctypes.c_void_p,  # handle
-            ctypes.c_double,  # t
         ]
         self._execute.restype = ctypes.c_bool
 
@@ -323,7 +322,7 @@ class RustyCompiler:
     def get_u0(self):
         if self.json_model is None:
             self.json_model = json.loads(self.model)
-        return [x["val"] for x in self.json_model["states"]]
+        return [x["val"] for x in self.json_model["states"][1:]]
 
     def get_p(self):
         if self.json_model is None:
@@ -348,8 +347,8 @@ class RustyCompiler:
             buf = fd.read()
             return buf
 
-    def execute(self, t=0.0):
-        if not lib._execute(self.p, t):
+    def execute(self):
+        if not lib._execute(self.p):
             raise ValueError("cannot execute the model")
 
     def execute_vectorized(self, buf):

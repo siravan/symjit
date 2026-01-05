@@ -268,7 +268,6 @@ impl Application {
     pub fn call(&mut self, args: &[f64]) -> Vec<f64> {
         {
             let mem = self.compiled.mem_mut();
-            mem[self.idx_iv] = 0.0;
             let states = &mut mem[self.first_state..self.first_state + self.count_states];
             states.copy_from_slice(args);
         }
@@ -293,7 +292,6 @@ impl Application {
     pub fn call_params(&mut self, args: &[f64], params: &[f64]) -> Vec<f64> {
         {
             let mem = self.compiled.mem_mut();
-            mem[self.idx_iv] = 0.0;
             let states = &mut mem[self.first_state..self.first_state + self.count_states];
             states.copy_from_slice(args);
         }

@@ -51,24 +51,19 @@ pub struct Application {
     pub first_param: usize,
     pub first_obs: usize,
     pub first_diff: usize,
-    pub idx_iv: usize, // independent variable index
     pub count_states: usize,
     pub count_params: usize,
     pub count_obs: usize,
     pub count_diffs: usize,
-    pub size: usize,
+    // pub size: usize,
 }
 
 impl Application {
     pub fn new(mut prog: Program, df: &Defuns) -> Result<Application> {
         let first_state = 0;
         let first_param = 0;
-        let idx_iv = prog.count_states;
-        let gap = if prog.config().is_complex() { 2 } else { 1 };
-        let first_obs = first_state + prog.count_states + gap;
+        let first_obs = first_state + prog.count_states;
         let first_diff = first_obs + prog.count_obs;
-        let size = first_diff + prog.count_diffs + 1; // +1 is here for padding, so that we can return
-                                                      // diff vector even if count_diff is 0
 
         let count_states = prog.count_states;
         let count_params = prog.count_params;
@@ -86,7 +81,7 @@ impl Application {
         let compiled = Self::compile_ty(prog.config().compiler_type(), &mir, &mut prog)?;
 
         let use_simd = prog.config().use_simd() && !prog.builder.has_loop();
-        let use_threads = prog.config().use_threads() && size < 128;
+        let use_threads = prog.config().use_threads() && prog.mem_size() < 128;
 
         let max_args = if prog.config().is_amd64() && cfg!(target_family = "windows") {
             4
@@ -114,12 +109,10 @@ impl Application {
             first_param,
             first_obs,
             first_diff,
-            idx_iv,
             count_states,
             count_params,
             count_obs,
             count_diffs,
-            size,
         })
     }
     /********************* compile_* functions *************************/
@@ -302,16 +295,15 @@ impl Application {
 
     /**********************************************************/
 
-    pub fn exec(&mut self, t: f64) {
-        let mem = self.compiled.mem_mut();
-        mem[self.idx_iv] = t;
+    #[inline]
+    pub fn exec(&mut self) {
         self.compiled.exec(&self.params[..]);
     }
 
     pub fn exec_callable(&mut self, xx: &[f64]) -> f64 {
         let mem = self.compiled.mem_mut();
         mem[self.first_state..self.first_state + self.count_states].copy_from_slice(xx);
-        mem[self.idx_iv] = 0.0;
+        // mem[self.idx_iv] = 0.0;
         self.compiled.exec(&self.params[..]);
         self.compiled.mem()[self.first_obs]
     }
@@ -371,7 +363,7 @@ impl Application {
         for t in 0..n {
             {
                 let mem = self.compiled.mem_mut();
-                mem[self.idx_iv] = t as f64;
+                // mem[self.idx_iv] = t as f64;
                 for i in 0..self.count_states {
                     mem[self.first_state + i] = states.get(i, t);
                 }

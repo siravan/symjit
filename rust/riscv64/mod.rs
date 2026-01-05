@@ -546,7 +546,7 @@ impl Generator for RiscV {
             |offset, _| rvv! {beq x(STATES), x(Self::zero), offset},
         );
 
-        let size = align_stack((count_states + count_obs + 1) as u32 * self.reg_size());
+        let size = align_stack((count_states + count_obs) as u32 * self.reg_size());
         self.sub_stack(size);
         self.emit(rvv! {mv x(MEM), x(Self::sp)});
         self.emit(rvv! {slli x(IDX), x(IDX), 3});
@@ -587,7 +587,7 @@ impl Generator for RiscV {
         });
 
         if count_obs > 16 {
-            self.li(Self::t1, 8 * (count_states + 1) as i32);
+            self.li(Self::t1, 8 * count_states as i32);
             self.emit(rvv! {add x(Self::t1), x(Self::t1), x(MEM)});
             self.li(Self::t2, count_obs as i32);
 
@@ -599,7 +599,7 @@ impl Generator for RiscV {
                 rvv! {bne x(Self::t2), x(Self::zero), offset}
             });
         } else if count_obs > 0 {
-            self.li(Self::t1, 8 * (count_states + 1) as i32);
+            self.li(Self::t1, 8 * count_states as i32);
             self.emit(rvv! {add x(Self::t1), x(Self::t1), x(MEM)});
 
             for _ in 0..count_obs {
@@ -607,7 +607,7 @@ impl Generator for RiscV {
             }
         }
 
-        let size = align_stack((count_states + count_obs + 1) as u32 * self.reg_size());
+        let size = align_stack((count_states + count_obs) as u32 * self.reg_size());
         self.add_stack(size);
 
         self.set_label("@done");

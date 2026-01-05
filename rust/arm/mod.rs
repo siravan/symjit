@@ -455,7 +455,7 @@ impl Generator for ArmGenerator {
         self.emit(arm! {tst x(STATES), x(STATES)});
         self.jump("@main", 0, |offset, _| arm! {b.eq label(offset)});
 
-        let size = align_stack((count_states + count_obs + 1) as u32 * self.reg_size());
+        let size = align_stack((count_states + count_obs) as u32 * self.reg_size());
         self.sub_stack(size);
         self.emit(arm! {mov x(MEM), sp});
 
@@ -482,12 +482,12 @@ impl Generator for ArmGenerator {
 
         for i in 0..count_obs {
             self.load_x_from_mem(SCRATCH2, STATES, (count_states + i) as u32);
-            let k = (count_states + i + 1) as u32;
+            let k = (count_states + i) as u32;
             self.load_d_from_mem(0, MEM, k);
             self.emit(arm! {str d(0), [x(SCRATCH2), x(IDX), lsl #3]});
         }
 
-        let size = align_stack((count_states + count_obs + 1) as u32 * self.reg_size());
+        let size = align_stack((count_states + count_obs) as u32 * self.reg_size());
         self.add_stack(size);
 
         self.set_label("@done");
@@ -968,7 +968,7 @@ impl Generator for ArmSimdGenerator {
         self.emit(arm! {tst x(STATES), x(STATES)});
         self.jump("@main", 0, |offset, _| arm! {b.eq label(offset)});
 
-        let size = align_stack((count_states + count_obs + 1) as u32 * self.reg_size());
+        let size = align_stack((count_states + count_obs) as u32 * self.reg_size());
         self.sub_stack(size);
         self.emit(arm! {mov x(MEM), sp});
 
@@ -998,12 +998,12 @@ impl Generator for ArmSimdGenerator {
 
         for i in 0..count_obs {
             self.load_x_from_mem(SCRATCH2, STATES, (count_states + i) as u32);
-            let k = (count_states + 1 + i) as u32;
+            let k = (count_states + i) as u32;
             self.load_q_from_mem(0, MEM, k);
             self.emit(arm! {str q(0), [x(SCRATCH2), x(IDX), lsl #4]});
         }
 
-        let size = align_stack((count_states + count_obs + 1) as u32 * self.reg_size());
+        let size = align_stack((count_states + count_obs) as u32 * self.reg_size());
         self.add_stack(size);
 
         self.set_label("@done");

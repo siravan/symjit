@@ -51,7 +51,7 @@ impl Program {
             builder.symbol_table().add_mem(&v.name);
         }
 
-        builder.symbol_table().add_mem(&ml.iv.name);
+        // builder.symbol_table().add_mem(&ml.iv.name);
 
         for v in &ml.params {
             builder.symbol_table().add_param(&v.name);
@@ -101,7 +101,7 @@ impl Program {
     }
 
     pub fn mem_size(&self) -> usize {
-        self.count_states + self.count_obs + self.count_params + self.count_diffs + 3
+        self.count_states + self.count_obs + self.count_diffs + 1
     }
 }
 

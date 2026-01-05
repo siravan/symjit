@@ -721,7 +721,7 @@ impl Generator for AmdGenerator {
         self.amd.or(STATES, STATES);
         self.amd.jz("@main");
 
-        let size = (count_states + count_obs + 1) as u32 * self.reg_size();
+        let size = (count_states + count_obs) as u32 * self.reg_size();
         //self.amd.sub_rsp(size);
         self.chkstk(size);
         self.amd.mov(MEM, Amd::RSP); // in indirect mode, MEM is allocated on the stack
@@ -769,12 +769,12 @@ impl Generator for AmdGenerator {
         self.amd.or(STATES, STATES);
         self.amd.jz("@done");
 
-        let size = (count_states + count_obs + 1) as u32 * self.reg_size();
+        let size = (count_states + count_obs) as u32 * self.reg_size();
 
         for i in 0..count_obs {
             self.amd
                 .mov_reg_mem(Amd::RAX, STATES, 8 * (count_states + i) as i32);
-            let k = (count_states + i + 1) as u32 * self.reg_size();
+            let k = (count_states + i) as u32 * self.reg_size();
             select!(
                 self,
                 movsd_xmm_mem,

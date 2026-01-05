@@ -1,10 +1,12 @@
 # from engine import Matrix
+import json
 import numbers
 import os
 import warnings
 
 import numpy as np
-from sympy import lambdify
+from sympy import Symbol, lambdify
+from sympy.core.multidimensional import structure_copy
 
 from . import engine, pyengine, structure
 
@@ -159,34 +161,33 @@ class FuncComplex:
             self.vecfmt = lambda res: res[0]
 
     def __call__(self, *args):
-        if len(args) > self.count_states:
-            p = np.frombuffer(
-                np.asarray(args[self.count_states :], dtype=np.complex128),
-                dtype=np.float64,
-            )
-            self.compiler.params[:] = p
-
         if isinstance(args[0], numbers.Number):
             u = np.frombuffer(
-                np.asarray(args[: self.count_states], dtype=np.complex128),
+                np.asarray(args, dtype=np.complex128),
                 dtype=np.float64,
             )
-            self.compiler.states[:] = u
+            self.compiler.params[:] = u[self.count_states :]
+            self.compiler.states[:] = u[: self.count_states]
             self.compiler.execute()
             return self.fmt(self.compiler.obs)
         else:
             return self.call_matrix(*args)
 
     def call_matrix(self, *args):
-        assert len(args) >= self.count_states // 2
+        if len(args) > self.count_states // 2:
+            p = np.frombuffer(
+                np.asarray(args, dtype=np.complex128),
+                dtype=np.float64,
+            )
+            self.compiler.params[:] = p[self.count_states :]
+
         shape = args[0].shape
 
         with engine.Matrix() as states:
             for i in range(self.count_states // 2):
                 assert args[i].shape == shape
-                X = args[i].astype(dtype=np.complex128, copy=False)
-                states.add_row(X.real)
-                states.add_row(X.imag)
+                states.add_row(args[i].real)
+                states.add_row(args[i].imag)
 
             res = []
 
@@ -237,14 +238,15 @@ class OdeFunc:
         self.compiler = compiler
 
     def __call__(self, t, y, *args):
-        y = np.array(y, dtype="double")
-        self.compiler.states[:] = y
+        # y = np.array(y, dtype="double")
+        self.compiler.states[0] = t
+        self.compiler.states[1:] = y
 
         if len(args) > 0:
-            p = np.array(args, dtype="double")
-            self.compiler.params[:] = p
+            # p = np.array(args, dtype="double")
+            self.compiler.params[:] = args
 
-        self.compiler.execute(t)
+        self.compiler.execute()
         return self.compiler.diffs.copy()
 
     def get_u0(self):
@@ -267,7 +269,8 @@ class JacFunc:
 
     def __call__(self, t, y, *args):
         y = np.array(y, dtype="double")
-        self.compiler.states[:] = y
+        self.compiler.states[0] = t
+        self.compiler.states[1:] = y
 
         if len(args) > 0:
             p = np.array(args, dtype="double")
@@ -275,7 +278,7 @@ class JacFunc:
 
         self.compiler.execute()
         jac = self.compiler.obs.copy()
-        return jac.reshape((self.count_states, self.count_states))
+        return jac.reshape((self.count_states - 1, self.count_states - 1))
 
     def dump(self, name, what="scalar"):
         self.compiler.dump(name, what=what)
@@ -558,6 +561,23 @@ def compile_jac(
     return JacFunc(compiler)
 
 
+def update_json_model(model):
+    """
+    Updates json models to comform to API change in ver 2.11,
+    where the explicit independent-variable was removed and appended
+    to the front of the states.
+    """
+    if not isinstance(model, dict):
+        model = json.loads(model)
+
+    if len(model["odes"]) == 0:
+        return model
+
+    model["states"] = [model["iv"]] + model["states"]
+    model["iv"] = structure.var(Symbol("$_"))
+    return model
+
+
 def compile_json(
     model,
     ty="native",
@@ -573,6 +593,9 @@ def compile_json(
     CellML json files are extracted using CellMLToolkit.jl
     model is already in Json format; hence, `convert = False`
     """
+
+    model = update_json_model(model)
+
     if can_use_rust("rust"):
         defuns = engine.Defuns(None)
         compiler = engine.RustyCompiler(
@@ -583,7 +606,6 @@ def compile_json(
             cse=cse,
             fastmath=fastmath,
             opt_level=opt_level,
-            convert=False,
             defuns=defuns,
             sanitize=sanitize,
         )
