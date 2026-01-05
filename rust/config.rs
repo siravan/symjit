@@ -6,6 +6,7 @@ pub const USE_THREADS: u32 = 0x02;
 pub const CSE: u32 = 0x04;
 pub const FASTMATH: u32 = 0x08;
 pub const SANITIZE: u32 = 0x10;
+pub const COMPLEX: u32 = 0x20;
 pub const OPT_LEVEL_MASK: u32 = 0x0f00;
 pub const OPT_LEVEL_SHIFT: usize = 8;
 
@@ -139,6 +140,14 @@ impl Config {
     }
 
     pub fn count_scratch(&self) -> u8 {
-        14
+        if self.is_complex() {
+            5
+        } else {
+            14
+        }
+    }
+
+    pub fn is_complex(&self) -> bool {
+        self.test(COMPLEX)
     }
 }

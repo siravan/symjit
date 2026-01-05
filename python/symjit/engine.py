@@ -284,18 +284,26 @@ class RustyCompiler:
         convert=True,
         defuns=None,
         sanitize=True,
+        dtype="float64",
     ):
         if convert:
             model = json.dumps(model)
+
+        dtype = str(dtype)
+        if dtype not in ["float64", "complex128"]:
+            raise ValueError("`dtype` should be `float64` or `complex128`")
+
         opt = (
             (0x01 if use_simd else 0)
             | (0x02 if use_threads else 0)
             | (0x04 if cse else 0)
             | (0x08 if fastmath else 0)
             | (0x10 if sanitize else 0)
+            | (0x20 if dtype == "complex128" else 0)
             | ((opt_level & 0x0F) << 8)
         )
 
+        self.dtype = dtype
         self.defuns = defuns
         self.p = lib._compile(
             model.encode("utf-8"), ty.encode("utf8"), opt, self.defuns.p

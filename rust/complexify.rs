@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 
 use crate::code::Func;
+use crate::config::Config;
 use crate::defuns::Defuns;
 use crate::generator::Generator;
 use crate::mir::Mir;
@@ -13,7 +14,7 @@ fn re(reg: Reg) -> Reg {
         Reg::Temp => Reg::Gen(0),
         Reg::Left => Reg::Left,
         Reg::Right => Reg::Gen(0),
-        Reg::Gen(r) => Reg::Gen(6 + 2 * r),
+        Reg::Gen(r) => Reg::Gen(4 + 2 * r),
         Reg::Static(_) => unreachable!(),
     }
 }
@@ -24,7 +25,7 @@ fn im(reg: Reg) -> Reg {
         Reg::Temp => Reg::Gen(1),
         Reg::Left => Reg::Temp,
         Reg::Right => Reg::Gen(1),
-        Reg::Gen(r) => Reg::Gen(6 + 2 * r + 1),
+        Reg::Gen(r) => Reg::Gen(4 + 2 * r + 1),
         Reg::Static(_) => unreachable!(),
     }
 }
@@ -34,15 +35,25 @@ pub struct Complexifier {
 }
 
 impl Complexifier {
-    pub fn new(mir: &Mir) -> Result<Complexifier> {
+    pub fn new(config: Config) -> Complexifier {
+        Complexifier {
+            mir: Mir::new(config, &Defuns::new()),
+        }
+    }
+
+    pub fn complexify(&mut self, mir: &Mir) -> Result<Mir> {
         if mir.df.len() != 0 {
             return Err(anyhow!(
                 "Complex functions do not support user-defined functions"
             ));
         }
 
-        let m = Mir::new(mir.config, &Defuns::new());
-        Ok(Complexifier { mir: m })
+        self.mir.consts = mir.consts.clone();
+        self.mir.labels = mir.labels.clone();
+
+        mir.rerun(self)?;
+
+        Ok(self.mir.clone())
     }
 
     // temporary registers
@@ -88,32 +99,32 @@ impl Generator for Complexifier {
     fn load_const(&mut self, dst: Reg, idx: u32) {
         // TODO: loading complex constants
         self.mir.load_const(re(dst), idx);
-        self.xor(im(dst), im(dst), im(dst));
+        self.mir.xor(im(dst), im(dst), im(dst));
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
-        self.mir.load_mem(re(dst), 2 * idx);
-        self.mir.load_mem(im(dst), 2 * idx + 1);
+        self.mir.load_mem(re(dst), idx);
+        self.mir.load_mem(im(dst), idx + 1);
     }
 
     fn save_mem(&mut self, dst: Reg, idx: u32) {
-        self.mir.save_mem(re(dst), 2 * idx);
-        self.mir.save_mem(im(dst), 2 * idx + 1);
+        self.mir.save_mem(re(dst), idx);
+        self.mir.save_mem(im(dst), idx + 1);
     }
 
     fn load_param(&mut self, dst: Reg, idx: u32) {
-        self.mir.load_param(re(dst), 2 * idx);
-        self.mir.load_param(im(dst), 2 * idx + 1);
+        self.mir.load_param(re(dst), idx);
+        self.mir.load_param(im(dst), idx + 1);
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
-        self.mir.load_stack(re(dst), 2 * idx);
-        self.mir.load_stack(im(dst), 2 * idx + 1);
+        self.mir.load_stack(re(dst), idx);
+        self.mir.load_stack(im(dst), idx + 1);
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        self.mir.save_stack(re(dst), 2 * idx);
-        self.mir.save_stack(im(dst), 2 * idx + 1);
+        self.mir.save_stack(re(dst), idx);
+        self.mir.save_stack(im(dst), idx + 1);
     }
 
     fn save_mem_result(&mut self, idx: u32) {
@@ -145,9 +156,9 @@ impl Generator for Complexifier {
         self.mir.times(Self::T0, re(s1), re(s1));
         self.mir.times(Self::T1, im(s1), im(s1));
         self.mir.plus(Self::T0, Self::T0, Self::T1);
-        self.divide(re(dst), re(s1), Self::T0);
-        self.divide(im(dst), im(s1), Self::T0);
-        self.neg(im(dst), im(dst));
+        self.mir.divide(re(dst), re(s1), Self::T0);
+        self.mir.divide(im(dst), im(s1), Self::T0);
+        self.mir.neg(im(dst), im(dst));
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {
@@ -313,7 +324,7 @@ impl Generator for Complexifier {
     fn load_used_registers(&mut self, used: &[u8]) {}
 
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {
-        let loc = Loc::Stack(2 * idx);
+        let loc = Loc::Stack(idx);
         self.mir.ifelse(re(dst), re(true_val), re(false_val), loc);
         self.mir.ifelse(im(dst), im(true_val), im(false_val), loc);
     }

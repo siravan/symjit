@@ -3,6 +3,7 @@ use anyhow::{anyhow, Result};
 use crate::amd::{AmdFamily, AmdGenerator};
 use crate::arm::{ArmGenerator, ArmSimdGenerator};
 use crate::builder::Builder;
+use crate::complexify::Complexifier;
 use crate::defuns::Defuns;
 use crate::generator::Generator;
 use crate::machine::MachineCode;
@@ -63,7 +64,8 @@ impl Application {
         let first_state = 0;
         let first_param = 0;
         let idx_iv = prog.count_states;
-        let first_obs = first_state + prog.count_states + 1; // +1 for the independent variable
+        let gap = if prog.config().is_complex() { 2 } else { 1 };
+        let first_obs = first_state + prog.count_states + gap;
         let first_diff = first_obs + prog.count_obs;
         let size = first_diff + prog.count_diffs + 1; // +1 is here for padding, so that we can return
                                                       // diff vector even if count_diff is 0
@@ -75,7 +77,12 @@ impl Application {
 
         let params = vec![0.0; count_params + 1];
 
-        let mir = prog.builder.compile_mir(df)?;
+        let mut mir = prog.builder.compile_mir(df)?;
+
+        if prog.config().is_complex() {
+            mir = Complexifier::new(*prog.config()).complexify(&mir)?;
+        }
+
         let compiled = Self::compile_ty(prog.config().compiler_type(), &mir, &mut prog)?;
 
         let use_simd = prog.config().use_simd() && !prog.builder.has_loop();

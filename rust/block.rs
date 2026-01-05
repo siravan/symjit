@@ -29,7 +29,7 @@ impl Block {
     pub fn new(config: Config) -> Block {
         Block {
             stmts: Vec::new(),
-            sym_table: SymbolTable::new(),
+            sym_table: SymbolTable::new(config.is_complex()),
             num_tmp: 0,
             calls: HashMap::new(),
             config,

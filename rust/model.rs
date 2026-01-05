@@ -83,12 +83,14 @@ impl Program {
 
         ml.transform(&mut builder)?;
 
+        let k = if config.is_complex() { 2 } else { 1 };
+
         let prog = Program {
             builder,
-            count_states: ml.states.len(),
-            count_params: ml.params.len(),
-            count_obs,
-            count_diffs: ml.odes.len(),
+            count_states: ml.states.len() * k,
+            count_params: ml.params.len() * k,
+            count_obs: count_obs * k,
+            count_diffs: ml.odes.len() * k,
         };
 
         Ok(prog)
@@ -99,7 +101,7 @@ impl Program {
     }
 
     pub fn mem_size(&self) -> usize {
-        self.count_states + self.count_obs + self.count_params + self.count_diffs + 2
+        self.count_states + self.count_obs + self.count_params + self.count_diffs + 3
     }
 }
 

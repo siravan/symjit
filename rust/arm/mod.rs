@@ -998,7 +998,7 @@ impl Generator for ArmSimdGenerator {
 
         for i in 0..count_obs {
             self.load_x_from_mem(SCRATCH2, STATES, (count_states + i) as u32);
-            let k = (count_states + i + 1) as u32;
+            let k = (count_states + 1 + i) as u32;
             self.load_q_from_mem(0, MEM, k);
             self.emit(arm! {str q(0), [x(SCRATCH2), x(IDX), lsl #4]});
         }

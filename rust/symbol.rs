@@ -51,17 +51,19 @@ pub struct SymbolTable {
     pub num_stack: usize,
     pub num_mem: usize,
     pub num_param: usize,
+    pub is_complex: bool,
 }
 
 impl SymbolTable {
     const SPILL_AREA: usize = 16;
 
-    pub fn new() -> SymbolTable {
+    pub fn new(is_complex: bool) -> SymbolTable {
         let mut s = SymbolTable {
             syms: HashMap::new(),
             num_stack: 0,
             num_mem: 0,
             num_param: 0,
+            is_complex,
         };
 
         /*
@@ -93,6 +95,12 @@ impl SymbolTable {
             let loc = Loc::Mem(self.num_mem as u32);
             self.num_mem += 1;
             self.add_sym(name, loc);
+
+            if self.is_complex {
+                let loc = Loc::Mem(self.num_mem as u32);
+                self.num_mem += 1;
+                self.add_sym(&format!("{}_i", &name), loc);
+            }
         }
     }
 
@@ -101,6 +109,12 @@ impl SymbolTable {
             let loc = Loc::Param(self.num_param as u32);
             self.num_param += 1;
             self.add_sym(name, loc);
+
+            if self.is_complex {
+                let loc = Loc::Param(self.num_mem as u32);
+                self.num_param += 1;
+                self.add_sym(&format!("{}_i", &name), loc);
+            }
         }
     }
 
@@ -109,6 +123,12 @@ impl SymbolTable {
             let loc = Loc::Stack(self.num_stack as u32);
             self.num_stack += 1;
             self.add_sym(name, loc);
+
+            if self.is_complex {
+                let loc = Loc::Stack(self.num_mem as u32);
+                self.num_stack += 1;
+                self.add_sym(&format!("{}_i", &name), loc);
+            }
         }
     }
 
