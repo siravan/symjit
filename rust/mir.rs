@@ -4,6 +4,7 @@ use std::fs;
 use std::io::Write;
 
 use anyhow::Result;
+use num_complex::Complex;
 use petgraph::matrix_graph::Zero;
 
 use crate::code::{Func, VirtualTable};
@@ -645,13 +646,8 @@ impl Mir {
         };
     }
 
-    pub fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
+    pub fn call(&mut self, op: &str, _num_args: usize) -> Result<()> {
         let f = self.find_op(op)?;
-
-        match f {
-            Func::Unary(_) => assert!(num_args == 1),
-            Func::Binary(_) => assert!(num_args == 2),
-        }
 
         self.push(Instruction::Call {
             f,
@@ -809,6 +805,24 @@ impl Mir {
                         Reg::Ret,
                         p(Self::get(regs, Reg::Left), Self::get(regs, Reg::Right)),
                     ),
+                    Func::UnaryCplx(p) => {
+                        let x =
+                            Complex::new(Self::get(regs, Reg::Left), Self::get(regs, Reg::Right));
+                        let z = p(x);
+                        Self::set(regs, Reg::Ret, z.re);
+                        Self::set(regs, Reg::Temp, z.im);
+                    }
+                    Func::BinaryCplx(p) => {
+                        let x =
+                            Complex::new(Self::get(regs, Reg::Left), Self::get(regs, Reg::Right));
+                        let y = Complex::new(
+                            Self::get(regs, Reg::Gen(0)),
+                            Self::get(regs, Reg::Gen(1)),
+                        );
+                        let z = p(x, y);
+                        Self::set(regs, Reg::Ret, z.re);
+                        Self::set(regs, Reg::Temp, z.im);
+                    }
                 },
                 Instruction::Fused { op, dst, a, b, c } => {
                     Self::exec_fused(regs, *op, *dst, *a, *b, *c);
@@ -914,8 +928,10 @@ impl Mir {
                     ir.load_const(*dst, *idx);
                 }
                 Instruction::Call { label, f } => match f {
-                    Func::Unary(_) => ir.call(label, 1),
-                    Func::Binary(_) => ir.call(label, 2),
+                    Func::Unary(_) => ir.call(label, 1)?,
+                    Func::Binary(_) => ir.call(label, 2)?,
+                    Func::UnaryCplx(_) => ir.call(label, 1)?,
+                    Func::BinaryCplx(_) => ir.call(label, 2)?,
                 },
                 Instruction::Fused { op, dst, a, b, c } => match op {
                     FusedOp::MulAdd => ir.fused_mul_add(*dst, *a, *b, *c),

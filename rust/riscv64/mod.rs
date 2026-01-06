@@ -4,6 +4,7 @@ mod macros;
 use crate::assembler::{Assembler, Jumper};
 use crate::generator::Generator;
 use crate::utils::{align_stack, Reg};
+use anyhow::Result;
 
 fn hi(x: u32) -> u32 {
     if x & 0x0800 != 0 {
@@ -458,7 +459,7 @@ impl Generator for RiscV {
         self.append_quad(p.func_ptr());
     }
 
-    fn call(&mut self, op: &str, _num_args: usize) {
+    fn call(&mut self, op: &str, _num_args: usize) -> Result<()> {
         let label = format!("_func_{}_", op);
 
         self.jump(
@@ -474,6 +475,8 @@ impl Generator for RiscV {
         );
 
         self.emit(rvv! {jalr x(Self::ra), x(Self::a0), 0});
+
+        Ok(())
     }
 
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {

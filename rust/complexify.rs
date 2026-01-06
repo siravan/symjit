@@ -307,11 +307,11 @@ impl Generator for Complexifier {
 
     fn add_func(&mut self, f: &str, p: Func) {}
 
-    fn call(&mut self, op: &str, num_args: usize) {
-        let mut f = "c".to_owned();
+    fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
+        let mut f = "cplx_".to_owned();
         f.push_str(op);
-        // TODO: fix error handling here
-        self.mir.call(op, num_args).unwrap();
+        self.mir.call(&f, num_args)?;
+        Ok(())
     }
 
     fn prologue_fast(&mut self, cap: u32, num_args: u32) {}

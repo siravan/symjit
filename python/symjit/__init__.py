@@ -146,11 +146,13 @@ class FuncComplex:
 
     def prepare_fmt(self, eqs):
         if isinstance(eqs, list):
-            self.fmt = lambda obs: obs.tolist()
+            self.fmt = lambda obs: np.frombuffer(obs, dtype=np.complex128).tolist()
         elif isinstance(eqs, tuple):
-            self.fmt = lambda obs: tuple(obs.tolist())
+            self.fmt = lambda obs: tuple(
+                np.frombuffer(obs, dtype=np.complex128).tolist()
+            )
         else:
-            self.fmt = lambda obs: obs[0]
+            self.fmt = lambda obs: obs[0] + obs[1] * 1j
 
     def prepare_vecfmt(self, eqs):
         if isinstance(eqs, list):

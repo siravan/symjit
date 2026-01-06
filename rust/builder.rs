@@ -86,11 +86,14 @@ impl Builder {
 
     pub fn add_unary(&mut self, op: &str, arg: Node) -> Result<Node> {
         if !UNARY.contains(&op) {
-            // let f = VirtualTable::from_str(op)?; // check to see if op is defined
-            // if !matches!(f, Func::Unary(_)) {
-            //     return Err(anyhow!("{} is not a unary function", op));
-            // }
-            self.ft.insert(op.to_string());
+            let mut f = if self.config.is_complex() {
+                "cplx_"
+            } else {
+                ""
+            }
+            .to_owned();
+            f.push_str(op);
+            self.ft.insert(f);
         }
 
         self.create_unary(op, arg)

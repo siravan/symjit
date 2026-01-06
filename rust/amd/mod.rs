@@ -1,3 +1,5 @@
+use anyhow::{anyhow, Result};
+
 use crate::generator::Generator;
 use crate::utils::align_stack;
 use crate::utils::{reg, DataType, Reg};
@@ -633,7 +635,7 @@ impl Generator for AmdGenerator {
         self.append_quad(p.func_ptr());
     }
 
-    fn call(&mut self, op: &str, num_args: usize) {
+    fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
         let label = format!("_func_{}_", op);
 
         match self.family {
@@ -651,11 +653,11 @@ impl Generator for AmdGenerator {
             AmdFamily::AvxVector => match num_args {
                 1 => self.call_vector_unary(&label),
                 2 => self.call_vector_binary(&label),
-                _ => {
-                    panic!("invalid number of arguments")
-                }
+                _ => return Err(anyhow!("invalid number of arguments")),
             },
         }
+
+        Ok(())
     }
 
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {

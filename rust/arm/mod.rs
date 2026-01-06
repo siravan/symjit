@@ -4,6 +4,7 @@ mod macros;
 use crate::assembler::{Assembler, Jumper};
 use crate::generator::Generator;
 use crate::utils::{align_stack, Reg};
+use anyhow::{anyhow, Result};
 
 const SP: u8 = 31;
 
@@ -371,7 +372,7 @@ impl Generator for ArmGenerator {
         self.append_quad(p.func_ptr());
     }
 
-    fn call(&mut self, op: &str, _num_args: usize) {
+    fn call(&mut self, op: &str, _num_args: usize) -> Result<()> {
         let label = format!("_func_{}_", op);
         //self.a
         //    .jump(&label, 0, |offset, _code| arm! {ldr x(0), label(offset)});
@@ -387,6 +388,8 @@ impl Generator for ArmGenerator {
         );
 
         self.emit(arm! {blr x(0)});
+
+        Ok(())
     }
 
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {
@@ -844,7 +847,7 @@ impl Generator for ArmSimdGenerator {
         self.append_quad(p.func_ptr());
     }
 
-    fn call(&mut self, op: &str, num_args: usize) {
+    fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
         let label = format!("_func_{}_", op);
         //self.a
         //    .jump(&label, 0, |offset, _code| arm! {ldr x(0), label(offset)});
@@ -893,10 +896,10 @@ impl Generator for ArmSimdGenerator {
                 self.emit(arm! {ldr q(0), [sp, #0]});
                 self.emit(arm! {add sp, sp, #32});
             }
-            _ => {
-                panic!("invalid number of arguments")
-            }
+            _ => return Err(anyhow!("invalid number of arguments")),
         }
+
+        Ok(())
     }
 
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {
