@@ -1,3 +1,9 @@
+# Version 2.11.0
+
+* Adding support for complex numbers.
+* Adding `dtype` to `compile` functions.
+* Removing explicit indendent variable.
+
 # Version 2.10.0
 
 * Adding support for NEON instructions on aarch64 (128-bit f64x2).
