@@ -151,3 +151,49 @@ impl Config {
         self.test(COMPLEX)
     }
 }
+
+// the list of intrinsic unary ops, i.e., operations that can be implemented directly in
+// machine code
+const UNARY: &[&str] = &[
+    "abs", "not", "neg", "root", "square", "cube", "recip", "round", "floor", "ceiling", "trunc",
+    "frac", "_powi_", "_call_",
+];
+
+// the list of intrinsic binary ops, i.e., operations that can be implemented directly in
+// machine code
+const BINARY: &[&str] = &[
+    "plus",
+    "minus",
+    "times",
+    "divide",
+    "rem",
+    "gt",
+    "geq",
+    "lt",
+    "leq",
+    "eq",
+    "neq",
+    "and",
+    "or",
+    "xor",
+    "_ifelse_",
+    "_powi_mod_",
+    "_call_",
+    "min",
+    "max",
+    "heaviside",
+];
+
+impl Config {
+    pub fn is_intrinsic_unary(&self, op: &str) -> bool {
+        if op == "root" {
+            !self.is_complex()
+        } else {
+            UNARY.contains(&op)
+        }
+    }
+
+    pub fn is_intrinsic_binary(&self, op: &str) -> bool {
+        BINARY.contains(&op)
+    }
+}

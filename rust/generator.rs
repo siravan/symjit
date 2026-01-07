@@ -63,6 +63,7 @@ pub trait Generator {
     fn add_consts(&mut self, consts: &[f64]);
     fn add_func(&mut self, f: &str, p: Func);
     fn call(&mut self, op: &str, num_args: usize) -> Result<()>;
+    fn call_complex(&mut self, op: &str, num_args: usize) -> Result<()>;
 
     fn prologue_fast(&mut self, cap: u32, num_args: u32);
     fn epilogue_fast(&mut self, cap: u32, idx_ret: i32);

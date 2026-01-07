@@ -12,8 +12,6 @@ use crate::node::{Node, VarStatus};
 use crate::statement::Statement;
 use crate::symbol::{Loc, Symbol, SymbolTable};
 
-use crate::builder::{BINARY, UNARY};
-
 //****************************************************//
 
 #[derive(Debug, Clone)]
@@ -153,7 +151,7 @@ impl Block {
     fn trim_unary(&mut self, op: &str, arg: Node, power: i32) -> Node {
         let arg = self.trim(arg);
 
-        if !UNARY.contains(&op) {
+        if !self.config.is_intrinsic_unary(op) {
             self.break_call_unary(op, arg)
         } else {
             Node::create_unary(op, arg, power)
@@ -187,7 +185,7 @@ impl Block {
         let left = self.trim(left);
         let right = self.trim(right);
 
-        if !BINARY.contains(&op) {
+        if !self.config.is_intrinsic_binary(op) {
             return self.break_call_binary(op, left, right);
         }
 

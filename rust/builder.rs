@@ -10,39 +10,6 @@ use crate::mir::Mir;
 use crate::node::Node;
 use crate::symbol::SymbolTable;
 
-// the list of intrinsic unary ops, i.e., operations that can be implemented directly in
-// machine code
-pub const UNARY: &[&str] = &[
-    "abs", "not", "neg", "root", "square", "cube", "recip", "round", "floor", "ceiling", "trunc",
-    "frac", "_powi_", "_call_",
-];
-// the list of intrinsic binary ops, i.e., operations that can be implemented directly in
-// machine code
-pub const BINARY: &[&str] = &[
-    "plus",
-    "minus",
-    "times",
-    "divide",
-    "rem",
-    "gt",
-    "geq",
-    "lt",
-    "leq",
-    "eq",
-    "neq",
-    "and",
-    "or",
-    "xor",
-    "_ifelse_",
-    "_powi_mod_",
-    "_call_",
-    "min",
-    "max",
-    "heaviside",
-];
-
-//****************************************************//
-
 #[derive(Debug, Clone)]
 pub struct Builder {
     pub primary_block: Block,
@@ -85,15 +52,8 @@ impl Builder {
     }
 
     pub fn add_unary(&mut self, op: &str, arg: Node) -> Result<Node> {
-        if !UNARY.contains(&op) {
-            let mut f = if self.config.is_complex() {
-                "cplx_"
-            } else {
-                ""
-            }
-            .to_owned();
-            f.push_str(op);
-            self.ft.insert(f);
+        if !self.config.is_intrinsic_unary(op) {
+            self.ft.insert(op.to_string());
         }
 
         self.create_unary(op, arg)
@@ -137,11 +97,7 @@ impl Builder {
             }
         }
 
-        if !BINARY.contains(&op) {
-            // let f = VirtualTable::from_str(op)?; // check to see if op is defined
-            // if !matches!(f, Func::Binary(_)) {
-            //     return Err(anyhow!("{} is not a binary function", op));
-            // }
+        if !self.config.is_intrinsic_binary(op) {
             self.ft.insert(op.to_string());
         }
 

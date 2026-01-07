@@ -213,6 +213,50 @@ impl AmdGenerator {
         self.amd.add_rsp(32 * 3);
     }
 
+    fn call_complex_vector_unary(&mut self, label: &str) {
+        self.amd.sub_rsp(32 * 3);
+        self.amd.vmovpd_mem_ymm(Amd::RSP, 32, 0);
+        self.amd.vmovpd_mem_ymm(Amd::RSP, 64, 1);
+
+        self.vzeroupper();
+
+        for i in 0..4 {
+            self.amd.movsd_xmm_mem(0, Amd::RSP, 32 + i * 8);
+            self.amd.movsd_xmm_mem(1, Amd::RSP, 64 + i * 8);
+            self.amd.call_indirect(label);
+            self.amd.movsd_mem_xmm(Amd::RSP, 32 + i * 8, 0);
+            self.amd.movsd_mem_xmm(Amd::RSP, 64 + i * 8, 1);
+        }
+
+        self.amd.vmovpd_ymm_mem(0, Amd::RSP, 32);
+        self.amd.vmovpd_ymm_mem(1, Amd::RSP, 64);
+        self.amd.add_rsp(32 * 3);
+    }
+
+    fn call_complex_vector_binary(&mut self, label: &str) {
+        self.amd.sub_rsp(32 * 5);
+        self.amd.vmovpd_mem_ymm(Amd::RSP, 32, 0);
+        self.amd.vmovpd_mem_ymm(Amd::RSP, 64, 1);
+        self.amd.vmovpd_mem_ymm(Amd::RSP, 96, 2);
+        self.amd.vmovpd_mem_ymm(Amd::RSP, 128, 3);
+
+        self.vzeroupper();
+
+        for i in 0..4 {
+            self.amd.movsd_xmm_mem(0, Amd::RSP, 32 + i * 8);
+            self.amd.movsd_xmm_mem(1, Amd::RSP, 64 + i * 8);
+            self.amd.movsd_xmm_mem(2, Amd::RSP, 96 + i * 8);
+            self.amd.movsd_xmm_mem(3, Amd::RSP, 128 + i * 8);
+            self.amd.call_indirect(label);
+            self.amd.movsd_mem_xmm(Amd::RSP, 32 + i * 8, 0);
+            self.amd.movsd_mem_xmm(Amd::RSP, 64 + i * 8, 1);
+        }
+
+        self.amd.vmovpd_ymm_mem(0, Amd::RSP, 32);
+        self.amd.vmovpd_ymm_mem(1, Amd::RSP, 64);
+        self.amd.add_rsp(32 * 5);
+    }
+
     fn predefined_consts(&mut self) {
         self.align();
 
@@ -653,6 +697,31 @@ impl Generator for AmdGenerator {
             AmdFamily::AvxVector => match num_args {
                 1 => self.call_vector_unary(&label),
                 2 => self.call_vector_binary(&label),
+                _ => return Err(anyhow!("invalid number of arguments")),
+            },
+        }
+
+        Ok(())
+    }
+
+    fn call_complex(&mut self, op: &str, num_args: usize) -> Result<()> {
+        let label = format!("_func_{}_", op);
+
+        match self.family {
+            AmdFamily::AvxScalar | AmdFamily::SSEScalar => {
+                self.vzeroupper();
+                #[cfg(target_family = "windows")]
+                self.amd.sub_rsp(32);
+
+                //self.amd.call(Amd::R12);
+                self.amd.call_indirect(&label);
+
+                #[cfg(target_family = "windows")]
+                self.amd.add_rsp(32);
+            }
+            AmdFamily::AvxVector => match num_args {
+                1 => self.call_complex_vector_unary(&label),
+                2 => self.call_complex_vector_binary(&label),
                 _ => return Err(anyhow!("invalid number of arguments")),
             },
         }

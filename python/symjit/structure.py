@@ -25,8 +25,11 @@ from sympy import (
     asinh,
     atan,
     atanh,
+    conjugate,
     diff,
+    im,
     log,
+    re,
     sqrt,
     symbols,
 )
@@ -56,6 +59,10 @@ def operation(func):
         op = "max"
     elif func == Heaviside:
         op = "heaviside"
+    elif func == re:
+        op = "real"
+    elif func == im:
+        op = "imaginary"
     elif func == asin:
         op = "arcsin"
     elif func == acos:

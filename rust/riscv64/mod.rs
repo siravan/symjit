@@ -411,10 +411,15 @@ impl Generator for RiscV {
     }
 
     fn xor(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(rvv! {fmv.x.d x(Self::t0), f(ϕ(s1))});
-        self.emit(rvv! {fmv.x.d x(Self::t1), f(ϕ(s2))});
-        self.emit(rvv! {xor x(Self::t0), x(Self::t0), x(Self::t1)});
-        self.emit(rvv! {fmv.d.x f(ϕ(dst)), x(Self::t0)});
+        if s1 == s2 {
+            // zeroing dst
+            self.emit(rvv! {fmv.d.x f(ϕ(dst)), x(Self::zero)});
+        } else {
+            self.emit(rvv! {fmv.x.d x(Self::t0), f(ϕ(s1))});
+            self.emit(rvv! {fmv.x.d x(Self::t1), f(ϕ(s2))});
+            self.emit(rvv! {xor x(Self::t0), x(Self::t0), x(Self::t1)});
+            self.emit(rvv! {fmv.d.x f(ϕ(dst)), x(Self::t0)});
+        }
     }
 
     fn not(&mut self, dst: Reg, s1: Reg) {
@@ -477,6 +482,10 @@ impl Generator for RiscV {
         self.emit(rvv! {jalr x(Self::ra), x(Self::a0), 0});
 
         Ok(())
+    }
+
+    fn call_complex(&mut self, op: &str, num_args: usize) -> Result<()> {
+        self.call(op, num_args)
     }
 
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {

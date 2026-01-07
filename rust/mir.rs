@@ -661,6 +661,12 @@ impl Mir {
         if let Some(f) = self.df.funcs.get(op) {
             Ok(f.clone())
         } else {
+            let op = if self.config.is_complex() {
+                &format!("cplx_{}", &op)
+            } else {
+                op
+            };
+
             VirtualTable::from_str(op)
         }
     }
@@ -930,8 +936,8 @@ impl Mir {
                 Instruction::Call { label, f } => match f {
                     Func::Unary(_) => ir.call(label, 1)?,
                     Func::Binary(_) => ir.call(label, 2)?,
-                    Func::UnaryCplx(_) => ir.call(label, 1)?,
-                    Func::BinaryCplx(_) => ir.call(label, 2)?,
+                    Func::UnaryCplx(_) => ir.call_complex(label, 1)?,
+                    Func::BinaryCplx(_) => ir.call_complex(label, 2)?,
                 },
                 Instruction::Fused { op, dst, a, b, c } => match op {
                     FusedOp::MulAdd => ir.fused_mul_add(*dst, *a, *b, *c),
