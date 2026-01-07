@@ -39,7 +39,7 @@ def func(states, p, **args):
     t0 = time.perf_counter_ns()
     f = compile_func(states, p, **args)
     t1 = time.perf_counter_ns()
-    print(f"compiled in {(t1 - t0) * 1e-6:.1f} ms\t", end="")
+    print(f"{(t1 - t0) * 1e-6:.1f} ms\t", end="")
     return f
 
 
@@ -333,12 +333,40 @@ def abbr_ty(ty):
     return ty[0]
 
 
+def abbr_dtype(dtype):
+    if dtype == "complex128":
+        return "C"
+    else:
+        return "R"
+
+
 def cases():
     cases = []
 
     if arch() == "amd":
-        for ty in ["native", "amd-sse", "bytecode", "debug"]:
-            for use_simd in [False, True]:
+        for dtype in ["float64", "complex128"]:
+            for ty in ["native", "amd-sse", "bytecode", "debug"]:
+                for use_simd in [False, True]:
+                    for use_threads in [False, True]:
+                        for cse in [False, True]:
+                            for fastmath in [False, True]:
+                                for opt_level in [0, 1, 2, 3]:
+                                    args = {
+                                        "backend": "rust",
+                                        "ty": ty,
+                                        "use_simd": use_simd,
+                                        "use_threads": use_threads,
+                                        "cse": cse,
+                                        "fastmath": fastmath,
+                                        "opt_level": opt_level,
+                                        "sanitize": False,
+                                        "dtype": dtype,
+                                    }
+                                    s = f"d={abbr_dtype(dtype)},y={abbr_ty(ty)}:s={Ω(use_simd)}:t={Ω(use_threads)}:c={Ω(cse)}:f={Ω(fastmath)},O={opt_level}"
+                                    cases.append((s, args))
+    else:
+        for dtype in ["float64", "complex128"]:
+            for ty in ["native", "bytecode", "debug"]:
                 for use_threads in [False, True]:
                     for cse in [False, True]:
                         for fastmath in [False, True]:
@@ -346,38 +374,21 @@ def cases():
                                 args = {
                                     "backend": "rust",
                                     "ty": ty,
-                                    "use_simd": use_simd,
+                                    "use_simd": False,
                                     "use_threads": use_threads,
                                     "cse": cse,
                                     "fastmath": fastmath,
                                     "opt_level": opt_level,
                                     "sanitize": False,
                                 }
-                                s = f"y={abbr_ty(ty)}:s={Ω(use_simd)}:t={Ω(use_threads)}:c={Ω(cse)}:f={Ω(fastmath)},O={opt_level}"
+                                s = f"d={abbr_dtype(dtype)},y={abbr_ty(ty)}:s=F:t={Ω(use_threads)}:c={Ω(cse)}:f={Ω(fastmath)},O={opt_level}"
                                 cases.append((s, args))
-    else:
-        for ty in ["native", "bytecode", "debug"]:
-            for use_threads in [False, True]:
-                for cse in [False, True]:
-                    for fastmath in [False, True]:
-                        for opt_level in [0, 1, 2, 3]:
-                            args = {
-                                "backend": "rust",
-                                "ty": ty,
-                                "use_simd": False,
-                                "use_threads": use_threads,
-                                "cse": cse,
-                                "fastmath": fastmath,
-                                "opt_level": opt_level,
-                                "sanitize": False,
-                            }
-                            s = f"y={abbr_ty(ty)}:s=F:t={Ω(use_threads)}:c={Ω(cse)}:f={Ω(fastmath)},O={opt_level}"
-                            cases.append((s, args))
     return cases
 
 
 def test_model(f, label, log, pyback=True, bytecode=False):
     print(f"testing {label}")
+    print("\td: dtype\t\t(R=float64, C=complex128)")
     print("\ty: ty\t\t(n: native, a: amd-sse, b: bytecode, d: debug)")
     print("\ts: simd\t\t(True/False)")
     print("\tt: threads\t(True/False)")
@@ -407,8 +418,9 @@ def test_model(f, label, log, pyback=True, bytecode=False):
         if args["ty"] not in ["bytecode", "debug"] or bytecode:
             print(f"{abbr}\t", end="")
             X, dt = f(**args)
+            print(X[(0,) * len(X.shape)])
             try:
-                np.testing.assert_array_almost_equal(X0, X)
+                np.testing.assert_array_almost_equal(X0, X.real)
                 print(f"\tpass in {1e-6 * dt:.3f} ms")
             except AssertionError:
                 print(f"\t\033[31mfail\033[0m in {1e-6 * dt:.3f} ms")
