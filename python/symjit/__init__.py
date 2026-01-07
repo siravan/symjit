@@ -1,314 +1,20 @@
 # from engine import Matrix
 import json
-import numbers
-import os
 import warnings
 
-import numpy as np
 from sympy import Symbol, lambdify
-from sympy.core.multidimensional import structure_copy
 
-from . import engine, pyengine, structure
-
-
-class Func:
-    def __init__(self, compiler, eqs):
-        self.compiler = compiler
-        self.count_states = self.compiler.count_states
-        self.count_params = self.compiler.count_params
-        self.count_obs = self.compiler.count_obs
-        self.f = self.compiler.fast_func()
-        self.prepare_fmt(eqs)
-        self.prepare_vecfmt(eqs)
-
-    def prepare_fmt(self, eqs):
-        if self.f is not None:
-            if isinstance(eqs, list):
-                self.fmt = lambda args: [self.f(*args)]
-            elif isinstance(eqs, tuple):
-                self.fmt = lambda args: (self.f(*args),)
-            else:
-                self.fmt = lambda args: self.f(*args)
-        else:
-            if isinstance(eqs, list):
-                self.fmt = lambda obs: obs.tolist()
-            elif isinstance(eqs, tuple):
-                self.fmt = lambda obs: tuple(obs.tolist())
-            else:
-                self.fmt = lambda obs: obs[0]
-
-    def prepare_vecfmt(self, eqs):
-        if isinstance(eqs, list):
-            self.vecfmt = lambda res: res
-        elif isinstance(eqs, tuple):
-            self.vecfmt = lambda res: tuple(res)
-        else:
-            self.vecfmt = lambda res: res[0]
-
-    def __call__(self, *args):
-        if len(args) > self.count_states:
-            p = np.array(args[self.count_states :])
-            self.compiler.params[:] = p
-
-        if isinstance(args[0], numbers.Number):
-            if self.f is not None:
-                return self.fmt(args)
-
-            u = np.asarray(args[: self.count_states])
-            self.compiler.states[:] = u
-            self.compiler.execute()
-            return self.fmt(self.compiler.obs)
-        elif isinstance(self.compiler, pyengine.PyCompiler):
-            return self.call_vectorized(*args)
-        else:
-            return self.call_matrix(*args)
-
-    def call_vectorized(self, *args):
-        assert len(args) >= self.count_states
-        shape = args[0].shape
-        n = args[0].size
-        h = max(self.count_states, self.count_obs)
-        buf = np.zeros((h, n), dtype=np.float64)
-
-        for i in range(self.count_states):
-            assert args[i].shape == shape
-            buf[i, :] = args[i].ravel()
-
-        self.compiler.execute_vectorized(buf)
-
-        res = []
-        for i in range(self.count_obs):
-            y = buf[i, :].reshape(shape)
-            res.append(y)
-
-        return self.vecfmt(res)
-
-    def call_matrix(self, *args):
-        assert len(args) >= self.count_states
-        shape = args[0].shape
-
-        with engine.Matrix() as states:
-            for i in range(self.count_states):
-                assert args[i].shape == shape
-                states.add_row(args[i])
-
-            res = []
-
-            with engine.Matrix() as obs:
-                for i in range(self.count_obs):
-                    X = np.zeros(shape, dtype=np.float64)
-                    res.append(X)
-                    obs.add_row(X)
-
-                self.compiler.execute_matrix(states, obs)
-
-        return self.vecfmt(res)
-
-    def dump(self, name, what="scalar"):
-        self.compiler.dump(name, what=what)
-
-    def dumps(self, what="scalar"):
-        return dumps(self.compiler, what=what)
-
-    def fast_func(self):
-        return self.f
-
-    def execute_vectorized(self, buf):
-        self.compiler.execute_vectorized(buf)
-
-    def apply(self, y, p=None):
-        y = np.asarray(y, dtype=self.dtype)
-        self.compiler.states[:] = y
-
-        if p is not None:
-            p = np.asarray(p, dtype=self.dtype)
-            self.compiler.params[:] = p
-
-        self.compiler.execute(0.0)
-        # return self.compiler.obs.copy()
-        return self.compiler.obs
-
-    def callable_quad(self, use_fast=True):
-        return self.compiler.callable_quad(use_fast=use_fast)
-
-    def callable_filter(self):
-        return self.compiler.callable_filter()
-
-
-class FuncComplex:
-    def __init__(self, compiler, eqs):
-        self.compiler = compiler
-        self.count_states = self.compiler.count_states
-        self.count_params = self.compiler.count_params
-        self.count_obs = self.compiler.count_obs
-        self.prepare_fmt(eqs)
-        self.prepare_vecfmt(eqs)
-
-    def prepare_fmt(self, eqs):
-        if isinstance(eqs, list):
-            self.fmt = lambda obs: np.frombuffer(obs, dtype=np.complex128).tolist()
-        elif isinstance(eqs, tuple):
-            self.fmt = lambda obs: tuple(
-                np.frombuffer(obs, dtype=np.complex128).tolist()
-            )
-        else:
-            self.fmt = lambda obs: obs[0] + obs[1] * 1j
-
-    def prepare_vecfmt(self, eqs):
-        if isinstance(eqs, list):
-            self.vecfmt = lambda res: res
-        elif isinstance(eqs, tuple):
-            self.vecfmt = lambda res: tuple(res)
-        else:
-            self.vecfmt = lambda res: res[0]
-
-    def __call__(self, *args):
-        if isinstance(args[0], numbers.Number):
-            u = np.frombuffer(
-                np.asarray(args, dtype=np.complex128),
-                dtype=np.float64,
-            )
-            self.compiler.params[:] = u[self.count_states :]
-            self.compiler.states[:] = u[: self.count_states]
-            self.compiler.execute()
-            return self.fmt(self.compiler.obs)
-        else:
-            return self.call_matrix(*args)
-
-    def call_matrix(self, *args):
-        if len(args) > self.count_states // 2:
-            p = np.frombuffer(
-                np.asarray(args, dtype=np.complex128),
-                dtype=np.float64,
-            )
-            self.compiler.params[:] = p[self.count_states :]
-
-        shape = args[0].shape
-
-        with engine.Matrix() as states:
-            for i in range(self.count_states // 2):
-                assert args[i].shape == shape
-                states.add_row(args[i].real)
-                states.add_row(args[i].imag)
-
-            res = []
-
-            with engine.Matrix() as obs:
-                AB = []
-
-                for i in range(self.count_obs // 2):
-                    a = np.empty(shape, dtype=np.float64)
-                    b = np.empty(shape, dtype=np.float64)
-                    obs.add_row(a)
-                    obs.add_row(b)
-                    AB.append((a, b))
-
-                self.compiler.execute_matrix(states, obs)
-
-                for a, b in AB:
-                    z = np.empty(shape, dtype=np.complex128)
-                    z.real = a
-                    z.imag = b
-                    res.append(z)
-
-        return self.vecfmt(res)
-
-    def dump(self, name, what="scalar"):
-        self.compiler.dump(name, what=what)
-
-    def dumps(self, what="scalar"):
-        return dumps(self.compiler, what=what)
-
-    def fast_func(self):
-        return None
-
-    def execute_vectorized(self, buf):
-        pass
-
-    def apply(self, y, p=None):
-        pass
-
-    def callable_quad(self, use_fast=True):
-        pass
-
-    def callable_filter(self):
-        pass
-
-
-class OdeFunc:
-    def __init__(self, compiler):
-        self.compiler = compiler
-
-    def __call__(self, t, y, *args):
-        # y = np.array(y, dtype="double")
-        self.compiler.states[0] = t
-        self.compiler.states[1:] = y
-
-        if len(args) > 0:
-            # p = np.array(args, dtype="double")
-            self.compiler.params[:] = args
-
-        self.compiler.execute()
-        return self.compiler.diffs.copy()
-
-    def get_u0(self):
-        return self.compiler.get_u0()
-
-    def get_p(self):
-        return self.compiler.get_p()
-
-    def dump(self, name, what="scalar"):
-        return self.compiler.dump(name, what=what)
-
-    def dumps(self, what="scalar"):
-        return dumps(self.compiler, what=what)
-
-
-class JacFunc:
-    def __init__(self, compiler):
-        self.compiler = compiler
-        self.count_states = self.compiler.count_states
-
-    def __call__(self, t, y, *args):
-        y = np.array(y, dtype="double")
-        self.compiler.states[0] = t
-        self.compiler.states[1:] = y
-
-        if len(args) > 0:
-            p = np.array(args, dtype="double")
-            self.compiler.params[:] = p
-
-        self.compiler.execute()
-        jac = self.compiler.obs.copy()
-        return jac.reshape((self.count_states - 1, self.count_states - 1))
-
-    def dump(self, name, what="scalar"):
-        self.compiler.dump(name, what=what)
-
-    def dumps(self, what="scalar"):
-        return dumps(self.compiler, what=what)
-
-
-def dumps(compiler, what="scalar"):
-    name = "symjit_dump.bin"
-    compiler.dump(name, what=what)
-    with open(name, "rb") as fd:
-        b = fd.read()
-    os.remove(name)
-    if b[0] == ord("#") and b[1] == ord("!"):
-        return b.decode("utf8")
-    else:
-        return b.hex()
+from . import engine, func, ode, pyengine, structure
 
 
 def can_use_rust(backend):
-    if not backend in ["python", "rust"]:
+    if backend not in ["python", "rust"]:
         raise ValueError(f"invalide backend: {backend}")
     return backend == "rust" and engine.lib.is_valid
 
 
 def can_use_python(backend):
-    if not backend in ["python", "rust"]:
+    if backend not in ["python", "rust"]:
         raise ValueError(f"invalide backend: {backend}")
     warnings.warn(
         "The Python codegen backend is deprecated and will be removed in a future version.",
@@ -406,9 +112,9 @@ def compile_func(
         raise ValueError("unsupported platform")
 
     if dtype == "complex128":
-        return FuncComplex(compiler, eqs)
+        return func.FuncComplex(compiler, eqs)
     else:
-        return Func(compiler, eqs)
+        return func.Func(compiler, eqs)
 
 
 def compile_ode(
@@ -425,6 +131,7 @@ def compile_ode(
     opt_level=1,
     defuns=None,
     sanitize=True,
+    dtype="float64",
 ):
     """Compile a symbolic ODE model into an executable form suitable for
     passung to scipy.integrate.solve_ivp.
@@ -486,6 +193,7 @@ def compile_ode(
             opt_level=opt_level,
             defuns=defuns,
             sanitize=sanitize,
+            dtype=dtype,
         )
     elif can_use_python(backend):
         model = pyengine.tree.model_ode(iv, states, odes, params)
@@ -493,7 +201,10 @@ def compile_ode(
     else:
         raise ValueError("unsupported platform")
 
-    return OdeFunc(compiler)
+    if dtype == "complex128":
+        return ode.OdeFuncComplex(compiler)
+    else:
+        return ode.OdeFunc(compiler)
 
 
 def compile_jac(
@@ -510,6 +221,7 @@ def compile_jac(
     opt_level=1,
     defuns=None,
     sanitize=True,
+    dtype="float64",
 ):
     """Genenrates and compiles Jacobian for an ODE system.
         iv: a single symbol, the independent variable.
@@ -553,6 +265,7 @@ def compile_jac(
             opt_level=opt_level,
             defuns=defuns,
             sanitize=sanitize,
+            dtype=dtype,
         )
     elif can_use_python(backend):
         model = pyengine.tree.model_jac(iv, states, odes, params)
@@ -560,7 +273,10 @@ def compile_jac(
     else:
         raise ValueError("unsupported platform")
 
-    return JacFunc(compiler)
+    if dtype == "complex128":
+        return ode.JacFuncComplex(compiler)
+    else:
+        return ode.JacFunc(compiler)
 
 
 def update_json_model(model):
@@ -590,6 +306,7 @@ def compile_json(
     opt_level=1,
     backend="rust",
     sanitize=True,
+    dtype="float64",
 ):
     """Compiles CellML models
     CellML json files are extracted using CellMLToolkit.jl
@@ -610,11 +327,18 @@ def compile_json(
             opt_level=opt_level,
             defuns=defuns,
             sanitize=sanitize,
+            dtype=dtype,
         )
 
         if compiler.count_diffs == 0:
-            return Func(compiler, [])
+            if dtype == "complex128":
+                return func.FuncComplex(compiler, [])
+            else:
+                return func.Func(compiler, [])
         else:
-            return OdeFunc(compiler)
+            if dtype == "complex128":
+                return ode.OdeFuncComplex(compiler)
+            else:
+                return ode.OdeFunc(compiler)
     else:
         raise ValueError("CellML json files only work with the rust backend")

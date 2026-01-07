@@ -347,6 +347,18 @@ class RustyCompiler:
             buf = fd.read()
             return buf
 
+    def dumps(self, what="scalar"):
+        name = "symjit_dump.bin"
+        self.dump(name, what=what)
+        with open(name, "rb") as fd:
+            b = fd.read()
+        os.remove(name)
+
+        if b[0] == ord("#") and b[1] == ord("!"):
+            return b.decode("utf8")
+        else:
+            return b.hex()
+
     def execute(self):
         if not lib._execute(self.p):
             raise ValueError("cannot execute the model")
