@@ -351,6 +351,18 @@ impl Generator for RiscV {
         self.emit(rvv! {fdiv.d f(ϕ(dst)), f(ϕ(s1)), f(ϕ(s2))});
     }
 
+    fn real(&mut self, dst: Reg, s1: Reg) {
+        self.fmov(dst, s1);
+    }
+
+    fn imaginary(&mut self, dst: Reg, _s1: Reg) {
+        self.xor(dst, dst, dst);
+    }
+
+    fn conjugate(&mut self, dst: Reg, s1: Reg) {
+        self.fmov(dst, s1);
+    }
+
     fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.emit(rvv! {fgt.d x(Self::t0), f(ϕ(s1)), f(ϕ(s2))});
         self.emit(rvv! {neg x(Self::t0), x(Self::t0)});

@@ -230,6 +230,22 @@ impl Generator for Complexifier {
         self.mir.divide(re(dst), Self::T0, t);
     }
 
+    fn real(&mut self, dst: Reg, s1: Reg) {
+        self.mir.fmov(re(dst), re(s1));
+        self.mir.xor(im(dst), im(dst), im(dst));
+    }
+
+    fn imaginary(&mut self, dst: Reg, s1: Reg) {
+        self.mir.fmov(re(dst), im(s1));
+        self.mir.xor(im(dst), im(dst), im(dst));
+    }
+
+    fn conjugate(&mut self, dst: Reg, s1: Reg) {
+        self.mir.fmov(re(dst), re(s1));
+        self.mir.fmov(im(dst), im(s1));
+        self.mir.neg(im(dst), im(dst));
+    }
+
     fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.gt(re(dst), re(s1), re(s2));
         self.mir.fmov(im(dst), re(dst));

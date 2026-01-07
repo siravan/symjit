@@ -25,6 +25,9 @@ pub enum UniOp {
     Floor,
     Ceiling,
     Trunc,
+    Real,
+    Imaginary,
+    Conjugate,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -346,6 +349,7 @@ impl Mir {
             s1,
         });
     }
+
     pub fn square(&mut self, dst: Reg, s1: Reg) {
         self.times(dst, s1, s1);
     }
@@ -398,6 +402,30 @@ impl Mir {
     pub fn trunc(&mut self, dst: Reg, s1: Reg) {
         self.push(Instruction::Uni {
             op: UniOp::Trunc,
+            dst,
+            s1,
+        });
+    }
+
+    pub fn real(&mut self, dst: Reg, s1: Reg) {
+        self.push(Instruction::Uni {
+            op: UniOp::Real,
+            dst,
+            s1,
+        });
+    }
+
+    pub fn imaginary(&mut self, dst: Reg, s1: Reg) {
+        self.push(Instruction::Uni {
+            op: UniOp::Imaginary,
+            dst,
+            s1,
+        });
+    }
+
+    pub fn conjugate(&mut self, dst: Reg, s1: Reg) {
+        self.push(Instruction::Uni {
+            op: UniOp::Conjugate,
             dst,
             s1,
         });
@@ -710,6 +738,9 @@ impl Mir {
             UniOp::Floor => s1.floor(),
             UniOp::Ceiling => s1.ceil(),
             UniOp::Trunc => s1.trunc(),
+            UniOp::Real => s1,
+            UniOp::Imaginary => 0.0,
+            UniOp::Conjugate => s1,
         };
 
         Self::set(regs, dst, val);
@@ -879,6 +910,9 @@ impl Mir {
             UniOp::Floor => ir.floor(dst, s1),
             UniOp::Ceiling => ir.ceiling(dst, s1),
             UniOp::Trunc => ir.trunc(dst, s1),
+            UniOp::Real => ir.real(dst, s1),
+            UniOp::Imaginary => ir.imaginary(dst, s1),
+            UniOp::Conjugate => ir.conjugate(dst, s1),
         };
     }
 

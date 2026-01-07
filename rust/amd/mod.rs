@@ -523,6 +523,18 @@ impl Generator for AmdGenerator {
         binop!(self, divsd, vdivsd, vdivpd, dst, s1, s2, false);
     }
 
+    fn real(&mut self, dst: Reg, s1: Reg) {
+        self.fmov(dst, s1);
+    }
+
+    fn imaginary(&mut self, dst: Reg, _s1: Reg) {
+        self.xor(dst, dst, dst);
+    }
+
+    fn conjugate(&mut self, dst: Reg, s1: Reg) {
+        self.fmov(dst, s1);
+    }
+
     fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, cmpnlesd, vcmpnlesd, vcmpnlepd, dst, s1, s2, false);
     }

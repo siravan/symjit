@@ -155,8 +155,23 @@ impl Config {
 // the list of intrinsic unary ops, i.e., operations that can be implemented directly in
 // machine code
 const UNARY: &[&str] = &[
-    "abs", "not", "neg", "root", "square", "cube", "recip", "round", "floor", "ceiling", "trunc",
-    "frac", "_powi_", "_call_",
+    "abs",
+    "not",
+    "neg",
+    "root",
+    "square",
+    "cube",
+    "recip",
+    "round",
+    "floor",
+    "ceiling",
+    "trunc",
+    "frac",
+    "_powi_",
+    "_call_",
+    "real",
+    "imaginary",
+    "conjugate",
 ];
 
 // the list of intrinsic binary ops, i.e., operations that can be implemented directly in

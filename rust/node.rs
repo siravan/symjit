@@ -456,6 +456,9 @@ impl Node {
                 "frac" => mir.frac(reg(dst), reg(r)),
                 "_powi_" => mir.powi(reg(dst), reg(r), *power),
                 "_call_" => mir.setup_call_unary(reg(r)),
+                "real" => mir.real(reg(dst), reg(r)),
+                "imaginary" => mir.imaginary(reg(dst), reg(r)),
+                "conjugate" => mir.conjugate(reg(dst), reg(r)),
                 _ => return Err(anyhow!("unary operator {:?} is not recognized", op)),
             };
 

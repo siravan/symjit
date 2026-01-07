@@ -280,6 +280,18 @@ impl Generator for ArmGenerator {
         self.emit(arm! {fdiv d(ϕ(dst)), d(ϕ(s1)), d(ϕ(s2))});
     }
 
+    fn real(&mut self, dst: Reg, s1: Reg) {
+        self.fmov(dst, s1);
+    }
+
+    fn imaginary(&mut self, dst: Reg, _s1: Reg) {
+        self.xor(dst, dst, dst);
+    }
+
+    fn conjugate(&mut self, dst: Reg, s1: Reg) {
+        self.fmov(dst, s1);
+    }
+
     fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.emit(arm! {fcmgt d(ϕ(dst)), d(ϕ(s1)), d(ϕ(s2))});
     }
@@ -761,6 +773,18 @@ impl Generator for ArmSimdGenerator {
 
     fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.emit(arm! {fdiv q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
+    }
+
+    fn real(&mut self, dst: Reg, s1: Reg) {
+        self.fmov(dst, s1);
+    }
+
+    fn imaginary(&mut self, dst: Reg, _s1: Reg) {
+        self.xor(dst, dst, dst);
+    }
+
+    fn conjugate(&mut self, dst: Reg, s1: Reg) {
+        self.fmov(dst, s1);
     }
 
     fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
