@@ -96,10 +96,13 @@ impl VirtualTable {
             "cplx_arcsinh" => Func::UnaryCplx(Self::cplx_asinh),
             "cplx_arccosh" => Func::UnaryCplx(Self::cplx_acosh),
             "cplx_arctanh" => Func::UnaryCplx(Self::cplx_atanh),
+            "cplx_root" => Func::UnaryCplx(Self::cplx_root),
             "cplx_cbrt" => Func::UnaryCplx(Self::cplx_cbrt),
             "cplx_exp" => Func::UnaryCplx(Self::cplx_exp),
             "cplx_ln" => Func::UnaryCplx(Self::cplx_ln),
             "cplx_log" => Func::UnaryCplx(Self::cplx_log),
+            // Complex Binary Functions
+            "cplx_power" => Func::BinaryCplx(Self::cplx_power),
             _ => {
                 return Err(anyhow!("op_code {} not found", op));
             }
@@ -336,6 +339,10 @@ impl VirtualTable {
         z.atanh()
     }
 
+    pub extern "C" fn cplx_root(z: Complex<f64>) -> Complex<f64> {
+        z.sqrt()
+    }
+
     pub extern "C" fn cplx_cbrt(z: Complex<f64>) -> Complex<f64> {
         z.cbrt()
     }
@@ -350,5 +357,9 @@ impl VirtualTable {
 
     pub extern "C" fn cplx_log(z: Complex<f64>) -> Complex<f64> {
         z.log10()
+    }
+
+    pub extern "C" fn cplx_power(x: Complex<f64>, y: Complex<f64>) -> Complex<f64> {
+        x.powc(y)
     }
 }

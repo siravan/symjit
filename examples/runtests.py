@@ -1,7 +1,7 @@
 import math
 import platform
+import sys
 import time
-from random import randint, random
 
 import numpy as np
 import pandas as pd
@@ -19,6 +19,7 @@ from sympy import (
 )
 
 L = 1000
+use_complex = len(sys.argv) > 1 and sys.argv[1] == "complex"
 
 
 def arch():
@@ -48,6 +49,14 @@ def func(states, p, **args):
 
 def mandelbrot(**args):
     A, B = np.meshgrid(np.arange(-2, 1, 0.002), np.arange(-1.5, 1.5, 0.002))
+
+    try:
+        if False and args["dtype"] == "complex128":
+            A = A + 0j
+            B = B + 0j
+    except KeyError:
+        pass
+
     f = func([a, b, x, y], [x**2 - y**2 + a, 2 * x * y + b], **args)
     X = np.zeros_like(A)
     Y = np.zeros_like(A)
@@ -126,7 +135,7 @@ def pi(**args):
     u = [f(1 / 5, 1 / 239) for _ in range(L)]
     t1 = time.perf_counter_ns()
 
-    return u[randint(0, L - 1)], t1 - t0
+    return np.sum(u), t1 - t0
 
 
 def viete_expr(x, n):
@@ -149,7 +158,7 @@ def viete(**args):
     u = [f(1 / 2) for _ in range(L)]
     t1 = time.perf_counter_ns()
 
-    return u[randint(0, L - 1)], t1 - t0
+    return np.sum(u), t1 - t0
 
 
 def lemniscate(**args):
@@ -167,7 +176,7 @@ def lemniscate(**args):
     u = [f(1 / 2) for _ in range(L)]
     t1 = time.perf_counter_ns()
 
-    return u[randint(0, L - 1)], t1 - t0
+    return np.sum(u), t1 - t0
 
 
 def binom(**args):
@@ -186,7 +195,7 @@ def binom(**args):
     u = [f(1, 1) for _ in range(L)]
     t1 = time.perf_counter_ns()
 
-    return u[randint(0, L - 1)], t1 - t0
+    return np.sum(u), t1 - t0
 
 
 def stress(**args):
@@ -202,7 +211,7 @@ def stress(**args):
     u = [f(0.001) for _ in range(L)]
     t1 = time.perf_counter_ns()
 
-    return u[randint(0, L - 1)], t1 - t0
+    return np.sum(u), t1 - t0
 
 
 def power(**args):
@@ -220,7 +229,7 @@ def power(**args):
     u = [f(x0) for _ in range(L)]
     t1 = time.perf_counter_ns()
 
-    return u[randint(0, L - 1)], t1 - t0
+    return np.sum(u), t1 - t0
 
 
 def powi_mod(**args):
@@ -238,7 +247,7 @@ def powi_mod(**args):
     u = [f(1, 1) for _ in range(L)]
     t1 = time.perf_counter_ns()
 
-    return u[randint(0, L - 1)], t1 - t0
+    return np.sum(u), t1 - t0
 
 
 def fact(**args):
@@ -255,7 +264,7 @@ def fact(**args):
     u = [f(18) for _ in range(L)]
     t1 = time.perf_counter_ns()
 
-    return u[randint(0, L - 1)], t1 - t0
+    return np.sum(u), t1 - t0
 
 
 def sumprod(**args):
@@ -270,7 +279,7 @@ def sumprod(**args):
     u = [f(i / L) for i in range(L)]
     t1 = time.perf_counter_ns()
 
-    return sum(u), t1 - t0
+    return np.sum(u), t1 - t0
 
 
 def triple(**args):
@@ -343,8 +352,12 @@ def abbr_dtype(dtype):
 def cases():
     cases = []
 
+    dtypes = ["float64"]
+    if use_complex:
+        dtypes.append("complex128")
+
     if arch() == "amd":
-        for dtype in ["float64", "complex128"]:
+        for dtype in dtypes:
             for ty in ["native", "amd-sse", "bytecode", "debug"]:
                 for use_simd in [False, True]:
                     for use_threads in [False, True]:
@@ -365,7 +378,7 @@ def cases():
                                     s = f"d={abbr_dtype(dtype)},y={abbr_ty(ty)}:s={Ω(use_simd)}:t={Ω(use_threads)}:c={Ω(cse)}:f={Ω(fastmath)},O={opt_level}"
                                     cases.append((s, args))
     else:
-        for dtype in ["float64", "complex128"]:
+        for dtype in dtypes:
             for ty in ["native", "bytecode", "debug"]:
                 for use_threads in [False, True]:
                     for cse in [False, True]:
@@ -418,7 +431,6 @@ def test_model(f, label, log, pyback=True, bytecode=False):
         if args["ty"] not in ["bytecode", "debug"] or bytecode:
             print(f"{abbr}\t", end="")
             X, dt = f(**args)
-            print(X[(0,) * len(X.shape)])
             try:
                 np.testing.assert_array_almost_equal(X0, X.real)
                 print(f"\tpass in {1e-6 * dt:.3f} ms")
@@ -454,6 +466,7 @@ def test_model(f, label, log, pyback=True, bytecode=False):
 
 ################################################################
 
+
 log = []
 test_model(mandelbrot, "mandelbrot", log)
 test_model(mandelbrot2, "mandelbrot2", log)
@@ -466,8 +479,10 @@ test_model(binom, "stress", log)
 test_model(power, "power", log)
 test_model(powi_mod, "powi_mod", log, pyback=False)
 test_model(fact, "fact", log)
-test_model(sumprod, "sumprod", log, pyback=False)
-test_model(triple_callable, "triple_callable", log, pyback=False, bytecode=False)
+
+if not use_complex:
+    test_model(sumprod, "sumprod", log, pyback=False)
+    test_model(triple_callable, "triple_callable", log, pyback=False, bytecode=False)
 
 df = pd.DataFrame(log)
 df.to_csv("runtests.csv")

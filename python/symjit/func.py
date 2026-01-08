@@ -102,7 +102,7 @@ class Func:
         self.compiler.dump(name, what=what)
 
     def dumps(self, what="scalar"):
-        return self.compiler.dumpd(what=what)
+        return self.compiler.dumps(what=what)
 
     def fast_func(self):
         return self.f
@@ -182,8 +182,9 @@ class FuncComplex:
         with engine.Matrix() as states:
             for i in range(self.count_states // 2):
                 assert args[i].shape == shape
-                states.add_row(args[i].real)
-                states.add_row(args[i].imag)
+                v = np.ascontiguousarray(args[i], dtype=np.complex128)
+                states.add_row(v.real)
+                states.add_row(v.imag)
 
             res = []
 

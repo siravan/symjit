@@ -70,7 +70,10 @@ impl Assembler {
 
     pub fn apply_jumps(&mut self) {
         for (label, ip, code, f, rel) in self.jumps.iter() {
-            let target = self.labels.get(label).expect("label not found");
+            let target = self
+                .labels
+                .get(label)
+                .expect(&format!("label {} not found", label));
             let offset = (*target as i32) - if *rel { *ip as i32 } else { 0 };
 
             let x = f(offset, *code);

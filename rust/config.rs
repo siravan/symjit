@@ -109,7 +109,7 @@ impl Config {
     pub fn opt_level(&self) -> u8 {
         let level = ((self.opt & OPT_LEVEL_MASK) >> OPT_LEVEL_SHIFT) as u8;
 
-        if self.is_sse() && self.test(SANITIZE) {
+        if self.is_sse() {
             level.min(2)
         } else {
             level
