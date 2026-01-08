@@ -4,7 +4,8 @@ import sys
 import time
 
 import numpy as np
-import pandas as pd
+
+# import pandas as pd
 from scipy import integrate
 from symjit import compile_func
 from sympy import (
@@ -484,6 +485,6 @@ if not use_complex:
     test_model(sumprod, "sumprod", log, pyback=False)
     test_model(triple_callable, "triple_callable", log, pyback=False, bytecode=False)
 
-df = pd.DataFrame(log)
-df.to_csv("runtests.csv")
-print("timing information saved as `runtests.csv`")
+# df = pd.DataFrame(log)
+# df.to_csv("runtests.csv")
+# print("timing information saved as `runtests.csv`")
