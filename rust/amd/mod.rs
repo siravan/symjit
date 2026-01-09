@@ -204,7 +204,6 @@ impl AmdGenerator {
         for i in 0..4 {
             self.amd.movsd_xmm_mem(0, Amd::RSP, 32 + i * 8);
             self.amd.movsd_xmm_mem(1, Amd::RSP, 64 + i * 8);
-            //self.amd.call(Amd::R12);
             self.amd.call_indirect(label);
             self.amd.movsd_mem_xmm(Amd::RSP, 32 + i * 8, 0);
         }
