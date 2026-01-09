@@ -79,6 +79,7 @@ impl VirtualTable {
             "atan2" => Func::Binary(Self::atan2),
             // Unary Complex Functions
             "cplx_sin" => Func::UnaryCplx(Self::cplx_sin),
+            "cplx_sinc" => Func::UnaryCplx(Self::cplx_sinc),
             "cplx_cos" => Func::UnaryCplx(Self::cplx_cos),
             "cplx_tan" => Func::UnaryCplx(Self::cplx_tan),
             "cplx_csc" => Func::UnaryCplx(Self::cplx_csc),
@@ -265,6 +266,16 @@ impl VirtualTable {
     pub extern "C" fn chi(x: f64) -> f64 {
         let (_, c) = cephes64::shichi(x);
         c
+    }
+
+    /************** Complex Functions ***************/
+
+    pub extern "C" fn cplx_sinc(z: Complex<f64>) -> Complex<f64> {
+        if z == Complex::ZERO {
+            Complex::ONE
+        } else {
+            z.sin() / z
+        }
     }
 
     pub extern "C" fn cplx_sin(z: Complex<f64>) -> Complex<f64> {

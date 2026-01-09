@@ -444,6 +444,29 @@ macro_rules! arm {
     (fcmge q($rd:expr), q($rn:expr), q($rm:expr)) => {
         0x6e60e400 | rd!($rd) | rn!($rn) | rm!($rm)
     };
+
+    // logical ops
+    (and v($rd:expr).16b, v($rn:expr).16b, v($rm:expr).16b) => {
+        0x4e201c00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (orr v($rd:expr).16b, v($rn:expr).16b, v($rm:expr).16b) => {
+        0x4ea01c00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (eor v($rd:expr).16b, v($rn:expr).16b, v($rm:expr).16b) => {
+        0x6e201c00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (bit v($rd:expr).16b, v($rn:expr).16b, v($rm:expr).16b) => {
+        0x6ea01c00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (bif v($rd:expr).16b, v($rn:expr).16b, v($rm:expr).16b) => {
+        0x6ee01c00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (bsl v($rd:expr).16b, v($rn:expr).16b, v($rm:expr).16b) => {
+        0x6e601c00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (not v($rd:expr).16b, v($rn:expr).16b) => {
+        0x6e205800 | rd!($rd) | rn!($rn)
+    };
 }
 
 #[test]

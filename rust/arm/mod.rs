@@ -663,6 +663,7 @@ impl Generator for ArmSimdGenerator {
         }
 
         self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(s1))});
+        //self.emit(arm! {orr v(ϕ(dst)).8b, v(ϕ(s1)).8b, v(ϕ(s1)).8b});
     }
 
     fn fxchg(&mut self, s1: Reg, s2: Reg) {
@@ -809,28 +810,28 @@ impl Generator for ArmSimdGenerator {
 
     fn neq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.emit(arm! {fcmeq q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
-        self.emit(arm! {not v(ϕ(dst)).8b, v(ϕ(dst)).8b});
+        self.emit(arm! {not v(ϕ(dst)).16b, v(ϕ(dst)).16b});
     }
 
     fn and(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(arm! {and v(ϕ(dst)).8b, v(ϕ(s1)).8b, v(ϕ(s2)).8b});
+        self.emit(arm! {and v(ϕ(dst)).16b, v(ϕ(s1)).16b, v(ϕ(s2)).16b});
     }
 
     fn andnot(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(arm! {not v(ϕ(s1)).8b, v(ϕ(s1)).8b});
-        self.emit(arm! {and v(ϕ(dst)).8b, v(ϕ(s1)).8b, v(ϕ(s2)).8b});
+        self.emit(arm! {not v(ϕ(s1)).16b, v(ϕ(s1)).16b});
+        self.emit(arm! {and v(ϕ(dst)).16b, v(ϕ(s1)).16b, v(ϕ(s2)).16b});
     }
 
     fn or(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(arm! {orr v(ϕ(dst)).8b, v(ϕ(s1)).8b, v(ϕ(s2)).8b});
+        self.emit(arm! {orr v(ϕ(dst)).16b, v(ϕ(s1)).16b, v(ϕ(s2)).16b});
     }
 
     fn xor(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(arm! {eor v(ϕ(dst)).8b, v(ϕ(s1)).8b, v(ϕ(s2)).8b});
+        self.emit(arm! {eor v(ϕ(dst)).16b, v(ϕ(s1)).16b, v(ϕ(s2)).16b});
     }
 
     fn not(&mut self, dst: Reg, s1: Reg) {
-        self.emit(arm! {not v(ϕ(dst)).8b, v(ϕ(s1)).8b});
+        self.emit(arm! {not v(ϕ(dst)).16b, v(ϕ(s1)).16b});
     }
 
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
@@ -1002,10 +1003,10 @@ impl Generator for ArmSimdGenerator {
             self.fmov(dst, true_val);
         } else if dst != true_val && dst != false_val {
             self.load_stack(dst, idx);
-            self.emit(arm! {bsl v(ϕ(dst)).8b, v(ϕ(true_val)).8b, v(ϕ(false_val)).8b});
+            self.emit(arm! {bsl v(ϕ(dst)).16b, v(ϕ(true_val)).16b, v(ϕ(false_val)).16b});
         } else {
             self.load_stack(Reg::Temp, idx);
-            self.emit(arm! {bsl v(ϕ(Reg::Temp)).8b, v(ϕ(true_val)).8b, v(ϕ(false_val)).8b});
+            self.emit(arm! {bsl v(ϕ(Reg::Temp)).16b, v(ϕ(true_val)).16b, v(ϕ(false_val)).16b});
             self.fmov(dst, Reg::Temp);
         }
     }

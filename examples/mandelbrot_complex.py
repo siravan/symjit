@@ -20,7 +20,7 @@ for _ in range(20):
 
 t0 = time.perf_counter_ns()
 
-f = compile_func([z, c], [p], **args, dtype="complex128")
+f = compile_func([z, c], [p], **args)
 
 n = A.shape[0] * A.shape[1]
 
