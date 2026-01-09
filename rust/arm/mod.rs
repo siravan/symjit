@@ -322,8 +322,7 @@ impl Generator for ArmGenerator {
     }
 
     fn andnot(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(arm! {not v(ϕ(s1)).8b, v(ϕ(s1)).8b});
-        self.emit(arm! {and v(ϕ(dst)).8b, v(ϕ(s1)).8b, v(ϕ(s2)).8b});
+        self.emit(arm! {bic v(ϕ(dst)).8b, v(ϕ(s1)).8b, v(ϕ(s2)).8b});
     }
 
     fn or(&mut self, dst: Reg, s1: Reg, s2: Reg) {
@@ -818,8 +817,7 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn andnot(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(arm! {not v(ϕ(s1)).16b, v(ϕ(s1)).16b});
-        self.emit(arm! {and v(ϕ(dst)).16b, v(ϕ(s1)).16b, v(ϕ(s2)).16b});
+        self.emit(arm! {bic v(ϕ(dst)).16b, v(ϕ(s1)).16b, v(ϕ(s2)).16b});
     }
 
     fn or(&mut self, dst: Reg, s1: Reg, s2: Reg) {

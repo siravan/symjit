@@ -295,6 +295,9 @@ macro_rules! arm {
     (bif v($rd:expr).8b, v($rn:expr).8b, v($rm:expr).8b) => {
         0x2ee01c00 | rd!($rd) | rn!($rn) | rm!($rm)
     };
+    (bic v($rd:expr).8b, v($rn:expr).8b, v($rm:expr).8b) => {
+        0x0e601c00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
     (bsl v($rd:expr).8b, v($rn:expr).8b, v($rm:expr).8b) => {
         0x2e601c00 | rd!($rd) | rn!($rn) | rm!($rm)
     };
@@ -460,6 +463,9 @@ macro_rules! arm {
     };
     (bif v($rd:expr).16b, v($rn:expr).16b, v($rm:expr).16b) => {
         0x6ee01c00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (bic v($rd:expr).16b, v($rn:expr).16b, v($rm:expr).16b) => {
+        0x4e601c00 | rd!($rd) | rn!($rn) | rm!($rm)
     };
     (bsl v($rd:expr).16b, v($rn:expr).16b, v($rm:expr).16b) => {
         0x6e601c00 | rd!($rd) | rn!($rn) | rm!($rm)
