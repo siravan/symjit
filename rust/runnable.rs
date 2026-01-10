@@ -83,14 +83,8 @@ impl Application {
         let use_simd = prog.config().use_simd() && !prog.builder.has_loop();
         let use_threads = prog.config().use_threads() && prog.mem_size() < 128;
 
-        let max_args = if prog.config().is_amd64() && cfg!(target_family = "windows") {
-            4
-        } else {
-            8
-        };
-
         let can_fast = prog.config().may_fast()
-            && count_states < max_args
+            && count_states <= 8
             && count_params == 0
             && count_obs == 1
             && count_diffs == 0;

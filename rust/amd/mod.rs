@@ -269,19 +269,15 @@ impl AmdGenerator {
         self.append_quad(0xffffffffffffffff);
     }
 
-    fn frame_size(&self, cap: u32) -> u32 {
-        align_stack(self.reg_size() * cap + 8) - 8
-    }
-
     fn save_nonvolatile_regs(&mut self) {
         if cfg!(target_family = "windows") {
-            self.amd.mov_mem_reg(Amd::RSP, 0x08, MEM);
+            // self.amd.mov_mem_reg(Amd::RSP, 0x08, MEM);
             self.amd.mov_mem_reg(Amd::RSP, 0x10, PARAMS);
             self.amd.mov_mem_reg(Amd::RSP, 0x18, IDX);
             self.amd.mov_mem_reg(Amd::RSP, 0x20, STATES);
         } else {
             self.amd.sub_rsp(32);
-            self.amd.mov_mem_reg(Amd::RSP, 0x00, MEM);
+            // self.amd.mov_mem_reg(Amd::RSP, 0x00, MEM);
             self.amd.mov_mem_reg(Amd::RSP, 0x08, PARAMS);
             self.amd.mov_mem_reg(Amd::RSP, 0x10, IDX);
             self.amd.mov_mem_reg(Amd::RSP, 0x18, STATES);
@@ -290,26 +286,29 @@ impl AmdGenerator {
 
     fn load_nonvolatile_regs(&mut self) {
         if cfg!(target_family = "windows") {
-            self.amd.mov_reg_mem(STATES, Amd::RSP, 0x20);
-            self.amd.mov_reg_mem(IDX, Amd::RSP, 0x18);
+            // self.amd.mov_reg_mem(MEM, Amd::RSP, 0x08);
             self.amd.mov_reg_mem(PARAMS, Amd::RSP, 0x10);
-            self.amd.mov_reg_mem(MEM, Amd::RSP, 0x08);
+            self.amd.mov_reg_mem(IDX, Amd::RSP, 0x18);
+            self.amd.mov_reg_mem(STATES, Amd::RSP, 0x20);
         } else {
-            self.amd.mov_reg_mem(STATES, Amd::RSP, 0x18);
-            self.amd.mov_reg_mem(IDX, Amd::RSP, 0x10);
+            // self.amd.mov_reg_mem(MEM, Amd::RSP, 0x00);
             self.amd.mov_reg_mem(PARAMS, Amd::RSP, 0x08);
-            self.amd.mov_reg_mem(MEM, Amd::RSP, 0x00);
+            self.amd.mov_reg_mem(IDX, Amd::RSP, 0x10);
+            self.amd.mov_reg_mem(STATES, Amd::RSP, 0x18);
             self.amd.add_rsp(32);
         }
     }
 
     #[cfg(target_family = "unix")]
-    fn chkstk(&mut self, size: u32) {
-        self.amd.sub_rsp(size);
+    fn sub_rsp(&mut self, size: u32) {
+        if size != 0 {
+            self.amd.sub_rsp(size);
+        }
     }
 
     #[cfg(target_family = "windows")]
-    fn chkstk(&mut self, mut size: u32) {
+    fn sub_rsp(&mut self, mut size: u32) {
+        // chkstk function
         const PAGE_SIZE: u32 = 4096;
 
         while size > PAGE_SIZE {
@@ -319,6 +318,12 @@ impl AmdGenerator {
         }
 
         self.amd.sub_rsp(size);
+    }
+
+    fn add_rsp(&mut self, size: u32) {
+        if size != 0 {
+            self.amd.add_rsp(size);
+        }
     }
 }
 
@@ -761,9 +766,9 @@ impl Generator for AmdGenerator {
 
     #[cfg(target_family = "unix")]
     fn prologue_fast(&mut self, cap: u32, num_args: u32) {
-        self.amd.push(MEM);
-        self.amd.push(PARAMS);
-        self.amd.sub_rsp(self.frame_size(cap));
+        self.amd.push(Amd::RBP);
+        let frame_size = align_stack(cap * self.reg_size());
+        self.sub_rsp(frame_size);
         self.amd.mov(MEM, Amd::RSP);
 
         for i in 0..num_args {
@@ -771,14 +776,38 @@ impl Generator for AmdGenerator {
         }
     }
 
-    #[cfg(target_family = "unix")]
+    #[cfg(target_family = "windows")]
+    fn prologue_fast(&mut self, cap: u32, num_args: u32) {
+        self.amd.push(Amd::RBP);
+        let frame_size = align_stack(cap * self.reg_size());
+        self.sub_rsp(frame_size);
+        self.amd.mov(MEM, Amd::RSP);
+
+        for i in 0..num_args.min(4) {
+            self.amd
+                .movsd_mem_xmm(MEM, (i * self.reg_size()) as i32, i as u8);
+        }
+
+        for i in 4..num_args {
+            // the offset of the fifth or eight arguments:
+            // +4 for the 32-byte home
+            // +1 for the return address in the stack
+            // +1 for RBP in the stack
+            // -4 for the first four arguments passed in XMM0-XMM3
+            self.amd
+                .movsd_xmm_mem(0, MEM, (frame_size + (i + 2) * self.reg_size()) as i32);
+            self.amd.movsd_mem_xmm(MEM, (i * self.reg_size()) as i32, 0);
+        }
+    }
+
     fn epilogue_fast(&mut self, cap: u32, idx_ret: i32) {
         self.vzeroupper();
-        self.amd.movsd_xmm_mem(0, Amd::RSP, 8 * idx_ret);
+        self.amd
+            .movsd_xmm_mem(0, Amd::RSP, idx_ret * self.reg_size() as i32);
 
-        self.amd.add_rsp(self.frame_size(cap));
-        self.amd.pop(PARAMS);
-        self.amd.pop(MEM);
+        let frame_size = align_stack(cap * self.reg_size());
+        self.add_rsp(frame_size);
+        self.amd.pop(Amd::RBP);
         self.amd.ret();
     }
 
@@ -793,6 +822,7 @@ impl Generator for AmdGenerator {
      */
     fn prologue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
         let win = cfg!(target_family = "windows");
+        self.amd.push(Amd::RBP);
         self.save_nonvolatile_regs();
 
         self.amd.mov(MEM, if win { Amd::RCX } else { Amd::RDI }); // first arg = mem if direct mode, otherwise null
@@ -803,9 +833,8 @@ impl Generator for AmdGenerator {
         self.amd.or(STATES, STATES);
         self.amd.jz("@main");
 
-        let size = (count_states + count_obs) as u32 * self.reg_size();
-        //self.amd.sub_rsp(size);
-        self.chkstk(size);
+        let frame_size = align_stack((count_states + count_obs) as u32 * self.reg_size());
+        self.sub_rsp(frame_size);
         self.amd.mov(MEM, Amd::RSP); // in indirect mode, MEM is allocated on the stack
 
         // multiply IDX by 4 to convert from f64x4 index to f64 index
@@ -841,17 +870,14 @@ impl Generator for AmdGenerator {
         // may save idx (RDX) as double in RBP + 8/32 * count_states
 
         self.set_label("@main");
-        // self.amd.sub_rsp(self.frame_size(cap));
-        self.chkstk(self.frame_size(cap));
+        self.sub_rsp(align_stack(cap * self.reg_size()));
     }
 
     fn epilogue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
-        self.amd.add_rsp(self.frame_size(cap));
+        self.add_rsp(align_stack(cap * self.reg_size()));
 
         self.amd.or(STATES, STATES);
         self.amd.jz("@done");
-
-        let size = (count_states + count_obs) as u32 * self.reg_size();
 
         for i in 0..count_obs {
             self.amd
@@ -878,52 +904,15 @@ impl Generator for AmdGenerator {
             );
         }
 
-        self.amd.add_rsp(size);
+        let frame_size = align_stack((count_states + count_obs) as u32 * self.reg_size());
+        self.amd.add_rsp(frame_size);
         self.set_label("@done");
 
         self.vzeroupper();
 
         self.load_nonvolatile_regs();
+        self.amd.pop(Amd::RBP);
         self.amd.ret();
-    }
-
-    #[cfg(target_family = "windows")]
-    fn prologue_fast(&mut self, cap: u32, num_args: u32) {
-        self.amd.mov_mem_reg(Amd::RSP, 0x08, MEM);
-        self.amd.mov_mem_reg(Amd::RSP, 0x10, PARAMS);
-
-        let frame_size = self.frame_size(cap);
-        self.amd.sub_rsp(frame_size);
-        self.amd.mov(MEM, Amd::RSP);
-
-        for i in 0..num_args.min(4) {
-            self.amd.movsd_mem_xmm(MEM, (i * 8) as i32, i as u8);
-        }
-
-        for i in 4..num_args {
-            // the offset of the fifth or eight arguments:
-            // +4 for the 32-byte home
-            // +1 for the return address in the stack
-            // -4 for the first four arguments passed in XMM0-XMM3
-            self.amd.movsd_xmm_mem(
-                0,
-                MEM,
-                (frame_size + self.reg_size() * (4 + 1 + i - 4)) as i32,
-            );
-            self.amd.movsd_mem_xmm(MEM, (i * 8) as i32, 0);
-        }
-    }
-
-    #[cfg(target_family = "windows")]
-    fn epilogue_fast(&mut self, cap: u32, idx_ret: i32) {
-        self.vzeroupper();
-        self.amd.movsd_xmm_mem(0, MEM, 8 * idx_ret);
-
-        self.amd.add_rsp(self.frame_size(cap));
-        self.amd.mov_reg_mem(PARAMS, Amd::RSP, 0x10);
-        self.amd.mov_reg_mem(MEM, Amd::RSP, 0x08);
-        self.amd.ret();
-        self.predefined_consts();
     }
 
     fn save_used_registers(&mut self, used: &[u8]) {
