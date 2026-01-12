@@ -103,7 +103,7 @@ def mandelbrot3(**args):
         X = np.zeros_like(A)
         Y = np.zeros_like(A)
         for i in range(5):
-            X, Y = f(X, Y, A, BytesPath)
+            X, Y = f(X, Y, A, B)
     else:
         n = A.shape[0] * A.shape[1]
         buf = np.zeros((4, n), dtype="double")
@@ -394,13 +394,14 @@ def cases():
                                     "fastmath": fastmath,
                                     "opt_level": opt_level,
                                     "sanitize": False,
+                                    "dtype": dtype
                                 }
                                 s = f"d={abbr_dtype(dtype)},y={abbr_ty(ty)}:s=F:t={Ω(use_threads)}:c={Ω(cse)}:f={Ω(fastmath)},O={opt_level}"
                                 cases.append((s, args))
     return cases
 
 
-def test_model(f, label, log, pyback=True, bytecode=False):
+def test_model(f, label, log, pyback=True, bytecode=False, may_complex=True):
     print(f"testing {label}")
     print("\td: dtype\t\t(R=float64, C=complex128)")
     print("\ty: ty\t\t(n: native, a: amd-sse, b: bytecode, d: debug)")
@@ -429,7 +430,8 @@ def test_model(f, label, log, pyback=True, bytecode=False):
     )
 
     for abbr, args in cases():
-        if args["ty"] not in ["bytecode", "debug"] or bytecode:
+        if ((args["ty"] not in ["bytecode", "debug"] or bytecode)
+                and (args["dtype"] == "float64" or may_complex)):
             print(f"{abbr}\t", end="")
             X, dt = f(**args)
             try:
@@ -471,7 +473,7 @@ def test_model(f, label, log, pyback=True, bytecode=False):
 log = []
 test_model(mandelbrot, "mandelbrot", log)
 test_model(mandelbrot2, "mandelbrot2", log)
-test_model(mandelbrot2, "mandelbrot3", log)
+test_model(mandelbrot3, "mandelbrot3", log, may_complex=False)
 test_model(pi, "pi", log)
 test_model(viete, "pi-viete", log)
 test_model(lemniscate, "lemniscate", log)

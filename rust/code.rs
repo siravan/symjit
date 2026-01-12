@@ -40,6 +40,7 @@ impl VirtualTable {
     pub fn from_str(op: &str) -> Result<Func> {
         let z = Self::test_cplx_add(Complex::new(1.0, 2.0), Complex::new(3.0, 5.0));
         let cplx = z == Complex::new(4.0, 7.0);
+        // println!("{:?}", z);
 
         let f = match op {
             "sin" => Func::Unary(Self::sin),
@@ -411,23 +412,24 @@ impl VirtualTable {
     #[cfg(target_arch = "aarch64")]
     fn test_cplx_add(x: Complex<f64>, y: Complex<f64>) -> Complex<f64> {
         let mut z = Complex::<f64>::new(0.0, 0.0);
+        let f: fn (x: Complex<f64>, y: Complex<f64>) -> Complex<f64> = Self::cplx_add;
 
         unsafe {
             std::arch::asm!(
-                "fmov d0, {}",
-                "fmov d1, {}",
-                "fmov d2, {}",
-                "fmov d3, {}",
-                "call {}",
-                "fmov {}, d0",
-                "fmov {}, d1",
-                in(dreg) x.re,
-                in(dreg) x.im,
-                in(dreg) y.re,
-                in(dreg) y.im,
-                sym Self::cplx_add,
-                out(dreg) z.re,
-                out(dreg) z.im,
+                "fmov d0, {0:d}",
+                "fmov d1, {1:d}",
+                "fmov d2, {2:d}",
+                "fmov d3, {3:d}",
+                "blr {4}",
+                "fmov {5:d}, d0",
+                "fmov {6:d}, d1",
+                in(vreg) x.re,
+                in(vreg) x.im,
+                in(vreg) y.re,
+                in(vreg) y.im,
+                in(reg) f,
+                out(vreg) z.re,
+                out(vreg) z.im,
             );
         };
         z
