@@ -210,7 +210,7 @@ impl Builder {
             "plus" if right.is_unary("neg") => {
                 self.create_binary("minus", left, right.arg().unwrap())?
             }
-            "rem" if left.is_unary("_powi_") => {
+            "rem" if left.is_unary("_powi_") && !self.config.is_complex() => {
                 let (arg, power) = left.arg_power().unwrap();
                 self.create_modular_powi(arg, right, power)?
             }
