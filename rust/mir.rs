@@ -845,7 +845,8 @@ impl Mir {
                     Func::UnaryCplx(p) => {
                         let x =
                             Complex::new(Self::get(regs, Reg::Left), Self::get(regs, Reg::Right));
-                        let z = p(x);
+                        let mut z = Complex::ZERO;
+                        p(x.re, x.im, &mut z);
                         Self::set(regs, Reg::Ret, z.re);
                         Self::set(regs, Reg::Temp, z.im);
                     }
@@ -856,7 +857,8 @@ impl Mir {
                             Self::get(regs, Reg::Gen(0)),
                             Self::get(regs, Reg::Gen(1)),
                         );
-                        let z = p(x, y);
+                        let mut z = y;
+                        p(x.re, x.im, &mut z);
                         Self::set(regs, Reg::Ret, z.re);
                         Self::set(regs, Reg::Temp, z.im);
                     }

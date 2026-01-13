@@ -175,19 +175,19 @@ impl AmdGenerator {
         // reserves 64 bytes in the stack
         // 32 bytes for shadow store (mandatory in Windows)
         // 32 bytes to save ymm0
-        self.amd.sub_rsp(32 * 2);
         self.amd.vmovpd_mem_ymm(Amd::RSP, 32, 0);
 
         self.vzeroupper();
 
         for i in 0..4 {
-            self.amd.movsd_xmm_mem(0, Amd::RSP, 32 + i * 8);
+            if i > 0 {
+                self.amd.movsd_xmm_mem(0, Amd::RSP, 32 + i * 8);
+            }
             self.amd.call_indirect(label);
             self.amd.movsd_mem_xmm(Amd::RSP, 32 + i * 8, 0);
         }
 
         self.amd.vmovpd_ymm_mem(0, Amd::RSP, 32);
-        self.amd.add_rsp(32 * 2);
     }
 
     fn call_vector_binary(&mut self, label: &str) {
@@ -195,65 +195,88 @@ impl AmdGenerator {
         // 32 bytes for shadow store (mandatory in Windows)
         // 32 bytes to save ymm0
         // 32 bytes to save ymm1
-        self.amd.sub_rsp(32 * 3);
         self.amd.vmovpd_mem_ymm(Amd::RSP, 32, 0);
         self.amd.vmovpd_mem_ymm(Amd::RSP, 64, 1);
 
         self.vzeroupper();
 
         for i in 0..4 {
-            self.amd.movsd_xmm_mem(0, Amd::RSP, 32 + i * 8);
-            self.amd.movsd_xmm_mem(1, Amd::RSP, 64 + i * 8);
+            if i > 0 {
+                self.amd.movsd_xmm_mem(0, Amd::RSP, 32 + i * 8);
+                self.amd.movsd_xmm_mem(1, Amd::RSP, 64 + i * 8);
+            }
             self.amd.call_indirect(label);
             self.amd.movsd_mem_xmm(Amd::RSP, 32 + i * 8, 0);
         }
 
         self.amd.vmovpd_ymm_mem(0, Amd::RSP, 32);
-        self.amd.add_rsp(32 * 3);
     }
 
     fn call_complex_vector_unary(&mut self, label: &str) {
-        self.amd.sub_rsp(32 * 3);
-        self.amd.vmovpd_mem_ymm(Amd::RSP, 32, 0);
-        self.amd.vmovpd_mem_ymm(Amd::RSP, 64, 1);
+        self.amd.vmovpd_mem_ymm(Amd::RSP, 64, 0);
+        self.amd.vmovpd_mem_ymm(Amd::RSP, 96, 1);
 
         self.vzeroupper();
 
         for i in 0..4 {
-            self.amd.movsd_xmm_mem(0, Amd::RSP, 32 + i * 8);
-            self.amd.movsd_xmm_mem(1, Amd::RSP, 64 + i * 8);
-            self.amd.call_indirect(label);
-            self.amd.movsd_mem_xmm(Amd::RSP, 32 + i * 8, 0);
-            self.amd.movsd_mem_xmm(Amd::RSP, 64 + i * 8, 1);
+            if i > 0 {
+                self.amd.movsd_xmm_mem(0, Amd::RSP, 64 + i * 8);
+                self.amd.movsd_xmm_mem(1, Amd::RSP, 96 + i * 8);
+            }
+
+            if cfg!(target_family = "windows") {
+                self.amd.lea_mem(Amd::R8, Amd::RSP, 32);
+            } else {
+                self.amd.lea_mem(Amd::RDI, Amd::RSP, 32);
+            }
+
+            self.amd.call_indirect(&label);
+
+            self.amd.movsd_xmm_mem(0, Amd::RSP, 32);
+            self.amd.movsd_xmm_mem(1, Amd::RSP, 40);
+            self.amd.movsd_mem_xmm(Amd::RSP, 64 + i * 8, 0);
+            self.amd.movsd_mem_xmm(Amd::RSP, 96 + i * 8, 1);
         }
 
-        self.amd.vmovpd_ymm_mem(0, Amd::RSP, 32);
-        self.amd.vmovpd_ymm_mem(1, Amd::RSP, 64);
-        self.amd.add_rsp(32 * 3);
+        self.amd.vmovpd_ymm_mem(0, Amd::RSP, 64);
+        self.amd.vmovpd_ymm_mem(1, Amd::RSP, 96);
     }
 
     fn call_complex_vector_binary(&mut self, label: &str) {
-        self.amd.sub_rsp(32 * 5);
-        self.amd.vmovpd_mem_ymm(Amd::RSP, 32, 0);
-        self.amd.vmovpd_mem_ymm(Amd::RSP, 64, 1);
-        self.amd.vmovpd_mem_ymm(Amd::RSP, 96, 2);
-        self.amd.vmovpd_mem_ymm(Amd::RSP, 128, 3);
+        self.amd.vmovpd_mem_ymm(Amd::RSP, 64, 0);
+        self.amd.vmovpd_mem_ymm(Amd::RSP, 96, 1);
+        self.amd.vmovpd_mem_ymm(Amd::RSP, 128, 2);
+        self.amd.vmovpd_mem_ymm(Amd::RSP, 160, 3);
 
         self.vzeroupper();
 
         for i in 0..4 {
-            self.amd.movsd_xmm_mem(0, Amd::RSP, 32 + i * 8);
-            self.amd.movsd_xmm_mem(1, Amd::RSP, 64 + i * 8);
-            self.amd.movsd_xmm_mem(2, Amd::RSP, 96 + i * 8);
-            self.amd.movsd_xmm_mem(3, Amd::RSP, 128 + i * 8);
+            if i > 0 {
+                self.amd.movsd_xmm_mem(0, Amd::RSP, 64 + i * 8);
+                self.amd.movsd_xmm_mem(1, Amd::RSP, 96 + i * 8);
+                self.amd.movsd_xmm_mem(2, Amd::RSP, 128 + i * 8);
+                self.amd.movsd_xmm_mem(3, Amd::RSP, 160 + i * 8);
+            }
+
+            self.amd.movsd_mem_xmm(Amd::RSP, 32, 2);
+            self.amd.movsd_mem_xmm(Amd::RSP, 40, 3);
+
+            if cfg!(target_family = "windows") {
+                self.amd.lea_mem(Amd::R8, Amd::RSP, 32);
+            } else {
+                self.amd.lea_mem(Amd::RDI, Amd::RSP, 32);
+            }
+
             self.amd.call_indirect(label);
-            self.amd.movsd_mem_xmm(Amd::RSP, 32 + i * 8, 0);
-            self.amd.movsd_mem_xmm(Amd::RSP, 64 + i * 8, 1);
+
+            self.amd.movsd_xmm_mem(0, Amd::RSP, 32);
+            self.amd.movsd_xmm_mem(1, Amd::RSP, 40);
+            self.amd.movsd_mem_xmm(Amd::RSP, 64 + i * 8, 0);
+            self.amd.movsd_mem_xmm(Amd::RSP, 96 + i * 8, 1);
         }
 
-        self.amd.vmovpd_ymm_mem(0, Amd::RSP, 32);
-        self.amd.vmovpd_ymm_mem(1, Amd::RSP, 64);
-        self.amd.add_rsp(32 * 5);
+        self.amd.vmovpd_ymm_mem(0, Amd::RSP, 64);
+        self.amd.vmovpd_ymm_mem(1, Amd::RSP, 96);
     }
 
     fn predefined_consts(&mut self) {
@@ -271,13 +294,11 @@ impl AmdGenerator {
 
     fn save_nonvolatile_regs(&mut self) {
         if cfg!(target_family = "windows") {
-            // self.amd.mov_mem_reg(Amd::RSP, 0x08, MEM);
             self.amd.mov_mem_reg(Amd::RSP, 0x10, PARAMS);
             self.amd.mov_mem_reg(Amd::RSP, 0x18, IDX);
             self.amd.mov_mem_reg(Amd::RSP, 0x20, STATES);
         } else {
             self.amd.sub_rsp(32);
-            // self.amd.mov_mem_reg(Amd::RSP, 0x00, MEM);
             self.amd.mov_mem_reg(Amd::RSP, 0x08, PARAMS);
             self.amd.mov_mem_reg(Amd::RSP, 0x10, IDX);
             self.amd.mov_mem_reg(Amd::RSP, 0x18, STATES);
@@ -286,12 +307,10 @@ impl AmdGenerator {
 
     fn load_nonvolatile_regs(&mut self) {
         if cfg!(target_family = "windows") {
-            // self.amd.mov_reg_mem(MEM, Amd::RSP, 0x08);
             self.amd.mov_reg_mem(PARAMS, Amd::RSP, 0x10);
             self.amd.mov_reg_mem(IDX, Amd::RSP, 0x18);
             self.amd.mov_reg_mem(STATES, Amd::RSP, 0x20);
         } else {
-            // self.amd.mov_reg_mem(MEM, Amd::RSP, 0x00);
             self.amd.mov_reg_mem(PARAMS, Amd::RSP, 0x08);
             self.amd.mov_reg_mem(IDX, Amd::RSP, 0x10);
             self.amd.mov_reg_mem(STATES, Amd::RSP, 0x18);
@@ -701,14 +720,7 @@ impl Generator for AmdGenerator {
         match self.family {
             AmdFamily::AvxScalar | AmdFamily::SSEScalar => {
                 self.vzeroupper();
-                #[cfg(target_family = "windows")]
-                self.amd.sub_rsp(32);
-
-                //self.amd.call(Amd::R12);
                 self.amd.call_indirect(&label);
-
-                #[cfg(target_family = "windows")]
-                self.amd.add_rsp(32);
             }
             AmdFamily::AvxVector => match num_args {
                 1 => self.call_vector_unary(&label),
@@ -725,15 +737,23 @@ impl Generator for AmdGenerator {
 
         match self.family {
             AmdFamily::AvxScalar | AmdFamily::SSEScalar => {
-                self.vzeroupper();
-                #[cfg(target_family = "windows")]
-                self.amd.sub_rsp(32);
+                if num_args == 2 {
+                    self.save_stack(Reg::Gen(0), 4);
+                    self.save_stack(Reg::Gen(1), 5);
+                }
 
-                //self.amd.call(Amd::R12);
+                self.vzeroupper();
+
+                if cfg!(target_family = "windows") {
+                    self.amd.lea_mem(Amd::R8, Amd::RSP, 32);
+                } else {
+                    self.amd.lea_mem(Amd::RDI, Amd::RSP, 32);
+                }
+
                 self.amd.call_indirect(&label);
 
-                #[cfg(target_family = "windows")]
-                self.amd.add_rsp(32);
+                self.load_stack(Reg::Ret, 4);
+                self.load_stack(Reg::Temp, 5);
             }
             AmdFamily::AvxVector => match num_args {
                 1 => self.call_complex_vector_unary(&label),

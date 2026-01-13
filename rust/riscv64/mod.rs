@@ -98,14 +98,14 @@ const FMAP: [u8; 14] = [
     RiscV::fa5,
     RiscV::fa6,
     RiscV::fa7,
+    RiscV::ft0,
+    RiscV::ft1,
+    RiscV::ft2,
+    RiscV::ft3,
     RiscV::ft4,
     RiscV::ft5,
     RiscV::ft6,
     RiscV::ft7,
-    RiscV::ft8,
-    RiscV::ft9,
-    RiscV::ft10,
-    RiscV::ft11,
 ];
 
 fn ϕ(r: Reg) -> u8 {

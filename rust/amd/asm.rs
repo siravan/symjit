@@ -723,6 +723,12 @@ impl Amd {
         self.modrm_mem(reg, rm, offset);
     }
 
+    pub fn lea_mem(&mut self, reg: u8, rm: u8, offset: i32) {
+        self.rex(reg, rm);
+        self.append_byte(0x8d);
+        self.modrm_mem(reg, rm, offset);
+    }
+
     pub fn mov_reg_label(&mut self, reg: u8, label: &str) {
         self.rex(reg, 0);
         self.append_byte(0x8b);
@@ -735,6 +741,12 @@ impl Amd {
         self.rex(reg, rm);
         self.append_byte(0x89);
         self.modrm_mem(reg, rm, offset);
+    }
+
+    pub fn lea_indexed(&mut self, reg: u8, base: u8, index: u8, scale: u8) {
+        self.rex(reg, 0);
+        self.append_byte(0x8d);
+        self.modrm_sib(reg, base, index, scale);
     }
 
     pub fn movabs(&mut self, rm: u8, imm64: u64) {

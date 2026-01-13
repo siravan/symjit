@@ -148,8 +148,8 @@ impl Generator for Complexifier {
         self.mir.xor(im(dst), im(dst), im(dst));
     }
 
-    fn root(&mut self, dst: Reg, s1: Reg) {
-        // TODO
+    fn root(&mut self, _dst: Reg, _s1: Reg) {
+        // complex root compiles into a function call
     }
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
@@ -336,14 +336,14 @@ impl Generator for Complexifier {
         self.mir.call(op, num_args)
     }
 
-    fn prologue_fast(&mut self, cap: u32, num_args: u32) {}
-    fn epilogue_fast(&mut self, cap: u32, idx_ret: i32) {}
+    fn prologue_fast(&mut self, _cap: u32, _num_args: u32) {}
+    fn epilogue_fast(&mut self, _cap: u32, _idx_ret: i32) {}
 
-    fn prologue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {}
-    fn epilogue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {}
+    fn prologue_indirect(&mut self, _cap: u32, _count_states: usize, _count_obs: usize) {}
+    fn epilogue_indirect(&mut self, _cap: u32, _count_states: usize, _count_obs: usize) {}
 
-    fn save_used_registers(&mut self, used: &[u8]) {}
-    fn load_used_registers(&mut self, used: &[u8]) {}
+    fn save_used_registers(&mut self, _used: &[u8]) {}
+    fn load_used_registers(&mut self, _used: &[u8]) {}
 
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {
         let loc = Loc::Stack(idx);

@@ -5,8 +5,8 @@ use std::fmt;
 
 pub type UnaryFunc = extern "C" fn(f64) -> f64;
 pub type BinaryFunc = extern "C" fn(f64, f64) -> f64;
-pub type UnaryFuncCplx = fn(Complex<f64>) -> Complex<f64>;
-pub type BinaryFuncCplx = fn(Complex<f64>, Complex<f64>) -> Complex<f64>;
+pub type UnaryFuncCplx = extern "C" fn(f64, f64, &mut Complex<f64>);
+pub type BinaryFuncCplx = extern "C" fn(f64, f64, &mut Complex<f64>);
 
 #[derive(Clone)]
 pub enum Func {
@@ -38,10 +38,6 @@ pub struct VirtualTable;
 impl VirtualTable {
     // Finds the function reference for op
     pub fn from_str(op: &str) -> Result<Func> {
-        let z = Self::test_cplx_add(Complex::new(1.0, 2.0), Complex::new(3.0, 5.0));
-        let cplx = z == Complex::new(4.0, 7.0);
-        // println!("{:?}", z);
-
         let f = match op {
             "sin" => Func::Unary(Self::sin),
             "sinc" => Func::Unary(Self::sinc),
@@ -82,32 +78,32 @@ impl VirtualTable {
             "power" => Func::Binary(Self::power),
             "atan2" => Func::Binary(Self::atan2),
             // Unary Complex Functions
-            "cplx_sin" if cplx => Func::UnaryCplx(Self::cplx_sin),
-            "cplx_sinc" if cplx => Func::UnaryCplx(Self::cplx_sinc),
-            "cplx_cos" if cplx => Func::UnaryCplx(Self::cplx_cos),
-            "cplx_tan" if cplx => Func::UnaryCplx(Self::cplx_tan),
-            "cplx_csc" if cplx => Func::UnaryCplx(Self::cplx_csc),
-            "cplx_sec" if cplx => Func::UnaryCplx(Self::cplx_sec),
-            "cplx_cot" if cplx => Func::UnaryCplx(Self::cplx_cot),
-            "cplx_sinh" if cplx => Func::UnaryCplx(Self::cplx_sinh),
-            "cplx_cosh" if cplx => Func::UnaryCplx(Self::cplx_cosh),
-            "cplx_tanh" if cplx => Func::UnaryCplx(Self::cplx_tanh),
-            "cplx_csch" if cplx => Func::UnaryCplx(Self::cplx_csch),
-            "cplx_sech" if cplx => Func::UnaryCplx(Self::cplx_sech),
-            "cplx_coth" if cplx => Func::UnaryCplx(Self::cplx_coth),
-            "cplx_arcsin" if cplx => Func::UnaryCplx(Self::cplx_asin),
-            "cplx_arccos" if cplx => Func::UnaryCplx(Self::cplx_acos),
-            "cplx_arctan" if cplx => Func::UnaryCplx(Self::cplx_atan),
-            "cplx_arcsinh" if cplx => Func::UnaryCplx(Self::cplx_asinh),
-            "cplx_arccosh" if cplx => Func::UnaryCplx(Self::cplx_acosh),
-            "cplx_arctanh" if cplx => Func::UnaryCplx(Self::cplx_atanh),
-            "cplx_root" if cplx => Func::UnaryCplx(Self::cplx_root),
-            "cplx_cbrt" if cplx => Func::UnaryCplx(Self::cplx_cbrt),
-            "cplx_exp" if cplx => Func::UnaryCplx(Self::cplx_exp),
-            "cplx_ln" if cplx => Func::UnaryCplx(Self::cplx_ln),
-            "cplx_log" if cplx => Func::UnaryCplx(Self::cplx_log),
+            "cplx_sin" => Func::UnaryCplx(Self::cplx_sin),
+            "cplx_sinc" => Func::UnaryCplx(Self::cplx_sinc),
+            "cplx_cos" => Func::UnaryCplx(Self::cplx_cos),
+            "cplx_tan" => Func::UnaryCplx(Self::cplx_tan),
+            "cplx_csc" => Func::UnaryCplx(Self::cplx_csc),
+            "cplx_sec" => Func::UnaryCplx(Self::cplx_sec),
+            "cplx_cot" => Func::UnaryCplx(Self::cplx_cot),
+            "cplx_sinh" => Func::UnaryCplx(Self::cplx_sinh),
+            "cplx_cosh" => Func::UnaryCplx(Self::cplx_cosh),
+            "cplx_tanh" => Func::UnaryCplx(Self::cplx_tanh),
+            "cplx_csch" => Func::UnaryCplx(Self::cplx_csch),
+            "cplx_sech" => Func::UnaryCplx(Self::cplx_sech),
+            "cplx_coth" => Func::UnaryCplx(Self::cplx_coth),
+            "cplx_arcsin" => Func::UnaryCplx(Self::cplx_asin),
+            "cplx_arccos" => Func::UnaryCplx(Self::cplx_acos),
+            "cplx_arctan" => Func::UnaryCplx(Self::cplx_atan),
+            "cplx_arcsinh" => Func::UnaryCplx(Self::cplx_asinh),
+            "cplx_arccosh" => Func::UnaryCplx(Self::cplx_acosh),
+            "cplx_arctanh" => Func::UnaryCplx(Self::cplx_atanh),
+            "cplx_root" => Func::UnaryCplx(Self::cplx_root),
+            "cplx_cbrt" => Func::UnaryCplx(Self::cplx_cbrt),
+            "cplx_exp" => Func::UnaryCplx(Self::cplx_exp),
+            "cplx_ln" => Func::UnaryCplx(Self::cplx_ln),
+            "cplx_log" => Func::UnaryCplx(Self::cplx_log),
             // Complex Binary Functions
-            "cplx_power" if cplx => Func::BinaryCplx(Self::cplx_power),
+            "cplx_power" => Func::BinaryCplx(Self::cplx_power),
             _ => {
                 return Err(anyhow!("op_code {} is not found or is not supported", op));
             }
@@ -274,190 +270,108 @@ impl VirtualTable {
 
     /************** Complex Functions ***************/
 
-    pub fn cplx_sinc(z: Complex<f64>) -> Complex<f64> {
-        if z == Complex::ZERO {
-            Complex::ONE
+    pub extern "C" fn cplx_sinc(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        let x = Complex::new(xr, xi);
+        if x == Complex::ZERO {
+            *z = Complex::ONE;
         } else {
-            z.sin() / z
+            *z = x.sin() / x;
         }
     }
 
-    pub fn cplx_sin(z: Complex<f64>) -> Complex<f64> {
-        z.sin()
+    pub extern "C" fn cplx_sin(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).sin();
     }
 
-    pub fn cplx_cos(z: Complex<f64>) -> Complex<f64> {
-        z.cos()
+    pub extern "C" fn cplx_cos(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).cos();
     }
 
-    pub fn cplx_tan(z: Complex<f64>) -> Complex<f64> {
-        z.tan()
+    pub extern "C" fn cplx_tan(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).tan();
     }
 
-    pub fn cplx_csc(z: Complex<f64>) -> Complex<f64> {
-        z.sin().inv()
+    pub extern "C" fn cplx_csc(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).sin().inv();
     }
 
-    pub fn cplx_sec(z: Complex<f64>) -> Complex<f64> {
-        z.cos().inv()
+    pub extern "C" fn cplx_sec(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).cos().inv();
     }
 
-    pub fn cplx_cot(z: Complex<f64>) -> Complex<f64> {
-        z.tan().inv()
+    pub extern "C" fn cplx_cot(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).tan().inv();
     }
 
-    pub fn cplx_sinh(z: Complex<f64>) -> Complex<f64> {
-        z.sinh()
+    pub extern "C" fn cplx_sinh(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).sinh();
     }
 
-    pub fn cplx_cosh(z: Complex<f64>) -> Complex<f64> {
-        z.cosh()
+    pub extern "C" fn cplx_cosh(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).cosh();
     }
 
-    pub fn cplx_tanh(z: Complex<f64>) -> Complex<f64> {
-        z.tanh()
+    pub extern "C" fn cplx_tanh(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).tanh();
     }
 
-    pub fn cplx_csch(z: Complex<f64>) -> Complex<f64> {
-        z.sinh().inv()
+    pub extern "C" fn cplx_csch(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).sinh().inv();
     }
 
-    pub fn cplx_sech(z: Complex<f64>) -> Complex<f64> {
-        z.cosh().inv()
+    pub extern "C" fn cplx_sech(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).cosh().inv();
     }
 
-    pub fn cplx_coth(z: Complex<f64>) -> Complex<f64> {
-        z.tanh().inv()
+    pub extern "C" fn cplx_coth(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).tanh().inv();
     }
 
-    pub fn cplx_asin(z: Complex<f64>) -> Complex<f64> {
-        z.asin()
+    pub extern "C" fn cplx_asin(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).asin();
     }
 
-    pub fn cplx_acos(z: Complex<f64>) -> Complex<f64> {
-        z.acos()
+    pub extern "C" fn cplx_acos(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).acos();
     }
 
-    pub fn cplx_atan(z: Complex<f64>) -> Complex<f64> {
-        z.atan()
+    pub extern "C" fn cplx_atan(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).atan();
     }
 
-    pub fn cplx_asinh(z: Complex<f64>) -> Complex<f64> {
-        z.asinh()
+    pub extern "C" fn cplx_asinh(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).asinh();
     }
 
-    pub fn cplx_acosh(z: Complex<f64>) -> Complex<f64> {
-        z.acosh()
+    pub extern "C" fn cplx_acosh(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).acosh();
     }
 
-    pub fn cplx_atanh(z: Complex<f64>) -> Complex<f64> {
-        z.atanh()
+    pub extern "C" fn cplx_atanh(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).atanh();
     }
 
-    pub fn cplx_root(z: Complex<f64>) -> Complex<f64> {
-        z.sqrt()
+    pub extern "C" fn cplx_root(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).sqrt();
     }
 
-    pub fn cplx_cbrt(z: Complex<f64>) -> Complex<f64> {
-        z.cbrt()
+    pub extern "C" fn cplx_cbrt(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).cbrt();
     }
 
-    pub fn cplx_exp(z: Complex<f64>) -> Complex<f64> {
-        z.exp()
+    pub extern "C" fn cplx_exp(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).exp();
     }
 
-    pub fn cplx_ln(z: Complex<f64>) -> Complex<f64> {
-        z.ln()
+    pub extern "C" fn cplx_ln(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).ln();
     }
 
-    pub fn cplx_log(z: Complex<f64>) -> Complex<f64> {
-        z.log10()
+    pub extern "C" fn cplx_log(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).ln();
     }
 
-    pub fn cplx_power(x: Complex<f64>, y: Complex<f64>) -> Complex<f64> {
-        x.powc(y)
-    }
-
-    pub fn cplx_add(x: Complex<f64>, y: Complex<f64>) -> Complex<f64> {
-        x + y
-    }
-
-    #[inline(never)]
-    #[cfg(target_arch = "x86_64")]
-    fn test_cplx_add(x: Complex<f64>, y: Complex<f64>) -> Complex<f64> {
-        let mut z = Complex::<f64>::new(0.0, 0.0);
-
-        unsafe {
-            std::arch::asm!(
-                "movapd xmm0, {}",
-                "movapd xmm1, {}",
-                "movapd xmm2, {}",
-                "movapd xmm3, {}",
-                "call {}",
-                "movapd {}, xmm0",
-                "movapd {}, xmm1",
-                in(xmm_reg) x.re,
-                in(xmm_reg) x.im,
-                in(xmm_reg) y.re,
-                in(xmm_reg) y.im,
-                sym Self::cplx_add,
-                out(xmm_reg) z.re,
-                out(xmm_reg) z.im,
-            );
-        };
-        z
-    }
-
-    #[inline(never)]
-    #[cfg(target_arch = "aarch64")]
-    fn test_cplx_add(x: Complex<f64>, y: Complex<f64>) -> Complex<f64> {
-        let mut z = Complex::<f64>::new(0.0, 0.0);
-        let f: fn (x: Complex<f64>, y: Complex<f64>) -> Complex<f64> = Self::cplx_add;
-
-        unsafe {
-            std::arch::asm!(
-                "fmov d0, {0:d}",
-                "fmov d1, {1:d}",
-                "fmov d2, {2:d}",
-                "fmov d3, {3:d}",
-                "blr {4}",
-                "fmov {5:d}, d0",
-                "fmov {6:d}, d1",
-                in(vreg) x.re,
-                in(vreg) x.im,
-                in(vreg) y.re,
-                in(vreg) y.im,
-                in(reg) f,
-                out(vreg) z.re,
-                out(vreg) z.im,
-            );
-        };
-        z
-    }
-
-    #[inline(never)]
-    #[cfg(target_arch = "riscv64")]
-    fn test_cplx_add(x: Complex<f64>, y: Complex<f64>) -> Complex<f64> {
-        let mut z = Complex::<f64>::new(0.0, 0.0);
-
-        unsafe {
-            std::arch::asm!(
-                "fmov fa0, {}",
-                "fmov fa1, {}",
-                "fmov fa2, {}",
-                "fmov fa3, {}",
-                "call {}",
-                "fmov {}, fa0",
-                "fmov {}, fa1",
-                in(freg) x.re,
-                in(freg) x.im,
-                in(freg) y.re,
-                in(freg) y.im,
-                sym Self::cplx_add,
-                out(freg) z.re,
-                out(freg) z.im,
-            );
-        };
-        z
+    pub extern "C" fn cplx_power(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).powc(*z);
     }
 }
