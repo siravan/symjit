@@ -1,6 +1,8 @@
 #[macro_use]
 mod macros;
 
+use std::num;
+
 use crate::assembler::{Assembler, Jumper};
 use crate::generator::Generator;
 use crate::utils::{align_stack, Reg};
@@ -389,22 +391,33 @@ impl Generator for ArmGenerator {
         //    .jump(&label, 0, |offset, _code| arm! {ldr x(0), label(offset)});
 
         self.jump_abs(&label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
-            arm! {adrp x(0), label((offset - pg as i32) as u32)}
+            arm! {adrp x(9), label((offset - pg as i32) as u32)}
         });
 
         self.jump_abs(
             &label,
             0,
-            |offset, _| arm! {ldr x(0), [x(0), #offset & 0x0fff]},
+            |offset, _| arm! {ldr x(9), [x(9), #offset & 0x0fff]},
         );
 
-        self.emit(arm! {blr x(0)});
+        self.emit(arm! {blr x(9)});
 
         Ok(())
     }
 
     fn call_complex(&mut self, op: &str, num_args: usize) -> Result<()> {
-        self.call(op, num_args)
+        self.emit(arm! {add x(0), x(SP), #16});
+
+        if num_args == 2 {
+            self.save_stack(Reg::Gen(0), 0);
+            self.save_stack(Reg::Gen(1), 1);
+        }
+
+        self.call(op, num_args)?;
+
+        self.load_stack(Reg::Ret, 0);
+        self.load_stack(Reg::Temp, 1);
+        Ok(())
     }
 
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {
@@ -891,10 +904,9 @@ impl Generator for ArmSimdGenerator {
 
         match num_args {
             1 => {
-                self.emit(arm! {sub sp, sp, #16});
+                // self.emit(arm! {sub sp, sp, #16});
                 self.emit(arm! {str q(0), [sp, #0]});
 
-                // self.emit(arm! {ldr d(0), [sp, #0]});
                 self.emit(arm! {blr x(CALL)});
                 self.emit(arm! {str d(0), [sp, #0]});
 
@@ -903,10 +915,10 @@ impl Generator for ArmSimdGenerator {
                 self.emit(arm! {str d(0), [sp, #8]});
 
                 self.emit(arm! {ldr q(0), [sp, #0]});
-                self.emit(arm! {add sp, sp, #16});
+                // self.emit(arm! {add sp, sp, #16});
             }
             2 => {
-                self.emit(arm! {sub sp, sp, #32});
+                // self.emit(arm! {sub sp, sp, #32});
                 self.emit(arm! {str q(0), [sp, #0]});
                 self.emit(arm! {str q(1), [sp, #16]});
 
@@ -921,7 +933,7 @@ impl Generator for ArmSimdGenerator {
                 self.emit(arm! {str d(0), [sp, #8]});
 
                 self.emit(arm! {ldr q(0), [sp, #0]});
-                self.emit(arm! {add sp, sp, #32});
+                // self.emit(arm! {add sp, sp, #32});
             }
             _ => return Err(anyhow!("invalid number of arguments")),
         }
@@ -946,35 +958,43 @@ impl Generator for ArmSimdGenerator {
 
         match num_args {
             1 => {
-                self.emit(arm! {sub sp, sp, #32});
+                // self.emit(arm! {sub sp, sp, #32});
                 self.emit(arm! {str q(0), [sp, #0]});
                 self.emit(arm! {str q(1), [sp, #16]});
 
-                // self.emit(arm! {ldr d(0), [sp, #0]});
+                self.emit(arm! {add x(0), x(SP), #32});
                 self.emit(arm! {blr x(CALL)});
+                self.emit(arm! {ldr d(0), [sp, #32]});
+                self.emit(arm! {ldr d(1), [sp, #40]});
                 self.emit(arm! {str d(0), [sp, #0]});
                 self.emit(arm! {str d(1), [sp, #16]});
 
                 self.emit(arm! {ldr d(0), [sp, #8]});
                 self.emit(arm! {ldr d(1), [sp, #24]});
+                self.emit(arm! {add x(0), x(SP), #32});
                 self.emit(arm! {blr x(CALL)});
+                self.emit(arm! {ldr d(0), [sp, #32]});
+                self.emit(arm! {ldr d(1), [sp, #40]});
                 self.emit(arm! {str d(0), [sp, #8]});
                 self.emit(arm! {str d(1), [sp, #24]});
 
                 self.emit(arm! {ldr q(0), [sp, #0]});
                 self.emit(arm! {ldr q(1), [sp, #16]});
-                self.emit(arm! {add sp, sp, #32});
+                // self.emit(arm! {add sp, sp, #32});
             }
             2 => {
-                self.emit(arm! {sub sp, sp, #64});
+                // self.emit(arm! {sub sp, sp, #64});
                 self.emit(arm! {str q(0), [sp, #0]});
                 self.emit(arm! {str q(1), [sp, #16]});
                 self.emit(arm! {str q(2), [sp, #32]});
                 self.emit(arm! {str q(3), [sp, #48]});
 
-                // self.emit(arm! {ldr d(0), [sp, #0]});
-                // self.emit(arm! {ldr d(1), [sp, #16]});
+                self.emit(arm! {str d(2), [sp, #64]});
+                self.emit(arm! {str d(3), [sp, #72]});
+                self.emit(arm! {add x(0), x(SP), #64});
                 self.emit(arm! {blr x(CALL)});
+                self.emit(arm! {ldr d(0), [sp, #64]});
+                self.emit(arm! {ldr d(1), [sp, #72]});
                 self.emit(arm! {str d(0), [sp, #0]});
                 self.emit(arm! {str d(1), [sp, #16]});
 
@@ -982,13 +1002,18 @@ impl Generator for ArmSimdGenerator {
                 self.emit(arm! {ldr d(1), [sp, #24]});
                 self.emit(arm! {ldr d(2), [sp, #40]});
                 self.emit(arm! {ldr d(3), [sp, #56]});
+                self.emit(arm! {str d(2), [sp, #64]});
+                self.emit(arm! {str d(3), [sp, #72]});
+                self.emit(arm! {add x(0), x(SP), #64});
                 self.emit(arm! {blr x(CALL)});
+                self.emit(arm! {ldr d(0), [sp, #64]});
+                self.emit(arm! {ldr d(1), [sp, #72]});
                 self.emit(arm! {str d(0), [sp, #8]});
                 self.emit(arm! {str d(1), [sp, #24]});
 
                 self.emit(arm! {ldr q(0), [sp, #0]});
                 self.emit(arm! {ldr q(1), [sp, #16]});
-                self.emit(arm! {add sp, sp, #64});
+                // self.emit(arm! {add sp, sp, #64});
             }
             _ => return Err(anyhow!("invalid number of arguments")),
         }
