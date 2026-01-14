@@ -5,7 +5,7 @@ use std::num;
 
 use crate::assembler::{Assembler, Jumper};
 use crate::generator::Generator;
-use crate::utils::{align_stack, Reg};
+use crate::utils::{align_stack, reg, Reg};
 use anyhow::{anyhow, Result};
 
 const SP: u8 = 31;
@@ -33,8 +33,10 @@ fn ϕ(r: Reg) -> u8 {
         Reg::Gen(dst) => {
             if dst < 6 {
                 dst + 2 // d2-d7
+            } else if dst < 22 {
+                dst + 10 // d16-d31
             } else {
-                dst + 10 // d16-d23
+                dst - 14 // d8-d15 (non-volatile)
             }
         }
         Reg::Static(..) => panic!("passing static registers to codegen"),
@@ -532,9 +534,21 @@ impl Generator for ArmGenerator {
         self.emit(arm! {ret});
     }
 
-    fn save_used_registers(&mut self, _used: &[u8]) {}
+    fn save_used_registers(&mut self, used: &[u8]) {
+        for r in used {
+            if *r >= 22 {
+                self.save_stack(reg(*r), *r as u32 - 14);
+            }
+        }
+    }
 
-    fn load_used_registers(&mut self, _used: &[u8]) {}
+    fn load_used_registers(&mut self, used: &[u8]) {
+        for r in used {
+            if *r >= 22 {
+                self.load_stack(reg(*r), *r as u32 - 14);
+            }
+        }
+    }
 }
 
 /*********************** ArmSimd ***********************/
@@ -1141,7 +1155,19 @@ impl Generator for ArmSimdGenerator {
         self.emit(arm! {ret});
     }
 
-    fn save_used_registers(&mut self, _used: &[u8]) {}
+    fn save_used_registers(&mut self, used: &[u8]) {
+        for r in used {
+            if *r >= 22 {
+                self.save_stack(reg(*r), *r as u32 - 14);
+            }
+        }
+    }
 
-    fn load_used_registers(&mut self, _used: &[u8]) {}
+    fn load_used_registers(&mut self, used: &[u8]) {
+        for r in used {
+            if *r >= 22 {
+                self.load_stack(reg(*r), *r as u32 - 14);
+            }
+        }
+    }
 }

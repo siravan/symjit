@@ -940,7 +940,7 @@ impl Generator for AmdGenerator {
 
         for r in used {
             if *r >= count_shadows {
-                self.save_stack(reg(*r), *r as u32);
+                self.save_stack(reg(*r), *r as u32 + 2);
             }
         }
     }
@@ -950,7 +950,7 @@ impl Generator for AmdGenerator {
 
         for r in used {
             if *r >= count_shadows {
-                self.load_stack(reg(*r), *r as u32);
+                self.load_stack(reg(*r), *r as u32 + 2);
             }
         }
     }

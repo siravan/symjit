@@ -3,7 +3,7 @@ mod macros;
 
 use crate::assembler::{Assembler, Jumper};
 use crate::generator::Generator;
-use crate::utils::{align_stack, Reg};
+use crate::utils::{align_stack, reg, Reg};
 use anyhow::Result;
 
 fn hi(x: u32) -> u32 {
@@ -91,7 +91,7 @@ impl RiscV {
     const ft11: u8 = 31;
 }
 
-const FMAP: [u8; 14] = [
+const FMAP: [u8; 30] = [
     RiscV::fa2,
     RiscV::fa3,
     RiscV::fa4,
@@ -106,6 +106,22 @@ const FMAP: [u8; 14] = [
     RiscV::ft5,
     RiscV::ft6,
     RiscV::ft7,
+    RiscV::ft8,
+    RiscV::ft9,
+    RiscV::ft10,
+    RiscV::ft11,
+    RiscV::fs0,
+    RiscV::fs1,
+    RiscV::fs2,
+    RiscV::fs3,
+    RiscV::fs4,
+    RiscV::fs5,
+    RiscV::fs6,
+    RiscV::fs7,
+    RiscV::fs8,
+    RiscV::fs9,
+    RiscV::fs10,
+    RiscV::fs11,
 ];
 
 fn ϕ(r: Reg) -> u8 {
@@ -482,22 +498,33 @@ impl Generator for RiscV {
         self.jump(
             label.as_str(),
             0,
-            |offset, _| rvv! {auipc x(Self::a0), hi(offset as u32)},
+            |offset, _| rvv! {auipc x(Self::a1), hi(offset as u32)},
         );
 
         self.jump(
             label.as_str(),
             0,
-            |offset, _| rvv! {ld x(Self::a0), x(Self::a0), lo((offset + 4) as u32)},
+            |offset, _| rvv! {ld x(Self::a1), x(Self::a1), lo((offset + 4) as u32)},
         );
 
-        self.emit(rvv! {jalr x(Self::ra), x(Self::a0), 0});
+        self.emit(rvv! {jalr x(Self::ra), x(Self::a1), 0});
 
         Ok(())
     }
 
     fn call_complex(&mut self, op: &str, num_args: usize) -> Result<()> {
-        self.call(op, num_args)
+        self.emit(rvv! {mv x(Self::a0), x(Self::sp)});
+
+        if num_args == 2 {
+            self.save_stack(Reg::Gen(0), 0);
+            self.save_stack(Reg::Gen(1), 1);
+        }
+
+        self.call(op, num_args)?;
+
+        self.load_stack(Reg::Ret, 0);
+        self.load_stack(Reg::Temp, 1);
+        Ok(())
     }
 
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {
@@ -646,9 +673,21 @@ impl Generator for RiscV {
         self.emit(rvv! {ret});
     }
 
-    fn save_used_registers(&mut self, _used: &[u8]) {}
+    fn save_used_registers(&mut self, used: &[u8]) {
+        for r in used {
+            if *r >= 18 {
+                self.save_stack(reg(*r), *r as u32 - 14);
+            }
+        }
+    }
 
-    fn load_used_registers(&mut self, _used: &[u8]) {}
+    fn load_used_registers(&mut self, used: &[u8]) {
+        for r in used {
+            if *r >= 18 {
+                self.load_stack(reg(*r), *r as u32 - 14);
+            }
+        }
+    }
 }
 
 impl RiscV {

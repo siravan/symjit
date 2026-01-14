@@ -139,11 +139,19 @@ impl Config {
         config.compiler_type()
     }
 
+    fn available_registers(&self) -> u8 {
+        if self.is_arm64() || self.is_riscv64() {
+            32
+        } else {
+            16
+        }
+    }
+
     pub fn count_scratch(&self) -> u8 {
         if self.is_complex() {
-            5
+            (self.available_registers() - 6) / 2
         } else {
-            14
+            self.available_registers() - 2
         }
     }
 
