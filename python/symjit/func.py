@@ -172,10 +172,10 @@ class FuncComplex:
     def call_matrix(self, *args):
         if len(args) > self.count_states // 2:
             p = np.frombuffer(
-                np.asarray(args, dtype=np.complex128),
+                np.asarray(args[self.count_states // 2 :], dtype=np.complex128),
                 dtype=np.float64,
             )
-            self.compiler.params[:] = p[self.count_states :]
+            self.compiler.params[:] = p
 
         shape = args[0].shape
 
@@ -218,6 +218,7 @@ class FuncComplex:
         return None
 
     def execute_vectorized(self, buf):
+        print("`execute_vectorized` is not implemented for complex functions.")
         pass
 
     def apply(self, y, p=None):

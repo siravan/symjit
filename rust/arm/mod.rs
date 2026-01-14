@@ -1,8 +1,6 @@
 #[macro_use]
 mod macros;
 
-use std::num;
-
 use crate::assembler::{Assembler, Jumper};
 use crate::generator::Generator;
 use crate::utils::{align_stack, reg, Reg};

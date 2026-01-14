@@ -77,7 +77,6 @@ eqs = [
     [Piecewise((1, ((x < y) ^ (x > sqrt(y)))), (0, True))],
 ]
 
-
 X = np.random.rand(15) * 0.9 + 0.1
 Y = np.random.rand(15) * 0.9 + 0.1
 

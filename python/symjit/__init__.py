@@ -64,6 +64,7 @@ def compile_func(
         variable).
     backend (default `rust`): the code-generator backend (`rust`: dynamic library coded
         in rust. `python`: pyengine library coded in plain Python.
+    dtype (default `float64`): the data type. Possibilities are `float64` and `complex128`.
     use_simd (default `True`): generates SIMD code for vectorized operations. Currently supports
         AVX on x86-64 and NEON on aarch64 systems.
     use_threads (default `True`): use multi-threading to speed up parallel operations when called
@@ -147,6 +148,7 @@ def compile_ode(
     ty (default `native`): see `compile_func` options for details.
     backend (default `rust`): the code-generator backend (`rust`: dynamic library coded
         in rust. `python`: pyengine library coded in plain Python.
+    dtype (default `float64`): the data type. Possibilities are `float64` and `complex128`.
     use_simd (default `True`): generates SIMD code for vectorized operations. Currently
         supports AVX on x86-64 and NEON on aarch64 systems.
     use_threads (default `True`): use multi-threading to speed up parallel operations
@@ -232,6 +234,7 @@ def compile_jac(
         ty (default `native`): see compile_func options for details.
         backend (default `rust`): the code-generator backend (`rust`: dynamic library coded
             in rust. `python`: pyengine library coded in plain Python.
+        dtype (default `float64`): the data type. Possibilities are `float64` and `complex128`.
         use_simd (default `True`): generates SIMD code for vectorized operations. Currently
             supports AVX on x86-64 and NEON on aarch64 systems.
         use_threads (default `True`): use multi-threading to speed up parallel operations when called

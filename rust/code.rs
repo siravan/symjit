@@ -3,6 +3,30 @@ use num_complex::Complex;
 use spec_math::cephes64;
 use std::fmt;
 
+/*
+ * Design Note:
+ *
+ * Unary complex functions are defined as:
+ *      `extern "C" fn(f64, f64, &mut Complex<f64>)`
+ *
+ * Initially, we tried `extern "C" fn(Complex<f64>) -> Complex<f64>`.
+ * However, Complex is a user-defined structure in Rust and not an
+ * intrinsic type. Therefore, the C-mapping is variable. This worked
+ * fine on Linux systems but not Windows that passes structures in
+ * stack and not registers.
+ *
+ * Next, we tried `fn(Complex<f64>) -> Complex<f64>`. In practice, this
+ * works but has a main shortcoming. It depends on the details of
+ * Rust ABI, which is not stable. In fact, this only works when the
+ * crate is compiled in release mode and not debug mode.
+ *
+ * Therefore, we settled on the current version, where the function
+ * arguments are defined explicitely and the C-mapping is unambiguous.
+ * This version has the additional benefit of allowing call elision
+ * (not implemented yet).
+ *
+ */
+
 pub type UnaryFunc = extern "C" fn(f64) -> f64;
 pub type BinaryFunc = extern "C" fn(f64, f64) -> f64;
 pub type UnaryFuncCplx = extern "C" fn(f64, f64, &mut Complex<f64>);

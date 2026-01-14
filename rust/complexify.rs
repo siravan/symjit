@@ -326,7 +326,7 @@ impl Generator for Complexifier {
         self.mir.add_consts(consts);
     }
 
-    fn add_func(&mut self, f: &str, p: Func) {}
+    fn add_func(&mut self, _f: &str, _p: Func) {}
 
     fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
         self.mir.call(op, num_args)

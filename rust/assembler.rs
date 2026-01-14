@@ -73,7 +73,7 @@ impl Assembler {
             let target = self
                 .labels
                 .get(label)
-                .expect(&format!("label {} not found", label));
+                .unwrap_or_else(|| panic!("label {} not found", label));
             let offset = (*target as i32) - if *rel { *ip as i32 } else { 0 };
 
             let x = f(offset, *code);

@@ -122,11 +122,11 @@ class JacFuncComplex:
 
         self.compiler.execute()
 
-        z = np.empty(self.compiler.count_diffs // 2, dtype=np.complex128)
-        z.real = self.compiler.diffs[::2]
-        z.imag = self.compiler.diffs[1::2]
+        z = np.empty(self.compiler.count_obs // 2, dtype=np.complex128)
+        z.real = self.compiler.obs[::2]
+        z.imag = self.compiler.obs[1::2]
 
-        return z.reshape((self.count_states - 1, self.count_states - 1))
+        return z.reshape((self.count_states // 2 - 1, self.count_states // 2 - 1))
 
     def dump(self, name, what="scalar"):
         self.compiler.dump(name, what=what)

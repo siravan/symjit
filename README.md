@@ -118,7 +118,7 @@ f = compile_func([x, y], [(x+y)**a], params=[a])
 assert(np.all(f(3., 5., 2.) == [64.]))  # 2. is the value of parameter a
 ```
 
-By default, `compile_func` uses the Rust backend. However, we can force the use of the Python backend by passing `backend='python'` to `compile_func`. Moreover, if the binary library containing the Rust backend is unavailable or incompatible, symjit automatically switches to the Python backend.
+By default, `compile_func` uses the Rust backend. However, we can force the use of the Python backend by passing `backend='python'` to `compile_func`. Moreover, if the binary library containing the Rust backend is unavailable or incompatible, symjit automatically switches to the Python backend. Note that the Python backend will be removed in version 3 of Symjit.
 
 `compile_func` helps generate functions to pass to numerical integration (quadrature) routines. The following example is adapted from scipy documentation:
 
@@ -182,6 +182,23 @@ plt.imshow(Z < 2)
 The output is:
 
 ![Mandelbrot](./figures/mandelbrot.png)
+
+## Complex Numbers
+
+Starting with version 2.11.0, Symjit supports complex numbers by passing `dtype = "complex128"` to `compile` functions:
+
+```python
+import numpy as np
+from symjit import compile_func
+from sympy import symbols
+
+x, y = symbols('x y')
+f = compile_func([x, y], [x+y, x*y], dtype = "complex128")
+assert(np.all(f(1 + 2j, 3 - 1j) == [4+1j, 5+5j]))
+
+f = compile_func([x, y], sin(x) + y*sinh(x*y), dtype="complex128")  # fast function
+assert(f(2, 1j) == 0)
+```
 
 ## Optimization
 
