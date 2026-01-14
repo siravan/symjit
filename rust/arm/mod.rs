@@ -406,7 +406,7 @@ impl Generator for ArmGenerator {
     }
 
     fn call_complex(&mut self, op: &str, num_args: usize) -> Result<()> {
-        self.emit(arm! {add x(0), x(SP), #16});
+        self.emit(arm! {add x(0), x(SP), #0});
 
         if num_args == 2 {
             self.save_stack(Reg::Gen(0), 0);
