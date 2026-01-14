@@ -790,6 +790,7 @@ impl Generator for AmdGenerator {
         let frame_size = align_stack(cap * self.reg_size());
         self.sub_rsp(frame_size);
         self.amd.mov(MEM, Amd::RSP);
+        self.amd.add_imm(MEM, 16 * 6);
 
         for i in 0..num_args {
             self.amd.movsd_mem_xmm(MEM, (i * 8) as i32, i as u8);
@@ -802,6 +803,7 @@ impl Generator for AmdGenerator {
         let frame_size = align_stack(cap * self.reg_size());
         self.sub_rsp(frame_size);
         self.amd.mov(MEM, Amd::RSP);
+        self.amd.add_imm(MEM, 16 * 6);
 
         for i in 0..num_args.min(4) {
             self.amd
@@ -823,7 +825,7 @@ impl Generator for AmdGenerator {
     fn epilogue_fast(&mut self, cap: u32, idx_ret: i32) {
         self.vzeroupper();
         self.amd
-            .movsd_xmm_mem(0, Amd::RSP, idx_ret * self.reg_size() as i32);
+            .movsd_xmm_mem(0, MEM, idx_ret * self.reg_size() as i32);
 
         let frame_size = align_stack(cap * self.reg_size());
         self.add_rsp(frame_size);
