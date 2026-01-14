@@ -447,12 +447,12 @@ impl Generator for ArmGenerator {
         self.sub_stack(stack_size);
 
         for i in 0..count_states {
-            self.emit(arm! {str d(i), [sp, #8*i]});
+            self.emit(arm! {str d(i), [x(MEM), #8*i]});
         }
     }
 
     fn epilogue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize, idx_ret: i32) {
-        self.emit(arm! {ldr d(0), [sp, #8*idx_ret]});
+        self.emit(arm! {ldr d(0), [x(MEM), #8*idx_ret]});
 
         let total_size = align_stack(cap as u32 * self.reg_size())
             + align_stack((count_states + count_obs) as u32 * self.reg_size());
@@ -1061,12 +1061,12 @@ impl Generator for ArmSimdGenerator {
         self.sub_stack(stack_size);
 
         for i in 0..count_states {
-            self.emit(arm! {str d(i), [sp, #self.reg_size()*(i as u32)]});
+            self.emit(arm! {str d(i), [x(MEM), #self.reg_size()*(i as u32)]});
         }
     }
 
     fn epilogue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize, idx_ret: i32) {
-        self.emit(arm! {ldr d(0), [sp, #8*idx_ret]});
+        self.emit(arm! {ldr d(0), [x(MEM), #8*idx_ret]});
 
         let total_size = align_stack(cap as u32 * self.reg_size())
             + align_stack((count_states + count_obs) as u32 * self.reg_size());
