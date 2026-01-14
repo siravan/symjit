@@ -800,8 +800,6 @@ impl Generator for AmdGenerator {
 
     #[cfg(target_family = "windows")]
     fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
-        use crate::count_states;
-
         self.amd.push(Amd::RBP);
 
         let frame_size = align_stack((count_states + count_obs) as u32 * self.reg_size());
@@ -811,10 +809,11 @@ impl Generator for AmdGenerator {
 
         for i in 0..count_states.min(4) {
             self.amd
-                .movsd_mem_xmm(MEM, (i * self.reg_size()) as i32, i as u8);
+                .movsd_mem_xmm(MEM, (i as u32 * self.reg_size()) as i32, i as u8);
         }
 
         for i in 4..count_states {
+            let i = i as u32;
             // the offset of the fifth or eight arguments:
             // +4 for the 32-byte home
             // +1 for the return address in the stack
