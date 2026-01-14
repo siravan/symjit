@@ -2,7 +2,8 @@
 
 * Adding support for complex numbers.
 * Adding `dtype` to `compile` functions.
-* Removing explicit indendent variable.
+* Removing explicit independent variable.
+* Fixing and consolidation stack frames between regular and fast functions.
 
 # Version 2.10.0
 

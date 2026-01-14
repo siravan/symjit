@@ -291,7 +291,7 @@ impl Builder {
         count_obs: usize,
     ) -> Result<()> {
         // println!("{:#?}", mir.used_registers());
-        let cap = self.symbol_table().num_stack as u32;
+        let cap = self.symbol_table().num_stack;
         ir.prologue_indirect(cap, count_states, count_obs);
 
         Self::save_registers(mir, ir);
@@ -313,19 +313,20 @@ impl Builder {
         &mut self,
         mir: &Mir,
         ir: &mut impl Generator,
-        num_args: u32,
+        count_states: usize,
+        count_obs: usize,
         idx_ret: i32,
     ) -> Result<()> {
         self.block().eliminate();
         // println!("{:#?}", &self.block().stmts);
-        let cap = self.symbol_table().num_stack as u32;
-        ir.prologue_fast(cap, num_args);
+        let cap = self.symbol_table().num_stack;
+        ir.prologue_fast(cap, count_states, count_obs);
 
         Self::save_registers(mir, ir);
         mir.rerun(ir)?;
         Self::restore_registers(mir, ir);
 
-        ir.epilogue_fast(cap, idx_ret);
+        ir.epilogue_fast(cap, count_states, count_obs, idx_ret);
         ir.align();
         self.append_const_section(ir);
         self.append_vt_section(mir, ir);

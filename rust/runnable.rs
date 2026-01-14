@@ -154,7 +154,8 @@ impl Application {
         prog.builder.compile_fast_from_mir(
             mir,
             &mut generator,
-            prog.count_states as u32,
+            prog.count_states,
+            prog.count_obs,
             idx_ret as i32,
         )?;
         let code = MachineCode::new(arch, generator.bytes(), mem, true, 1);

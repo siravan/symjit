@@ -336,11 +336,18 @@ impl Generator for Complexifier {
         self.mir.call(op, num_args)
     }
 
-    fn prologue_fast(&mut self, _cap: u32, _num_args: u32) {}
-    fn epilogue_fast(&mut self, _cap: u32, _idx_ret: i32) {}
+    fn prologue_fast(&mut self, _cap: usize, _count_states: usize, _count_obs: usize) {}
+    fn epilogue_fast(
+        &mut self,
+        _cap: usize,
+        _count_states: usize,
+        _count_obs: usize,
+        _idx_ret: i32,
+    ) {
+    }
 
-    fn prologue_indirect(&mut self, _cap: u32, _count_states: usize, _count_obs: usize) {}
-    fn epilogue_indirect(&mut self, _cap: u32, _count_states: usize, _count_obs: usize) {}
+    fn prologue_indirect(&mut self, _cap: usize, _count_states: usize, _count_obs: usize) {}
+    fn epilogue_indirect(&mut self, _cap: usize, _count_states: usize, _count_obs: usize) {}
 
     fn save_used_registers(&mut self, _used: &[u8]) {}
     fn load_used_registers(&mut self, _used: &[u8]) {}

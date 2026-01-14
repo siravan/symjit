@@ -69,7 +69,7 @@ impl ColoringAllocator {
         if res.is_ok() {
             mir.code = allocator.code;
         } else {
-            println!("Level 3 register allocator requests too many registers ({}), will revert back to level 2.", res.unwrap_err());
+            // println!("Level 3 register allocator requests too many registers ({}), will revert back to level 2.", res.unwrap_err());
         }
     }
 

@@ -785,32 +785,36 @@ impl Generator for AmdGenerator {
     /****************** Prologues/Epilogues ********************/
 
     #[cfg(target_family = "unix")]
-    fn prologue_fast(&mut self, cap: u32, num_args: u32) {
+    fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
         self.amd.push(Amd::RBP);
-        let frame_size = align_stack(cap * self.reg_size());
+
+        let frame_size = align_stack((count_states + count_obs) as u32 * self.reg_size());
         self.sub_rsp(frame_size);
         self.amd.mov(MEM, Amd::RSP);
-        self.amd.add_imm(MEM, 16 * 6);
+        self.sub_rsp(align_stack(cap as u32 * self.reg_size()));
 
-        for i in 0..num_args {
+        for i in 0..count_states {
             self.amd.movsd_mem_xmm(MEM, (i * 8) as i32, i as u8);
         }
     }
 
     #[cfg(target_family = "windows")]
-    fn prologue_fast(&mut self, cap: u32, num_args: u32) {
+    fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
+        use crate::count_states;
+
         self.amd.push(Amd::RBP);
-        let frame_size = align_stack(cap * self.reg_size());
+
+        let frame_size = align_stack((count_states + count_obs) as u32 * self.reg_size());
         self.sub_rsp(frame_size);
         self.amd.mov(MEM, Amd::RSP);
-        self.amd.add_imm(MEM, 16 * 6);
+        self.sub_rsp(align_stack(cap as u32 * self.reg_size()));
 
-        for i in 0..num_args.min(4) {
+        for i in 0..count_states.min(4) {
             self.amd
                 .movsd_mem_xmm(MEM, (i * self.reg_size()) as i32, i as u8);
         }
 
-        for i in 4..num_args {
+        for i in 4..count_states {
             // the offset of the fifth or eight arguments:
             // +4 for the 32-byte home
             // +1 for the return address in the stack
@@ -822,13 +826,15 @@ impl Generator for AmdGenerator {
         }
     }
 
-    fn epilogue_fast(&mut self, cap: u32, idx_ret: i32) {
+    fn epilogue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize, idx_ret: i32) {
         self.vzeroupper();
         self.amd
             .movsd_xmm_mem(0, MEM, idx_ret * self.reg_size() as i32);
 
-        let frame_size = align_stack(cap * self.reg_size());
-        self.add_rsp(frame_size);
+        let total_size = align_stack(cap as u32 * self.reg_size())
+            + align_stack((count_states + count_obs) as u32 * self.reg_size());
+        self.amd.add_rsp(total_size);
+
         self.amd.pop(Amd::RBP);
         self.amd.ret();
     }
@@ -862,7 +868,7 @@ impl Generator for AmdGenerator {
      *      6 slots are the work area for various call routines, Specifically, the bottom
      *      32 bytes is reserved as the home area for Windows call ABI.
      */
-    fn prologue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
+    fn prologue_indirect(&mut self, cap: usize, count_states: usize, count_obs: usize) {
         let win = cfg!(target_family = "windows");
         self.amd.push(Amd::RBP);
         self.save_nonvolatile_regs();
@@ -912,11 +918,11 @@ impl Generator for AmdGenerator {
         // may save idx (RDX) as double in RBP + 8/32 * count_states
 
         self.set_label("@main");
-        self.sub_rsp(align_stack(cap * self.reg_size()));
+        self.sub_rsp(align_stack(cap as u32 * self.reg_size()));
     }
 
-    fn epilogue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
-        self.add_rsp(align_stack(cap * self.reg_size()));
+    fn epilogue_indirect(&mut self, cap: usize, count_states: usize, count_obs: usize) {
+        self.add_rsp(align_stack(cap as u32 * self.reg_size()));
 
         self.amd.or(STATES, STATES);
         self.amd.jz("@done");

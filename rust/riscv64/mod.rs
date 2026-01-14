@@ -540,29 +540,31 @@ impl Generator for RiscV {
 
     /********************************************************/
 
-    fn prologue_fast(&mut self, cap: u32, num_args: u32) {
+    fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
         self.sub_stack(16);
 
         self.emit(rvv! {sd x(Self::ra), x(Self::sp), 0});
         self.emit(rvv! {sd x(MEM), x(Self::sp), 8});
 
-        let stack_size = align_stack(self.reg_size() * cap);
+        let size = align_stack((count_states + count_obs) as u32 * self.reg_size());
+        self.sub_stack(size);
+        self.emit(rvv! {mv x(MEM), x(Self::sp)});
+        let stack_size = align_stack(cap as u32 * self.reg_size());
         self.sub_stack(stack_size);
 
         self.emit(rvv! {mv x(MEM), x(Self::sp)});
 
-        let num_args = num_args as i32;
-
-        for i in 0..num_args {
+        for i in 0..count_states {
             self.emit(rvv! {fsd f(Self::fa0 + i as u8), x(MEM), 8 * i});
         }
     }
 
-    fn epilogue_fast(&mut self, cap: u32, idx_ret: i32) {
+    fn epilogue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize, idx_ret: i32) {
         self.emit(rvv! {fld f(Self::fa0), x(MEM), 8*idx_ret});
 
-        let stack_size = align_stack(self.reg_size() * cap);
-        self.add_stack(stack_size);
+        let total_size = align_stack(cap as u32 * self.reg_size())
+            + align_stack((count_states + count_obs) as u32 * self.reg_size());
+        self.add_stack(total_size);
 
         self.emit(rvv! {ld x(Self::ra), x(Self::sp), 0});
         self.emit(rvv! {ld x(MEM), x(Self::sp), 8});
@@ -577,7 +579,7 @@ impl Generator for RiscV {
      * IDX => third arg = index if indirect mode
      * PARAMS => fourth arg = params
      */
-    fn prologue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
+    fn prologue_indirect(&mut self, cap: usize, count_states: usize, count_obs: usize) {
         self.sub_stack(64);
 
         self.emit(rvv! {sd x(Self::ra), x(Self::sp), 0});
@@ -625,12 +627,12 @@ impl Generator for RiscV {
 
         self.set_label("@main");
 
-        let stack_size = align_stack(self.reg_size() * cap);
+        let stack_size = align_stack(cap as u32 * self.reg_size());
         self.sub_stack(stack_size);
     }
 
-    fn epilogue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
-        let stack_size = align_stack(self.reg_size() * cap);
+    fn epilogue_indirect(&mut self, cap: usize, count_states: usize, count_obs: usize) {
+        let stack_size = align_stack(cap as u32 * self.reg_size());
         self.add_stack(stack_size);
 
         self.jump("@done", 0, |offset, _| {

@@ -69,11 +69,11 @@ pub trait Generator {
     fn call(&mut self, op: &str, num_args: usize) -> Result<()>;
     fn call_complex(&mut self, op: &str, num_args: usize) -> Result<()>;
 
-    fn prologue_fast(&mut self, cap: u32, num_args: u32);
-    fn epilogue_fast(&mut self, cap: u32, idx_ret: i32);
+    fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize);
+    fn epilogue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize, idx_ret: i32);
 
-    fn prologue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize);
-    fn epilogue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize);
+    fn prologue_indirect(&mut self, cap: usize, count_states: usize, count_obs: usize);
+    fn epilogue_indirect(&mut self, cap: usize, count_states: usize, count_obs: usize);
 
     fn save_used_registers(&mut self, used: &[u8]);
     fn load_used_registers(&mut self, used: &[u8]);

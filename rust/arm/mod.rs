@@ -435,28 +435,28 @@ impl Generator for ArmGenerator {
 
     /**************************************************/
 
-    fn prologue_fast(&mut self, cap: u32, num_args: u32) {
+    fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
         self.emit(arm! {sub sp, sp, #16});
         self.emit(arm! {str lr, [sp, #0]});
         self.emit(arm! {str x(MEM), [sp, #8]});
 
-        let stack_size = align_stack(self.reg_size() * cap);
+        let frame_size = align_stack((count_states + count_obs) as u32 * self.reg_size());
+        self.sub_stack(frame_size);
+        self.emit(arm! {mov x(MEM), sp});
+        let stack_size = align_stack(cap as u32 * self.reg_size());
         self.sub_stack(stack_size);
 
-        self.emit(arm! {mov x(MEM), sp});
-
-        let num_args = num_args as i32;
-
-        for i in 0..num_args {
+        for i in 0..count_states {
             self.emit(arm! {str d(i), [sp, #8*i]});
         }
     }
 
-    fn epilogue_fast(&mut self, cap: u32, idx_ret: i32) {
+    fn epilogue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize, idx_ret: i32) {
         self.emit(arm! {ldr d(0), [sp, #8*idx_ret]});
 
-        let stack_size = align_stack(self.reg_size() * cap);
-        self.add_stack(stack_size);
+        let total_size = align_stack(cap as u32 * self.reg_size())
+            + align_stack((count_states + count_obs) as u32 * self.reg_size());
+        self.add_stack(total_size);
 
         self.emit(arm! {ldr x(MEM), [sp, #8]});
         self.emit(arm! {ldr lr, [sp, #0]});
@@ -470,7 +470,7 @@ impl Generator for ArmGenerator {
      * IDX => third arg = index if indirect mode
      * PARAMS => fourth arg = params
      */
-    fn prologue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
+    fn prologue_indirect(&mut self, cap: usize, count_states: usize, count_obs: usize) {
         self.emit(arm! {sub sp, sp, #48});
         self.emit(arm! {str lr, [sp, #0]});
         self.emit(arm! {str x(MEM), [sp, #8]});
@@ -486,8 +486,8 @@ impl Generator for ArmGenerator {
         self.emit(arm! {tst x(STATES), x(STATES)});
         self.jump("@main", 0, |offset, _| arm! {b.eq label(offset)});
 
-        let size = align_stack((count_states + count_obs) as u32 * self.reg_size());
-        self.sub_stack(size);
+        let frame_size = align_stack((count_states + count_obs) as u32 * self.reg_size());
+        self.sub_stack(frame_size);
         self.emit(arm! {mov x(MEM), sp});
 
         for i in 0..count_states {
@@ -500,12 +500,12 @@ impl Generator for ArmGenerator {
 
         self.set_label("@main");
 
-        let stack_size = align_stack(self.reg_size() * cap);
+        let stack_size = align_stack(cap as u32 * self.reg_size());
         self.sub_stack(stack_size);
     }
 
-    fn epilogue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
-        let stack_size = align_stack(self.reg_size() * cap);
+    fn epilogue_indirect(&mut self, cap: usize, count_states: usize, count_obs: usize) {
+        let stack_size = align_stack(cap as u32 * self.reg_size());
         self.add_stack(stack_size);
 
         self.emit(arm! {tst x(STATES), x(STATES)});
@@ -518,8 +518,8 @@ impl Generator for ArmGenerator {
             self.emit(arm! {str d(0), [x(SCRATCH2), x(IDX), lsl #3]});
         }
 
-        let size = align_stack((count_states + count_obs) as u32 * self.reg_size());
-        self.add_stack(size);
+        let frame_size = align_stack((count_states + count_obs) as u32 * self.reg_size());
+        self.add_stack(frame_size);
 
         self.set_label("@done");
 
@@ -1048,29 +1048,29 @@ impl Generator for ArmSimdGenerator {
 
     /**************************************************/
 
-    fn prologue_fast(&mut self, cap: u32, num_args: u32) {
+    fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
         self.emit(arm! {sub sp, sp, #32});
         self.emit(arm! {str lr, [sp, #0]});
         self.emit(arm! {str x(MEM), [sp, #8]});
         self.emit(arm! {str x(CALL), [sp, #16]});
 
-        let stack_size = align_stack(self.reg_size() * cap);
+        let frame_size = align_stack((count_states + count_obs) as u32 * self.reg_size());
+        self.sub_stack(frame_size);
+        self.emit(arm! {mov x(MEM), sp});
+        let stack_size = align_stack(cap as u32 * self.reg_size());
         self.sub_stack(stack_size);
 
-        self.emit(arm! {mov x(MEM), sp});
-
-        let num_args = num_args as i32;
-
-        for i in 0..num_args {
+        for i in 0..count_states {
             self.emit(arm! {str d(i), [sp, #self.reg_size()*(i as u32)]});
         }
     }
 
-    fn epilogue_fast(&mut self, cap: u32, idx_ret: i32) {
+    fn epilogue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize, idx_ret: i32) {
         self.emit(arm! {ldr d(0), [sp, #8*idx_ret]});
 
-        let stack_size = align_stack(self.reg_size() * cap);
-        self.add_stack(stack_size);
+        let total_size = align_stack(cap as u32 * self.reg_size())
+            + align_stack((count_states + count_obs) as u32 * self.reg_size());
+        self.add_stack(total_size);
 
         self.emit(arm! {ldr lr, [sp, #0]});
         self.emit(arm! {ldr x(MEM), [sp, #8]});
@@ -1085,7 +1085,7 @@ impl Generator for ArmSimdGenerator {
      * IDX => third arg = index if indirect mode
      * PARAMS => fourth arg = params
      */
-    fn prologue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
+    fn prologue_indirect(&mut self, cap: usize, count_states: usize, count_obs: usize) {
         self.emit(arm! {sub sp, sp, #48});
         self.emit(arm! {str lr, [sp, #0]});
         self.emit(arm! {str x(MEM), [sp, #8]});
@@ -1102,8 +1102,8 @@ impl Generator for ArmSimdGenerator {
         self.emit(arm! {tst x(STATES), x(STATES)});
         self.jump("@main", 0, |offset, _| arm! {b.eq label(offset)});
 
-        let size = align_stack((count_states + count_obs) as u32 * self.reg_size());
-        self.sub_stack(size);
+        let frame_size = align_stack((count_states + count_obs) as u32 * self.reg_size());
+        self.sub_stack(frame_size);
         self.emit(arm! {mov x(MEM), sp});
 
         // dividing IDX by 2 to convert from indexing f64 to f64x2
@@ -1119,12 +1119,12 @@ impl Generator for ArmSimdGenerator {
 
         self.set_label("@main");
 
-        let stack_size = align_stack(self.reg_size() * cap);
+        let stack_size = align_stack(cap as u32 * self.reg_size());
         self.sub_stack(stack_size);
     }
 
-    fn epilogue_indirect(&mut self, cap: u32, count_states: usize, count_obs: usize) {
-        let stack_size = align_stack(self.reg_size() * cap);
+    fn epilogue_indirect(&mut self, cap: usize, count_states: usize, count_obs: usize) {
+        let stack_size = align_stack(cap as u32 * self.reg_size());
         self.add_stack(stack_size);
 
         self.emit(arm! {tst x(STATES), x(STATES)});
@@ -1137,8 +1137,8 @@ impl Generator for ArmSimdGenerator {
             self.emit(arm! {str q(0), [x(SCRATCH2), x(IDX), lsl #4]});
         }
 
-        let size = align_stack((count_states + count_obs) as u32 * self.reg_size());
-        self.add_stack(size);
+        let frame_size = align_stack((count_states + count_obs) as u32 * self.reg_size());
+        self.add_stack(frame_size);
 
         self.set_label("@done");
 
