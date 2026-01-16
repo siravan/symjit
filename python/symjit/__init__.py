@@ -4,7 +4,9 @@ import warnings
 
 from sympy import Symbol, lambdify
 
-from . import engine, func, ode, pyengine, structure
+from . import engine, pyengine, structure
+from .func import *
+from .ode import *
 
 
 def can_use_rust(backend):
@@ -42,7 +44,7 @@ def compile_func(
     """Compile a list of symbolic expression into an executable form.
     compile_func tries to mimic sympy lambdify, but instead of generating
     a standard python funciton, it returns a callable (Func object) that
-    is a thin wrapper over compiled machine-code.
+    is a thin wrapper over compiled machine-c
 
     Parameters
     ==========
@@ -113,9 +115,9 @@ def compile_func(
         raise ValueError("unsupported platform")
 
     if dtype == "complex128":
-        return func.FuncComplex(compiler, eqs)
+        return FuncComplex(compiler, eqs)
     else:
-        return func.Func(compiler, eqs)
+        return Func(compiler, eqs)
 
 
 def compile_ode(
@@ -204,9 +206,9 @@ def compile_ode(
         raise ValueError("unsupported platform")
 
     if dtype == "complex128":
-        return ode.OdeFuncComplex(compiler)
+        return OdeFuncComplex(compiler)
     else:
-        return ode.OdeFunc(compiler)
+        return OdeFunc(compiler)
 
 
 def compile_jac(
@@ -277,9 +279,9 @@ def compile_jac(
         raise ValueError("unsupported platform")
 
     if dtype == "complex128":
-        return ode.JacFuncComplex(compiler)
+        return JacFuncComplex(compiler)
     else:
-        return ode.JacFunc(compiler)
+        return JacFunc(compiler)
 
 
 def update_json_model(model):
@@ -335,13 +337,13 @@ def compile_json(
 
         if compiler.count_diffs == 0:
             if dtype == "complex128":
-                return func.FuncComplex(compiler, [])
+                return FuncComplex(compiler, [])
             else:
-                return func.Func(compiler, [])
+                return Func(compiler, [])
         else:
             if dtype == "complex128":
-                return ode.OdeFuncComplex(compiler)
+                return OdeFuncComplex(compiler)
             else:
-                return ode.OdeFunc(compiler)
+                return OdeFunc(compiler)
     else:
         raise ValueError("CellML json files only work with the rust backend")

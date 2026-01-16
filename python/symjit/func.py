@@ -118,8 +118,7 @@ class Func:
             p = np.asarray(p, dtype=np.float64)
             self.compiler.params[:] = p
 
-        self.compiler.execute(0.0)
-        # return self.compiler.obs.copy()
+        self.compiler.execute()
         return self.compiler.obs
 
     def callable_quad(self, use_fast=True):
