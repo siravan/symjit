@@ -313,11 +313,10 @@ use defuns::Defuns;
 use matrix::Matrix;
 use model::{CellModel, Program};
 
+pub use crate::config::Config;
 pub use compiler::{Compiler, FastFunc};
 pub use expr::{double, int, var, Expr};
 pub use runnable::{Application, CompilerType};
-
-use crate::config::Config;
 
 #[derive(Debug, Clone, Copy)]
 pub enum CompilerStatus {

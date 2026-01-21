@@ -11,8 +11,7 @@ use crate::{Application, CompilerType};
 
 // #[derive(Debug)]
 pub struct Compiler {
-    opt: u32,
-    ty: CompilerType,
+    config: Config,
     df: Defuns,
 }
 
@@ -64,8 +63,9 @@ type __m256d = [f64; 4];
 ///     let u = &x + &y;
 ///     let v = &x * &y;
 ///
-///     let mut comp = Compiler::new();
-///     comp.opt_level(2);  // optional (opt_level 0 to 2; default 1)
+///     let mut config = Config::default();
+///     config.set_opt_level(2);
+///     let mut comp = Compiler::with_config(config);
 ///     let mut app = comp.compile(&[x, y], &[u, v])?;
 ///     let res = app.call(&[3.0, 5.0]);
 ///     println!("{:?}", &res);
@@ -74,69 +74,19 @@ type __m256d = [f64; 4];
 /// }
 /// ```
 impl Compiler {
-    const USE_SIMD: u32 = 0x01;
-    const USE_THREADS: u32 = 0x02;
-    const CSE: u32 = 0x04;
-    const FASTMATH: u32 = 0x08;
-    const SANITIZE: u32 = 0x10;
-
-    const OPT_LEVEL_0: u32 = 0x0000;
-    const OPT_LEVEL_1: u32 = 0x0100;
-    const OPT_LEVEL_2: u32 = 0x0200;
-    const OPT_LEVEL_MASK: u32 = 0x0f00;
-    const OPT_LEVEL_SHIFT: usize = 8;
-
-    pub const DEFAULT: u32 = Self::CSE | Self::SANITIZE | Self::OPT_LEVEL_1 | Self::USE_SIMD;
-
     /// Creates a new `Compiler` object with default settings.
     pub fn new() -> Compiler {
         Compiler {
-            opt: Self::DEFAULT,
-            ty: CompilerType::Native,
+            config: Config::default(),
             df: Defuns::new(),
         }
     }
 
-    /// Creates a new `Compiler` object based on `ty`:
-    ///
-    /// * `CompilerType::Native`: generates code for the detected CPU (default)
-    /// * `CompilerType::Amd`: generates x86-64 (AMD64) code.
-    /// * `CompilerType::AmdAVX`: generates AVX code for x86-64 architecture.
-    /// * `CompilerType::AmdSSE`: generates SSE2 code for x86-64 architecture.
-    /// * `CompilerType::Arm`: generates aarch64 (ARM64) code.
-    /// * `CompilerType::RiscV`: generates riscv64 (RISC V) code.
-    /// * `CompilerType::ByteCode`: generates bytecode (interpreter).
-    /// * `CompilerType::Debug`: debug mode, generates both bytecode and native codes
-    ///    and compares the outputs.
-    ///
-    pub fn with_compiler_type(ty: CompilerType) -> Compiler {
+    pub fn with_config(config: Config) -> Compiler {
         Compiler {
-            opt: Self::DEFAULT,
-            ty,
+            config,
             df: Defuns::new(),
         }
-    }
-
-    /// Sets of optimization level. The valid values are 0, 1, 2, which roughly correspond to gcc O0, O1, and O2 levels.
-    pub fn opt_level(&mut self, opt_level: u8) {
-        self.opt =
-            (self.opt & !Self::OPT_LEVEL_MASK) | ((opt_level as u32) << Self::OPT_LEVEL_SHIFT);
-    }
-
-    /// Enables Common-Subexpression-Elimination.
-    pub fn cse(&mut self, enabled: bool) {
-        self.opt = (self.opt & !Self::CSE) | if enabled { Self::CSE } else { 0 };
-    }
-
-    /// Enables fastmath mode. The main effect is to generate fused-multiply-addition
-    /// instructions if possible.
-    pub fn fastmath(&mut self, enabled: bool) {
-        self.opt = (self.opt & !Self::FASTMATH) | if enabled { Self::FASTMATH } else { 0 };
-    }
-
-    /// Enables SIMD mode.
-    pub fn simd(&mut self, enabled: bool) {
-        self.opt = (self.opt & !Self::USE_SIMD) | if enabled { Self::USE_SIMD } else { 0 };
     }
 
     /// Compiles a model.
@@ -193,7 +143,7 @@ impl Compiler {
             obs: eqs,
         };
 
-        let prog = Program::new(&ml, Config::new(self.ty, self.opt)?)?;
+        let prog = Program::new(&ml, self.config)?;
         // let df = Defuns::new();
         let mut app = Application::new(prog, &self.df);
 

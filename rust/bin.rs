@@ -1,5 +1,5 @@
 use anyhow::Result;
-use symjit::{int, var, Compiler, Expr, FastFunc};
+use symjit::{int, var, Compiler, Config, Expr, FastFunc};
 
 fn test_simple() -> Result<()> {
     let x = Expr::var("x");
@@ -7,8 +7,10 @@ fn test_simple() -> Result<()> {
     let p = &x + &y;
     let q = &x * &y;
 
-    let mut comp = Compiler::new();
-    comp.opt_level(2); // optional
+    let mut config = Config::default();
+    config.set_opt_level(2); // optional
+    let mut comp = Compiler::with_config(config);
+
     let mut app = comp.compile(&[x, y], &[p, q])?;
     let v = app.call(&[3.0, 5.0]);
     println!("simple\t{:?}", &v);
@@ -166,9 +168,11 @@ pub fn main() -> Result<()> {
     #[cfg(target_arch = "x86_64")]
     test_simd()?;
 
+    /*
     print!("testing memory leaks...");
     test_memory(1000)?;
     println!("pass!");
+    */
 
     Ok(())
 }

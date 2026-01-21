@@ -158,6 +158,37 @@ impl Config {
     pub fn is_complex(&self) -> bool {
         self.test(COMPLEX)
     }
+
+    /// Sets of optimization level. The valid values are 0, 1, 2, which roughly correspond to gcc O0, O1, and O2 levels.
+    pub fn set_opt_level(&mut self, opt_level: u8) {
+        self.opt = (self.opt & !OPT_LEVEL_MASK) | ((opt_level as u32) << OPT_LEVEL_SHIFT);
+    }
+
+    /// Enables Common-Subexpression-Elimination.
+    pub fn set_cse(&mut self, enabled: bool) {
+        self.opt = (self.opt & !CSE) | if enabled { CSE } else { 0 };
+    }
+
+    /// Enables fastmath mode. The main effect is to generate fused-multiply-addition
+    /// instructions if possible.
+    pub fn set_fastmath(&mut self, enabled: bool) {
+        self.opt = (self.opt & !FASTMATH) | if enabled { FASTMATH } else { 0 };
+    }
+
+    /// Enables SIMD mode.
+    pub fn set_simd(&mut self, enabled: bool) {
+        self.opt = (self.opt & !USE_SIMD) | if enabled { USE_SIMD } else { 0 };
+    }
+}
+
+impl Default for Config {
+    fn default() -> Config {
+        Config::new(
+            CompilerType::Native,
+            USE_SIMD | USE_THREADS | CSE | (2 << OPT_LEVEL_SHIFT),
+        )
+        .unwrap()
+    }
 }
 
 // the list of intrinsic unary ops, i.e., operations that can be implemented directly in
