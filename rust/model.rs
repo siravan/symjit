@@ -61,11 +61,13 @@ impl Program {
 
         for eq in &ml.obs {
             if let Some(name) = eq.lhs.normal_var() {
-                if name.starts_with("__") {
-                    builder.block().create_tmp_named(&name);
-                } else {
-                    builder.block().create_mem(&name);
-                    count_obs += 1;
+                if !builder.block().var_exists(&name) {
+                    if name.starts_with("__") {
+                        builder.block().create_tmp_named(&name);
+                    } else {
+                        builder.block().create_mem(&name);
+                        count_obs += 1;
+                    }
                 }
             } else {
                 return Err(anyhow!("lhs var not found"));

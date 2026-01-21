@@ -1,13 +1,16 @@
+use serde::Deserialize;
+
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::{__m256d, _mm256_setzero_pd};
 
 use anyhow::{anyhow, Result};
+use num_complex::Complex;
 
 use crate::config::Config;
 use crate::defuns::Defuns;
 use crate::expr::Expr;
 use crate::model::{CellModel, Equation, Program, Variable};
-use crate::{Application, CompilerType};
+use crate::Application;
 
 // #[derive(Debug)]
 pub struct Compiler {
@@ -256,6 +259,12 @@ impl Application {
         obs.to_vec()
     }
 
+    pub fn evaluate(&mut self, args: &[f64], outs: &mut [f64]) {
+        self.compiled.exec(args);
+        let mem = self.compiled.mem();
+        outs.copy_from_slice(&mem[self.first_obs..self.first_obs + self.count_obs]);
+    }
+
     /// Calls the compiled SIMD function.
     ///
     /// `args` is a slice of __m256d values, corresponding to the states.
@@ -448,5 +457,194 @@ impl Application {
         } else {
             Err(anyhow!("not a fast function"))
         }
+    }
+}
+
+/* Symbolica */
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct BuiltinSymbol(u32);
+
+impl<'de> serde::Deserialize<'de> for BuiltinSymbol {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let id: u32 = u32::deserialize(deserializer)?;
+        Ok(BuiltinSymbol(id))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+pub enum Slot {
+    /// An entry in the list of parameters.
+    Param(usize),
+    /// An entry in the list of constants.
+    Const(usize),
+    /// An entry in the list of temporary storage.
+    Temp(usize),
+    /// An entry in the list of results.
+    Out(usize),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub enum Instruction {
+    /// `Add(o, [i0,...,i_n])` means `o = i0 + ... + i_n`.
+    Add(Slot, Vec<Slot>),
+    /// `Mul(o, [i0,...,i_n])` means `o = i0 * ... * i_n`.
+    Mul(Slot, Vec<Slot>),
+    /// `Pow(o, b, e)` means `o = b^e`.
+    Pow(Slot, Slot, i64),
+    /// `Powf(o, b, e)` means `o = b^e`.
+    Powf(Slot, Slot, Slot),
+    /// `Fun(o, s, a)` means `o = s(a)`, where `s` is assumed to
+    /// be a built-in function such as `sin`.
+    Fun(Slot, BuiltinSymbol, Slot),
+    /// `ExternalFun(o, s, a,...)` means `o = s(a, ...)`, where `s` is an external function.
+    ExternalFun(Slot, String, Vec<Slot>),
+    /// `Assign(o, v)` means `o = v`.
+    Assign(Slot, Slot),
+    /// `IfElse(cond, label)` means jump to `label` if `cond` is zero.
+    IfElse(Slot, usize),
+    /// Unconditional jump to `label`.
+    Goto(usize),
+    /// A position in the instruction list to jump to.
+    Label(usize),
+    /// `Join(o, cond, t, f)` means `o = cond ? t : f`.
+    Join(Slot, Slot, Slot, Slot),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+enum Value {
+    Single(f64)
+}
+
+impl Value {
+    fn value(&self) -> f64 {
+        if let Value::Single(x) = self {
+            *x
+        } else {
+            panic!("only Single values are supported");
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct Rational {
+    numerator: Value,
+    denominator: Value,
+}
+
+impl Rational {
+    fn value(&self) -> f64 {
+        self.numerator.value()  / self.denominator.value()
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ComplexRational {
+    re: Rational,
+    im: Rational,
+}
+
+impl ComplexRational {
+    fn value(&self) -> Complex<f64> {
+        Complex::new(self.re.value(), self.im.value())
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct SymbolicaModel(Vec<Instruction>, usize, Vec<ComplexRational>);
+
+#[derive(Debug, Clone, Deserialize)]
+struct Translator {
+    consts: Vec<f64>,
+    count_params: usize,
+    count_temps: usize,
+    count_outs: usize,
+    eqs: Vec<Equation>,
+}
+
+impl Translator {
+    fn new() -> Translator {
+        Translator {
+            consts: Vec::new(),
+            count_params: 0,
+            count_temps: 0,
+            count_outs: 0,
+            eqs: Vec::new(),
+        }
+    }
+
+    fn expr(&mut self, slot: &Slot) -> Expr {
+        match slot {
+            Slot::Param(idx) => {
+                self.count_params = self.count_params.max(*idx);
+                Expr::var(&format!("Param{}", idx))
+            }
+            Slot::Temp(idx) => {
+                self.count_temps = self.count_temps.max(*idx);
+                Expr::var(&format!("__Temp{}", idx))
+            }
+            Slot::Out(idx) => {
+                self.count_outs = self.count_outs.max(*idx);
+                Expr::var(&format!("Out{}", idx))
+            }
+            Slot::Const(idx) => {
+                Expr::from(self.consts[*idx])
+            }
+        }
+    }
+
+    fn translate(&mut self, model: &SymbolicaModel) -> CellModel {
+        self.consts = model.2.iter().map(|x| x.value().re).collect::<Vec<f64>>();
+
+        for line in model.0.iter() {
+            match line {
+                Instruction::Add(lhs, args) =>  self.translate_nary("plus", &lhs, &args),
+                Instruction::Mul(lhs, args) =>  self.translate_nary("times", &lhs, &args),
+                _ => {}
+            }
+        }
+
+        let params: Vec<Variable> = (0..=self.count_params).map(|idx| self.expr(&Slot::Param(idx)).to_variable().unwrap()).collect();
+
+        println!("{:?}", &params);
+
+        CellModel {
+            iv: Expr::var("$_").to_variable().unwrap(),
+            params,
+            states: Vec::new(),
+            algs: Vec::new(),
+            odes: Vec::new(),
+            obs: self.eqs.clone(),
+        }
+    }
+
+    fn translate_nary(&mut self, op: &str, lhs: &Slot, args: &[Slot]) {
+        let lhs = self.expr(lhs);
+        let args: Vec<Expr> = args.iter().map(|x| self.expr(x)).collect();
+        let p: Vec<&Expr> = args.iter().collect();
+        self.eqs.push(Expr::equation(&lhs, &Expr::nary(op, &p)));
+    }
+}
+
+impl Compiler {
+    pub fn translate(&mut self, json: &str) -> Result<Application> {
+        let model: SymbolicaModel = serde_json::from_str(json)?;
+        let mut translator = Translator::new();
+        let ml = translator.translate(&model);
+
+        println!("{:?}", &ml);
+
+        let prog = Program::new(&ml, self.config)?;
+        let df = Defuns::new();
+        let mut app = Application::new(prog, &df);
+
+        #[cfg(target_arch = "aarch64")]
+        if let Ok(app) = &mut app {
+            // this is a hack to give enough delay to prevent a bus error
+            app.dump("dump.bin", "scalar");
+            std::fs::remove_file("dump.bin")?;
+        };
+
+        app
     }
 }

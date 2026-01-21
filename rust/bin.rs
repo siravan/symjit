@@ -1,6 +1,12 @@
 use anyhow::Result;
 use symjit::{int, var, Compiler, Config, Expr, FastFunc};
 
+use symbolica::{
+    atom::AtomCore,
+    evaluate::{FunctionMap, OptimizationSettings},
+    parse, symbol,
+};
+
 fn test_simple() -> Result<()> {
     let x = Expr::var("x");
     let y = Expr::var("y");
@@ -154,6 +160,31 @@ fn test_memory(n: usize) -> Result<()> {
     Ok(())
 }
 
+fn test_symbolica() -> Result<()> {
+    let params = vec![parse!("x"), parse!("y")];
+    let optimization_settings = OptimizationSettings::default();
+
+    let evaluator = parse!("x + y^2 - 7")
+        .evaluator(&FunctionMap::new(), &params, optimization_settings)
+        .unwrap();
+
+    let json = serde_json::to_string(&evaluator.export_instructions())?;
+
+    println!("{:?}", &json);
+
+    let mut comp = Compiler::new();
+    let mut app = comp.translate(&json)?;
+
+    let args = vec![2.0, 5.0];
+    let mut outs = vec![0.0];
+
+    app.evaluate(&args, &mut outs);
+
+    println!("{:?}", &outs);
+
+    Ok(())
+}
+
 pub fn main() -> Result<()> {
     test_simple()?;
     test_pi_viete(false)?;
@@ -173,6 +204,8 @@ pub fn main() -> Result<()> {
     test_memory(1000)?;
     println!("pass!");
     */
+
+    test_symbolica()?;
 
     Ok(())
 }

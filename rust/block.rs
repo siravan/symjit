@@ -86,6 +86,10 @@ impl Block {
         }
     }
 
+    pub fn var_exists(&self, name: &str) -> bool {
+        self.sym_table.contains(name)
+    }
+
     pub fn create_void(&mut self) -> Node {
         Node::create_void()
     }
