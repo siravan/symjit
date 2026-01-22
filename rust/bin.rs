@@ -166,8 +166,6 @@ fn test_symbolica_scalar() -> Result<()> {
 
     let mut f = FunctionMap::new();
     f.add_conditional(symbol!("if")).unwrap();
-    f.add_external_function(symbol!("sinh"), "sinh".to_string())
-        .unwrap();
 
     let tests = vec![
         ("x + y^2", &[2.0, 5.0]),
@@ -181,6 +179,8 @@ fn test_symbolica_scalar() -> Result<()> {
         ("x^3 + y^3", &[5.0, 6.0]),
         ("x^30 + y^30", &[2.0, 3.0]),
     ];
+
+    let mut outs = vec![0.0];
 
     for (input, args) in tests {
         let eval = parse!(input)
@@ -197,9 +197,9 @@ fn test_symbolica_scalar() -> Result<()> {
         // let s = std::str::from_utf8(&bytes);
         // println!("{:?}", s);
 
-        let u = app.evaluate_single(args);
+        app.evaluate(args, &mut outs);
         let v = eval.map_coeff(&|x| x.re.to_f64()).evaluate_single(args);
-        println!("{:?}({:?}) => {} vs {}", &input, args, u, v);
+        println!("{:?}({:?}) => {} vs {}", &input, args, outs[0], v);
     }
 
     Ok(())
@@ -218,7 +218,7 @@ fn test_symbolica_complex() -> Result<()> {
     let mut comp = Compiler::with_config(config);
     let mut app = comp.translate(&json)?;
 
-    let u = app.evaluate_single_complex(&[Complex::new(2.0, 1.0), Complex::new(-2.0, 4.0)]);
+    let u = app.evaluate_single(&[Complex::new(2.0, 1.0), Complex::new(-2.0, 4.0)]);
     println!("{:?}", u);
 
     Ok(())

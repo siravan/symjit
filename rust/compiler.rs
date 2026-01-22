@@ -260,37 +260,29 @@ impl Application {
         obs.to_vec()
     }
 
-    pub fn evaluate(&mut self, args: &[f64], outs: &mut [f64]) {
-        self.compiled.exec(args);
-        let mem = self.compiled.mem();
-        outs.copy_from_slice(&mem[self.first_obs..self.first_obs + self.count_obs]);
+    pub fn evaluate<T: Sized + Copy>(&mut self, args: &[T], outs: &mut [T]) {
+        let k = std::mem::size_of::<T>() / std::mem::size_of::<f64>();
+        assert!(args.len() * k >= self.count_params && outs.len() * k >= self.count_obs);
+
+        let f = self.compiled.func();
+        f(
+            outs.as_ptr() as *mut f64,
+            std::ptr::null(),
+            0,
+            args.as_ptr() as *const f64,
+        );
     }
 
-    pub fn evaluate_complex(&mut self, args: &[Complex<f64>], outs: &mut [Complex<f64>]) {
-        let args: &[f64] =
-            unsafe { std::slice::from_raw_parts(args.as_ptr() as *const f64, args.len() * 2) };
-        self.compiled.exec(args);
-        let obs: &[f64] = &self.compiled.mem()[self.first_obs..(self.first_obs + self.count_obs)];
-        let res: &[Complex<f64>] =
-            unsafe { std::slice::from_raw_parts(obs.as_ptr() as *const Complex<f64>, outs.len()) };
-        outs.copy_from_slice(&res);
-    }
-
-    pub fn evaluate_single(&mut self, args: &[f64]) -> f64 {
-        assert!(self.count_obs == 1);
-        self.compiled.exec(args);
-        self.compiled.mem()[self.first_obs]
-    }
-
-    pub fn evaluate_single_complex(&mut self, args: &[Complex<f64>]) -> Complex<f64> {
-        assert!(self.count_obs == 2);
-
-        let args: &[f64] =
-            unsafe { std::slice::from_raw_parts(args.as_ptr() as *const f64, args.len() * 2) };
-        self.compiled.exec(args);
-
-        let mem: &[f64] = &self.compiled.mem();
-        Complex::new(mem[self.first_obs], mem[self.first_obs + 1])
+    pub fn evaluate_single<T: Sized + Copy + Default>(&mut self, args: &[T]) -> T {
+        let mut outs = [T::default(); 1];
+        let f = self.compiled.func();
+        f(
+            outs.as_ptr() as *mut f64,
+            std::ptr::null(),
+            0,
+            args.as_ptr() as *const f64,
+        );
+        outs[0]
     }
 
     /// Calls the compiled SIMD function.
