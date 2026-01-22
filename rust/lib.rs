@@ -17,7 +17,118 @@
 //! codes on Linux, Windows, and macOS platforms. SIMD is supported on x86-64
 //! CPUs with AVX instruction sets.
 //!
-//! # Workflow
+//! There are two ways to contruct expressions to pass to Symjit: using Symbolica or
+//! using Symjit standalone expression builder.
+//!
+//! # Symbolica
+//!
+//! Symbolica (<https://symbolica.io/>) is a fast Rust-based Computer Algebra System.
+//! Symbolica usually generate fast code using external compilers (e.g., using gcc to
+//! compiler generated c++ code). Symjit accepts Symbolica expressions and can act as
+//! an optional code-generator for Symbolica. The link between the two is through
+//! Symbolica's `export_instructions` function that exports an optimized intermediate
+//! representation. Using serde, it is possible to convert the output of `export_instructions`
+//! into JSON, which is then passed to the `translate` function of Symjit `Compiler`
+//! structure. If successful, `translate` returns an `Application` object, which wraps
+//! the compiled code and can be run using `evaluate` and `evaluate_single` functions.
+//!
+//! /// Example:
+//!
+//! ```rust
+//! use anyhow::Result;
+//! use symjit::{Compiler, Config};
+//! use symbolica::{atom::AtomCore, parse, symbol};
+//! use symbolica::evaluate::{FunctionMap, OptimizationSettings};
+//!
+//! fn test1() -> Result<()> {
+//!     let params = vec![parse!("x"), parse!("y")];
+//!     let eval = parse!("x + y^2")
+//!         .evaluator(
+//!             &FunctionMap::new(),
+//!             &params,
+//!             OptimizationSettings::default(),
+//!         )
+//!         .unwrap();
+//!
+//!     let json = serde_json::to_string(&eval.export_instructions())?;
+//!     let mut comp = Compiler::new();
+//!     let mut app = comp.translate(&json)?;
+//!     assert!(app.evaluate_single(&[2.0, 3.0]) == 11.0);
+//!     Ok(())
+//! }
+//! ```
+//!
+//! Note that Symbolica needs to be imported by `features = ["serde"]` to allow for
+//! applying `serde_json::to_string` to the output of `export_instructions`.
+//!
+//! To change compilation options, one passes a `Config` struct to the `Compiler`
+//! constructor. The following example shows how to compile for complex number.
+//!
+//! ```rust
+//! use anyhow::Result;
+//! use num_complex::Complex;
+//! use symjit::{Compiler, Config};
+//! use symbolica::{atom::AtomCore, parse, symbol};
+//! use symbolica::evaluate::{FunctionMap, OptimizationSettings};
+//!
+//! fn test2() -> Result<()> {
+//!     let params = vec![parse!("x"), parse!("y")];
+//!     let eval = parse!("x + y^2")
+//!         .evaluator(
+//!             &FunctionMap::new(),
+//!             &params,
+//!             OptimizationSettings::default(),
+//!         )
+//!         .unwrap();
+//!
+//!     let json = serde_json::to_string(&eval.export_instructions())?;
+//!     let mut config = Config::default();
+//!     config.set_complex(true);
+//!     let mut comp = Compiler::with_config(config);
+//!     let mut app = comp.translate(&json)?;
+//!     let v = vec![Complex::new(2.0, 1.0), Complex::new(-1.0, 3.0)];
+//!     assert!(app.evaluate_single(&v) == Complex::new(-6.0, -5.0));
+//!     Ok(())
+//! }
+//! ```
+//!
+//! Currently, Symjit supports most of Symbolica's expressions with the exception of
+//! external user-defined functions. However, it is possible to link to Symjit
+//! numerical functions (see below) by defining their name using `add_external_function`.
+//! The following example shows how to link to `sinh` function:
+//!
+//! ```rust
+//! use anyhow::Result;
+//! use symjit::{Compiler, Config};
+//! use symbolica::{atom::AtomCore, parse, symbol};
+//! use symbolica::evaluate::{FunctionMap, OptimizationSettings};
+//!
+//! fn test3() -> Result<()> {
+//!     let params = vec![parse!("x")];
+//!
+//!     let mut f = FunctionMap::new();
+//!     f.add_external_function(symbol!("sinh"), "sinh".to_string())
+//!         .unwrap();
+//!
+//!     let eval = parse!("sinh(x)")
+//!         .evaluator(&f, &params, OptimizationSettings::default())
+//!         .unwrap();
+//!
+//!     let json = serde_json::to_string(&eval.export_instructions())?;
+//!     let mut comp = Compiler::new();
+//!     let mut app = comp.translate(&json)?;
+//!     assert!(app.evaluate_single(&[1.5]) == f64::sinh(1.5));
+//!     Ok(())
+//! }
+//! ```
+//!
+//! # Standalone Expression Builder
+//!
+//! A second way to use Symjit is by using its standalone expression builder. Compared to
+//! Symbolica, the expression builder is limited but is useful in situations that the goal
+//! is to compile an expression without extensive symbolic manipulations.
+//!
+//! The workflow to create, compile, and run expressions is:
 //!
 //! 1. Create terminals (variables and constants) and compose expressions using `Expr` methods:
 //!    * Constructors: `var`, `from`, `unary`, `binary`, ...
@@ -29,20 +140,17 @@
 //!    * Heaviside function: `heaviside(x)`, which returns 1 if `x >= 0`; otherwise 0.
 //!    * Comparison methods `eq`, `ne`, `lt`, `le`, `gt`, and `ge`.
 //!    * Looping constructs `sum` and `prod`.
-//! 2. Create a new `Compiler` object (say, `comp`) using one of its constructors: `new()`
-//!    or `with_compile_type(ty: CompilerType)`.
-//! 3. Fine-tune the optimization passes using `opt_level`, `simd`, `fastmath`,
-//!    and `cse` methods (optional).
-//! 4. Define user-defined functions by calling `comp.def_unary` and `comp.def_binary`
+//! 2. Create a new `Compiler` object (say, `comp`) using one of its constructors.
+//! 3. Define user-defined functions by calling `comp.def_unary` and `comp.def_binary`
 //!    (optional).
-//! 5. Compile by calling `comp.compile` or `comp.compile_params`. The result is of
+//! 4. Compile by calling `comp.compile` or `comp.compile_params`. The result is of
 //!    type `Application` (say, `app`).
-//! 6. Execute the compiled code using one of the `app`'s `call` functions:
+//! 5. Execute the compiled code using one of the `app`'s `call` functions:
 //!    * `call(&[f64])`: scalar call.
 //!    * `call_params(&[f64], &[f64])`: scalar call with parameters.
 //!    * `call_simd(&[__m256d])`: simd call.
 //!    * `call_simd_params(&[__m256d], &[f64])`: simd call with parameters.
-//! 7. Optionally, generate a standalone fast function to execute.
+//! 6. Optionally, generate a standalone fast function to execute.
 //!
 //! Note that you can use the helper functions `var(&str) -> Expr`, `int(i32) -> Expr`,
 //! `double(f64) -> Expr`, and `boolean(bool) -> f64` to reduce clutter.

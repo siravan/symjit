@@ -1,6 +1,6 @@
 use anyhow::Result;
 use num_complex::Complex;
-use symjit::{int, var, Compiler, CompilerType, Config, Expr, FastFunc};
+use symjit::{int, var, Compiler, Config, Expr, FastFunc};
 
 use symbolica::{
     atom::AtomCore,
@@ -244,6 +244,60 @@ fn test_symbolica_external() -> Result<()> {
     Ok(())
 }
 
+fn test_symbolica_doc_1() -> Result<()> {
+    let params = vec![parse!("x"), parse!("y")];
+    let eval = parse!("x + y^2")
+        .evaluator(
+            &FunctionMap::new(),
+            &params,
+            OptimizationSettings::default(),
+        )
+        .unwrap();
+
+    let json = serde_json::to_string(&eval.export_instructions())?;
+    let mut comp = Compiler::new();
+    let mut app = comp.translate(&json)?;
+    assert!(app.evaluate_single(&[2.0, 3.0]) == 11.0);
+    Ok(())
+}
+
+fn test_symbolica_doc_2() -> Result<()> {
+    let params = vec![parse!("x"), parse!("y")];
+    let eval = parse!("x + y^2")
+        .evaluator(
+            &FunctionMap::new(),
+            &params,
+            OptimizationSettings::default(),
+        )
+        .unwrap();
+
+    let json = serde_json::to_string(&eval.export_instructions())?;
+    let mut config = Config::default();
+    config.set_complex(true);
+    let mut comp = Compiler::with_config(config);
+    let mut app = comp.translate(&json)?;
+    let v = vec![Complex::new(2.0, 1.0), Complex::new(-1.0, 3.0)];
+    assert!(app.evaluate_single(&v) == Complex::new(-6.0, -5.0));
+    Ok(())
+}
+
+fn test_symbolica_doc_3() -> Result<()> {
+    let params = vec![parse!("x")];
+    let mut f = FunctionMap::new();
+    f.add_external_function(symbol!("sinh"), "sinh".to_string())
+        .unwrap();
+
+    let eval = parse!("sinh(x)")
+        .evaluator(&f, &params, OptimizationSettings::default())
+        .unwrap();
+
+    let json = serde_json::to_string(&eval.export_instructions())?;
+    let mut comp = Compiler::new();
+    let mut app = comp.translate(&json)?;
+    assert!(app.evaluate_single(&[1.5]) == f64::sinh(1.5));
+    Ok(())
+}
+
 pub fn main() -> Result<()> {
     test_simple()?;
     test_pi_viete(false)?;
@@ -263,6 +317,15 @@ pub fn main() -> Result<()> {
     test_memory(1000)?;
     println!("pass!");
     */
+
+    test_symbolica_doc_1()?;
+    println!("doc test #1 passed");
+
+    test_symbolica_doc_2()?;
+    println!("doc test #2 passed");
+
+    test_symbolica_doc_3()?;
+    println!("doc test #3 passed");
 
     test_symbolica_scalar()?;
     test_symbolica_complex()?;

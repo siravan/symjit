@@ -260,6 +260,7 @@ impl Application {
         obs.to_vec()
     }
 
+    /// Generic evaluate function for compiled Symbolica expressions
     pub fn evaluate<T: Sized + Copy>(&mut self, args: &[T], outs: &mut [T]) {
         let k = std::mem::size_of::<T>() / std::mem::size_of::<f64>();
         assert!(args.len() * k >= self.count_params && outs.len() * k >= self.count_obs);
@@ -273,6 +274,7 @@ impl Application {
         );
     }
 
+    /// Generic evaluate_single function for compiled Symbolica expressions
     pub fn evaluate_single<T: Sized + Copy + Default>(&mut self, args: &[T]) -> T {
         let mut outs = [T::default(); 1];
         let f = self.compiled.func();
@@ -493,7 +495,7 @@ impl<'de> serde::Deserialize<'de> for BuiltinSymbol {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
-pub enum Slot {
+enum Slot {
     /// An entry in the list of parameters.
     Param(usize),
     /// An entry in the list of constants.
@@ -505,7 +507,7 @@ pub enum Slot {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub enum Instruction {
+enum Instruction {
     /// `Add(o, [i0,...,i_n])` means `o = i0 + ... + i_n`.
     Add(Slot, Vec<Slot>),
     /// `Mul(o, [i0,...,i_n])` means `o = i0 * ... * i_n`.
@@ -770,6 +772,22 @@ impl Translator {
 }
 
 impl Compiler {
+    /// Compiles a Symbolica model.
+    ///
+    /// `json` is the JSON-encoded output of Symbolica `export_instructions`.
+    ///
+    /// Example:
+    ///
+    /// ```rust
+    /// let params = vec![parse!("x"), parse!("y")];
+    /// let eval = parse!("x + y^2")
+    ///     .evaluator(&FunctionMap::new(), &params, OptimizationSettings::default())?
+    ///
+    /// let json = serde_json::to_string(&eval.export_instructions())?;
+    /// let mut comp = Compiler::new();
+    /// let mut app = comp.translate(&json)?;
+    /// assert!(app.evaluate_single(&[2.0, 3.0]) == 11.0);
+    /// ```
     pub fn translate(&mut self, json: &str) -> Result<Application> {
         let model: SymbolicaModel = serde_json::from_str(json)?;
         let mut translator = Translator::new();
