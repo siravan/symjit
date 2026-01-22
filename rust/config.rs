@@ -179,13 +179,18 @@ impl Config {
     pub fn set_simd(&mut self, enabled: bool) {
         self.opt = (self.opt & !USE_SIMD) | if enabled { USE_SIMD } else { 0 };
     }
+
+    /// Enables Complex Numbers.
+    pub fn set_complex(&mut self, enabled: bool) {
+        self.opt = (self.opt & !COMPLEX) | if enabled { COMPLEX } else { 0 };
+    }
 }
 
 impl Default for Config {
     fn default() -> Config {
         Config::new(
             CompilerType::Native,
-            USE_SIMD | USE_THREADS | CSE | (2 << OPT_LEVEL_SHIFT),
+            USE_SIMD | USE_THREADS | CSE | (1 << OPT_LEVEL_SHIFT),
         )
         .unwrap()
     }

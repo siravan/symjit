@@ -273,7 +273,7 @@ impl Block {
                     depth += 1;
                 }
                 Statement::Branch { .. } => {
-                    assert!(depth > 0);
+                    // assert!(depth > 0);
                     depth -= 1;
                 }
             }

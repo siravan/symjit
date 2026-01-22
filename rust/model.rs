@@ -60,7 +60,9 @@ impl Program {
         let mut count_obs = 0;
 
         for eq in &ml.obs {
-            if let Some(name) = eq.lhs.normal_var() {
+            if let Expr::Special = eq.lhs {
+                // pass
+            } else if let Some(name) = eq.lhs.normal_var() {
                 if !builder.block().var_exists(&name) {
                     if name.starts_with("__") {
                         builder.block().create_tmp_named(&name);
@@ -96,6 +98,23 @@ impl Program {
         };
 
         Ok(prog)
+    }
+
+    fn special(builder: &mut Builder, rhs: &Expr) -> Result<()> {
+        match rhs {
+            Expr::Label { id } => {
+                let label = format!("L.{}", id);
+                builder.block().add_label(&label);
+            }
+            Expr::IfElse { cond, id } => {
+                let cond = cond.transform(builder)?;
+                let label = format!("L.{}", id);
+                builder.block().add_branch(cond, &label);
+            }
+            _ => return Err(anyhow!("Special expressions are Label and IfElse")),
+        }
+
+        Ok(())
     }
 
     pub fn config(&self) -> &Config {
@@ -236,6 +255,7 @@ impl Transformer for Expr {
                 3 => self.transform_ternary(builder, op.as_str(), args)?,
                 _ => self.transform_poly(builder, op.as_str(), args)?,
             },
+            _ => builder.create_void()?, // should be handled by Equation::special
         };
         Ok(dst)
     }
@@ -250,6 +270,10 @@ pub struct Equation {
 
 impl Transformer for Equation {
     fn transform(&self, builder: &mut Builder) -> Result<Node> {
+        if let Expr::Special = self.lhs {
+            return self.special(builder);
+        }
+
         let var = if let Some(var) = self.lhs.diff_var() {
             format!("δ{}", var)
         } else if let Some(var) = self.lhs.normal_var() {
@@ -261,6 +285,25 @@ impl Transformer for Equation {
         let rhs = self.rhs.transform(builder)?;
         let lhs = builder.create_var(var.as_str())?;
         builder.add_assign(lhs, rhs)?;
+        builder.create_void()
+    }
+}
+
+impl Equation {
+    fn special(&self, builder: &mut Builder) -> Result<Node> {
+        match &self.rhs {
+            Expr::Label { id } => {
+                let label = format!("L.{}", id);
+                builder.block().add_label(&label);
+            }
+            Expr::IfElse { cond, id } => {
+                let cond = cond.transform(builder)?;
+                let label = format!("L.{}", id);
+                builder.block().add_branch(cond, &label);
+            }
+            _ => return Err(anyhow!("Special expressions are Label and IfElse")),
+        }
+
         builder.create_void()
     }
 }

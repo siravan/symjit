@@ -1,5 +1,6 @@
 use serde::Deserialize;
 
+use std::any;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::{__m256d, _mm256_setzero_pd};
 
@@ -265,6 +266,33 @@ impl Application {
         outs.copy_from_slice(&mem[self.first_obs..self.first_obs + self.count_obs]);
     }
 
+    pub fn evaluate_complex(&mut self, args: &[Complex<f64>], outs: &mut [Complex<f64>]) {
+        let args: &[f64] =
+            unsafe { std::slice::from_raw_parts(args.as_ptr() as *const f64, args.len() * 2) };
+        self.compiled.exec(args);
+        let obs: &[f64] = &self.compiled.mem()[self.first_obs..(self.first_obs + self.count_obs)];
+        let res: &[Complex<f64>] =
+            unsafe { std::slice::from_raw_parts(obs.as_ptr() as *const Complex<f64>, outs.len()) };
+        outs.copy_from_slice(&res);
+    }
+
+    pub fn evaluate_single(&mut self, args: &[f64]) -> f64 {
+        assert!(self.count_obs == 1);
+        self.compiled.exec(args);
+        self.compiled.mem()[self.first_obs]
+    }
+
+    pub fn evaluate_single_complex(&mut self, args: &[Complex<f64>]) -> Complex<f64> {
+        assert!(self.count_obs == 2);
+
+        let args: &[f64] =
+            unsafe { std::slice::from_raw_parts(args.as_ptr() as *const f64, args.len() * 2) };
+        self.compiled.exec(args);
+
+        let mem: &[f64] = &self.compiled.mem();
+        Complex::new(mem[self.first_obs], mem[self.first_obs + 1])
+    }
+
     /// Calls the compiled SIMD function.
     ///
     /// `args` is a slice of __m256d values, corresponding to the states.
@@ -460,7 +488,7 @@ impl Application {
     }
 }
 
-/* Symbolica */
+/************************* Symbolica *****************************/
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct BuiltinSymbol(u32);
@@ -513,16 +541,13 @@ pub enum Instruction {
 
 #[derive(Debug, Clone, Deserialize)]
 enum Value {
-    Single(f64)
+    Single(f64),
 }
 
 impl Value {
     fn value(&self) -> f64 {
-        if let Value::Single(x) = self {
-            *x
-        } else {
-            panic!("only Single values are supported");
-        }
+        let Value::Single(x) = self;
+        *x
     }
 }
 
@@ -534,7 +559,7 @@ struct Rational {
 
 impl Rational {
     fn value(&self) -> f64 {
-        self.numerator.value()  / self.denominator.value()
+        self.numerator.value() / self.denominator.value()
     }
 }
 
@@ -587,42 +612,168 @@ impl Translator {
                 self.count_outs = self.count_outs.max(*idx);
                 Expr::var(&format!("Out{}", idx))
             }
-            Slot::Const(idx) => {
-                Expr::from(self.consts[*idx])
-            }
+            Slot::Const(idx) => Expr::from(self.consts[*idx]),
         }
     }
 
-    fn translate(&mut self, model: &SymbolicaModel) -> CellModel {
+    fn translate(&mut self, model: &SymbolicaModel) -> Result<CellModel> {
         self.consts = model.2.iter().map(|x| x.value().re).collect::<Vec<f64>>();
 
         for line in model.0.iter() {
             match line {
-                Instruction::Add(lhs, args) =>  self.translate_nary("plus", &lhs, &args),
-                Instruction::Mul(lhs, args) =>  self.translate_nary("times", &lhs, &args),
-                _ => {}
+                Instruction::Add(lhs, args) => self.translate_nary("plus", lhs, args)?,
+                Instruction::Mul(lhs, args) => self.translate_nary("times", lhs, args)?,
+                Instruction::Pow(lhs, arg, p) => {
+                    let p = Expr::from(*p as f64);
+                    self.translate_pow(&lhs, &arg, &p)?
+                }
+                Instruction::Powf(lhs, arg, p) => {
+                    let p = self.expr(p);
+                    self.translate_pow(&lhs, &arg, &p)?
+                }
+                Instruction::Assign(lhs, rhs) => self.translate_assign(lhs, rhs)?,
+                Instruction::Fun(lhs, fun, arg) => self.translate_fun(&lhs, fun, arg)?,
+                Instruction::Join(lhs, cond, true_val, false_val) => {
+                    self.translate_join(lhs, cond, true_val, false_val)?
+                }
+                Instruction::Label(id) => {
+                    self.eqs
+                        .push(Expr::equation(&Expr::Special, &Expr::Label { id: *id }));
+                }
+                Instruction::IfElse(cond, id) => self.translate_ifelse(cond, *id)?,
+                Instruction::Goto(id) => self.translate_goto(*id)?,
+                Instruction::ExternalFun(lhs, op, args) => {
+                    self.translate_external_fun(lhs, op, args)?
+                }
             }
         }
 
-        let params: Vec<Variable> = (0..=self.count_params).map(|idx| self.expr(&Slot::Param(idx)).to_variable().unwrap()).collect();
+        let params: Vec<Variable> = (0..=self.count_params)
+            .map(|idx| self.expr(&Slot::Param(idx)).to_variable().unwrap())
+            .collect();
 
-        println!("{:?}", &params);
-
-        CellModel {
+        Ok(CellModel {
             iv: Expr::var("$_").to_variable().unwrap(),
             params,
             states: Vec::new(),
             algs: Vec::new(),
             odes: Vec::new(),
             obs: self.eqs.clone(),
-        }
+        })
     }
 
-    fn translate_nary(&mut self, op: &str, lhs: &Slot, args: &[Slot]) {
+    fn translate_nary(&mut self, op: &str, lhs: &Slot, args: &[Slot]) -> Result<()> {
         let lhs = self.expr(lhs);
         let args: Vec<Expr> = args.iter().map(|x| self.expr(x)).collect();
         let p: Vec<&Expr> = args.iter().collect();
         self.eqs.push(Expr::equation(&lhs, &Expr::nary(op, &p)));
+        Ok(())
+    }
+
+    fn translate_pow(&mut self, lhs: &Slot, arg: &Slot, power: &Expr) -> Result<()> {
+        let lhs = self.expr(lhs);
+        let arg = self.expr(arg);
+        self.eqs
+            .push(Expr::equation(&lhs, &Expr::binary("power", &arg, power)));
+        Ok(())
+    }
+
+    fn translate_assign(&mut self, lhs: &Slot, rhs: &Slot) -> Result<()> {
+        let lhs = self.expr(lhs);
+        let rhs = self.expr(rhs);
+        self.eqs.push(Expr::equation(&lhs, &rhs));
+        Ok(())
+    }
+
+    fn translate_fun(&mut self, lhs: &Slot, fun: &BuiltinSymbol, arg: &Slot) -> Result<()> {
+        let lhs = self.expr(lhs);
+        let arg = self.expr(arg);
+
+        let op = match fun.0 {
+            2 => "exp",
+            3 => "ln",
+            4 => "sin",
+            5 => "cos",
+            6 => "root",
+            7 => "conjugate",
+            _ => return Err(anyhow!("function is not defined.")),
+        };
+
+        self.eqs.push(Expr::equation(&lhs, &Expr::unary(op, &arg)));
+        Ok(())
+    }
+
+    fn translate_external_fun(&mut self, lhs: &Slot, op: &str, args: &[Slot]) -> Result<()> {
+        let lhs = self.expr(lhs);
+
+        match args.len() {
+            1 => {
+                let arg = self.expr(&args[0]);
+                self.eqs.push(Expr::equation(&lhs, &Expr::unary(op, &arg)));
+            }
+            2 => {
+                let l = self.expr(&args[0]);
+                let r = self.expr(&args[1]);
+                self.eqs
+                    .push(Expr::equation(&lhs, &Expr::binary(op, &l, &r)));
+            }
+            _ => {
+                return Err(anyhow!(
+                    "only unary and binary external functions are supported"
+                ))
+            }
+        }
+
+        Ok(())
+    }
+
+    fn translate_join(
+        &mut self,
+        lhs: &Slot,
+        cond: &Slot,
+        true_val: &Slot,
+        false_val: &Slot,
+    ) -> Result<()> {
+        let lhs = self.expr(lhs);
+        let cond = Expr::binary(
+            "gt",
+            &Expr::unary("abs", &self.expr(cond)),
+            &Expr::from(f64::EPSILON),
+        );
+        let t = self.expr(true_val);
+        let f = self.expr(false_val);
+        self.eqs.push(Expr::equation(&lhs, &cond.ifelse(&t, &f)));
+        Ok(())
+    }
+
+    fn translate_ifelse(&mut self, cond: &Slot, id: usize) -> Result<()> {
+        let cond = Expr::binary(
+            "lt",
+            &Expr::unary("abs", &self.expr(cond)),
+            &Expr::from(f64::EPSILON),
+        );
+
+        self.eqs.push(Expr::equation(
+            &Expr::Special,
+            &Expr::IfElse {
+                cond: Box::new(cond),
+                id,
+            },
+        ));
+        Ok(())
+    }
+
+    fn translate_goto(&mut self, id: usize) -> Result<()> {
+        let cond = Expr::from(f64::from_bits(!0 as u64)); // cond = true
+        self.eqs.push(Expr::equation(
+            &Expr::Special,
+            &Expr::IfElse {
+                cond: Box::new(cond),
+                id: id,
+            },
+        ));
+
+        Ok(())
     }
 }
 
@@ -630,9 +781,9 @@ impl Compiler {
     pub fn translate(&mut self, json: &str) -> Result<Application> {
         let model: SymbolicaModel = serde_json::from_str(json)?;
         let mut translator = Translator::new();
-        let ml = translator.translate(&model);
+        let ml = translator.translate(&model)?;
 
-        println!("{:?}", &ml);
+        // println!("{:?}", &ml);
 
         let prog = Program::new(&ml, self.config)?;
         let df = Defuns::new();

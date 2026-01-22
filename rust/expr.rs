@@ -34,6 +34,9 @@ pub enum Expr {
     Tree { op: String, args: Vec<Expr> },
     Const { val: f64 },
     Var { name: String },
+    Special,
+    Label { id: usize },
+    IfElse { cond: Box<Expr>, id: usize },
 }
 
 impl From<f64> for Expr {

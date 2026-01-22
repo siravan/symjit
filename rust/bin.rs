@@ -1,5 +1,6 @@
 use anyhow::Result;
-use symjit::{int, var, Compiler, Config, Expr, FastFunc};
+use num_complex::Complex;
+use symjit::{int, var, Compiler, CompilerType, Config, Expr, FastFunc};
 
 use symbolica::{
     atom::AtomCore,
@@ -160,27 +161,85 @@ fn test_memory(n: usize) -> Result<()> {
     Ok(())
 }
 
-fn test_symbolica() -> Result<()> {
+fn test_symbolica_scalar() -> Result<()> {
     let params = vec![parse!("x"), parse!("y")];
-    let optimization_settings = OptimizationSettings::default();
 
-    let evaluator = parse!("x + y^2 - 7")
-        .evaluator(&FunctionMap::new(), &params, optimization_settings)
+    let mut f = FunctionMap::new();
+    f.add_conditional(symbol!("if")).unwrap();
+    f.add_external_function(symbol!("sinh"), "sinh".to_string())
         .unwrap();
 
-    let json = serde_json::to_string(&evaluator.export_instructions())?;
+    let tests = vec![
+        ("x + y^2", &[2.0, 5.0]),
+        ("x - 4.0", &[-4.0, 10.0]),
+        ("sin(x) + y", &[1.0, 5.0]),
+        ("x^10 / y^3", &[2.0, 10.0]),
+        ("if(y, x*x + y, x + 3)", &[5.0, 0.0]),
+        ("if(y, x*x, x + 3)", &[5.0, 2.0]),
+        ("if(y, x*x + y, x + 3)", &[5.0, 2.0]),
+        ("x^2 + y^2", &[3.0, 4.0]),
+        ("x^3 + y^3", &[5.0, 6.0]),
+        ("x^30 + y^30", &[2.0, 3.0]),
+    ];
 
-    println!("{:?}", &json);
+    for (input, args) in tests {
+        let eval = parse!(input)
+            .evaluator(&f, &params, OptimizationSettings::default())
+            .unwrap();
+        let json = serde_json::to_string(&eval.export_instructions())?;
+
+        // println!("{:?}", &json);
+
+        let mut comp = Compiler::new();
+        let mut app = comp.translate(&json)?;
+
+        // let bytes = app.dumps();
+        // let s = std::str::from_utf8(&bytes);
+        // println!("{:?}", s);
+
+        let u = app.evaluate_single(args);
+        let v = eval.map_coeff(&|x| x.re.to_f64()).evaluate_single(args);
+        println!("{:?}({:?}) => {} vs {}", &input, args, u, v);
+    }
+
+    Ok(())
+}
+
+fn test_symbolica_complex() -> Result<()> {
+    let params = vec![parse!("x"), parse!("y")];
+    let f = FunctionMap::new();
+    let eval = parse!("x + y^3")
+        .evaluator(&f, &params, OptimizationSettings::default())
+        .unwrap();
+    let json = serde_json::to_string(&eval.export_instructions())?;
+
+    let mut config = Config::default();
+    config.set_complex(true);
+    let mut comp = Compiler::with_config(config);
+    let mut app = comp.translate(&json)?;
+
+    let u = app.evaluate_single_complex(&[Complex::new(2.0, 1.0), Complex::new(-2.0, 4.0)]);
+    println!("{:?}", u);
+
+    Ok(())
+}
+
+fn test_symbolica_external() -> Result<()> {
+    let params = vec![parse!("x"), parse!("y")];
+    let mut f = FunctionMap::new();
+    f.add_external_function(symbol!("sinh"), "sinh".to_string())
+        .unwrap();
+
+    let eval = parse!("sinh(x+y)")
+        .evaluator(&f, &params, OptimizationSettings::default())
+        .unwrap();
+    let json = serde_json::to_string(&eval.export_instructions())?;
 
     let mut comp = Compiler::new();
     let mut app = comp.translate(&json)?;
 
-    let args = vec![2.0, 5.0];
-    let mut outs = vec![0.0];
-
-    app.evaluate(&args, &mut outs);
-
-    println!("{:?}", &outs);
+    let u = app.evaluate_single(&[2.0, -3.0]);
+    println!("{:?}", u);
 
     Ok(())
 }
@@ -205,7 +264,9 @@ pub fn main() -> Result<()> {
     println!("pass!");
     */
 
-    test_symbolica()?;
+    test_symbolica_scalar()?;
+    test_symbolica_complex()?;
+    test_symbolica_external()?;
 
     Ok(())
 }
