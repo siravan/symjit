@@ -590,14 +590,12 @@ struct SymbolicaModel(Vec<Instruction>, usize, Vec<ComplexRational>);
 struct Translator {
     consts: Vec<f64>,
     count_params: usize,
-    count_temps: usize,
-    count_outs: usize,
     count_statics: usize,
     eqs: Vec<Equation>,
     temps: HashMap<usize, Slot>,
-    outs: HashMap<usize, Slot>,
     counts: HashMap<usize, usize>,
     cache: HashMap<usize, Expr>,
+    outs: HashMap<usize, Expr>,
 }
 
 impl Translator {
@@ -605,8 +603,6 @@ impl Translator {
         Translator {
             consts: Vec::new(),
             count_params: 0,
-            count_temps: 0,
-            count_outs: 0,
             count_statics: 0,
             eqs: Vec::new(),
             temps: HashMap::new(),
@@ -622,56 +618,56 @@ impl Translator {
         for line in model.0.iter() {
             match line {
                 Instruction::Add(lhs, args) => {
-                    let args = self.rename_list(args)?;
-                    let lhs = self.define(lhs)?;
+                    let args = self.consume_list(args)?;
+                    let lhs = self.produce(lhs)?;
                     ssa.push(Instruction::Add(lhs, args));
                 }
                 Instruction::Mul(lhs, args) => {
-                    let args = self.rename_list(args)?;
-                    let lhs = self.define(lhs)?;
+                    let args = self.consume_list(args)?;
+                    let lhs = self.produce(lhs)?;
                     ssa.push(Instruction::Mul(lhs, args));
                 }
                 Instruction::Pow(lhs, arg, p) => {
-                    let arg = self.rename(arg)?;
-                    let lhs = self.define(lhs)?;
+                    let arg = self.consume(arg)?;
+                    let lhs = self.produce(lhs)?;
                     ssa.push(Instruction::Pow(lhs, arg, *p));
                 }
                 Instruction::Powf(lhs, arg, p) => {
-                    let arg = self.rename(arg)?;
-                    let p = self.rename(p)?;
-                    let lhs = self.define(lhs)?;
+                    let arg = self.consume(arg)?;
+                    let p = self.consume(p)?;
+                    let lhs = self.produce(lhs)?;
                     ssa.push(Instruction::Powf(lhs, arg, p));
                 }
                 Instruction::Assign(lhs, rhs) => {
-                    let rhs = self.rename(rhs)?;
-                    let lhs = self.define(lhs)?;
+                    let rhs = self.consume(rhs)?;
+                    let lhs = self.produce(lhs)?;
                     ssa.push(Instruction::Assign(lhs, rhs));
                 }
                 Instruction::Fun(lhs, fun, arg) => {
-                    let arg = self.rename(arg)?;
-                    let lhs = self.define(lhs)?;
+                    let arg = self.consume(arg)?;
+                    let lhs = self.produce(lhs)?;
                     ssa.push(Instruction::Fun(lhs, *fun, arg));
                 }
                 Instruction::Join(lhs, cond, true_val, false_val) => {
-                    let cond = self.rename(cond)?;
-                    let true_val = self.rename(true_val)?;
-                    let false_val = self.rename(false_val)?;
-                    let lhs = self.define(lhs)?;
+                    let cond = self.consume(cond)?;
+                    let true_val = self.consume(true_val)?;
+                    let false_val = self.consume(false_val)?;
+                    let lhs = self.produce(lhs)?;
                     ssa.push(Instruction::Join(lhs, cond, true_val, false_val));
                 }
                 Instruction::Label(id) => {
                     ssa.push(Instruction::Label(*id));
                 }
                 Instruction::IfElse(cond, id) => {
-                    let cond = self.rename(cond)?;
+                    let cond = self.consume(cond)?;
                     ssa.push(Instruction::IfElse(cond, *id));
                 }
                 Instruction::Goto(id) => {
                     ssa.push(Instruction::Goto(*id));
                 }
                 Instruction::ExternalFun(lhs, op, args) => {
-                    let args = self.rename_list(args)?;
-                    let lhs = self.define(lhs)?;
+                    let args = self.consume_list(args)?;
+                    let lhs = self.produce(lhs)?;
                     ssa.push(Instruction::ExternalFun(lhs, op.clone(), args));
                 }
             }
@@ -680,7 +676,7 @@ impl Translator {
         Ok(ssa)
     }
 
-    fn define(&mut self, slot: &Slot) -> Result<Slot> {
+    fn produce(&mut self, slot: &Slot) -> Result<Slot> {
         match slot {
             Slot::Temp(idx) => {
                 let s = Slot::Static(self.count_statics);
@@ -689,68 +685,31 @@ impl Translator {
                 self.temps.insert(*idx, s);
                 Ok(s)
             }
-            Slot::Out(idx) => {
-                let s = Slot::Static(self.count_statics);
-                self.counts.insert(self.count_statics, 2);
-                self.count_statics += 1;
-                self.outs.insert(*idx, s);
-                Ok(s)
-            }
+            Slot::Out(idx) => Ok(Slot::Out(*idx)),
             _ => Err(anyhow!("unacceptable lhs.")),
         }
     }
 
-    fn rename(&mut self, slot: &Slot) -> Result<Slot> {
+    fn consume(&mut self, slot: &Slot) -> Result<Slot> {
         match slot {
             Slot::Temp(idx) => {
                 if let Some(Slot::Static(s)) = self.temps.get(&idx) {
-                    self.counts.get_mut(s).map(|v| *v + 1);
+                    let count = self.counts.remove(s).unwrap();
+                    self.counts.insert(*s, count + 1);
                     Ok(Slot::Static(*s))
                 } else {
                     Err(anyhow!("Not a static reg."))
                 }
             }
-            Slot::Out(idx) => {
-                if let Some(Slot::Static(s)) = self.outs.get(&idx) {
-                    self.counts.get_mut(s).map(|v| *v + 1);
-                    Ok(Slot::Static(*s))
-                } else {
-                    Err(anyhow!("Not a static reg."))
-                }
-            }
+            Slot::Out(idx) => Ok(Slot::Out(*idx)),
             Slot::Param(idx) => Ok(Slot::Param(*idx)),
             Slot::Const(idx) => Ok(Slot::Const(*idx)),
             Slot::Static(_) => Err(anyhow!("Undefined Static.")),
         }
     }
 
-    fn rename_list(&mut self, slots: &Vec<Slot>) -> Result<Vec<Slot>> {
-        slots.iter().map(|s| self.rename(s)).collect()
-    }
-
-    fn expr(&mut self, slot: &Slot) -> Expr {
-        match slot {
-            Slot::Param(idx) => {
-                self.count_params = self.count_params.max(*idx);
-                Expr::var(&format!("Param{}", idx))
-            }
-            Slot::Temp(idx) => {
-                self.count_temps = self.count_temps.max(*idx);
-                Expr::var(&format!("__Temp{}", idx))
-            }
-            Slot::Out(idx) => {
-                self.count_outs = self.count_outs.max(*idx);
-                Expr::var(&format!("Out{}", idx))
-            }
-            Slot::Const(idx) => Expr::from(self.consts[*idx]),
-            Slot::Static(idx) => {
-                if let Some(e) = self.cache.get(idx) {
-                    e.clone()
-                } else {
-                    Expr::var(&format!("__Static{}", idx))
-                }
-            }
-        }
+    fn consume_list(&mut self, slots: &Vec<Slot>) -> Result<Vec<Slot>> {
+        slots.iter().map(|s| self.consume(s)).collect()
     }
 
     fn translate(&mut self, model: &SymbolicaModel) -> Result<CellModel> {
@@ -786,12 +745,13 @@ impl Translator {
             }
         }
 
-        for (k, v) in self.outs.iter() {
-            if let Slot::Static(s) = v {
-                let out = Expr::var(&format!("Out{}", k));
-                let var = Expr::var(&format!("__Static{}", s));
-                self.eqs.push(Expr::equation(&out, &var));
-            }
+        for (k, eq) in self.outs.iter() {
+            let out = Expr::var(&format!("Out{}", k));
+            self.eqs.push(Expr::equation(&out, eq));
+        }
+
+        for eq in self.eqs.iter().take(100) {
+            println!("{:?}", &eq);
         }
 
         let params: Vec<Variable> = (0..=self.count_params)
@@ -808,12 +768,42 @@ impl Translator {
         })
     }
 
+    fn expr(&mut self, slot: &Slot) -> Expr {
+        match slot {
+            Slot::Param(idx) => {
+                self.count_params = self.count_params.max(*idx);
+                Expr::var(&format!("Param{}", idx))
+            }
+            Slot::Out(idx) => {
+                if let Some(e) = self.outs.get(idx) {
+                    e.clone()
+                } else {
+                    Expr::var(&format!("Out{}", idx))
+                }
+            }
+            Slot::Temp(idx) => Expr::var(&format!("__Temp{}", idx)),
+            Slot::Const(idx) => Expr::from(self.consts[*idx]),
+            Slot::Static(idx) => {
+                if let Some(e) = self.cache.get(idx) {
+                    e.clone()
+                } else {
+                    Expr::var(&format!("__Static{}", idx))
+                }
+            }
+        }
+    }
+
     fn assign(&mut self, lhs: &Slot, rhs: &Expr) -> Result<()> {
         if let Slot::Static(idx) = lhs {
             if self.counts.get(idx).is_some_and(|c| *c == 1) {
                 self.cache.insert(*idx, rhs.clone());
                 return Ok(());
             }
+        }
+
+        if let Slot::Out(idx) = lhs {
+            self.outs.insert(*idx, rhs.clone());
+            return Ok(());
         }
 
         let lhs = self.expr(lhs);
