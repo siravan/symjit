@@ -1,8 +1,9 @@
 use serde::Deserialize;
 
-use std::any;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::{__m256d, _mm256_setzero_pd};
+
+use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
 use num_complex::Complex;
@@ -515,6 +516,8 @@ enum Slot {
     Temp(usize),
     /// An entry in the list of results.
     Out(usize),
+    /// Static-Single-Assingment Form
+    Static(usize),
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -589,7 +592,12 @@ struct Translator {
     count_params: usize,
     count_temps: usize,
     count_outs: usize,
+    count_statics: usize,
     eqs: Vec<Equation>,
+    temps: HashMap<usize, Slot>,
+    outs: HashMap<usize, Slot>,
+    counts: HashMap<usize, usize>,
+    cache: HashMap<usize, Expr>,
 }
 
 impl Translator {
@@ -599,8 +607,125 @@ impl Translator {
             count_params: 0,
             count_temps: 0,
             count_outs: 0,
+            count_statics: 0,
             eqs: Vec::new(),
+            temps: HashMap::new(),
+            counts: HashMap::new(),
+            cache: HashMap::new(),
+            outs: HashMap::new(),
         }
+    }
+
+    fn convert(&mut self, model: &SymbolicaModel) -> Result<Vec<Instruction>> {
+        let mut ssa: Vec<Instruction> = Vec::new();
+
+        for line in model.0.iter() {
+            match line {
+                Instruction::Add(lhs, args) => {
+                    let args = self.rename_list(args)?;
+                    let lhs = self.define(lhs)?;
+                    ssa.push(Instruction::Add(lhs, args));
+                }
+                Instruction::Mul(lhs, args) => {
+                    let args = self.rename_list(args)?;
+                    let lhs = self.define(lhs)?;
+                    ssa.push(Instruction::Mul(lhs, args));
+                }
+                Instruction::Pow(lhs, arg, p) => {
+                    let arg = self.rename(arg)?;
+                    let lhs = self.define(lhs)?;
+                    ssa.push(Instruction::Pow(lhs, arg, *p));
+                }
+                Instruction::Powf(lhs, arg, p) => {
+                    let arg = self.rename(arg)?;
+                    let p = self.rename(p)?;
+                    let lhs = self.define(lhs)?;
+                    ssa.push(Instruction::Powf(lhs, arg, p));
+                }
+                Instruction::Assign(lhs, rhs) => {
+                    let rhs = self.rename(rhs)?;
+                    let lhs = self.define(lhs)?;
+                    ssa.push(Instruction::Assign(lhs, rhs));
+                }
+                Instruction::Fun(lhs, fun, arg) => {
+                    let arg = self.rename(arg)?;
+                    let lhs = self.define(lhs)?;
+                    ssa.push(Instruction::Fun(lhs, *fun, arg));
+                }
+                Instruction::Join(lhs, cond, true_val, false_val) => {
+                    let cond = self.rename(cond)?;
+                    let true_val = self.rename(true_val)?;
+                    let false_val = self.rename(false_val)?;
+                    let lhs = self.define(lhs)?;
+                    ssa.push(Instruction::Join(lhs, cond, true_val, false_val));
+                }
+                Instruction::Label(id) => {
+                    ssa.push(Instruction::Label(*id));
+                }
+                Instruction::IfElse(cond, id) => {
+                    let cond = self.rename(cond)?;
+                    ssa.push(Instruction::IfElse(cond, *id));
+                }
+                Instruction::Goto(id) => {
+                    ssa.push(Instruction::Goto(*id));
+                }
+                Instruction::ExternalFun(lhs, op, args) => {
+                    let args = self.rename_list(args)?;
+                    let lhs = self.define(lhs)?;
+                    ssa.push(Instruction::ExternalFun(lhs, op.clone(), args));
+                }
+            }
+        }
+
+        Ok(ssa)
+    }
+
+    fn define(&mut self, slot: &Slot) -> Result<Slot> {
+        match slot {
+            Slot::Temp(idx) => {
+                let s = Slot::Static(self.count_statics);
+                self.counts.insert(self.count_statics, 0);
+                self.count_statics += 1;
+                self.temps.insert(*idx, s);
+                Ok(s)
+            }
+            Slot::Out(idx) => {
+                let s = Slot::Static(self.count_statics);
+                self.counts.insert(self.count_statics, 2);
+                self.count_statics += 1;
+                self.outs.insert(*idx, s);
+                Ok(s)
+            }
+            _ => Err(anyhow!("unacceptable lhs.")),
+        }
+    }
+
+    fn rename(&mut self, slot: &Slot) -> Result<Slot> {
+        match slot {
+            Slot::Temp(idx) => {
+                if let Some(Slot::Static(s)) = self.temps.get(&idx) {
+                    self.counts.get_mut(s).map(|v| *v + 1);
+                    Ok(Slot::Static(*s))
+                } else {
+                    Err(anyhow!("Not a static reg."))
+                }
+            }
+            Slot::Out(idx) => {
+                if let Some(Slot::Static(s)) = self.outs.get(&idx) {
+                    self.counts.get_mut(s).map(|v| *v + 1);
+                    Ok(Slot::Static(*s))
+                } else {
+                    Err(anyhow!("Not a static reg."))
+                }
+            }
+            Slot::Param(idx) => Ok(Slot::Param(*idx)),
+            Slot::Const(idx) => Ok(Slot::Const(*idx)),
+            Slot::Static(_) => Err(anyhow!("Undefined Static.")),
+        }
+    }
+
+    fn rename_list(&mut self, slots: &Vec<Slot>) -> Result<Vec<Slot>> {
+        slots.iter().map(|s| self.rename(s)).collect()
     }
 
     fn expr(&mut self, slot: &Slot) -> Expr {
@@ -618,13 +743,21 @@ impl Translator {
                 Expr::var(&format!("Out{}", idx))
             }
             Slot::Const(idx) => Expr::from(self.consts[*idx]),
+            Slot::Static(idx) => {
+                if let Some(e) = self.cache.get(idx) {
+                    e.clone()
+                } else {
+                    Expr::var(&format!("__Static{}", idx))
+                }
+            }
         }
     }
 
     fn translate(&mut self, model: &SymbolicaModel) -> Result<CellModel> {
         self.consts = model.2.iter().map(|x| x.value().re).collect::<Vec<f64>>();
+        let ssa = self.convert(model)?;
 
-        for line in model.0.iter() {
+        for line in ssa.iter() {
             match line {
                 Instruction::Add(lhs, args) => self.translate_nary("plus", lhs, args)?,
                 Instruction::Mul(lhs, args) => self.translate_nary("times", lhs, args)?,
@@ -653,6 +786,14 @@ impl Translator {
             }
         }
 
+        for (k, v) in self.outs.iter() {
+            if let Slot::Static(s) = v {
+                let out = Expr::var(&format!("Out{}", k));
+                let var = Expr::var(&format!("__Static{}", s));
+                self.eqs.push(Expr::equation(&out, &var));
+            }
+        }
+
         let params: Vec<Variable> = (0..=self.count_params)
             .map(|idx| self.expr(&Slot::Param(idx)).to_variable().unwrap())
             .collect();
@@ -667,31 +808,36 @@ impl Translator {
         })
     }
 
-    fn translate_nary(&mut self, op: &str, lhs: &Slot, args: &[Slot]) -> Result<()> {
+    fn assign(&mut self, lhs: &Slot, rhs: &Expr) -> Result<()> {
+        if let Slot::Static(idx) = lhs {
+            if self.counts.get(idx).is_some_and(|c| *c == 1) {
+                self.cache.insert(*idx, rhs.clone());
+                return Ok(());
+            }
+        }
+
         let lhs = self.expr(lhs);
+        self.eqs.push(Expr::equation(&lhs, rhs));
+        Ok(())
+    }
+
+    fn translate_nary(&mut self, op: &str, lhs: &Slot, args: &[Slot]) -> Result<()> {
         let args: Vec<Expr> = args.iter().map(|x| self.expr(x)).collect();
         let p: Vec<&Expr> = args.iter().collect();
-        self.eqs.push(Expr::equation(&lhs, &Expr::nary(op, &p)));
-        Ok(())
+        self.assign(lhs, &Expr::nary(op, &p))
     }
 
     fn translate_pow(&mut self, lhs: &Slot, arg: &Slot, power: &Expr) -> Result<()> {
-        let lhs = self.expr(lhs);
         let arg = self.expr(arg);
-        self.eqs
-            .push(Expr::equation(&lhs, &Expr::binary("power", &arg, power)));
-        Ok(())
+        self.assign(lhs, &Expr::binary("power", &arg, power))
     }
 
     fn translate_assign(&mut self, lhs: &Slot, rhs: &Slot) -> Result<()> {
-        let lhs = self.expr(lhs);
         let rhs = self.expr(rhs);
-        self.eqs.push(Expr::equation(&lhs, &rhs));
-        Ok(())
+        self.assign(lhs, &rhs)
     }
 
     fn translate_fun(&mut self, lhs: &Slot, fun: &BuiltinSymbol, arg: &Slot) -> Result<()> {
-        let lhs = self.expr(lhs);
         let arg = self.expr(arg);
 
         let op = match fun.0 {
@@ -704,23 +850,19 @@ impl Translator {
             _ => return Err(anyhow!("function is not defined.")),
         };
 
-        self.eqs.push(Expr::equation(&lhs, &Expr::unary(op, &arg)));
-        Ok(())
+        self.assign(lhs, &Expr::unary(op, &arg))
     }
 
     fn translate_external_fun(&mut self, lhs: &Slot, op: &str, args: &[Slot]) -> Result<()> {
-        let lhs = self.expr(lhs);
-
         match args.len() {
             1 => {
                 let arg = self.expr(&args[0]);
-                self.eqs.push(Expr::equation(&lhs, &Expr::unary(op, &arg)));
+                self.assign(lhs, &Expr::unary(op, &arg))?;
             }
             2 => {
                 let l = self.expr(&args[0]);
                 let r = self.expr(&args[1]);
-                self.eqs
-                    .push(Expr::equation(&lhs, &Expr::binary(op, &l, &r)));
+                self.assign(lhs, &Expr::binary(op, &l, &r))?;
             }
             _ => {
                 return Err(anyhow!(
@@ -739,7 +881,6 @@ impl Translator {
         true_val: &Slot,
         false_val: &Slot,
     ) -> Result<()> {
-        let lhs = self.expr(lhs);
         let cond = Expr::binary(
             "gt",
             &Expr::unary("abs", &self.expr(cond)),
@@ -747,8 +888,7 @@ impl Translator {
         );
         let t = self.expr(true_val);
         let f = self.expr(false_val);
-        self.eqs.push(Expr::equation(&lhs, &cond.ifelse(&t, &f)));
-        Ok(())
+        self.assign(lhs, &cond.ifelse(&t, &f))
     }
 
     fn translate_ifelse(&mut self, cond: &Slot, id: usize) -> Result<()> {
