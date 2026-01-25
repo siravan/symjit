@@ -527,6 +527,14 @@ impl Compiled<f64> for Debugger {
         self.assert_equal();
     }
 
+    fn evaluate(&mut self, args: &[f64], outs: &mut [f64]) {
+        self.compiled.evaluate(args, outs);
+    }
+
+    fn evaluate_single(&mut self, args: &[f64]) -> f64 {
+        self.compiled.evaluate_single(args)
+    }
+
     fn mem(&self) -> &[f64] {
         self.bytecode.mem()
     }

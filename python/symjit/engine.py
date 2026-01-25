@@ -312,7 +312,6 @@ class RustyCompiler:
         cse=True,
         fastmath=False,
         opt_level=1,
-        reorder=False,
         convert=True,
         defuns=None,
         sanitize=True,
@@ -333,7 +332,6 @@ class RustyCompiler:
             | (0x08 if fastmath else 0)
             | (0x10 if sanitize else 0)
             | (0x20 if dtype == "complex128" else 0)
-            | (0x40 if reorder else 0)
             | ((opt_level & 0x0F) << 8)
         )
 

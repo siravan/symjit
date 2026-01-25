@@ -250,10 +250,6 @@ impl Builder {
 
         self.block().eliminate();
 
-        if self.config.reorder() {
-            self.block().reorder();
-        }
-
         self.block().compile(&mut mir)?;
 
         if opt_level >= 1 {

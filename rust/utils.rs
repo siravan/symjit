@@ -2,8 +2,10 @@ use std::fmt;
 
 pub type CompiledFunc<T> = fn(*const T, *const *mut T, usize, *const T);
 
-pub trait Compiled<T> {
+pub trait Compiled<T: Sized + Copy + Default> {
     fn exec(&mut self, params: &[T]);
+    fn evaluate(&mut self, args: &[T], outs: &mut [T]);
+    fn evaluate_single(&mut self, args: &[T]) -> T;
     fn mem(&self) -> &[T];
     fn mem_mut(&mut self) -> &mut [T];
     fn dump(&self, name: &str);

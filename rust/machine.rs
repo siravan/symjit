@@ -79,12 +79,26 @@ impl<T> Drop for MachineCode<T> {
     }
 }
 
-impl<T> Compiled<T> for MachineCode<T> {
+impl<T: Sized + Copy + Default> Compiled<T> for MachineCode<T> {
     #[inline]
     fn exec(&mut self, params: &[T]) {
         let p = self._mem.as_ptr();
         let q = params.as_ptr();
         (self.f)(p, std::ptr::null(), 0, q);
+    }
+
+    /// Generic evaluate function for compiled Symbolica expressions
+    #[inline]
+    fn evaluate(&mut self, args: &[T], outs: &mut [T]) {
+        (self.f)(outs.as_ptr(), std::ptr::null(), 0, args.as_ptr());
+    }
+
+    /// Generic evaluate_single function for compiled Symbolica expressions
+    #[inline]
+    fn evaluate_single(&mut self, args: &[T]) -> T {
+        let outs = [T::default(); 1];
+        (self.f)(outs.as_ptr(), std::ptr::null(), 0, args.as_ptr());
+        outs[0]
     }
 
     #[inline]

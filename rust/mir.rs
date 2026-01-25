@@ -1407,6 +1407,18 @@ impl Compiled<f64> for CompiledMir {
             .exec_instruction(&mut self.mem, &mut self.stack, &mut self.regs, params);
     }
 
+    fn evaluate(&mut self, args: &[f64], outs: &mut [f64]) {
+        self.mir
+            .exec_instruction(&mut self.mem, &mut self.stack, &mut self.regs, args);
+        outs.copy_from_slice(&self.mem[0..outs.len()]);
+    }
+
+    fn evaluate_single(&mut self, args: &[f64]) -> f64 {
+        self.mir
+            .exec_instruction(&mut self.mem, &mut self.stack, &mut self.regs, args);
+        self.mem[0]
+    }
+
     fn mem(&self) -> &[f64] {
         &self.mem[..]
     }
