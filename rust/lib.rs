@@ -526,6 +526,73 @@ pub unsafe extern "C" fn compile(
     Box::into_raw(Box::new(res)) as *const _
 }
 
+/// Translates a Symbolica model.
+///
+/// * `json` is a json string encoding the output of `export_instructions`.
+/// * `ty` is the requested arch (amd, arm, native, or bytecode).
+/// * `opt`: compilation options.
+/// * `df`: user-defined functions (currently ignored).
+///
+/// # Safety
+///     * both model and ty are pointers to null-terminated strings.
+///     * The output is a raw pointer to a CompilerResults.
+///
+#[no_mangle]
+pub unsafe extern "C" fn translate(
+    json: *const c_char,
+    ty: *const c_char,
+    opt: u32,
+    _df: *const Defuns,
+) -> *const CompilerResult {
+    let mut res = CompilerResult {
+        app: None,
+        status: CompilerStatus::Incomplete,
+    };
+
+    let json = unsafe {
+        match CStr::from_ptr(json).to_str() {
+            Ok(json) => json,
+            Err(msg) => {
+                println!("{}", msg);
+                res.status = CompilerStatus::InvalidUtf8;
+                return Box::into_raw(Box::new(res)) as *const _;
+            }
+        }
+    };
+
+    let ty = unsafe {
+        match CStr::from_ptr(ty).to_str() {
+            Ok(ty) => ty,
+            Err(msg) => {
+                println!("{}", msg);
+                res.status = CompilerStatus::InvalidUtf8;
+                return Box::into_raw(Box::new(res)) as *const _;
+            }
+        }
+    };
+
+    if let Ok(config) = Config::from_name(ty, opt) {
+        let mut comp = Compiler::with_config(config);
+        let app = comp.translate(&json);
+
+        match app {
+            Ok(app) => {
+                res.app = Some(app);
+                res.status = CompilerStatus::Ok;
+            }
+            Err(msg) => {
+                println!("{}", msg);
+                res.status = CompilerStatus::InvalidCompiler;
+            }
+        }
+    } else {
+        println!("invalid compiler type: {}", ty);
+        res.status = CompilerStatus::InvalidCompiler;
+    }
+
+    Box::into_raw(Box::new(res)) as *const _
+}
+
 /// Checks the status of a `CompilerResult`.
 ///
 /// Returns a null-terminated string representing the status message.
@@ -697,6 +764,59 @@ pub unsafe extern "C" fn execute_vectorized(
         let states = Matrix::from_buf(buf, h, n);
         let mut obs = Matrix::from_buf(buf, h, n);
         app.exec_vectorized(&states, &mut obs);
+        true
+    } else {
+        false
+    }
+}
+
+/// Evaluates the compiled function. This is for Symbolica compatibility.
+///
+/// # Safety
+///     it is the responsibility of the calling function to ensure
+///     that q points to a valid CompilerResult.
+///
+#[no_mangle]
+pub unsafe extern "C" fn evaluate(
+    q: *mut CompilerResult,
+    args: *const f64,
+    nargs: usize,
+    outs: *mut f64,
+    nouts: usize,
+) -> bool {
+    let q: &mut CompilerResult = unsafe { &mut *q };
+
+    if let Some(app) = &mut q.app {
+        let args: &[f64] = unsafe { std::slice::from_raw_parts(args, nargs) };
+        let outs: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(outs, nouts) };
+        app.evaluate(args, outs);
+        true
+    } else {
+        false
+    }
+}
+
+/// Evaluates the compiled function. This is for Symbolica compatibility.
+///
+/// # Safety
+///     it is the responsibility of the calling function to ensure
+///     that q points to a valid CompilerResult.
+///
+#[no_mangle]
+pub unsafe extern "C" fn evaluate_matrix(
+    q: *mut CompilerResult,
+    args: *const f64,
+    nargs: usize,
+    outs: *mut f64,
+    nouts: usize,
+) -> bool {
+    let q: &mut CompilerResult = unsafe { &mut *q };
+
+    if let Some(app) = &mut q.app {
+        let args: &[f64] = unsafe { std::slice::from_raw_parts(args, nargs) };
+        let outs: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(outs, nouts) };
+        let n = nargs / app.count_params;
+        app.evaluate_matrix(args, outs, n);
         true
     } else {
         false

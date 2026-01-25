@@ -77,6 +77,26 @@ class Engine:
         ]
         self._execute.restype = ctypes.c_bool
 
+        self._evaluate = self.dll.evaluate
+        self._evaluate.argtypes = [
+            ctypes.c_void_p,  # handle
+            ctypes.POINTER(ctypes.c_double),  # args
+            ctypes.c_size_t,  # nargs
+            ctypes.POINTER(ctypes.c_double),  # outs
+            ctypes.c_size_t,  # nouts
+        ]
+        self._evaluate.restype = ctypes.c_bool
+
+        self._evaluate_matrix = self.dll.evaluate_matrix
+        self._evaluate_matrix.argtypes = [
+            ctypes.c_void_p,  # handle
+            ctypes.POINTER(ctypes.c_double),  # args
+            ctypes.c_size_t,  # nargs
+            ctypes.POINTER(ctypes.c_double),  # outs
+            ctypes.c_size_t,  # nouts
+        ]
+        self._evaluate_matrix.restype = ctypes.c_bool
+
         self._execute_vectorized = self.dll.execute_vectorized
         self._execute_vectorized.argtypes = [
             ctypes.c_void_p,  # handle
@@ -93,6 +113,15 @@ class Engine:
             ctypes.c_void_p,
         ]
         self._compile.restype = ctypes.c_void_p
+
+        self._translate = self.dll.translate
+        self._translate.argtypes = [
+            ctypes.c_char_p,
+            ctypes.c_char_p,
+            ctypes.c_uint32,
+            ctypes.c_void_p,
+        ]
+        self._translate.restype = ctypes.c_void_p
 
         self._dump = self.dll.dump
         self._dump.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
@@ -208,7 +237,10 @@ lib = Engine()  # interface to the rust codegen engine
 
 
 def from_raw_parts(ptr, count):
-    return np.ctypeslib.as_array(ptr, shape=(count,))
+    if count == 0:
+        return np.zeros(1)
+    else:
+        return np.ctypeslib.as_array(ptr, shape=(count,))
 
 
 class Matrix:
@@ -280,10 +312,12 @@ class RustyCompiler:
         cse=True,
         fastmath=False,
         opt_level=1,
+        reorder=False,
         convert=True,
         defuns=None,
         sanitize=True,
         dtype="float64",
+        action="compile",
     ):
         if convert:
             model = json.dumps(model)
@@ -299,17 +333,28 @@ class RustyCompiler:
             | (0x08 if fastmath else 0)
             | (0x10 if sanitize else 0)
             | (0x20 if dtype == "complex128" else 0)
+            | (0x40 if reorder else 0)
             | ((opt_level & 0x0F) << 8)
         )
 
         self.dtype = dtype
         self.defuns = defuns
-        self.p = lib._compile(
-            model.encode("utf-8"), ty.encode("utf8"), opt, self.defuns.p
-        )
+
+        if action == "compile":
+            self.p = lib._compile(
+                model.encode("utf-8"), ty.encode("utf8"), opt, self.defuns.p
+            )
+        elif action == "translate":
+            self.p = lib._translate(
+                model.encode("utf-8"), ty.encode("utf8"), opt, self.defuns.p
+            )
+        else:
+            raise ValueError(f"action {action} not defined")
+
         status = lib._check_status(self.p)
         if status != b"Success":
             raise ValueError(status.decode())
+
         self.model = model
         self.json_model = None
         self.ty = ty
@@ -372,6 +417,24 @@ class RustyCompiler:
     def execute_matrix(self, states, obs):
         if not lib._execute_matrix(self.p, states.p, obs.p):
             raise ValueError("cannot execute the model")
+
+    def evaluate(self, args, outs):
+        pargs = args.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+        nargs = args.size
+        pouts = outs.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+        nouts = outs.size
+
+        if not lib._evaluate(self.p, pargs, nargs, pouts, nouts):
+            raise ValueError("cannot evaluate the model")
+
+    def evaluate_matrix(self, args, outs, k=1):
+        pargs = args.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+        nargs = args.size
+        pouts = outs.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+        nouts = outs.size
+
+        if not lib._evaluate_matrix(self.p, pargs, nargs * k, pouts, nouts * k):
+            raise ValueError("cannot evaluate the model")
 
     def fast_func(self):
         if self.ty == "bytecode":

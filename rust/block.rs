@@ -406,4 +406,71 @@ impl Block {
 
         None
     }
+
+    pub fn reorder(&mut self) {
+        let mut cache: HashMap<Loc, usize> = HashMap::new();
+        let mut deps: HashSet<Loc> = HashSet::new();
+        let mut perm: Vec<usize> = Vec::with_capacity(self.stmts.len());
+
+        for (i, stmt) in self.stmts.iter().enumerate() {
+            match stmt {
+                Statement::Assign { lhs, rhs } | Statement::Call { lhs, arg: rhs, .. } => {
+                    let lhs: Vec<Loc> = lhs.locations().drain().collect();
+                    let rhs: Vec<Loc> = rhs.locations().drain().collect();
+
+                    assert!(lhs.len() == 1);
+
+                    if deps.contains(&lhs[0]) {
+                        for (_, j) in cache.drain() {
+                            perm.push(j);
+                        }
+                        deps.clear();
+                    }
+
+                    let mut b = false;
+
+                    for loc in rhs.iter() {
+                        if let Some(j) = cache.remove(&loc) {
+                            perm.push(j);
+                            b = true;
+                        }
+                    }
+
+                    if b {
+                        perm.push(i);
+                    } else {
+                        cache.insert(lhs[0], i);
+                        for loc in rhs {
+                            deps.insert(loc);
+                        }
+                    }
+                }
+                Statement::Branch { .. } | Statement::Label { .. } => {
+                    for (_, j) in cache.drain() {
+                        perm.push(j);
+                    }
+                    perm.push(i)
+                }
+            }
+        }
+
+        for (_, j) in cache.drain() {
+            perm.push(j);
+        }
+
+        // println!("*************************************");
+        // for s in self.stmts.iter() {
+        //     println!("{:?}", &s);
+        // }
+
+        let mut stmts: Vec<Statement> = Vec::with_capacity(self.stmts.len());
+        for i in perm {
+            stmts.push(self.stmts[i].clone())
+        }
+        self.stmts = stmts;
+        // println!("*************************************");
+        // for s in self.stmts.iter() {
+        //     println!("{:?}", &s);
+        // }
+    }
 }

@@ -1,4 +1,5 @@
 import numbers
+from multiprocessing.sharedctypes import Value
 
 import numpy as np
 
@@ -228,3 +229,107 @@ class FuncComplex:
 
     def callable_filter(self):
         pass
+
+
+############################################################################
+
+
+class SymbolicaFunc:
+    def __init__(self, compiler):
+        self.compiler = compiler
+        self.count_states = self.compiler.count_states
+        self.count_params = self.compiler.count_params
+        self.count_obs = self.compiler.count_obs
+
+    def evaluate(self, inputs):
+        assert inputs.shape[1] == self.count_params
+        args = np.ascontiguousarray(inputs, dtype=np.float64)
+        outs = np.empty((inputs.shape[0], self.count_obs), dtype=np.float64)
+        self.compiler.evaluate_matrix(args, outs)
+        return outs
+
+    def evaluate_complex(self, inputs):
+        assert inputs.shape[1] == self.count_params // 2
+        args = np.ascontiguousarray(inputs, dtype=np.complex128)
+        outs = np.empty((inputs.shape[0], self.count_obs // 2), dtype=np.complex128)
+        self.compiler.evaluate_matrix(args, outs, 2)
+        return outs
+
+    def dump(self, name, what="scalar"):
+        self.compiler.dump(name, what=what)
+
+    def dumps(self, what="scalar"):
+        return self.compiler.dumps(what=what)
+
+
+class Bridge:
+    def __init__(self, evaluator):
+        a, b, c = evaluator.get_instructions()
+        self.instructions = a
+        self.count_temps = b
+        self.consts = c
+
+    def translate(self):
+        p = []
+
+        for q in self.instructions:
+            op = q[0]
+
+            if op == "add":
+                op = "Add"
+            elif op == "mul":
+                op = "Mul"
+            elif op == "pow":
+                op = "Pow"
+            elif op == "powf":
+                op = "Powf"
+            elif op == "fun":
+                op = "Fun"
+            elif op == "external_fun":
+                op = "ExternalFun"
+            elif op == "assign":
+                op = "Assign"
+            elif op == "if_else":
+                op = "IfElse"
+            elif op == "goto":
+                op = "Goto"
+            elif op == "label":
+                op = "Label"
+            else:
+                raise ValueError("undefined instruction")
+
+            p.append({op: self.process(list(q[1:]))})
+
+        consts = [self.num(x) for x in self.consts]
+        return (p, self.count_temps, consts)
+
+    def process(self, item):
+        if isinstance(item, tuple):
+            return self.slot(item)
+        elif isinstance(item, list):
+            return [self.process(p) for p in item]
+        else:
+            return item
+
+    def slot(self, item):
+        name = item[0]
+        idx = item[1]
+
+        if name == "param":
+            return {"Param": idx}
+        elif name == "out":
+            return {"Out": idx}
+        elif name == "temp":
+            return {"Temp": idx}
+        elif name == "const":
+            return {"Const": idx}
+        else:
+            raise ValueError(f"undefined Slot type: {name}")
+
+    def num(self, x):
+        val = x.evaluate_complex({}, {})
+
+        return {
+            "re": {"numerator": {"Single": val.real}, "denominator": {"Single": 1}},
+            "im": {"numerator": {"Single": val.imag}, "denominator": {"Single": 1}},
+        }

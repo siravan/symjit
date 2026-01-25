@@ -244,12 +244,17 @@ impl Builder {
     }
 
     pub fn compile_mir(&mut self, df: &Defuns) -> Result<Mir> {
+        let opt_level = self.config.opt_level();
+
         let mut mir = Mir::new(self.config, df);
 
         self.block().eliminate();
-        self.block().compile(&mut mir)?;
 
-        let opt_level = self.config.opt_level();
+        if self.config.reorder() {
+            self.block().reorder();
+        }
+
+        self.block().compile(&mut mir)?;
 
         if opt_level >= 1 {
             mir.optimize_peephole();
@@ -265,6 +270,8 @@ impl Builder {
 
         mir.add_consts(&self.consts);
         mir.populate_labels();
+
+        // println!("{:?}", &mir);
 
         Ok(mir)
     }

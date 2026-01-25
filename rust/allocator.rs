@@ -681,6 +681,18 @@ impl GreedyAllocator {
                 Instruction::Save { src, loc } => {
                     let src = self.deallocate(ip, src);
                     self.push(Instruction::Save { src, loc });
+
+                    // this for loop is added due to a bug discovered while
+                    // compiling Symbolica expressions (e.g., x^3 + y^3).
+                    // A loc should be in only one register (the wrong registers
+                    // were used). Therefore, a save invalidates all previous
+                    // assignments to that loc.
+                    for a in self.allocs.iter_mut() {
+                        if Some(loc) == a.loc {
+                            a.loc = None;
+                        }
+                    }
+
                     if let Reg::Gen(r) = src {
                         self.allocs[r as usize].loc = Some(loc);
                     }

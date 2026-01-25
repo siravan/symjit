@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Debug;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -598,6 +599,27 @@ impl Node {
             Some((*arg, power))
         } else {
             None
+        }
+    }
+
+    pub fn locations(&self) -> HashSet<Loc> {
+        match self {
+            Node::Void | Node::Const { .. } => HashSet::new(),
+            Node::Unary { arg, .. } => arg.locations(),
+            Node::Binary {
+                left, right, cond, ..
+            } => {
+                let mut s1 = left.locations();
+                let s2 = right.locations();
+                s1.extend(s2);
+                cond.map(|loc| s1.insert(loc));
+                s1
+            }
+            Node::Var { sym, .. } => {
+                let mut s = HashSet::new();
+                s.insert(sym.borrow().loc);
+                s
+            }
         }
     }
 }

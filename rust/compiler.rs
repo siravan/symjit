@@ -287,6 +287,17 @@ impl Application {
         outs[0]
     }
 
+    /// Generic evaluate function for compiled Symbolica expressions
+    pub fn evaluate_matrix<T: Sized + Copy>(&mut self, args: &[T], outs: &mut [T], n: usize) {
+        assert!(args.len() == self.count_params * n && outs.len() == self.count_obs * n);
+
+        for i in 0..n {
+            let p = &args[i * self.count_params..(i + 1) * self.count_params];
+            let q = &mut outs[i * self.count_obs..(i + 1) * self.count_obs];
+            self.evaluate(p, q);
+        }
+    }
+
     /// Calls the compiled SIMD function.
     ///
     /// `args` is a slice of __m256d values, corresponding to the states.
@@ -792,8 +803,6 @@ impl Compiler {
         let model: SymbolicaModel = serde_json::from_str(json)?;
         let mut translator = Translator::new();
         let ml = translator.translate(&model)?;
-
-        // println!("{:?}", &ml);
 
         let prog = Program::new(&ml, self.config)?;
         let df = Defuns::new();

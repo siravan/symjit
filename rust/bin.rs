@@ -298,6 +298,33 @@ fn test_symbolica_doc_3() -> Result<()> {
     Ok(())
 }
 
+fn test_symbolica_opt2_bug() -> Result<()> {
+    let params = vec![parse!("x"), parse!("y")];
+    let f = FunctionMap::new();
+    let eval = parse!("x^3 + y^3")
+        .evaluator(&f, &params, OptimizationSettings::default())
+        .unwrap();
+    let json = serde_json::to_string(&eval.export_instructions())?;
+
+    let mut config = Config::default();
+    config.set_opt_level(1);
+    let mut comp = Compiler::with_config(config);
+    let mut app = comp.translate(&json)?;
+
+    let u = app.evaluate_single(&[2.0, 3.0]);
+    println!("{:?}", u);
+
+    let mut config = Config::default();
+    config.set_opt_level(2);
+    let mut comp = Compiler::with_config(config);
+    let mut app = comp.translate(&json)?;
+
+    let u = app.evaluate_single(&[2.0, 3.0]);
+    println!("{:?}", u);
+
+    Ok(())
+}
+
 pub fn main() -> Result<()> {
     test_simple()?;
     test_pi_viete(false)?;
@@ -330,6 +357,8 @@ pub fn main() -> Result<()> {
     test_symbolica_scalar()?;
     test_symbolica_complex()?;
     test_symbolica_external()?;
+
+    test_symbolica_opt2_bug()?;
 
     Ok(())
 }
