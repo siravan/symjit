@@ -32,12 +32,6 @@ def process_argv():
         action="store_true",
         dest="fastmath",
     )
-    parser.add_argument(
-        "--reorder",
-        help="reorder/move instructions",
-        action="store_true",
-        dest="reorder",
-    )
     parser.add_argument("--dtype", help="data type", default="float64")
     parser.add_argument(
         "--opt_level",

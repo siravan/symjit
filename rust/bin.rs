@@ -1,9 +1,11 @@
 use anyhow::Result;
 use num_complex::Complex;
+use rand::{self, Rng};
+use std::fs;
 use symjit::{int, var, Compiler, Config, Expr, FastFunc};
 
 use symbolica::{
-    atom::AtomCore,
+    atom::{self, AtomCore},
     evaluate::{FunctionMap, OptimizationSettings},
     parse, symbol,
 };
@@ -188,14 +190,8 @@ fn test_symbolica_scalar() -> Result<()> {
             .unwrap();
         let json = serde_json::to_string(&eval.export_instructions())?;
 
-        // println!("{:?}", &json);
-
         let mut comp = Compiler::new();
         let mut app = comp.translate(&json)?;
-
-        // let bytes = app.dumps();
-        // let s = std::str::from_utf8(&bytes);
-        // println!("{:?}", s);
 
         app.evaluate(args, &mut outs);
         let v = eval.map_coeff(&|x| x.re.to_f64()).evaluate_single(args);
@@ -239,7 +235,7 @@ fn test_symbolica_external() -> Result<()> {
     let mut app = comp.translate(&json)?;
 
     let u = app.evaluate_single(&[2.0, -3.0]);
-    println!("{:?}", u);
+    println!("sinh(x+y)[2.0, -3.0] => {:?} vs {:?}", u, f64::sinh(-1.0));
 
     Ok(())
 }
@@ -312,7 +308,7 @@ fn test_symbolica_opt2_bug() -> Result<()> {
     let mut app = comp.translate(&json)?;
 
     let u = app.evaluate_single(&[2.0, 3.0]);
-    println!("{:?}", u);
+    assert!(u == 35.0);
 
     let mut config = Config::default();
     config.set_opt_level(2);
@@ -320,7 +316,44 @@ fn test_symbolica_opt2_bug() -> Result<()> {
     let mut app = comp.translate(&json)?;
 
     let u = app.evaluate_single(&[2.0, 3.0]);
-    println!("{:?}", u);
+    assert!(u == 35.0);
+
+    Ok(())
+}
+
+fn test_f13() -> Result<()> {
+    let f13 = fs::read_to_string("f13.txt")?;
+
+    let params: Vec<atom::Atom> = [
+        "alpha", "amuq", "ammu", "xcp1", "e1245", "xcp4", "e3e2", "e1234", "e2345", "e1235",
+        "e1345", "amel2", "e2e1", "e5e2", "e4e2", "e3e1", "e4e1", "e5e1", "ammu2", "amuq2", "e5e3",
+        "e4e3", "x5", "x6", "x1", "x3", "x4", "xcp3", "xcp2",
+    ]
+    .iter()
+    .map(|v| parse!(v))
+    .collect();
+
+    let mut evaluator = parse!(f13)
+        .evaluator(
+            &FunctionMap::new(),
+            &params,
+            OptimizationSettings::default(),
+        )
+        .unwrap()
+        .map_coeff(&|x| x.to_real().unwrap().to_f64());
+
+    let mut rng = rand::rng();
+    let inputs: Vec<f64> = params.iter().map(|_| rng.random::<f64>()).collect();
+
+    let y1 = evaluator.evaluate_single(&inputs);
+
+    let mut comp = Compiler::new();
+    let json = serde_json::to_string(&evaluator.export_instructions())?;
+    let mut app = comp.translate(&json)?;
+
+    let y2 = app.evaluate_single(&inputs);
+
+    assert!((y1 - y2).abs() < 1e-10);
 
     Ok(())
 }
@@ -339,11 +372,9 @@ pub fn main() -> Result<()> {
     #[cfg(target_arch = "x86_64")]
     test_simd()?;
 
-    /*
-    print!("testing memory leaks...");
-    test_memory(1000)?;
-    println!("pass!");
-    */
+    // print!("testing memory leaks...");
+    // test_memory(1000)?;
+    // println!("pass!");
 
     test_symbolica_doc_1()?;
     println!("doc test #1 passed");
@@ -359,6 +390,10 @@ pub fn main() -> Result<()> {
     test_symbolica_external()?;
 
     test_symbolica_opt2_bug()?;
+    println!("opt_level 2 bug test passed");
+
+    test_f13()?;
+    println!("f13 passed");
 
     Ok(())
 }

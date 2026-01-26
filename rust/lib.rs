@@ -11,14 +11,14 @@
 //! generate code dynamically. Considering its origin, symjit is geared toward
 //! compiling mathematical expressions instead of being a general-purpose JIT
 //! compiler. Therefore, the only supported types for variables are `f64`,
-//! `__m256d` (packed f64x4), and implicitly, `bool` and `i32`.
+//! (SIMD f64x4 and f64x2), and implicitly, `bool` and `i32`.
 //!
 //! Symjit emits AMD64 (x86-64), ARM64 (aarch64), and 64-bit RISC-V (riscv64) machine
 //! codes on Linux, Windows, and macOS platforms. SIMD is supported on x86-64
-//! CPUs with AVX instruction sets.
+//! and ARM64.
 //!
-//! There are two ways to contruct expressions to pass to Symjit: using Symbolica or
-//! using Symjit standalone expression builder.
+//! In Rust, there are two ways to contruct expressions to pass to Symjit: using
+//! Symbolica or using Symjit standalone expression builder.
 //!
 //! # Symbolica
 //!
@@ -573,7 +573,7 @@ pub unsafe extern "C" fn translate(
 
     if let Ok(config) = Config::from_name(ty, opt) {
         let mut comp = Compiler::with_config(config);
-        let app = comp.translate(&json);
+        let app = comp.translate(json);
 
         match app {
             Ok(app) => {
