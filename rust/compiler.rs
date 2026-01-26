@@ -788,24 +788,21 @@ impl Translator {
             }
             Slot::Temp(idx) => Expr::var(&format!("__Temp{}", idx)),
             Slot::Const(idx) => Expr::from(self.consts[*idx]),
-            Slot::Static(idx) => {
-                if let Some(e) = self.cache.get(idx) {
-                    e.clone()
-                } else {
-                    Expr::var(&format!("__Static{}", idx))
-                }
-            }
+            Slot::Static(idx) => self
+                .cache
+                .remove(idx)
+                .unwrap_or(Expr::var(&format!("__Static{}", idx))),
         }
     }
 
     // The counterpart of produce for the second-pass
-    fn assign(&mut self, lhs: &Slot, rhs: &Expr) -> Result<()> {
+    fn assign(&mut self, lhs: &Slot, rhs: Expr) -> Result<()> {
         if let Slot::Static(idx) = lhs {
             // Important! If a static variable is used only once, it
             // is pushed into the cache to be incorporated into the
             // destination expression tree.
             if self.counts.get(idx).is_some_and(|c| *c == 1) {
-                self.cache.insert(*idx, rhs.clone());
+                self.cache.insert(*idx, rhs);
                 return Ok(());
             }
         }
@@ -816,24 +813,24 @@ impl Translator {
         }
 
         let lhs = self.expr(lhs);
-        self.eqs.push(Expr::equation(&lhs, rhs));
+        self.eqs.push(Expr::equation(&lhs, &rhs));
         Ok(())
     }
 
     fn translate_nary(&mut self, op: &str, lhs: &Slot, args: &[Slot]) -> Result<()> {
         let args: Vec<Expr> = args.iter().map(|x| self.expr(x)).collect();
         let p: Vec<&Expr> = args.iter().collect();
-        self.assign(lhs, &Expr::nary(op, &p))
+        self.assign(lhs, Expr::nary(op, &p))
     }
 
     fn translate_pow(&mut self, lhs: &Slot, arg: &Slot, power: &Expr) -> Result<()> {
         let arg = self.expr(arg);
-        self.assign(lhs, &Expr::binary("power", &arg, power))
+        self.assign(lhs, Expr::binary("power", &arg, power))
     }
 
     fn translate_assign(&mut self, lhs: &Slot, rhs: &Slot) -> Result<()> {
         let rhs = self.expr(rhs);
-        self.assign(lhs, &rhs)
+        self.assign(lhs, rhs)
     }
 
     fn translate_fun(&mut self, lhs: &Slot, fun: &BuiltinSymbol, arg: &Slot) -> Result<()> {
@@ -849,19 +846,19 @@ impl Translator {
             _ => return Err(anyhow!("function is not defined.")),
         };
 
-        self.assign(lhs, &Expr::unary(op, &arg))
+        self.assign(lhs, Expr::unary(op, &arg))
     }
 
     fn translate_external_fun(&mut self, lhs: &Slot, op: &str, args: &[Slot]) -> Result<()> {
         match args.len() {
             1 => {
                 let arg = self.expr(&args[0]);
-                self.assign(lhs, &Expr::unary(op, &arg))?;
+                self.assign(lhs, Expr::unary(op, &arg))?;
             }
             2 => {
                 let l = self.expr(&args[0]);
                 let r = self.expr(&args[1]);
-                self.assign(lhs, &Expr::binary(op, &l, &r))?;
+                self.assign(lhs, Expr::binary(op, &l, &r))?;
             }
             _ => {
                 return Err(anyhow!(
@@ -887,7 +884,7 @@ impl Translator {
         );
         let t = self.expr(true_val);
         let f = self.expr(false_val);
-        self.assign(lhs, &cond.ifelse(&t, &f))
+        self.assign(lhs, cond.ifelse(&t, &f))
     }
 
     fn translate_ifelse(&mut self, cond: &Slot, id: usize) -> Result<()> {
@@ -939,6 +936,10 @@ impl Compiler {
     /// assert!(app.evaluate_single(&[2.0, 3.0]) == 11.0);
     /// ```
     pub fn translate(&mut self, json: &str) -> Result<Application> {
+        if self.config.is_bytecode() {
+            return Err(anyhow!("bytecode is not supported for Symbolica models."));
+        }
+
         let model: SymbolicaModel = serde_json::from_str(json)?;
         let mut translator = Translator::new();
         let ml = translator.translate(&model)?;
