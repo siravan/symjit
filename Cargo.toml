@@ -1,6 +1,6 @@
 [package]
 name = "symjit"
-version = "2.12.0"
+version = "2.12.1"
 edition = "2021"
 authors = ["Shahriar Iravanian <siravan@svtsim.com>"]
 license = "MIT"
