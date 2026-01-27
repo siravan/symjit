@@ -2,6 +2,7 @@
 mod macros;
 
 use crate::assembler::{Assembler, Jumper};
+use crate::config::Config;
 use crate::generator::Generator;
 use crate::utils::{align_stack, reg, Reg};
 use anyhow::{anyhow, Result};
@@ -20,6 +21,7 @@ const TEMP: u8 = 1;
 
 pub struct ArmGenerator {
     a: Assembler,
+    config: Config,
 }
 
 fn ϕ(r: Reg) -> u8 {
@@ -42,9 +44,10 @@ fn ϕ(r: Reg) -> u8 {
 }
 
 impl ArmGenerator {
-    pub fn new() -> ArmGenerator {
+    pub fn new(config: Config) -> ArmGenerator {
         ArmGenerator {
             a: Assembler::new(),
+            config,
         }
     }
 
@@ -553,12 +556,14 @@ impl Generator for ArmGenerator {
 
 pub struct ArmSimdGenerator {
     a: Assembler,
+    config: Config,
 }
 
 impl ArmSimdGenerator {
-    pub fn new() -> ArmSimdGenerator {
+    pub fn new(config: Config) -> ArmSimdGenerator {
         ArmSimdGenerator {
             a: Assembler::new(),
+            config,
         }
     }
 
@@ -588,6 +593,19 @@ impl ArmSimdGenerator {
 
     fn emit(&mut self, w: u32) {
         self.a.append_word(w);
+    }
+
+    fn load_d_from_mem(&mut self, d: u8, base: u8, idx: u32) {
+        if idx < 4096 {
+            self.emit(arm! {ldr d(d), [x(base), #8*idx]});
+        } else if idx < 65536 {
+            self.emit(arm! {movz x(SCRATCH1), #idx});
+            self.emit(arm! {ldr d(d), [x(base), x(SCRATCH1), lsl #3]});
+        } else {
+            self.emit(arm! {movz x(SCRATCH1), #idx & 0xffff});
+            self.emit(arm! {movk_lsl16 x(SCRATCH1), #idx >> 16});
+            self.emit(arm! {ldr d(d), [x(base), x(SCRATCH1), lsl #3]});
+        }
     }
 
     fn load_q_from_mem(&mut self, d: u8, base: u8, idx: u32) {
@@ -730,7 +748,12 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn load_param(&mut self, dst: Reg, idx: u32) {
-        self.load_q_from_mem(ϕ(dst), PARAMS, idx);
+        if self.config.symbolica() {
+            self.load_q_from_mem(ϕ(dst), PARAMS, idx);
+        } else {
+            self.load_d_from_mem(ϕ(dst), PARAMS, idx);
+            self.emit(arm! {dup q(ϕ(dst)), q(ϕ(dst))[0]});
+        }
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {

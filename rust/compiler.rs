@@ -12,6 +12,7 @@ use crate::config::Config;
 use crate::defuns::Defuns;
 use crate::expr::Expr;
 use crate::model::{CellModel, Equation, Program, Variable};
+use crate::utils::CompiledFunc;
 use crate::Application;
 
 // #[derive(Debug)]
@@ -266,6 +267,7 @@ impl Application {
         assert!(args.len() * k >= self.count_params && outs.len() * k >= self.count_obs);
 
         let f = self.compiled.func();
+
         f(
             outs.as_ptr() as *mut f64,
             std::ptr::null(),
@@ -277,7 +279,9 @@ impl Application {
     /// Generic evaluate_single function for compiled Symbolica expressions
     pub fn evaluate_single<T: Sized + Copy + Default>(&mut self, args: &[T]) -> T {
         let mut outs = [T::default(); 1];
+
         let f = self.compiled.func();
+
         f(
             outs.as_ptr() as *mut f64,
             std::ptr::null(),
@@ -285,6 +289,41 @@ impl Application {
             args.as_ptr() as *const f64,
         );
         outs[0]
+    }
+
+    /// Generic SIMD evaluate function for compiled Symbolica expressions
+    pub fn evaluate_simd<T: Sized + Copy>(&mut self, args: &[T], outs: &mut [T]) {
+        let k = std::mem::size_of::<T>() / std::mem::size_of::<f64>();
+        assert!(args.len() * k >= self.count_params && outs.len() * k >= self.count_obs);
+
+        if let Some(g) = &mut self.compiled_simd {
+            let f = g.func();
+
+            f(
+                outs.as_ptr() as *mut f64,
+                std::ptr::null(),
+                0,
+                args.as_ptr() as *const f64,
+            );
+        }
+    }
+
+    /// Generic SIMD evaluate_single function for compiled Symbolica expressions
+    pub fn evaluate_simd_single<T: Sized + Copy + Default>(&mut self, args: &[T]) -> T {
+        if let Some(g) = &mut self.compiled_simd {
+            let mut outs = [T::default(); 1];
+            let f = g.func();
+
+            f(
+                outs.as_ptr() as *mut f64,
+                std::ptr::null(),
+                0,
+                args.as_ptr() as *const f64,
+            );
+            outs[0]
+        } else {
+            T::default()
+        }
     }
 
     /// Generic evaluate function for compiled Symbolica expressions
@@ -955,21 +994,25 @@ impl Compiler {
             return Err(anyhow!("bytecode is not supported for Symbolica models."));
         }
 
+        self.config.set_symbolica(true);
+
         let model: SymbolicaModel = serde_json::from_str(json)?;
         let mut translator = Translator::new();
         let ml = translator.translate(&model)?;
 
         let prog = Program::new(&ml, self.config)?;
         let df = Defuns::new();
-        let mut app = Application::new(prog, &df);
+        let mut app = Application::new(prog, &df)?;
 
-        #[cfg(target_arch = "aarch64")]
-        if let Ok(app) = &mut app {
-            // this is a hack to give enough delay to prevent a bus error
-            app.dump("dump.bin", "scalar");
-            std::fs::remove_file("dump.bin")?;
-        };
+        app.prepare_simd();
 
-        app
+        // #[cfg(target_arch = "aarch64")]
+        // if let Ok(app) = &mut app {
+        //     // this is a hack to give enough delay to prevent a bus error
+        //     app.dump("dump.bin", "scalar");
+        //     std::fs::remove_file("dump.bin")?;
+        // };
+
+        Ok(app)
     }
 }

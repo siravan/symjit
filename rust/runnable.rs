@@ -168,7 +168,7 @@ impl Application {
         Self::compile::<AmdGenerator>(
             mir,
             prog,
-            AmdGenerator::new(AmdFamily::SSEScalar),
+            AmdGenerator::new(AmdFamily::SSEScalar, *prog.config()),
             prog.mem_size(),
             "x86_64",
             1,
@@ -179,7 +179,7 @@ impl Application {
         Self::compile::<AmdGenerator>(
             mir,
             prog,
-            AmdGenerator::new(AmdFamily::AvxScalar),
+            AmdGenerator::new(AmdFamily::AvxScalar, *prog.config()),
             prog.mem_size(),
             "x86_64",
             1,
@@ -190,7 +190,7 @@ impl Application {
         Self::compile::<AmdGenerator>(
             mir,
             prog,
-            AmdGenerator::new(AmdFamily::AvxVector),
+            AmdGenerator::new(AmdFamily::AvxVector, *prog.config()),
             prog.mem_size() * 4,
             "x86_64",
             4,
@@ -201,7 +201,7 @@ impl Application {
         Self::compile::<ArmGenerator>(
             mir,
             prog,
-            ArmGenerator::new(),
+            ArmGenerator::new(*prog.config()),
             prog.mem_size(),
             "aarch64",
             1,
@@ -212,7 +212,7 @@ impl Application {
         Self::compile::<ArmSimdGenerator>(
             mir,
             prog,
-            ArmSimdGenerator::new(),
+            ArmSimdGenerator::new(*prog.config()),
             prog.mem_size() * 2,
             "aarch64",
             2,
@@ -220,7 +220,14 @@ impl Application {
     }
 
     fn compile_riscv(mir: &Mir, prog: &mut Program) -> Result<Box<dyn Compiled<f64>>> {
-        Self::compile::<RiscV>(mir, prog, RiscV::new(), prog.mem_size(), "riscv64", 1)
+        Self::compile::<RiscV>(
+            mir,
+            prog,
+            RiscV::new(*prog.config()),
+            prog.mem_size(),
+            "riscv64",
+            1,
+        )
     }
 
     fn compile_amd_fast(
@@ -232,7 +239,7 @@ impl Application {
             Self::compile_fast(
                 mir,
                 prog,
-                AmdGenerator::new(AmdFamily::AvxScalar),
+                AmdGenerator::new(AmdFamily::AvxScalar, *prog.config()),
                 idx_ret,
                 "x86_64",
             )
@@ -240,7 +247,7 @@ impl Application {
             Self::compile_fast(
                 mir,
                 prog,
-                AmdGenerator::new(AmdFamily::SSEScalar),
+                AmdGenerator::new(AmdFamily::SSEScalar, *prog.config()),
                 idx_ret,
                 "x86_64",
             )
@@ -252,7 +259,13 @@ impl Application {
         prog: &mut Program,
         idx_ret: u32,
     ) -> Result<Box<dyn Compiled<f64>>> {
-        Self::compile_fast(mir, prog, ArmGenerator::new(), idx_ret, "aarch64")
+        Self::compile_fast(
+            mir,
+            prog,
+            ArmGenerator::new(*prog.config()),
+            idx_ret,
+            "aarch64",
+        )
     }
 
     fn compile_riscv_fast(
@@ -260,7 +273,7 @@ impl Application {
         prog: &mut Program,
         idx_ret: u32,
     ) -> Result<Box<dyn Compiled<f64>>> {
-        Self::compile_fast(mir, prog, RiscV::new(), idx_ret, "riscv64")
+        Self::compile_fast(mir, prog, RiscV::new(*prog.config()), idx_ret, "riscv64")
     }
 
     fn compile_bytecode(mir: &Mir, prog: &mut Program) -> Result<Box<dyn Compiled<f64>>> {

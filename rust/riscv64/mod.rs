@@ -2,6 +2,7 @@
 mod macros;
 
 use crate::assembler::{Assembler, Jumper};
+use crate::config::Config;
 use crate::generator::Generator;
 use crate::utils::{align_stack, reg, Reg};
 use anyhow::Result;
@@ -20,42 +21,43 @@ fn lo(x: u32) -> u32 {
 
 pub struct RiscV {
     a: Assembler,
+    config: Config,
 }
 
 impl RiscV {
     const zero: u8 = 0;
     const ra: u8 = 1;
     const sp: u8 = 2;
-    const gp: u8 = 3;
-    const tp: u8 = 4;
+    // const gp: u8 = 3;
+    // const tp: u8 = 4;
     const t0: u8 = 5;
     const t1: u8 = 6;
     const t2: u8 = 7;
-    const s0: u8 = 8;
-    const fp: u8 = 8;
-    const s1: u8 = 9;
+    // const s0: u8 = 8;
+    // const fp: u8 = 8;
+    // const s1: u8 = 9;
     const a0: u8 = 10;
     const a1: u8 = 11;
     const a2: u8 = 12;
     const a3: u8 = 13;
-    const a4: u8 = 14;
-    const a5: u8 = 15;
-    const a6: u8 = 16;
-    const a7: u8 = 17;
-    const s2: u8 = 18;
-    const s3: u8 = 19;
-    const s4: u8 = 20;
-    const s5: u8 = 21;
-    const s6: u8 = 22;
-    const s7: u8 = 23;
-    const s8: u8 = 24;
-    const s9: u8 = 25;
-    const s10: u8 = 26;
-    const s11: u8 = 27;
-    const t3: u8 = 28;
-    const t4: u8 = 29;
-    const t5: u8 = 30;
-    const t6: u8 = 31;
+    // const a4: u8 = 14;
+    // const a5: u8 = 15;
+    // const a6: u8 = 16;
+    // const a7: u8 = 17;
+    // const s2: u8 = 18;
+    // const s3: u8 = 19;
+    // const s4: u8 = 20;
+    // const s5: u8 = 21;
+    // const s6: u8 = 22;
+    // const s7: u8 = 23;
+    // const s8: u8 = 24;
+    // const s9: u8 = 25;
+    // const s10: u8 = 26;
+    // const s11: u8 = 27;
+    // const t3: u8 = 28;
+    // const t4: u8 = 29;
+    // const t5: u8 = 30;
+    // const t6: u8 = 31;
 
     const ft0: u8 = 0;
     const ft1: u8 = 1;
@@ -139,9 +141,10 @@ const IDX: u8 = RiscV::fs2; // third arg = index if indirect mode
 const PARAMS: u8 = RiscV::fs3; // fourth arg = params
 
 impl RiscV {
-    pub fn new() -> RiscV {
+    pub fn new(config: Config) -> RiscV {
         RiscV {
             a: Assembler::new(),
+            config,
         }
     }
 

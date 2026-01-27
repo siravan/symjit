@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 
+use crate::config::Config;
 use crate::generator::Generator;
 use crate::utils::align_stack;
 use crate::utils::{reg, DataType, Reg};
@@ -84,6 +85,7 @@ pub enum AmdFamily {
 pub struct AmdGenerator {
     amd: Amd,
     family: AmdFamily,
+    config: Config,
 }
 
 const MEM: u8 = Amd::RBP;
@@ -107,10 +109,11 @@ fn ϕ(r: Reg) -> u8 {
 }
 
 impl AmdGenerator {
-    pub fn new(family: AmdFamily) -> AmdGenerator {
+    pub fn new(family: AmdFamily, config: Config) -> AmdGenerator {
         AmdGenerator {
             amd: Amd::new(DataType::F64),
             family,
+            config,
         }
     }
 
@@ -451,15 +454,27 @@ impl Generator for AmdGenerator {
     }
 
     fn load_param(&mut self, dst: Reg, idx: u32) {
-        select!(
-            self,
-            movsd_xmm_mem,
-            vmovsd_xmm_mem,
-            vbroadcastsd,
-            ϕ(dst),
-            PARAMS,
-            8 * idx as i32
-        );
+        if self.config.symbolica() {
+            select!(
+                self,
+                movsd_xmm_mem,
+                vmovsd_xmm_mem,
+                vmovpd_ymm_mem,
+                ϕ(dst),
+                PARAMS,
+                (idx * self.reg_size()) as i32
+            );
+        } else {
+            select!(
+                self,
+                movsd_xmm_mem,
+                vmovsd_xmm_mem,
+                vbroadcastsd,
+                ϕ(dst),
+                PARAMS,
+                8 * idx as i32
+            );
+        }
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {

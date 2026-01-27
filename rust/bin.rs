@@ -3,6 +3,7 @@ use num_complex::Complex;
 use rand::{self, Rng};
 use std::fs;
 use symjit::{int, var, Compiler, Config, Expr, FastFunc};
+use wide::f64x4;
 
 use symbolica::{
     atom::{self, AtomCore},
@@ -294,6 +295,32 @@ fn test_symbolica_doc_3() -> Result<()> {
     Ok(())
 }
 
+fn test_symbolica_simd() -> Result<()> {
+    let params = vec![parse!("x"), parse!("y")];
+    let eval = parse!("x + y^2")
+        .evaluator(
+            &FunctionMap::new(),
+            &params,
+            OptimizationSettings::default(),
+        )
+        .unwrap();
+
+    let json = serde_json::to_string(&eval.export_instructions())?;
+    let mut config = Config::default();
+    config.set_simd(true);
+    let mut comp = Compiler::with_config(config);
+    let mut app = comp.translate(&json)?;
+
+    let v = vec![
+        f64x4::new([1.0, 2.0, 3.0, 4.0]),
+        f64x4::new([5.0, 2.0, 1.0, 2.0]),
+    ];
+    let u = app.evaluate_simd_single(&v);
+    println!("{:#}", u);
+
+    Ok(())
+}
+
 fn test_symbolica_opt2_bug() -> Result<()> {
     let params = vec![parse!("x"), parse!("y")];
     let f = FunctionMap::new();
@@ -384,6 +411,8 @@ pub fn main() -> Result<()> {
 
     test_symbolica_doc_3()?;
     println!("doc test #3 passed");
+
+    test_symbolica_simd()?;
 
     test_symbolica_scalar()?;
     test_symbolica_complex()?;

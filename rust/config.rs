@@ -7,6 +7,7 @@ pub const CSE: u32 = 0x04;
 pub const FASTMATH: u32 = 0x08;
 // pub const SANITIZE: u32 = 0x10;
 pub const COMPLEX: u32 = 0x20;
+pub const SYMBOLICA: u32 = 0x40;
 pub const OPT_LEVEL_MASK: u32 = 0x0f00;
 pub const OPT_LEVEL_SHIFT: usize = 8;
 
@@ -155,6 +156,10 @@ impl Config {
         }
     }
 
+    pub fn symbolica(&self) -> bool {
+        self.test(SYMBOLICA)
+    }
+
     pub fn is_complex(&self) -> bool {
         self.test(COMPLEX)
     }
@@ -183,6 +188,11 @@ impl Config {
     /// Enables Complex Numbers.
     pub fn set_complex(&mut self, enabled: bool) {
         self.opt = (self.opt & !COMPLEX) | if enabled { COMPLEX } else { 0 };
+    }
+
+    /// Enables Symbolica Mode.
+    pub fn set_symbolica(&mut self, enabled: bool) {
+        self.opt = (self.opt & !SYMBOLICA) | if enabled { SYMBOLICA } else { 0 };
     }
 }
 
