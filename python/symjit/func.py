@@ -162,7 +162,7 @@ class FuncComplex:
                 np.asarray(args, dtype=np.complex128),
                 dtype=np.float64,
             )
-            self.compiler.params[:] = u[self.count_states :]
+            self.compiler.params[:self.count_params] = u[self.count_states :]
             self.compiler.states[:] = u[: self.count_states]
             self.compiler.execute()
             return self.fmt(self.compiler.obs)
