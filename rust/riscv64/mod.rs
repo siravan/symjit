@@ -21,7 +21,6 @@ fn lo(x: u32) -> u32 {
 
 pub struct RiscV {
     a: Assembler,
-    config: Config,
 }
 
 impl RiscV {
@@ -141,10 +140,9 @@ const IDX: u8 = RiscV::fs2; // third arg = index if indirect mode
 const PARAMS: u8 = RiscV::fs3; // fourth arg = params
 
 impl RiscV {
-    pub fn new(config: Config) -> RiscV {
+    pub fn new(_config: Config) -> RiscV {
         RiscV {
             a: Assembler::new(),
-            config,
         }
     }
 

@@ -21,7 +21,6 @@ const TEMP: u8 = 1;
 
 pub struct ArmGenerator {
     a: Assembler,
-    config: Config,
 }
 
 fn ϕ(r: Reg) -> u8 {
@@ -44,10 +43,9 @@ fn ϕ(r: Reg) -> u8 {
 }
 
 impl ArmGenerator {
-    pub fn new(config: Config) -> ArmGenerator {
+    pub fn new(_config: Config) -> ArmGenerator {
         ArmGenerator {
             a: Assembler::new(),
-            config,
         }
     }
 

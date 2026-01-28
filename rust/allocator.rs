@@ -431,15 +431,14 @@ impl GreedyAllocator {
         // logical (colored) registers
         let res = allocator.color();
 
-        if res.is_ok() {
+        if let Err(err) = res {
+            println!("Level 2 register allocator requests too many registers ({}), will revert back to level 1.", err);
+        } else {
             // contract the code by removing unnecessary instructions
             let res = allocator.contract();
             if res.is_ok() {
                 mir.code = allocator.code;
             }
-        } else {
-            // this should not happen!
-            println!("Level 2 register allocator requests too many registers ({}), will revert back to level 1.", res.unwrap_err());
         }
     }
 

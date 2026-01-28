@@ -394,7 +394,7 @@ def cases():
                                     "fastmath": fastmath,
                                     "opt_level": opt_level,
                                     "sanitize": False,
-                                    "dtype": dtype
+                                    "dtype": dtype,
                                 }
                                 s = f"d={abbr_dtype(dtype)},y={abbr_ty(ty)}:s=F:t={Ω(use_threads)}:c={Ω(cse)}:f={Ω(fastmath)},O={opt_level}"
                                 cases.append((s, args))
@@ -430,8 +430,9 @@ def test_model(f, label, log, pyback=True, bytecode=False, may_complex=True):
     )
 
     for abbr, args in cases():
-        if ((args["ty"] not in ["bytecode", "debug"] or bytecode)
-                and (args["dtype"] == "float64" or may_complex)):
+        if (args["ty"] not in ["bytecode", "debug"] or bytecode) and (
+            args["dtype"] == "float64" or may_complex
+        ):
             print(f"{abbr}\t", end="")
             X, dt = f(**args)
             try:

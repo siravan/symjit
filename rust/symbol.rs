@@ -123,6 +123,6 @@ impl SymbolTable {
     }
 
     pub fn contains(&self, name: &str) -> bool {
-        self.syms.get(name).is_some()
+        self.syms.contains_key(name)
     }
 }

@@ -1,3 +1,11 @@
+# Version 2.12.0
+
+* `Compiler` modified to access the output of Symbolica `export_instructions`.
+* `Translator` object implements a two-pass translation of `export_instructions` outputs. 
+* Adding `compile_evaluator` to the Python interface.
+* Symbolica interface supports SIMD (`Application.evaluate*` functions). 
+* `opt_level` default increased to 2.
+
 # Version 2.11.0
 
 * Adding support for complex numbers.

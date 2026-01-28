@@ -12,7 +12,6 @@ use crate::config::Config;
 use crate::defuns::Defuns;
 use crate::expr::Expr;
 use crate::model::{CellModel, Equation, Program, Variable};
-use crate::utils::CompiledFunc;
 use crate::Application;
 
 // #[derive(Debug)]
@@ -262,10 +261,8 @@ impl Application {
     }
 
     /// Generic evaluate function for compiled Symbolica expressions
+    #[inline(always)]
     pub fn evaluate<T: Sized + Copy>(&mut self, args: &[T], outs: &mut [T]) {
-        let k = std::mem::size_of::<T>() / std::mem::size_of::<f64>();
-        assert!(args.len() * k >= self.count_params && outs.len() * k >= self.count_obs);
-
         let f = self.compiled.func();
 
         f(
@@ -277,25 +274,16 @@ impl Application {
     }
 
     /// Generic evaluate_single function for compiled Symbolica expressions
+    #[inline(always)]
     pub fn evaluate_single<T: Sized + Copy + Default>(&mut self, args: &[T]) -> T {
         let mut outs = [T::default(); 1];
-
-        let f = self.compiled.func();
-
-        f(
-            outs.as_ptr() as *mut f64,
-            std::ptr::null(),
-            0,
-            args.as_ptr() as *const f64,
-        );
+        self.evaluate(args, &mut outs);
         outs[0]
     }
 
     /// Generic SIMD evaluate function for compiled Symbolica expressions
+    #[inline(always)]
     pub fn evaluate_simd<T: Sized + Copy>(&mut self, args: &[T], outs: &mut [T]) {
-        let k = std::mem::size_of::<T>() / std::mem::size_of::<f64>();
-        assert!(args.len() * k >= self.count_params && outs.len() * k >= self.count_obs);
-
         if let Some(g) = &mut self.compiled_simd {
             let f = g.func();
 
@@ -309,31 +297,30 @@ impl Application {
     }
 
     /// Generic SIMD evaluate_single function for compiled Symbolica expressions
+    #[inline(always)]
     pub fn evaluate_simd_single<T: Sized + Copy + Default>(&mut self, args: &[T]) -> T {
-        if let Some(g) = &mut self.compiled_simd {
-            let mut outs = [T::default(); 1];
-            let f = g.func();
-
-            f(
-                outs.as_ptr() as *mut f64,
-                std::ptr::null(),
-                0,
-                args.as_ptr() as *const f64,
-            );
-            outs[0]
-        } else {
-            T::default()
-        }
+        let mut outs = [T::default(); 1];
+        self.evaluate_simd(args, &mut outs);
+        outs[0]
     }
 
     /// Generic evaluate function for compiled Symbolica expressions
     pub fn evaluate_matrix<T: Sized + Copy>(&mut self, args: &[T], outs: &mut [T], n: usize) {
-        assert!(args.len() == self.count_params * n && outs.len() == self.count_obs * n);
+        let args_size = args.len() / n;
+        let outs_size = outs.len() / n;
 
-        for i in 0..n {
-            let p = &args[i * self.count_params..(i + 1) * self.count_params];
-            let q = &mut outs[i * self.count_obs..(i + 1) * self.count_obs];
+        for (p, q) in args.chunks(args_size).zip(outs.chunks_mut(outs_size)) {
             self.evaluate(p, q);
+        }
+    }
+
+    /// Generic evaluate function for compiled Symbolica expressions
+    pub fn evaluate_simd_matrix<T: Sized + Copy>(&mut self, args: &[T], outs: &mut [T], n: usize) {
+        let args_size = args.len() / n;
+        let outs_size = outs.len() / n;
+
+        for (p, q) in args.chunks(args_size).zip(outs.chunks_mut(outs_size)) {
+            self.evaluate_simd(p, q);
         }
     }
 

@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 /*******************************************
 This file is essentially
 

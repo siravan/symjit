@@ -30,9 +30,19 @@
 //! representation. Using serde, it is possible to convert the output of `export_instructions`
 //! into JSON, which is then passed to the `translate` function of Symjit `Compiler`
 //! structure. If successful, `translate` returns an `Application` object, which wraps
-//! the compiled code and can be run using `evaluate` and `evaluate_single` functions.
+//! the compiled code and can be run using one of the six `evaluate` functions:
 //!
-//! /// Example:
+//! * `evaluate(&mut self, args: &[T], outs: &mut [T])`.
+//! * `evaluate_single(&mut self, args: &[T]) -> T`.
+//! * `evaluate_matrix(&mut self, args: &[T], outs: &mut [T], nrows: usize)`.
+//! * `evaluate_simd(&mut self, args: &[S], outs: &mut [S])`.
+//! * `evaluate_simd_single(&mut self, args: &[S]) -> S`.
+//! * `evaluate_simd_matrix(&mut self, args: &[S], outs: &mut [S], nrows: usize)`.
+//!
+//! where `T` is either `f64` or `Complex<f64>` and `S` is `f64x64` on x86-64 or `f64x2`
+//! on aarch64, or the complex version of them.
+//!
+//! /// Examples:
 //!
 //! ```rust
 //! use anyhow::Result;
@@ -96,6 +106,7 @@
 //! external user-defined functions. However, it is possible to link to Symjit
 //! numerical functions (see below) by defining their name using `add_external_function`.
 //! The following example shows how to link to `sinh` function:
+//!
 //!
 //! ```rust
 //! use anyhow::Result;

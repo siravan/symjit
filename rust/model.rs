@@ -100,23 +100,6 @@ impl Program {
         Ok(prog)
     }
 
-    fn special(builder: &mut Builder, rhs: &Expr) -> Result<()> {
-        match rhs {
-            Expr::Label { id } => {
-                let label = format!("L.{}", id);
-                builder.block().add_label(&label);
-            }
-            Expr::IfElse { cond, id } => {
-                let cond = cond.transform(builder)?;
-                let label = format!("L.{}", id);
-                builder.block().add_branch(cond, &label);
-            }
-            _ => return Err(anyhow!("Special expressions are Label and IfElse")),
-        }
-
-        Ok(())
-    }
-
     pub fn config(&self) -> &Config {
         &self.builder.config
     }
