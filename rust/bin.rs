@@ -164,6 +164,10 @@ fn test_memory(n: usize) -> Result<()> {
     Ok(())
 }
 
+fn assert_nearly_eq(x: f64, y: f64) {
+    assert!((x - y).abs() < 1e-10);
+}
+
 fn test_symbolica_scalar() -> Result<()> {
     let params = vec![parse!("x"), parse!("y")];
 
@@ -196,7 +200,7 @@ fn test_symbolica_scalar() -> Result<()> {
 
         app.evaluate(args, &mut outs);
         let v = eval.map_coeff(&|x| x.re.to_f64()).evaluate_single(args);
-        println!("{:?}({:?}) => {} vs {}", &input, args, outs[0], v);
+        assert_nearly_eq(outs[0], v);
     }
 
     Ok(())
@@ -216,7 +220,8 @@ fn test_symbolica_complex() -> Result<()> {
     let mut app = comp.translate(&json)?;
 
     let u = app.evaluate_single(&[Complex::new(2.0, 1.0), Complex::new(-2.0, 4.0)]);
-    println!("{:?}", u);
+
+    assert_eq!(u, Complex::new(90.0, -15.0));
 
     Ok(())
 }
@@ -236,62 +241,9 @@ fn test_symbolica_external() -> Result<()> {
     let mut app = comp.translate(&json)?;
 
     let u = app.evaluate_single(&[2.0, -3.0]);
-    println!("sinh(x+y)[2.0, -3.0] => {:?} vs {:?}", u, f64::sinh(-1.0));
 
-    Ok(())
-}
+    assert_nearly_eq(u, f64::sinh(-1.0));
 
-fn test_symbolica_doc_1() -> Result<()> {
-    let params = vec![parse!("x"), parse!("y")];
-    let eval = parse!("x + y^2")
-        .evaluator(
-            &FunctionMap::new(),
-            &params,
-            OptimizationSettings::default(),
-        )
-        .unwrap();
-
-    let json = serde_json::to_string(&eval.export_instructions())?;
-    let mut comp = Compiler::new();
-    let mut app = comp.translate(&json)?;
-    assert!(app.evaluate_single(&[2.0, 3.0]) == 11.0);
-    Ok(())
-}
-
-fn test_symbolica_doc_2() -> Result<()> {
-    let params = vec![parse!("x"), parse!("y")];
-    let eval = parse!("x + y^2")
-        .evaluator(
-            &FunctionMap::new(),
-            &params,
-            OptimizationSettings::default(),
-        )
-        .unwrap();
-
-    let json = serde_json::to_string(&eval.export_instructions())?;
-    let mut config = Config::default();
-    config.set_complex(true);
-    let mut comp = Compiler::with_config(config);
-    let mut app = comp.translate(&json)?;
-    let v = vec![Complex::new(2.0, 1.0), Complex::new(-1.0, 3.0)];
-    assert!(app.evaluate_single(&v) == Complex::new(-6.0, -5.0));
-    Ok(())
-}
-
-fn test_symbolica_doc_3() -> Result<()> {
-    let params = vec![parse!("x")];
-    let mut f = FunctionMap::new();
-    f.add_external_function(symbol!("sinh"), "sinh".to_string())
-        .unwrap();
-
-    let eval = parse!("sinh(x)")
-        .evaluator(&f, &params, OptimizationSettings::default())
-        .unwrap();
-
-    let json = serde_json::to_string(&eval.export_instructions())?;
-    let mut comp = Compiler::new();
-    let mut app = comp.translate(&json)?;
-    assert!(app.evaluate_single(&[1.5]) == f64::sinh(1.5));
     Ok(())
 }
 
@@ -316,34 +268,47 @@ fn test_symbolica_simd() -> Result<()> {
         f64x4::new([5.0, 2.0, 1.0, 2.0]),
     ];
     let u = app.evaluate_simd_single(&v);
-    println!("{:#}", u);
+
+    assert_eq!(u, f64x4::new([26.0, 6.0, 4.0, 8.0]));
 
     Ok(())
 }
 
-fn test_symbolica_opt2_bug() -> Result<()> {
+fn test_symbolica_complex_simd() -> Result<()> {
     let params = vec![parse!("x"), parse!("y")];
-    let f = FunctionMap::new();
-    let eval = parse!("x^3 + y^3")
-        .evaluator(&f, &params, OptimizationSettings::default())
+    let eval = parse!("x + y^2")
+        .evaluator(
+            &FunctionMap::new(),
+            &params,
+            OptimizationSettings::default(),
+        )
         .unwrap();
+
     let json = serde_json::to_string(&eval.export_instructions())?;
-
     let mut config = Config::default();
-    config.set_opt_level(1);
+    config.set_simd(true);
+    config.set_complex(true);
     let mut comp = Compiler::with_config(config);
     let mut app = comp.translate(&json)?;
 
-    let u = app.evaluate_single(&[2.0, 3.0]);
-    assert!(u == 35.0);
+    let v = vec![
+        Complex::new(
+            f64x4::new([1.0, 2.0, 3.0, 4.0]),
+            f64x4::new([3.0, 5.0, 2.0, -4.0]),
+        ),
+        Complex::new(
+            f64x4::new([5.0, 2.0, 1.0, 2.0]),
+            f64x4::new([-2.0, 1.0, 3.0, 7.0]),
+        ),
+    ];
+    let u = app.evaluate_simd_single(&v);
 
-    let mut config = Config::default();
-    config.set_opt_level(2);
-    let mut comp = Compiler::with_config(config);
-    let mut app = comp.translate(&json)?;
+    let res = Complex::new(
+        f64x4::new([22.0, 5.0, -5.0, -41.0]),
+        f64x4::new([-17.0, 9.0, 8.0, 24.0]),
+    );
 
-    let u = app.evaluate_single(&[2.0, 3.0]);
-    assert!(u == 35.0);
+    assert_eq!(u, res);
 
     Ok(())
 }
@@ -385,6 +350,10 @@ fn test_f13() -> Result<()> {
     Ok(())
 }
 
+fn pass(what: &str) {
+    println!("**** test {:?} passed. ****", what);
+}
+
 pub fn main() -> Result<()> {
     test_simple()?;
     test_pi_viete(false)?;
@@ -403,26 +372,23 @@ pub fn main() -> Result<()> {
     // test_memory(1000)?;
     // println!("pass!");
 
-    test_symbolica_doc_1()?;
-    println!("doc test #1 passed");
+    test_symbolica_scalar()?;
+    pass("scalar");
 
-    test_symbolica_doc_2()?;
-    println!("doc test #2 passed");
+    test_symbolica_complex()?;
+    pass("complex");
 
-    test_symbolica_doc_3()?;
-    println!("doc test #3 passed");
+    test_symbolica_external()?;
+    pass("external");
 
     test_symbolica_simd()?;
+    pass("simd");
 
-    test_symbolica_scalar()?;
-    test_symbolica_complex()?;
-    test_symbolica_external()?;
-
-    test_symbolica_opt2_bug()?;
-    println!("opt_level 2 bug test passed");
+    test_symbolica_complex_simd()?;
+    pass("complex simd");
 
     test_f13()?;
-    println!("f13 passed");
+    pass("f13");
 
     Ok(())
 }
