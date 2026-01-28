@@ -3,7 +3,7 @@ use num_complex::Complex;
 use rand::{self, Rng};
 use std::fs;
 use symjit::{int, var, Compiler, Config, Expr, FastFunc};
-use wide::f64x4;
+use wide::{f64x4, f64x2};
 
 use symbolica::{
     atom::{self, AtomCore},
@@ -247,7 +247,7 @@ fn test_symbolica_external() -> Result<()> {
     Ok(())
 }
 
-fn test_symbolica_simd() -> Result<()> {
+fn test_symbolica_simd_f64x4() -> Result<()> {
     let params = vec![parse!("x"), parse!("y")];
     let eval = parse!("x + y^2")
         .evaluator(
@@ -274,7 +274,34 @@ fn test_symbolica_simd() -> Result<()> {
     Ok(())
 }
 
-fn test_symbolica_complex_simd() -> Result<()> {
+fn test_symbolica_simd_f64x2() -> Result<()> {
+    let params = vec![parse!("x"), parse!("y")];
+    let eval = parse!("x + y^2")
+        .evaluator(
+            &FunctionMap::new(),
+            &params,
+            OptimizationSettings::default(),
+        )
+        .unwrap();
+
+    let json = serde_json::to_string(&eval.export_instructions())?;
+    let mut config = Config::default();
+    config.set_simd(true);
+    let mut comp = Compiler::with_config(config);
+    let mut app = comp.translate(&json)?;
+
+    let v = vec![
+        f64x2::new([1.0, 2.0]),
+        f64x2::new([5.0, 2.0]),
+    ];
+    let u = app.evaluate_simd_single(&v);
+
+    assert_eq!(u, f64x2::new([26.0, 6.0]));
+
+    Ok(())
+}
+
+fn test_symbolica_complex_simd_f64x4() -> Result<()> {
     let params = vec![parse!("x"), parse!("y")];
     let eval = parse!("x + y^2")
         .evaluator(
@@ -306,6 +333,45 @@ fn test_symbolica_complex_simd() -> Result<()> {
     let res = Complex::new(
         f64x4::new([22.0, 5.0, -5.0, -41.0]),
         f64x4::new([-17.0, 9.0, 8.0, 24.0]),
+    );
+
+    assert_eq!(u, res);
+
+    Ok(())
+}
+
+fn test_symbolica_complex_simd_f64x2() -> Result<()> {
+    let params = vec![parse!("x"), parse!("y")];
+    let eval = parse!("x + y^2")
+        .evaluator(
+            &FunctionMap::new(),
+            &params,
+            OptimizationSettings::default(),
+        )
+        .unwrap();
+
+    let json = serde_json::to_string(&eval.export_instructions())?;
+    let mut config = Config::default();
+    config.set_simd(true);
+    config.set_complex(true);
+    let mut comp = Compiler::with_config(config);
+    let mut app = comp.translate(&json)?;
+
+    let v = vec![
+        Complex::new(
+            f64x2::new([1.0, 2.0]),
+            f64x2::new([3.0, 5.0]),
+        ),
+        Complex::new(
+            f64x2::new([5.0, 2.0]),
+            f64x2::new([-2.0, 1.0]),
+        ),
+    ];
+    let u = app.evaluate_simd_single(&v);
+
+    let res = Complex::new(
+        f64x2::new([22.0, 5.0]),
+        f64x2::new([-17.0, 9.0]),
     );
 
     assert_eq!(u, res);
@@ -381,10 +447,20 @@ pub fn main() -> Result<()> {
     test_symbolica_external()?;
     pass("external");
 
-    test_symbolica_simd()?;
+    #[cfg(target_arch = "x86_64")]
+    test_symbolica_simd_f64x4()?;
+
+    #[cfg(target_arch = "aarch64")]
+    test_symbolica_simd_f64x2()?;
+
     pass("simd");
 
-    test_symbolica_complex_simd()?;
+    #[cfg(target_arch = "x86_64")]
+    test_symbolica_complex_simd_f64x4()?;
+
+    #[cfg(target_arch = "aarch64")]
+    test_symbolica_complex_simd_f64x2()?;
+
     pass("complex simd");
 
     test_f13()?;
