@@ -38,7 +38,7 @@ def process_argv():
         help="optimization level (0, 1, 2, or 3)",
         action="store",
         dest="opt_level",
-        default=1,
+        default=2,
         type=int,
     )
     parser.add_argument(
