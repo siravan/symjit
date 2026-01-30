@@ -319,7 +319,7 @@ class RustyCompiler:
         action="compile",
     ):
         if convert:
-            model = json.dumps(model)
+            model = json.dumps(model, indent=4)
 
         dtype = str(dtype)
         if dtype not in ["float64", "complex128"]:

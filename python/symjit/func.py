@@ -2,6 +2,7 @@ import numbers
 from multiprocessing.sharedctypes import Value
 
 import numpy as np
+from sympy.tensor.array.ndim_array import NumberKind
 
 from . import engine, pyengine
 
@@ -162,7 +163,7 @@ class FuncComplex:
                 np.asarray(args, dtype=np.complex128),
                 dtype=np.float64,
             )
-            self.compiler.params[:self.count_params] = u[self.count_states :]
+            self.compiler.params[: self.count_params] = u[self.count_states :]
             self.compiler.states[:] = u[: self.count_states]
             self.compiler.execute()
             return self.fmt(self.compiler.obs)
@@ -264,7 +265,11 @@ class SymbolicaFunc:
 
 class Bridge:
     def __init__(self, evaluator):
-        a, b, c = evaluator.get_instructions()
+        if isinstance(evaluator, str):
+            a, b, c = eval(evaluator.replace("𝑖", "j"))
+        else:
+            a, b, c = evaluator.get_instructions()
+
         self.instructions = a
         self.count_temps = b
         self.consts = c
@@ -295,6 +300,8 @@ class Bridge:
                 op = "Goto"
             elif op == "label":
                 op = "Label"
+            elif op == "join":
+                op = "Join"
             else:
                 raise ValueError("undefined instruction")
 
@@ -307,7 +314,10 @@ class Bridge:
         if isinstance(item, tuple):
             return self.slot(item)
         elif isinstance(item, list):
-            return [self.process(p) for p in item]
+            if len(item) == 1 and isinstance(item[0], numbers.Number):
+                return item[0]
+            else:
+                return [self.process(p) for p in item]
         else:
             return item
 
@@ -327,7 +337,10 @@ class Bridge:
             raise ValueError(f"undefined Slot type: {name}")
 
     def num(self, x):
-        val = x.evaluate_complex({}, {})
+        if isinstance(x, numbers.Number):
+            val = complex(x, 0)
+        else:
+            val = x.evaluate_complex({}, {})
 
         return {
             "re": {"numerator": {"Single": val.real}, "denominator": {"Single": 1}},

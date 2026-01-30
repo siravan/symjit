@@ -785,7 +785,7 @@ impl Mir {
         Self::set(regs, dst, val);
     }
 
-    fn exec_instruction(
+    pub fn exec_instruction(
         &mut self,
         mem: &mut [f64],
         stack: &mut [f64],

@@ -263,6 +263,21 @@ impl Application {
     /// Generic evaluate function for compiled Symbolica expressions
     #[inline(always)]
     pub fn evaluate<T: Sized + Copy>(&mut self, args: &[T], outs: &mut [T]) {
+        if self.prog.config().is_bytecode() {
+            let mut stack: Vec<f64> = vec![0.0; self.prog.builder.block().sym_table.num_stack];
+            let mut regs = vec![0.0; 16];
+
+            let outs: &mut [f64] = unsafe { std::mem::transmute(outs) };
+            let args: &[f64] = unsafe { std::mem::transmute(args) };
+
+            self.mir.exec_instruction(outs, &mut stack, &mut regs, args);
+
+            // println!("{:?}", &stack);
+            println!("{:?}", &regs);
+
+            return;
+        }
+
         let f = self.compiled.func();
 
         f(
@@ -977,9 +992,9 @@ impl Compiler {
     /// assert!(app.evaluate_single(&[2.0, 3.0]) == 11.0);
     /// ```
     pub fn translate(&mut self, json: &str) -> Result<Application> {
-        if self.config.is_bytecode() {
-            return Err(anyhow!("bytecode is not supported for Symbolica models."));
-        }
+        // if self.config.is_bytecode() {
+        //    return Err(anyhow!("bytecode is not supported for Symbolica models."));
+        //}
 
         self.config.set_symbolica(true);
 
