@@ -45,6 +45,7 @@ pub trait Generator {
     fn real(&mut self, dst: Reg, s1: Reg);
     fn imaginary(&mut self, dst: Reg, s1: Reg);
     fn conjugate(&mut self, dst: Reg, s1: Reg);
+    fn complex(&mut self, dst: Reg, s1: Reg, s2: Reg);
 
     fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg);
     fn geq(&mut self, dst: Reg, s1: Reg, s2: Reg);

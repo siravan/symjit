@@ -498,6 +498,7 @@ impl Node {
                 "and" => mir.and(reg(dst), reg(l), reg(r)),
                 "or" => mir.or(reg(dst), reg(l), reg(r)),
                 "xor" => mir.xor(reg(dst), reg(l), reg(r)),
+                "complex" => mir.complex(reg(dst), reg(l), reg(r)),
                 "_ifelse_" => mir.ifelse(reg(dst), reg(l), reg(r), cond.unwrap()),
                 "_powi_mod_" => mir.powi_mod(reg(dst), reg(l), *power, reg(r)),
                 "_call_" => mir.setup_call_binary(reg(l), reg(r)),

@@ -380,6 +380,10 @@ impl Generator for RiscV {
         self.fmov(dst, s1);
     }
 
+    fn complex(&mut self, dst: Reg, s1: Reg, _s2: Reg) {
+        self.fmov(dst, s1);
+    }
+
     fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.emit(rvv! {fgt.d x(Self::t0), f(ϕ(s1)), f(ϕ(s2))});
         self.emit(rvv! {neg x(Self::t0), x(Self::t0)});

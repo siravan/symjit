@@ -46,6 +46,7 @@ pub enum BinOp {
     AndNot,
     Or,
     Xor,
+    Complex,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -431,6 +432,15 @@ impl Mir {
         });
     }
 
+    pub fn complex(&mut self, dst: Reg, s1: Reg, s2: Reg) {
+        self.push(Instruction::Bi {
+            op: BinOp::Complex,
+            dst,
+            s1,
+            s2,
+        });
+    }
+
     pub fn frac(&mut self, dst: Reg, s1: Reg) {
         self.floor(Reg::Temp, s1);
         self.minus(dst, s1, Reg::Temp);
@@ -765,6 +775,7 @@ impl Mir {
             BinOp::AndNot => f64::from_bits(!s1.to_bits() & s2.to_bits()),
             BinOp::Or => f64::from_bits(s1.to_bits() | s2.to_bits()),
             BinOp::Xor => f64::from_bits(s1.to_bits() ^ s2.to_bits()),
+            BinOp::Complex => s1,
         };
 
         Self::set(regs, dst, val);
@@ -934,6 +945,7 @@ impl Mir {
             BinOp::AndNot => ir.andnot(dst, s1, s2),
             BinOp::Or => ir.or(dst, s1, s2),
             BinOp::Xor => ir.xor(dst, s1, s2),
+            BinOp::Complex => ir.complex(dst, s1, s2),
         };
     }
 

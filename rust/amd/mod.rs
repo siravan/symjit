@@ -573,6 +573,10 @@ impl Generator for AmdGenerator {
         self.fmov(dst, s1);
     }
 
+    fn complex(&mut self, dst: Reg, s1: Reg, _s2: Reg) {
+        self.fmov(dst, s1);
+    }
+
     fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, cmpnlesd, vcmpnlesd, vcmpnlepd, dst, s1, s2, false);
     }

@@ -246,6 +246,14 @@ impl Generator for Complexifier {
         self.mir.neg(im(dst), im(dst));
     }
 
+    fn complex(&mut self, dst: Reg, s1: Reg, s2: Reg) {
+        // Important! The order of these two statements matters.
+        // The imaginary part needs to be set first to prevent
+        // conflict if dst == s2.
+        self.mir.fmov(im(dst), re(s2));
+        self.mir.fmov(re(dst), re(s1));
+    }
+
     fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.gt(re(dst), re(s1), re(s2));
         self.mir.fmov(im(dst), re(dst));

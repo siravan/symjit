@@ -251,6 +251,7 @@ const BINARY: &[&str] = &[
     "min",
     "max",
     "heaviside",
+    "complex",
 ];
 
 impl Config {

@@ -295,6 +295,10 @@ impl Generator for ArmGenerator {
         self.fmov(dst, s1);
     }
 
+    fn complex(&mut self, dst: Reg, s1: Reg, _s2: Reg) {
+        self.fmov(dst, s1);
+    }
+
     fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.emit(arm! {fcmgt d(ϕ(dst)), d(ϕ(s1)), d(ϕ(s2))});
     }
@@ -830,6 +834,10 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn conjugate(&mut self, dst: Reg, s1: Reg) {
+        self.fmov(dst, s1);
+    }
+
+    fn complex(&mut self, dst: Reg, s1: Reg, _s2: Reg) {
         self.fmov(dst, s1);
     }
 
