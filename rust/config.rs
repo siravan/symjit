@@ -275,7 +275,7 @@ impl Config {
 
 impl Storage for Config {
     fn save(&self, stream: &mut impl Write) -> Result<()> {
-        stream.write(&Self::MAGIC.to_le_bytes())?;
+        stream.write_all(&Self::MAGIC.to_le_bytes())?;
 
         let ty: usize = match self.ty {
             CompilerType::Native => 0,
@@ -289,20 +289,20 @@ impl Storage for Config {
         };
 
         let val: usize = (self.opt as usize) | (ty << 32);
-        stream.write(&val.to_le_bytes())?;
+        stream.write_all(&val.to_le_bytes())?;
         Ok(())
     }
 
     fn load(stream: &mut impl Read) -> Result<Self> {
         let mut bytes: [u8; 8] = [0; 8];
 
-        stream.read(&mut bytes)?;
+        stream.read_exact(&mut bytes)?;
 
         if usize::from_le_bytes(bytes) != Self::MAGIC {
             return Err(anyhow!("invalid magic number"));
         }
 
-        stream.read(&mut bytes)?;
+        stream.read_exact(&mut bytes)?;
         let val = usize::from_le_bytes(bytes);
         let opt: u32 = (val & 0xffffffff) as u32;
         let ty: u32 = (val >> 32) as u32;

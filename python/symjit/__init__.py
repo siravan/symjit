@@ -427,6 +427,18 @@ def compile_evaluator(
 
 def load_func(file, eqs=[]):
     if can_use_rust("rust"):
+        """Loads a previously compiled function.
+        The function should have been saving using various `Func` objects' `save` method.
+
+        Parameters
+        ==========
+
+        file: file name
+        eqs: the phantom list of state variables. The actual variables are not needed and are
+            discarded. The import thing is the type of `eqs` which determines the output format
+            of the `Func` function. The valid options are `[]` (a list), `()` (a tuple), or `None`,
+            meaning a fast-function.
+        """
         compiler = engine.RustyCompiler("", action="load", file=file)
         if compiler.symbolica:
             return SymbolicaFunc(compiler)

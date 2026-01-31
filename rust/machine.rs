@@ -76,13 +76,13 @@ impl<T: Clone + Default> Storage for MachineCode<T> {
     fn load(stream: &mut impl Read) -> Result<MachineCode<T>> {
         let mut bytes: [u8; 8] = [0; 8];
 
-        stream.read(&mut bytes)?;
+        stream.read_exact(&mut bytes)?;
 
         if usize::from_le_bytes(bytes) != Self::MAGIC {
             return Err(anyhow!("invalid magic number"));
         }
 
-        stream.read(&mut bytes)?;
+        stream.read_exact(&mut bytes)?;
         let header = usize::from_le_bytes(bytes);
 
         let lanes = header & 0xff;
@@ -94,16 +94,16 @@ impl<T: Clone + Default> Storage for MachineCode<T> {
             _ => return Err(anyhow!("invalid arch")),
         };
 
-        stream.read(&mut bytes)?;
+        stream.read_exact(&mut bytes)?;
         let mem_size = usize::from_le_bytes(bytes);
         let _mem: Vec<T> = vec![T::default(); mem_size];
 
-        stream.read(&mut bytes)?;
+        stream.read_exact(&mut bytes)?;
         let size = usize::from_le_bytes(bytes);
         let mut machine_code: Vec<u8> = vec![0; size];
         stream.read_exact(&mut machine_code)?;
 
-        Ok(Self::new(&arch, machine_code, _mem, leaky, lanes))
+        Ok(Self::new(arch, machine_code, _mem, leaky, lanes))
     }
 
     fn save(&self, stream: &mut impl Write) -> Result<()> {
@@ -118,10 +118,10 @@ impl<T: Clone + Default> Storage for MachineCode<T> {
         let mem_size: usize = self._mem.len();
         let size: usize = self.machine_code.len();
 
-        stream.write(&Self::MAGIC.to_le_bytes())?;
-        stream.write(&header.to_le_bytes())?;
-        stream.write(&mem_size.to_le_bytes())?;
-        stream.write(&size.to_le_bytes())?;
+        stream.write_all(&Self::MAGIC.to_le_bytes())?;
+        stream.write_all(&header.to_le_bytes())?;
+        stream.write_all(&mem_size.to_le_bytes())?;
+        stream.write_all(&size.to_le_bytes())?;
         stream.write_all(&self.machine_code)?;
 
         Ok(())

@@ -118,20 +118,20 @@ impl Program {
 
 impl Storage for Program {
     fn save(&self, stream: &mut impl Write) -> Result<()> {
-        stream.write(&Self::MAGIC.to_le_bytes())?;
+        stream.write_all(&Self::MAGIC.to_le_bytes())?;
         self.config().save(stream)?;
-        stream.write(&self.count_states.to_le_bytes())?;
-        stream.write(&self.count_params.to_le_bytes())?;
-        stream.write(&self.count_obs.to_le_bytes())?;
-        stream.write(&self.count_diffs.to_le_bytes())?;
-        stream.write(&self.count_loops.to_le_bytes())?;
+        stream.write_all(&self.count_states.to_le_bytes())?;
+        stream.write_all(&self.count_params.to_le_bytes())?;
+        stream.write_all(&self.count_obs.to_le_bytes())?;
+        stream.write_all(&self.count_diffs.to_le_bytes())?;
+        stream.write_all(&self.count_loops.to_le_bytes())?;
         Ok(())
     }
 
     fn load(stream: &mut impl Read) -> Result<Self> {
         let mut bytes: [u8; 8] = [0; 8];
 
-        stream.read(&mut bytes)?;
+        stream.read_exact(&mut bytes)?;
 
         if usize::from_le_bytes(bytes) != Self::MAGIC {
             return Err(anyhow!("invalid magic number"));
@@ -139,19 +139,19 @@ impl Storage for Program {
 
         let config = Config::load(stream)?;
 
-        stream.read(&mut bytes)?;
+        stream.read_exact(&mut bytes)?;
         let count_states = usize::from_le_bytes(bytes);
 
-        stream.read(&mut bytes)?;
+        stream.read_exact(&mut bytes)?;
         let count_params = usize::from_le_bytes(bytes);
 
-        stream.read(&mut bytes)?;
+        stream.read_exact(&mut bytes)?;
         let count_obs = usize::from_le_bytes(bytes);
 
-        stream.read(&mut bytes)?;
+        stream.read_exact(&mut bytes)?;
         let count_diffs = usize::from_le_bytes(bytes);
 
-        stream.read(&mut bytes)?;
+        stream.read_exact(&mut bytes)?;
         let count_loops = usize::from_le_bytes(bytes);
 
         let builder = Builder::new(config);

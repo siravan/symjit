@@ -649,7 +649,7 @@ pub unsafe extern "C" fn save(q: *const CompilerResult, file: *const c_char) -> 
         if let Ok(mut fs) = std::fs::File::create(file) {
             app.save(&mut fs).is_ok()
         } else {
-            return false;
+            false
         }
     } else {
         false

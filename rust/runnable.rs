@@ -488,7 +488,10 @@ impl Application {
 
 impl Storage for Application {
     fn save(&self, stream: &mut impl Write) -> Result<()> {
-        stream.write(&Self::MAGIC.to_le_bytes())?;
+        stream.write_all(&Self::MAGIC.to_le_bytes())?;
+
+        let version: usize = 1;
+        stream.write_all(&version.to_le_bytes())?;
 
         self.prog.save(stream)?;
 
@@ -510,7 +513,7 @@ impl Storage for Application {
             mask |= 4;
         }
 
-        stream.write(&mask.to_le_bytes())?;
+        stream.write_all(&mask.to_le_bytes())?;
 
         self.compiled.as_machine().unwrap().save(stream)?;
 
@@ -528,15 +531,21 @@ impl Storage for Application {
     fn load(stream: &mut impl Read) -> Result<Self> {
         let mut bytes: [u8; 8] = [0; 8];
 
-        stream.read(&mut bytes)?;
+        stream.read_exact(&mut bytes)?;
 
         if usize::from_le_bytes(bytes) != Self::MAGIC {
             return Err(anyhow!("invalid magic number"));
         }
 
+        stream.read_exact(&mut bytes)?;
+
+        if usize::from_le_bytes(bytes) != 1 {
+            return Err(anyhow!("invalid sjb version"));
+        }
+
         let prog = Program::load(stream)?;
 
-        stream.read(&mut bytes)?;
+        stream.read_exact(&mut bytes)?;
         let mask = usize::from_le_bytes(bytes);
 
         let compiled: Box<dyn Compiled<f64>> = Box::new(MachineCode::load(stream)?);
