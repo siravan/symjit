@@ -1,11 +1,12 @@
 use anyhow::{anyhow, Result};
-
 use serde::Deserialize;
+use std::io::{Read, Write};
 
 use crate::builder::Builder;
 use crate::config::Config;
 use crate::expr::Expr;
 use crate::node::Node;
+use crate::utils::Storage;
 
 pub trait Transformer {
     fn transform(&self, builder: &mut Builder) -> Result<Node>;
@@ -19,9 +20,12 @@ pub struct Program {
     pub count_params: usize,
     pub count_obs: usize,
     pub count_diffs: usize,
+    pub count_loops: usize,
 }
 
 impl Program {
+    const MAGIC: usize = 0xc2b244aefb8e4d5d;
+
     pub fn new(ml: &CellModel, config: Config) -> Result<Program> {
         /*
             this section lays the memory format
@@ -89,12 +93,15 @@ impl Program {
 
         let k = if config.is_complex() { 2 } else { 1 };
 
+        let count_loops = builder.count_loops;
+
         let prog = Program {
             builder,
             count_states: ml.states.len() * k,
             count_params: ml.params.len() * k,
             count_obs: count_obs * k,
             count_diffs: ml.odes.len() * k,
+            count_loops,
         };
 
         Ok(prog)
@@ -106,6 +113,57 @@ impl Program {
 
     pub fn mem_size(&self) -> usize {
         self.count_states + self.count_obs + self.count_diffs + 1
+    }
+}
+
+impl Storage for Program {
+    fn save(&self, stream: &mut impl Write) -> Result<()> {
+        stream.write(&Self::MAGIC.to_le_bytes())?;
+        self.config().save(stream)?;
+        stream.write(&self.count_states.to_le_bytes())?;
+        stream.write(&self.count_params.to_le_bytes())?;
+        stream.write(&self.count_obs.to_le_bytes())?;
+        stream.write(&self.count_diffs.to_le_bytes())?;
+        stream.write(&self.count_loops.to_le_bytes())?;
+        Ok(())
+    }
+
+    fn load(stream: &mut impl Read) -> Result<Self> {
+        let mut bytes: [u8; 8] = [0; 8];
+
+        stream.read(&mut bytes)?;
+
+        if usize::from_le_bytes(bytes) != Self::MAGIC {
+            return Err(anyhow!("invalid magic number"));
+        }
+
+        let config = Config::load(stream)?;
+
+        stream.read(&mut bytes)?;
+        let count_states = usize::from_le_bytes(bytes);
+
+        stream.read(&mut bytes)?;
+        let count_params = usize::from_le_bytes(bytes);
+
+        stream.read(&mut bytes)?;
+        let count_obs = usize::from_le_bytes(bytes);
+
+        stream.read(&mut bytes)?;
+        let count_diffs = usize::from_le_bytes(bytes);
+
+        stream.read(&mut bytes)?;
+        let count_loops = usize::from_le_bytes(bytes);
+
+        let builder = Builder::new(config);
+
+        Ok(Program {
+            builder,
+            count_states,
+            count_params,
+            count_obs,
+            count_diffs,
+            count_loops,
+        })
     }
 }
 

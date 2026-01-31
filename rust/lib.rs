@@ -433,6 +433,7 @@ use matrix::Matrix;
 use model::{CellModel, Program};
 
 pub use crate::config::Config;
+use crate::utils::Storage;
 pub use compiler::{Compiler, FastFunc};
 pub use expr::{double, int, var, Expr};
 pub use runnable::{Application, CompilerType};
@@ -626,7 +627,112 @@ pub unsafe extern "C" fn check_status(q: *const CompilerResult) -> *const c_char
     msg.as_ptr() as *const _
 }
 
-/// Returns the number of states (dependent variables).
+/// Checks the status of a `CompilerResult`.
+///
+/// Returns a null-terminated string representing the status message.
+///
+/// # Safety
+///     it is the responsibility of the calling function to ensure
+///     that q points to a valid CompilerResult.
+///
+#[no_mangle]
+pub unsafe extern "C" fn save(q: *const CompilerResult, file: *const c_char) -> bool {
+    let q: &CompilerResult = unsafe { &*q };
+    let file = unsafe {
+        match CStr::from_ptr(file).to_str() {
+            Ok(file) => file,
+            Err(_) => return false,
+        }
+    };
+
+    if let Some(app) = &q.app {
+        if let Ok(mut fs) = std::fs::File::create(file) {
+            app.save(&mut fs).is_ok()
+        } else {
+            return false;
+        }
+    } else {
+        false
+    }
+}
+
+/// Checks the status of a `CompilerResult`.
+///
+/// Returns a null-terminated string representing the status message.
+///
+/// # Safety
+///     it is the responsibility of the calling function to ensure
+///     that q points to a valid CompilerResult.
+///
+#[no_mangle]
+pub unsafe extern "C" fn load(file: *const c_char) -> *const CompilerResult {
+    let mut res = CompilerResult {
+        app: None,
+        status: CompilerStatus::Incomplete,
+    };
+
+    let file = unsafe {
+        match CStr::from_ptr(file).to_str() {
+            Ok(file) => file,
+            Err(_) => return Box::into_raw(Box::new(res)) as *const _,
+        }
+    };
+
+    let fs = std::fs::File::open(file);
+
+    match fs {
+        Ok(mut fs) => match Application::load(&mut fs) {
+            Ok(app) => {
+                res.app = Some(app);
+                res.status = CompilerStatus::Ok;
+            }
+            Err(err) => {
+                res.status = CompilerStatus::ParseError;
+                println!("parse error: {:?}", err);
+            }
+        },
+        Err(err) => {
+            println!("io error: {:?}", err);
+        }
+    }
+
+    Box::into_raw(Box::new(res)) as *const _
+}
+
+/// Checks the status of a `CompilerResult`.
+///
+/// Returns a null-terminated string representing the status message.
+///
+/// # Safety
+///     it is the responsibility of the calling function to ensure
+///     that q points to a valid CompilerResult.
+///
+#[no_mangle]
+pub unsafe extern "C" fn get_config(q: *const CompilerResult) -> usize {
+    let q: &CompilerResult = unsafe { &*q };
+
+    match &q.app {
+        Some(app) => {
+            let config = app.prog.config();
+
+            let ty: usize = match config.ty {
+                CompilerType::Native => 0,
+                CompilerType::Amd => 1,
+                CompilerType::AmdAVX => 2,
+                CompilerType::AmdSSE => 3,
+                CompilerType::Arm => 4,
+                CompilerType::RiscV => 5,
+                CompilerType::ByteCode => 6,
+                CompilerType::Debug => 7,
+            };
+
+            (config.opt as usize) | (ty << 32)
+        }
+        None => 0,
+    }
+}
+
+/// Returns the number of state variables.
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure

@@ -1,5 +1,8 @@
 use crate::runnable::CompilerType;
 use anyhow::{anyhow, Result};
+use std::io::{Read, Write};
+
+use crate::utils::Storage;
 
 pub const USE_SIMD: u32 = 0x01;
 pub const USE_THREADS: u32 = 0x02;
@@ -18,6 +21,8 @@ pub struct Config {
 }
 
 impl Config {
+    const MAGIC: usize = 0x802c3c77c7422e70;
+
     pub fn new(ty: CompilerType, opt: u32) -> Result<Config> {
         Ok(Config { opt, ty })
     }
@@ -265,5 +270,55 @@ impl Config {
 
     pub fn is_intrinsic_binary(&self, op: &str) -> bool {
         BINARY.contains(&op)
+    }
+}
+
+impl Storage for Config {
+    fn save(&self, stream: &mut impl Write) -> Result<()> {
+        stream.write(&Self::MAGIC.to_le_bytes())?;
+
+        let ty: usize = match self.ty {
+            CompilerType::Native => 0,
+            CompilerType::Amd => 1,
+            CompilerType::AmdAVX => 2,
+            CompilerType::AmdSSE => 3,
+            CompilerType::Arm => 4,
+            CompilerType::RiscV => 5,
+            CompilerType::ByteCode => 6,
+            CompilerType::Debug => 7,
+        };
+
+        let val: usize = (self.opt as usize) | (ty << 32);
+        stream.write(&val.to_le_bytes())?;
+        Ok(())
+    }
+
+    fn load(stream: &mut impl Read) -> Result<Self> {
+        let mut bytes: [u8; 8] = [0; 8];
+
+        stream.read(&mut bytes)?;
+
+        if usize::from_le_bytes(bytes) != Self::MAGIC {
+            return Err(anyhow!("invalid magic number"));
+        }
+
+        stream.read(&mut bytes)?;
+        let val = usize::from_le_bytes(bytes);
+        let opt: u32 = (val & 0xffffffff) as u32;
+        let ty: u32 = (val >> 32) as u32;
+
+        let ty: CompilerType = match ty {
+            0 => CompilerType::Native,
+            1 => CompilerType::Amd,
+            2 => CompilerType::AmdAVX,
+            3 => CompilerType::AmdSSE,
+            4 => CompilerType::Arm,
+            5 => CompilerType::RiscV,
+            6 => CompilerType::ByteCode,
+            7 => CompilerType::Debug,
+            _ => return Err(anyhow!("invalid compiler type value.")),
+        };
+
+        Ok(Config { opt, ty })
     }
 }

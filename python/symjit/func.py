@@ -129,6 +129,9 @@ class Func:
     def callable_filter(self):
         return self.compiler.callable_filter()
 
+    def save(self, file):
+        self.compiler.save(file)
+
 
 class FuncComplex:
     def __init__(self, compiler, eqs):
@@ -231,6 +234,9 @@ class FuncComplex:
     def callable_filter(self):
         pass
 
+    def save(self, file):
+        self.compiler.save(file)
+
 
 ############################################################################
 
@@ -261,6 +267,9 @@ class SymbolicaFunc:
 
     def dumps(self, what="scalar"):
         return self.compiler.dumps(what=what)
+
+    def save(self, file):
+        self.compiler.save(file)
 
 
 class Bridge:

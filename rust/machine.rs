@@ -1,10 +1,11 @@
+use anyhow::{anyhow, Result};
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Write};
 
 use super::memory::*;
 use super::utils::*;
 
-pub struct MachineCode<T> {
+pub struct MachineCode<T: Default> {
     machine_code: Vec<u8>,
     #[allow(dead_code)]
     code: Memory, // code needs to be here for f to stay valid
@@ -14,7 +15,9 @@ pub struct MachineCode<T> {
     lanes: usize,
 }
 
-impl<T> MachineCode<T> {
+impl<T: Clone + Default> MachineCode<T> {
+    const MAGIC: usize = 0x6a7c68ec7656d6d;
+
     pub fn new(
         arch: &str,
         machine_code: Vec<u8>,
@@ -69,7 +72,63 @@ impl<T> MachineCode<T> {
     }
 }
 
-impl<T> Drop for MachineCode<T> {
+impl<T: Clone + Default> Storage for MachineCode<T> {
+    fn load(stream: &mut impl Read) -> Result<MachineCode<T>> {
+        let mut bytes: [u8; 8] = [0; 8];
+
+        stream.read(&mut bytes)?;
+
+        if usize::from_le_bytes(bytes) != Self::MAGIC {
+            return Err(anyhow!("invalid magic number"));
+        }
+
+        stream.read(&mut bytes)?;
+        let header = usize::from_le_bytes(bytes);
+
+        let lanes = header & 0xff;
+        let leaky = (header & 0x010000) != 0;
+        let arch = match (header >> 24) & 0x0f {
+            1 => "x86_64",
+            2 => "aarch64",
+            3 => "riscv64",
+            _ => return Err(anyhow!("invalid arch")),
+        };
+
+        stream.read(&mut bytes)?;
+        let mem_size = usize::from_le_bytes(bytes);
+        let _mem: Vec<T> = vec![T::default(); mem_size];
+
+        stream.read(&mut bytes)?;
+        let size = usize::from_le_bytes(bytes);
+        let mut machine_code: Vec<u8> = vec![0; size];
+        stream.read_exact(&mut machine_code)?;
+
+        Ok(Self::new(&arch, machine_code, _mem, leaky, lanes))
+    }
+
+    fn save(&self, stream: &mut impl Write) -> Result<()> {
+        #[cfg(target_arch = "x86_64")]
+        let arch = 1;
+        #[cfg(target_arch = "aarch64")]
+        let arch = 2;
+        #[cfg(target_arch = "riscv64")]
+        let arch = 3;
+
+        let header: usize = self.lanes | (if self.leaky { 0x010000 } else { 0 }) | arch << 24;
+        let mem_size: usize = self._mem.len();
+        let size: usize = self.machine_code.len();
+
+        stream.write(&Self::MAGIC.to_le_bytes())?;
+        stream.write(&header.to_le_bytes())?;
+        stream.write(&mem_size.to_le_bytes())?;
+        stream.write(&size.to_le_bytes())?;
+        stream.write_all(&self.machine_code)?;
+
+        Ok(())
+    }
+}
+
+impl<T: Default> Drop for MachineCode<T> {
     fn drop(&mut self) {
         if !self.leaky {
             unsafe {
@@ -131,6 +190,10 @@ impl<T: Sized + Copy + Default> Compiled<T> for MachineCode<T> {
     fn count_lanes(&self) -> usize {
         self.lanes
     }
+
+    fn as_machine(&self) -> Option<&MachineCode<T>> {
+        Some(self)
+    }
 }
 
-unsafe impl<T> Sync for MachineCode<T> {}
+unsafe impl<T: Default> Sync for MachineCode<T> {}

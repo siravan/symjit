@@ -1,4 +1,8 @@
+use anyhow::Result;
 use std::fmt;
+use std::io::{Read, Write};
+
+use crate::machine::MachineCode;
 
 pub type CompiledFunc<T> = fn(*const T, *const *mut T, usize, *const T);
 
@@ -13,6 +17,12 @@ pub trait Compiled<T: Sized + Copy + Default> {
     fn func(&self) -> CompiledFunc<T>;
     fn support_indirect(&self) -> bool;
     fn count_lanes(&self) -> usize;
+    fn as_machine(&self) -> Option<&MachineCode<T>>;
+}
+
+pub trait Storage: Sized {
+    fn save(&self, stream: &mut impl Write) -> Result<()>;
+    fn load(stream: &mut impl Read) -> Result<Self>;
 }
 
 pub fn bool_to_f64(b: bool) -> f64 {

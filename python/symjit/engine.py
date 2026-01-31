@@ -31,7 +31,8 @@ class Engine:
             self.dll = ctypes.CDLL(dll_path)
             self.populate()
             self.is_valid = True
-        except:
+        except AttributeError as e:
+            print(e)
             self.is_valid = False
 
     def populate(self):
@@ -122,6 +123,18 @@ class Engine:
             ctypes.c_void_p,
         ]
         self._translate.restype = ctypes.c_void_p
+
+        self._save = self.dll.save
+        self._save.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        self._save.restype = ctypes.c_bool
+
+        self._load = self.dll.load
+        self._load.argtypes = [ctypes.c_char_p]
+        self._load.restype = ctypes.c_void_p
+
+        self._get_config = self.dll.get_config
+        self._get_config.argtypes = [ctypes.c_void_p]
+        self._get_config.restype = ctypes.c_size_t
 
         self._dump = self.dll.dump
         self._dump.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
@@ -317,6 +330,7 @@ class RustyCompiler:
         sanitize=True,
         dtype="float64",
         action="compile",
+        file="",
     ):
         if convert:
             model = json.dumps(model, indent=4)
@@ -337,15 +351,20 @@ class RustyCompiler:
 
         self.dtype = dtype
         self.defuns = defuns
+        self.ty = ty
 
         if action == "compile":
             self.p = lib._compile(
                 model.encode("utf-8"), ty.encode("utf8"), opt, self.defuns.p
             )
+            self.symbolica = False
         elif action == "translate":
             self.p = lib._translate(
                 model.encode("utf-8"), ty.encode("utf8"), opt, self.defuns.p
             )
+            self.symbolica = True
+        elif action == "load":
+            self.load(file)
         else:
             raise ValueError(f"action {action} not defined")
 
@@ -355,12 +374,43 @@ class RustyCompiler:
 
         self.model = model
         self.json_model = None
-        self.ty = ty
         self.populate()
 
     def __del__(self):
         if hasattr(self, "p"):
             lib._finalize(self.p)
+
+    def save(self, file):
+        lib._save(self.p, file.encode("utf-8"))
+
+    def load(self, file):
+        self.p = lib._load(file.encode("utf-8"))
+
+        opt = lib._get_config(self.p)
+        self.symbolica = opt & 0x40 != 0
+
+        if opt & 0x20 != 0:
+            self.dtype = "complex128"
+        else:
+            self.dtype = "float64"
+
+        t = opt >> 32
+        if t == 0:
+            self.ty = "native"
+        elif t == 1:
+            self.ty = "amd"
+        elif t == 2:
+            self.ty = "amd-avx"
+        elif t == 3:
+            self.ty = "amd-sse"
+        elif t == 4:
+            self.ty = "arm"
+        elif t == 5:
+            self.ty = "risvc"
+        elif t == 6:
+            self.ty = "bytecode"
+        elif t == 7:
+            self.ty = "debug"
 
     def get_u0(self):
         if self.json_model is None:

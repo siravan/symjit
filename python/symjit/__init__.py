@@ -423,3 +423,18 @@ def compile_evaluator(
         raise ValueError("unsupported platform")
 
     return SymbolicaFunc(compiler)
+
+
+def load_func(file, eqs=[]):
+    if can_use_rust("rust"):
+        compiler = engine.RustyCompiler("", action="load", file=file)
+        if compiler.symbolica:
+            return SymbolicaFunc(compiler)
+        elif compiler.dtype == "float64":
+            return Func(compiler, eqs)
+        elif compiler.dtype == "complex128":
+            return FuncComplex(compiler, eqs)
+        else:
+            raise ValueError("invalid dtype")
+    else:
+        raise ValueError("unsupported platform")

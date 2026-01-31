@@ -11,6 +11,7 @@ use crate::code::{Func, VirtualTable};
 use crate::config::Config;
 use crate::defuns::Defuns;
 use crate::generator::Generator;
+use crate::machine::MachineCode;
 use crate::symbol::Loc;
 use crate::utils::{bool_to_f64, Compiled, CompiledFunc, Reg};
 
@@ -1460,5 +1461,9 @@ impl Compiled<f64> for CompiledMir {
 
     fn count_lanes(&self) -> usize {
         1
+    }
+
+    fn as_machine(&self) -> Option<&MachineCode<f64>> {
+        None
     }
 }

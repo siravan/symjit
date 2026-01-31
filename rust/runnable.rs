@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use std::io::{Read, Write};
 
 use crate::amd::{AmdFamily, AmdGenerator};
 use crate::arm::{ArmGenerator, ArmSimdGenerator};
@@ -80,7 +81,7 @@ impl Application {
 
         let compiled = Self::compile_ty(prog.config().compiler_type(), &mir, &mut prog)?;
 
-        let use_simd = prog.config().use_simd() && !prog.builder.has_loop();
+        let use_simd = prog.config().use_simd() && prog.count_loops == 0;
         let use_threads = prog.config().use_threads() && prog.mem_size() < 128;
 
         let can_fast = prog.config().may_fast()
@@ -109,6 +110,7 @@ impl Application {
             count_diffs,
         })
     }
+
     /********************* compile_* functions *************************/
 
     fn compile_ty(
@@ -478,6 +480,121 @@ impl Application {
     pub fn dumps(&self) -> Vec<u8> {
         self.compiled.dumps()
     }
+
+    /************************** save/load ******************************/
+
+    const MAGIC: usize = 0x40568795410d08e9;
+}
+
+impl Storage for Application {
+    fn save(&self, stream: &mut impl Write) -> Result<()> {
+        stream.write(&Self::MAGIC.to_le_bytes())?;
+
+        self.prog.save(stream)?;
+
+        let mut mask: usize = if self.compiled.as_machine().is_some() {
+            1
+        } else {
+            0
+        };
+
+        if self.compiled_fast.is_some()
+            && self.compiled_fast.as_ref().unwrap().as_machine().is_some()
+        {
+            mask |= 2;
+        }
+
+        if self.compiled_simd.is_some()
+            && self.compiled_simd.as_ref().unwrap().as_machine().is_some()
+        {
+            mask |= 4;
+        }
+
+        stream.write(&mask.to_le_bytes())?;
+
+        self.compiled.as_machine().unwrap().save(stream)?;
+
+        if let Some(compiled) = &self.compiled_fast {
+            compiled.as_machine().unwrap().save(stream)?;
+        }
+
+        if let Some(compiled) = &self.compiled_simd {
+            compiled.as_machine().unwrap().save(stream)?;
+        }
+
+        Ok(())
+    }
+
+    fn load(stream: &mut impl Read) -> Result<Self> {
+        let mut bytes: [u8; 8] = [0; 8];
+
+        stream.read(&mut bytes)?;
+
+        if usize::from_le_bytes(bytes) != Self::MAGIC {
+            return Err(anyhow!("invalid magic number"));
+        }
+
+        let prog = Program::load(stream)?;
+
+        stream.read(&mut bytes)?;
+        let mask = usize::from_le_bytes(bytes);
+
+        let compiled: Box<dyn Compiled<f64>> = Box::new(MachineCode::load(stream)?);
+
+        let compiled_fast: Option<Box<dyn Compiled<f64>>> = if mask & 2 != 0 {
+            Some(Box::new(MachineCode::load(stream)?))
+        } else {
+            None
+        };
+
+        let compiled_simd: Option<Box<dyn Compiled<f64>>> = if mask & 4 != 0 {
+            Some(Box::new(MachineCode::load(stream)?))
+        } else {
+            None
+        };
+
+        let first_state = 0;
+        let first_param = 0;
+        let first_obs = first_state + prog.count_states;
+        let first_diff = first_obs + prog.count_obs;
+
+        let count_states = prog.count_states;
+        let count_params = prog.count_params;
+        let count_obs = prog.count_obs;
+        let count_diffs = prog.count_diffs;
+
+        let params = vec![0.0; count_params + 1];
+        let mir = Mir::new(*prog.config(), &Defuns::new());
+
+        let use_simd = prog.config().use_simd() && prog.count_loops == 0;
+        let use_threads = prog.config().use_threads() && prog.mem_size() < 128;
+
+        let can_fast = prog.config().may_fast()
+            && count_states <= 8
+            && count_params == 0
+            && count_obs == 1
+            && count_diffs == 0;
+
+        Ok(Application {
+            prog,
+            mir,
+            compiled,
+            compiled_simd,
+            compiled_fast,
+            params,
+            use_simd,
+            use_threads,
+            can_fast,
+            first_state,
+            first_param,
+            first_obs,
+            first_diff,
+            count_states,
+            count_params,
+            count_obs,
+            count_diffs,
+        })
+    }
 }
 
 /***************************************************/
@@ -574,5 +691,9 @@ impl Compiled<f64> for Debugger {
 
     fn count_lanes(&self) -> usize {
         1
+    }
+
+    fn as_machine(&self) -> Option<&MachineCode<f64>> {
+        None
     }
 }
