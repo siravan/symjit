@@ -886,7 +886,17 @@ impl Generator for AmdGenerator {
      *      6 slots are the work area for various call routines, Specifically, the bottom
      *      32 bytes is reserved as the home area for Windows call ABI.
      */
-    fn prologue_indirect(&mut self, cap: usize, count_states: usize, count_obs: usize) {
+    fn prologue_indirect(
+        &mut self,
+        cap: usize,
+        count_states: usize,
+        count_obs: usize,
+        count_params: usize,
+    ) {
+        if self.config.symbolica() {
+            return self.prologue_symbolica(cap, count_params, count_obs);
+        }
+
         let win = cfg!(target_family = "windows");
         self.amd.push(Amd::RBP);
         self.save_nonvolatile_regs();
@@ -939,7 +949,17 @@ impl Generator for AmdGenerator {
         self.sub_rsp(align_stack(cap as u32 * self.reg_size()));
     }
 
-    fn epilogue_indirect(&mut self, cap: usize, count_states: usize, count_obs: usize) {
+    fn epilogue_indirect(
+        &mut self,
+        cap: usize,
+        count_states: usize,
+        count_obs: usize,
+        count_params: usize,
+    ) {
+        if self.config.symbolica() {
+            return self.epilogue_symbolica(cap, count_params, count_obs);
+        }
+
         self.add_rsp(align_stack(cap as u32 * self.reg_size()));
 
         self.amd.or(STATES, STATES);
@@ -999,5 +1019,72 @@ impl Generator for AmdGenerator {
                 self.load_stack(reg(*r), *r as u32 + 2);
             }
         }
+    }
+}
+
+impl AmdGenerator {
+    fn prologue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
+        let win = cfg!(target_family = "windows");
+        self.amd.push(Amd::RBP);
+        self.save_nonvolatile_regs();
+
+        self.amd.mov(MEM, if win { Amd::RCX } else { Amd::RDI }); // first arg = mem if direct mode, otherwise null
+        self.amd.mov(STATES, if win { Amd::RDX } else { Amd::RSI }); // second arg = states+obs if indirect mode, otherwise null
+        self.amd.mov(IDX, if win { Amd::R8 } else { Amd::RDX }); // third arg = index if indirect mode
+        self.amd.mov(PARAMS, if win { Amd::R9 } else { Amd::RCX }); // fourth arg = params
+
+        if self.reg_size() == 32 {
+            self.amd.or(IDX, IDX);
+            self.amd.jz("@main");
+
+            self.sub_rsp(align_stack(count_params as u32 * 32));
+            self.amd.mov(Amd::RAX, PARAMS);
+            self.amd.mov(PARAMS, Amd::RSP);
+
+            for j in 0..4 {
+                for i in 0..count_params {
+                    self.amd
+                        .vmovsd_xmm_mem(RET, Amd::RAX, 8 * (i + j * count_params) as i32);
+                    self.amd.vmovsd_mem_xmm(PARAMS, 8 * (i * 4 + j) as i32, RET);
+                }
+            }
+
+            self.sub_rsp(align_stack(count_obs as u32 * 32));
+            self.amd.mov(STATES, MEM);
+            self.amd.mov(MEM, Amd::RSP);
+
+            self.set_label("@main");
+        }
+        self.sub_rsp(align_stack(cap as u32 * self.reg_size()));
+    }
+
+    fn epilogue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
+        self.add_rsp(align_stack(cap as u32 * self.reg_size()));
+
+        if self.reg_size() == 32 {
+            self.amd.or(IDX, IDX);
+            self.amd.jz("@done");
+
+            self.amd.mov(Amd::RAX, STATES);
+
+            for j in 0..4 {
+                for i in 0..count_obs {
+                    self.amd.vmovsd_xmm_mem(RET, MEM, 8 * (i * 4 + j) as i32);
+                    self.amd
+                        .vmovsd_mem_xmm(STATES, 8 * (i + j * count_obs) as i32, 0);
+                }
+            }
+
+            let frame_size =
+                align_stack(count_params as u32 * 32) + align_stack(count_obs as u32 * 32);
+            self.amd.add_rsp(frame_size);
+            self.set_label("@done");
+        }
+
+        self.vzeroupper();
+
+        self.load_nonvolatile_regs();
+        self.amd.pop(Amd::RBP);
+        self.amd.ret();
     }
 }

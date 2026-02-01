@@ -292,16 +292,17 @@ impl Builder {
         ir: &mut impl Generator,
         count_states: usize,
         count_obs: usize,
+        count_params: usize,
     ) -> Result<()> {
         // println!("{:#?}", mir.used_registers());
         let cap = self.symbol_table().num_stack;
-        ir.prologue_indirect(cap, count_states, count_obs);
+        ir.prologue_indirect(cap, count_states, count_obs, count_params);
 
         Self::save_registers(mir, ir);
         mir.rerun(ir)?;
         Self::restore_registers(mir, ir);
 
-        ir.epilogue_indirect(cap, count_states, count_obs);
+        ir.epilogue_indirect(cap, count_states, count_obs, count_params);
         ir.align();
         self.append_const_section(ir);
         self.append_vt_section(mir, ir);

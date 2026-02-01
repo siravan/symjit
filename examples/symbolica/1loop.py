@@ -3,7 +3,6 @@ import os
 import time
 
 import numpy as np
-from symbolica import E, S  # type: ignore
 from symjit import compile_evaluator, load_func
 
 # resource.setrlimit(resource.RLIMIT_STACK, (16777216, 2 * 16777216))

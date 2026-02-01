@@ -249,8 +249,7 @@ class SymbolicaFunc:
         self.count_obs = self.compiler.count_obs
 
     def evaluate(self, inputs):
-        assert inputs.shape[1] == self.count_params
-        args = np.ascontiguousarray(inputs, dtype=np.float64)
+        args = np.ascontiguousarray(inputs[:, : self.count_params], dtype=np.float64)
         outs = np.empty((inputs.shape[0], self.count_obs), dtype=np.float64)
         self.compiler.evaluate_matrix(args, outs)
         return outs

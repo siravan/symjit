@@ -101,6 +101,10 @@ impl Config {
     }
 
     pub fn use_simd(&self) -> bool {
+        // TODO! To implement Symbolica arm64 SIMD.
+        if self.symbolica() && self.is_arm64() {
+            return false;
+        }
         self.test(USE_SIMD) && (self.has_avx() || self.is_arm64())
     }
 

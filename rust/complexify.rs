@@ -354,8 +354,22 @@ impl Generator for Complexifier {
     ) {
     }
 
-    fn prologue_indirect(&mut self, _cap: usize, _count_states: usize, _count_obs: usize) {}
-    fn epilogue_indirect(&mut self, _cap: usize, _count_states: usize, _count_obs: usize) {}
+    fn prologue_indirect(
+        &mut self,
+        _cap: usize,
+        _count_states: usize,
+        _count_obs: usize,
+        _count_params: usize,
+    ) {
+    }
+    fn epilogue_indirect(
+        &mut self,
+        _cap: usize,
+        _count_states: usize,
+        _count_obs: usize,
+        _count_params: usize,
+    ) {
+    }
 
     fn save_used_registers(&mut self, _used: &[u8]) {}
     fn load_used_registers(&mut self, _used: &[u8]) {}

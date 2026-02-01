@@ -475,7 +475,13 @@ impl Generator for ArmGenerator {
      * IDX => third arg = index if indirect mode
      * PARAMS => fourth arg = params
      */
-    fn prologue_indirect(&mut self, cap: usize, count_states: usize, count_obs: usize) {
+    fn prologue_indirect(
+        &mut self,
+        cap: usize,
+        count_states: usize,
+        count_obs: usize,
+        _count_params: usize,
+    ) {
         self.emit(arm! {sub sp, sp, #48});
         self.emit(arm! {str lr, [sp, #0]});
         self.emit(arm! {str x(MEM), [sp, #8]});
@@ -509,7 +515,13 @@ impl Generator for ArmGenerator {
         self.sub_stack(stack_size);
     }
 
-    fn epilogue_indirect(&mut self, cap: usize, count_states: usize, count_obs: usize) {
+    fn epilogue_indirect(
+        &mut self,
+        cap: usize,
+        count_states: usize,
+        count_obs: usize,
+        _count_params: usize,
+    ) {
         let stack_size = align_stack(cap as u32 * self.reg_size());
         self.add_stack(stack_size);
 
@@ -1114,7 +1126,13 @@ impl Generator for ArmSimdGenerator {
      * IDX => third arg = index if indirect mode
      * PARAMS => fourth arg = params
      */
-    fn prologue_indirect(&mut self, cap: usize, count_states: usize, count_obs: usize) {
+    fn prologue_indirect(
+        &mut self,
+        cap: usize,
+        count_states: usize,
+        count_obs: usize,
+        _count_params: usize,
+    ) {
         self.emit(arm! {sub sp, sp, #48});
         self.emit(arm! {str lr, [sp, #0]});
         self.emit(arm! {str x(MEM), [sp, #8]});
@@ -1152,7 +1170,13 @@ impl Generator for ArmSimdGenerator {
         self.sub_stack(stack_size);
     }
 
-    fn epilogue_indirect(&mut self, cap: usize, count_states: usize, count_obs: usize) {
+    fn epilogue_indirect(
+        &mut self,
+        cap: usize,
+        count_states: usize,
+        count_obs: usize,
+        _count_params: usize,
+    ) {
         let stack_size = align_stack(cap as u32 * self.reg_size());
         self.add_stack(stack_size);
 

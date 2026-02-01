@@ -584,7 +584,13 @@ impl Generator for RiscV {
      * IDX => third arg = index if indirect mode
      * PARAMS => fourth arg = params
      */
-    fn prologue_indirect(&mut self, cap: usize, count_states: usize, count_obs: usize) {
+    fn prologue_indirect(
+        &mut self,
+        cap: usize,
+        count_states: usize,
+        count_obs: usize,
+        _count_params: usize,
+    ) {
         self.sub_stack(64);
 
         self.emit(rvv! {sd x(Self::ra), x(Self::sp), 0});
@@ -636,7 +642,13 @@ impl Generator for RiscV {
         self.sub_stack(stack_size);
     }
 
-    fn epilogue_indirect(&mut self, cap: usize, count_states: usize, count_obs: usize) {
+    fn epilogue_indirect(
+        &mut self,
+        cap: usize,
+        count_states: usize,
+        count_obs: usize,
+        _count_params: usize,
+    ) {
         let stack_size = align_stack(cap as u32 * self.reg_size());
         self.add_stack(stack_size);
 

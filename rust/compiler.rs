@@ -7,11 +7,13 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
 use num_complex::Complex;
+use rayon::prelude::*;
 
 use crate::config::Config;
 use crate::defuns::Defuns;
 use crate::expr::Expr;
 use crate::model::{CellModel, Equation, Program, Variable};
+use crate::utils::CompiledFunc;
 use crate::Application;
 
 // #[derive(Debug)]
@@ -316,13 +318,114 @@ impl Application {
         outs[0]
     }
 
-    /// Generic evaluate function for compiled Symbolica expressions
-    pub fn evaluate_matrix<T: Sized + Copy>(&mut self, args: &[T], outs: &mut [T], n: usize) {
-        let args_size = args.len() / n;
-        let outs_size = outs.len() / n;
+    fn evaluate_row(
+        args: &[f64],
+        args_idx: usize,
+        outs: &[f64],
+        outs_idx: usize,
+        f: CompiledFunc<f64>,
+    ) {
+        unsafe {
+            f(
+                (outs.as_ptr() as *const f64).add(outs_idx),
+                std::ptr::null(),
+                0,
+                (args.as_ptr() as *const f64).add(args_idx),
+            );
+        }
+    }
 
-        for (p, q) in args.chunks(args_size).zip(outs.chunks_mut(outs_size)) {
-            self.evaluate(p, q);
+    fn evaluate_row_simd(
+        args: &[f64],
+        args_idx: usize,
+        outs: &[f64],
+        outs_idx: usize,
+        f: CompiledFunc<f64>,
+    ) {
+        unsafe {
+            f(
+                outs.as_ptr().add(outs_idx),
+                std::ptr::null(),
+                1,
+                args.as_ptr().add(args_idx),
+            );
+        }
+    }
+
+    /// Generic evaluate function for compiled Symbolica expressions
+    fn evaluate_matrix_with_threads(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
+        let count_params = self.count_params;
+        let count_obs = self.count_obs;
+        let f = self.compiled.func();
+
+        (0..n)
+            .into_par_iter()
+            .for_each(|t| Self::evaluate_row(args, t * count_params, outs, t * count_obs, f));
+    }
+
+    /// Generic evaluate function for compiled Symbolica expressions
+    fn evaluate_matrix_without_threads(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
+        let count_params = self.count_params;
+        let count_obs = self.count_obs;
+        let f = self.compiled.func();
+
+        for t in 0..n {
+            Self::evaluate_row(args, t * count_params, outs, t * count_obs, f);
+        }
+    }
+
+    fn evaluate_matrix_with_threads_simd(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
+        let count_params = self.count_params;
+        let count_obs = self.count_obs;
+
+        if let Some(compiled) = &self.compiled_simd {
+            let g = compiled.func();
+            let l = compiled.count_lanes();
+
+            (0..n / l).into_par_iter().for_each(|t| {
+                Self::evaluate_row_simd(args, t * count_params * l, outs, t * count_obs * l, g)
+            });
+
+            let f = self.compiled.func();
+            for t in l * (n / l)..n {
+                Self::evaluate_row(args, t * count_params, outs, t * count_obs, f);
+            }
+        }
+    }
+
+    fn evaluate_matrix_without_threads_simd(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
+        let count_params = self.count_params;
+        let count_obs = self.count_obs;
+
+        if let Some(compiled) = &self.compiled_simd {
+            let g = compiled.func();
+            let l = compiled.count_lanes();
+
+            for t in 0..n / l {
+                Self::evaluate_row_simd(args, t * count_params * l, outs, t * count_obs * l, g);
+            }
+
+            let f = self.compiled.func();
+            for t in l * (n / l)..n {
+                Self::evaluate_row(args, t * count_params, outs, t * count_obs, f);
+            }
+        }
+    }
+
+    /// Generic evaluate function for compiled Symbolica expressions
+    pub fn evaluate_matrix(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
+        if self.use_threads {
+            if self.compiled_simd.is_some() {
+                self.evaluate_matrix_with_threads_simd(args, outs, n);
+            } else {
+                self.evaluate_matrix_with_threads(args, outs, n);
+            }
+        } else {
+            if self.compiled_simd.is_some() {
+                self.evaluate_matrix_without_threads_simd(args, outs, n);
+            } else {
+                self.evaluate_matrix_without_threads(args, outs, n);
+            }
         }
     }
 

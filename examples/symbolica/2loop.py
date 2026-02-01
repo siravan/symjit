@@ -3,7 +3,6 @@ import resource
 import time
 
 import numpy as np
-from symbolica import E, S  # type: ignore
 from symjit import compile_evaluator, load_func
 
 resource.setrlimit(resource.RLIMIT_STACK, (16777216, 2 * 16777216))
@@ -16,28 +15,28 @@ with open(
 ) as fd:
     S = fd.read()
 
-f = compile_evaluator(S, dtype="complex128")
+f = compile_evaluator(S, dtype="complex128", use_threads=True, use_simd=True)
 print(f"completed in {time.time() - t_start:.1f} s.")
 
 f.save("2loop.sjb")
 
-rng = np.random.default_rng(1337)
-samples_real = rng.random(f.count_params // 2)
-samples_imag = rng.random(f.count_params // 2)
-samples = samples_real + 1j * samples_imag
+N_SAMPLES = 10000
+n = f.count_params // 2
 
-N_SAMPLES = 1000
+rng = np.random.default_rng(1337)
+samples_real = rng.random(N_SAMPLES * n).reshape((N_SAMPLES, n))
+samples_imag = rng.random(N_SAMPLES * n).reshape((N_SAMPLES, n))
+
+samples = samples_real + 1j * samples_imag
 
 print("Running symjit evaluator...")
 
 t_start = time.time()
-for _ in range(N_SAMPLES):
-    f.evaluate_complex(samples[None, :])
-
+f.evaluate_complex(samples)
 print(f"Symjit evaluation: {((time.time() - t_start) * 1000.0 / N_SAMPLES):.3f} ms")
 
-print(f.evaluate_complex(samples[None, :]).sum())
+print(f.evaluate_complex(samples[:1, :]).sum())
 
 g = load_func("2loop.sjb")
 
-print(g.evaluate_complex(samples[None, :]).sum())
+print(g.evaluate_complex(samples[:1, :]).sum())

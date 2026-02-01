@@ -73,8 +73,20 @@ pub trait Generator {
     fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize);
     fn epilogue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize, idx_ret: i32);
 
-    fn prologue_indirect(&mut self, cap: usize, count_states: usize, count_obs: usize);
-    fn epilogue_indirect(&mut self, cap: usize, count_states: usize, count_obs: usize);
+    fn prologue_indirect(
+        &mut self,
+        cap: usize,
+        count_states: usize,
+        count_obs: usize,
+        count_params: usize,
+    );
+    fn epilogue_indirect(
+        &mut self,
+        cap: usize,
+        count_states: usize,
+        count_obs: usize,
+        count_params: usize,
+    );
 
     fn save_used_registers(&mut self, used: &[u8]);
     fn load_used_registers(&mut self, used: &[u8]);

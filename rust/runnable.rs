@@ -138,8 +138,13 @@ impl Application {
         lanes: usize,
     ) -> Result<Box<dyn Compiled<f64>>> {
         let mem: Vec<f64> = vec![0.0; size];
-        prog.builder
-            .compile_from_mir(mir, &mut generator, prog.count_states, prog.count_obs)?;
+        prog.builder.compile_from_mir(
+            mir,
+            &mut generator,
+            prog.count_states,
+            prog.count_obs,
+            prog.count_params,
+        )?;
         let code = MachineCode::new(arch, generator.bytes(), mem, false, lanes);
         let compiled: Box<dyn Compiled<f64>> = Box::new(code);
         Ok(compiled)
@@ -515,7 +520,9 @@ impl Storage for Application {
 
         stream.write_all(&mask.to_le_bytes())?;
 
-        self.compiled.as_machine().unwrap().save(stream)?;
+        if let Some(compiled) = self.compiled.as_machine() {
+            compiled.save(stream)?;
+        }
 
         if let Some(compiled) = &self.compiled_fast {
             compiled.as_machine().unwrap().save(stream)?;
