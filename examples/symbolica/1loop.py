@@ -11,7 +11,7 @@ print("Building symjit evaluator...")
 t_start = time.time()
 
 with open(
-    os.path.join(os.path.dirname(__file__), "evaluator_instructions_1loop.txt")
+    os.path.join(os.path.dirname(__file__), "evaluator_instructions_1loop.txt"), encoding="utf-8"
 ) as fd:
     S = fd.read()
 

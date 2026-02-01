@@ -1,5 +1,5 @@
 import os
-import resource
+# import resource
 import time
 
 import numpy as np
@@ -11,7 +11,7 @@ print("Building symjit evaluator...")
 t_start = time.time()
 
 with open(
-    os.path.join(os.path.dirname(__file__), "evaluator_instructions_2loop.txt")
+    os.path.join(os.path.dirname(__file__), "evaluator_instructions_2loop.txt"), encoding="utf-8"
 ) as fd:
     S = fd.read()
 
