@@ -351,8 +351,8 @@ def compile_json(
 def compile_evaluator(
     evaluator,
     ty="native",
-    use_simd=False,
-    use_threads=False,
+    use_simd=True,
+    use_threads=True,
     cse=False,
     fastmath=False,
     backend="rust",
