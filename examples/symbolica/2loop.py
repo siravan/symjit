@@ -5,7 +5,7 @@ import time
 import numpy as np
 from symjit import compile_evaluator, load_func
 
-resource.setrlimit(resource.RLIMIT_STACK, (16777216, 2 * 16777216))
+# resource.setrlimit(resource.RLIMIT_STACK, (16777216, 2 * 16777216))
 
 print("Building symjit evaluator...")
 t_start = time.time()
