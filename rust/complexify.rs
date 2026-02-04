@@ -88,6 +88,10 @@ impl Complexifier {
         self.reals_locs.insert(loc);
     }
 
+    fn set_loc_complex(&mut self, loc: Loc) {
+        self.reals_locs.remove(&loc);
+    }
+
     fn set_reg_real(&mut self, dst: Reg) {
         self.reals_regs[ϕ(dst)] = true;
     }
@@ -102,6 +106,13 @@ impl Complexifier {
 
     fn promote_real(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.reals_regs[ϕ(dst)] = self.is_real_reg(s1) && self.is_real_reg(s2);
+    }
+
+    fn ensure_complex(&mut self, dst: Reg) {
+        if self.is_real_reg(dst) {
+            self.mir.xor(im(dst), im(dst), im(dst));
+        }
+        self.set_reg_complex(dst);
     }
 }
 
@@ -151,29 +162,20 @@ impl Generator for Complexifier {
     }
 
     fn load_const(&mut self, dst: Reg, idx: u32) {
-        // TODO: loading complex constants
         self.mir.load_const(re(dst), idx);
-        // self.mir.xor(im(dst), im(dst), im(dst));
         self.set_reg_real(dst);
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
         self.mir.load_mem(re(dst), idx);
-
-        if self.is_real_loc(Loc::Mem(idx)) {
-            self.set_reg_real(dst);
-        } else {
-            self.mir.load_mem(im(dst), idx + 1);
-            self.set_reg_complex(dst);
-        }
+        self.mir.load_mem(im(dst), idx + 1);
+        self.set_reg_complex(dst);
     }
 
-    fn save_mem(&mut self, dst: Reg, idx: u32) {
-        self.mir.save_mem(re(dst), idx);
-
-        if !self.is_real_reg(dst) {
-            self.mir.save_mem(im(dst), idx + 1);
-        }
+    fn save_mem(&mut self, s1: Reg, idx: u32) {
+        self.ensure_complex(s1);
+        self.mir.save_mem(re(s1), idx);
+        self.mir.save_mem(im(s1), idx + 1);
     }
 
     fn load_param(&mut self, dst: Reg, idx: u32) {
@@ -189,12 +191,24 @@ impl Generator for Complexifier {
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
         self.mir.load_stack(re(dst), idx);
-        self.mir.load_stack(im(dst), idx + 1);
+
+        if self.is_real_loc(Loc::Stack(idx)) {
+            self.set_reg_real(dst);
+        } else {
+            self.mir.load_stack(im(dst), idx + 1);
+            self.set_reg_complex(dst);
+        }
     }
 
-    fn save_stack(&mut self, dst: Reg, idx: u32) {
-        self.mir.save_stack(re(dst), idx);
-        self.mir.save_stack(im(dst), idx + 1);
+    fn save_stack(&mut self, s1: Reg, idx: u32) {
+        self.mir.save_stack(re(s1), idx);
+
+        if self.is_real_reg(s1) {
+            self.set_loc_real(Loc::Stack(idx));
+        } else {
+            self.mir.save_stack(im(s1), idx + 1);
+            self.set_loc_complex(Loc::Stack(idx));
+        }
     }
 
     fn save_mem_result(&mut self, idx: u32) {
