@@ -80,24 +80,28 @@ impl Complexifier {
         self.reals_locs.contains(&loc)
     }
 
-    fn is_real_reg(&self, r: Reg) -> bool {
-        self.reals_regs[ϕ(r)]
+    fn is_real_reg(&self, s1: Reg) -> bool {
+        self.reals_regs[ϕ(s1)]
     }
 
     fn set_loc_real(&mut self, loc: Loc) {
         self.reals_locs.insert(loc);
     }
 
-    fn set_reg_real(&mut self, r: Reg) {
-        self.reals_regs[ϕ(r)] = true;
+    fn set_reg_real(&mut self, dst: Reg) {
+        self.reals_regs[ϕ(dst)] = true;
     }
 
-    fn copy_real(&mut self, dst: Reg, r1: Reg) {
-        self.reals_regs[ϕ(dst)] = self.is_real_reg(r1);
+    fn set_reg_complex(&mut self, dst: Reg) {
+        self.reals_regs[ϕ(dst)] = false;
     }
 
-    fn promote_real(&mut self, dst: Reg, r1: Reg, r2: Reg) {
-        self.reals_regs[ϕ(dst)] = self.is_real_reg(r1) && self.is_real_reg(r2);
+    fn copy_real(&mut self, dst: Reg, s1: Reg) {
+        self.reals_regs[ϕ(dst)] = self.is_real_reg(s1);
+    }
+
+    fn promote_real(&mut self, dst: Reg, s1: Reg, s2: Reg) {
+        self.reals_regs[ϕ(dst)] = self.is_real_reg(s1) && self.is_real_reg(s2);
     }
 }
 
@@ -128,33 +132,59 @@ impl Generator for Complexifier {
     /***********************************/
     fn fmov(&mut self, dst: Reg, s1: Reg) {
         self.mir.fmov(re(dst), re(s1));
-        self.mir.fmov(im(dst), im(s1));
+
+        if !self.is_real_reg(s1) {
+            self.mir.fmov(im(dst), im(s1));
+        }
+
+        self.copy_real(dst, s1);
     }
 
     fn fxchg(&mut self, dst: Reg, s1: Reg) {
         self.mir.fxchg(re(dst), re(s1));
-        self.mir.fxchg(im(dst), im(s1));
+
+        if !self.is_real_reg(s1) {
+            self.mir.fxchg(im(dst), im(s1));
+        }
+
+        self.copy_real(dst, s1);
     }
 
     fn load_const(&mut self, dst: Reg, idx: u32) {
         // TODO: loading complex constants
         self.mir.load_const(re(dst), idx);
-        self.mir.xor(im(dst), im(dst), im(dst));
+        // self.mir.xor(im(dst), im(dst), im(dst));
+        self.set_reg_real(dst);
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
         self.mir.load_mem(re(dst), idx);
-        self.mir.load_mem(im(dst), idx + 1);
+
+        if self.is_real_loc(Loc::Mem(idx)) {
+            self.set_reg_real(dst);
+        } else {
+            self.mir.load_mem(im(dst), idx + 1);
+            self.set_reg_complex(dst);
+        }
     }
 
     fn save_mem(&mut self, dst: Reg, idx: u32) {
         self.mir.save_mem(re(dst), idx);
-        self.mir.save_mem(im(dst), idx + 1);
+
+        if !self.is_real_reg(dst) {
+            self.mir.save_mem(im(dst), idx + 1);
+        }
     }
 
     fn load_param(&mut self, dst: Reg, idx: u32) {
         self.mir.load_param(re(dst), idx);
-        self.mir.load_param(im(dst), idx + 1);
+
+        if self.is_real_loc(Loc::Param(idx)) {
+            self.set_reg_real(dst);
+        } else {
+            self.mir.load_param(im(dst), idx + 1);
+            self.set_reg_complex(dst);
+        }
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
@@ -177,15 +207,26 @@ impl Generator for Complexifier {
 
     fn neg(&mut self, dst: Reg, s1: Reg) {
         self.mir.neg(re(dst), re(s1));
-        self.mir.neg(im(dst), im(s1));
+
+        if !self.is_real_reg(s1) {
+            self.mir.neg(im(dst), im(s1));
+        }
+
+        self.copy_real(dst, s1);
     }
 
     fn abs(&mut self, dst: Reg, s1: Reg) {
-        self.mir.times(Self::T0, re(s1), re(s1));
-        self.mir.times(Self::T1, im(s1), im(s1));
-        self.mir.plus(re(dst), Self::T0, Self::T1);
-        self.mir.root(re(dst), re(dst));
-        self.mir.xor(im(dst), im(dst), im(dst));
+        if self.is_real_reg(s1) {
+            self.mir.abs(dst, s1);
+            self.set_reg_real(dst);
+        } else {
+            self.mir.times(Self::T0, re(s1), re(s1));
+            self.mir.times(Self::T1, im(s1), im(s1));
+            self.mir.plus(re(dst), Self::T0, Self::T1);
+            self.mir.root(re(dst), re(dst));
+            self.mir.xor(im(dst), im(dst), im(dst));
+            self.set_reg_complex(dst);
+        }
     }
 
     fn root(&mut self, _dst: Reg, _s1: Reg) {
@@ -193,22 +234,38 @@ impl Generator for Complexifier {
     }
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
-        self.mir.times(Self::T0, re(s1), re(s1));
-        self.mir.times(Self::T1, im(s1), im(s1));
-        self.mir.plus(Self::T0, Self::T0, Self::T1);
-        self.mir.divide(re(dst), re(s1), Self::T0);
-        self.mir.divide(im(dst), im(s1), Self::T0);
-        self.mir.neg(im(dst), im(dst));
+        if self.is_real_reg(s1) {
+            self.mir.recip(dst, s1);
+            self.set_reg_real(dst);
+        } else {
+            self.mir.times(Self::T0, re(s1), re(s1));
+            self.mir.times(Self::T1, im(s1), im(s1));
+            self.mir.plus(Self::T0, Self::T0, Self::T1);
+            self.mir.divide(re(dst), re(s1), Self::T0);
+            self.mir.divide(im(dst), im(s1), Self::T0);
+            self.mir.neg(im(dst), im(dst));
+            self.set_reg_complex(dst);
+        }
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {
         self.mir.round(re(dst), re(s1));
-        self.mir.round(im(dst), im(s1));
+
+        if !self.is_real_reg(s1) {
+            self.mir.round(im(dst), im(s1));
+        }
+
+        self.copy_real(dst, s1);
     }
 
     fn floor(&mut self, dst: Reg, s1: Reg) {
         self.mir.floor(re(dst), re(s1));
-        self.mir.floor(im(dst), im(s1));
+
+        if !self.is_real_reg(s1) {
+            self.mir.floor(im(dst), im(s1));
+        }
+
+        self.copy_real(dst, s1);
     }
 
     fn ceiling(&mut self, dst: Reg, s1: Reg) {
@@ -218,34 +275,74 @@ impl Generator for Complexifier {
 
     fn trunc(&mut self, dst: Reg, s1: Reg) {
         self.mir.trunc(re(dst), re(s1));
-        self.mir.trunc(im(dst), im(s1));
+
+        if !self.is_real_reg(s1) {
+            self.mir.trunc(im(dst), im(s1));
+        }
+
+        self.copy_real(dst, s1);
     }
 
     fn frac(&mut self, dst: Reg, s1: Reg) {
         self.mir.frac(re(dst), re(s1));
-        self.mir.frac(im(dst), im(s1));
+
+        if !self.is_real_reg(s1) {
+            self.mir.frac(im(dst), im(s1));
+        }
+
+        self.copy_real(dst, s1);
     }
 
     fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.plus(re(dst), re(s1), re(s2));
-        self.mir.plus(im(dst), im(s1), im(s2));
+
+        if self.is_real_reg(s1) && !self.is_real_reg(s2) {
+            self.mir.fmov(im(dst), im(s2));
+        } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
+            self.mir.fmov(im(dst), im(s1));
+        } else if !self.is_real_reg(s1) && !self.is_real_reg(s2) {
+            self.mir.plus(im(dst), im(s1), im(s2));
+        }
+
+        self.promote_real(dst, s1, s2);
     }
 
     fn minus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.minus(re(dst), re(s1), re(s2));
-        self.mir.minus(im(dst), im(s1), im(s2));
+
+        if self.is_real_reg(s1) && !self.is_real_reg(s2) {
+            self.mir.neg(im(dst), im(s2));
+        } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
+            self.mir.fmov(im(dst), im(s1));
+        } else if !self.is_real_reg(s1) && !self.is_real_reg(s2) {
+            self.mir.minus(im(dst), im(s1), im(s2));
+        }
+
+        self.promote_real(dst, s1, s2);
     }
 
     fn times(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.mir.times(Self::T0, re(s1), re(s2));
-        self.mir.times(Self::T1, im(s1), im(s2));
-        self.mir.minus(Self::T0, Self::T0, Self::T1);
+        if self.is_real_reg(s1) && self.is_real_reg(s2) {
+            self.mir.times(re(dst), re(s1), re(s2));
+        } else if self.is_real_reg(s1) && !self.is_real_reg(s2) {
+            self.mir.times(re(dst), re(s1), re(s2));
+            self.mir.times(im(dst), re(s1), im(s2));
+        } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
+            self.mir.times(re(dst), re(s1), re(s2));
+            self.mir.times(im(dst), im(s1), re(s2));
+        } else {
+            self.mir.times(Self::T0, re(s1), re(s2));
+            self.mir.times(Self::T1, im(s1), im(s2));
+            self.mir.minus(Self::T0, Self::T0, Self::T1);
 
-        self.mir.times(Self::T1, re(s1), im(s2));
-        self.mir.times(im(dst), im(s1), re(s2));
-        self.mir.plus(im(dst), im(dst), Self::T1);
+            self.mir.times(Self::T1, re(s1), im(s2));
+            self.mir.times(im(dst), im(s1), re(s2));
+            self.mir.plus(im(dst), im(dst), Self::T1);
 
-        self.mir.fmov(re(dst), Self::T0);
+            self.mir.fmov(re(dst), Self::T0);
+        }
+
+        self.promote_real(dst, s1, s2);
     }
 
     fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
@@ -254,36 +351,71 @@ impl Generator for Complexifier {
         // except for powi_mod which needs to be modified (TODO)
         let t = re(Reg::Temp);
 
-        self.mir.times(Self::T0, re(s2), re(s2));
-        self.mir.times(Self::T1, im(s2), im(s2));
-        self.mir.plus(t, Self::T0, Self::T1);
+        if self.is_real_reg(s1) && self.is_real_reg(s2) {
+            self.mir.divide(re(dst), re(s1), re(s2));
+        } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
+            self.mir.divide(re(dst), re(s1), re(s2));
+            self.mir.divide(im(dst), im(s1), re(s2));
+        } else if self.is_real_reg(s1) && !self.is_real_reg(s2) {
+            self.mir.times(Self::T0, re(s2), re(s2));
+            self.mir.times(Self::T1, im(s2), im(s2));
+            self.mir.plus(t, Self::T0, Self::T1);
 
-        self.mir.times(Self::T0, re(s1), re(s2));
-        self.mir.times(Self::T1, im(s1), im(s2));
-        self.mir.plus(Self::T0, Self::T0, Self::T1);
+            self.mir.times(Self::T0, re(s1), re(s2));
+            self.mir.times(Self::T1, re(s1), im(s2));
+            self.mir.neg(im(dst), Self::T1);
 
-        self.mir.times(Self::T1, re(s1), im(s2));
-        self.mir.times(im(dst), im(s1), re(s2));
-        self.mir.minus(im(dst), im(dst), Self::T1);
+            self.mir.divide(im(dst), im(dst), t);
+            self.mir.divide(re(dst), Self::T0, t);
+        } else {
+            self.mir.times(Self::T0, re(s2), re(s2));
+            self.mir.times(Self::T1, im(s2), im(s2));
+            self.mir.plus(t, Self::T0, Self::T1);
 
-        self.mir.divide(im(dst), im(dst), t);
-        self.mir.divide(re(dst), Self::T0, t);
+            self.mir.times(Self::T0, re(s1), re(s2));
+            self.mir.times(Self::T1, im(s1), im(s2));
+            self.mir.plus(Self::T0, Self::T0, Self::T1);
+
+            self.mir.times(Self::T1, re(s1), im(s2));
+            self.mir.times(im(dst), im(s1), re(s2));
+            self.mir.minus(im(dst), im(dst), Self::T1);
+
+            self.mir.divide(im(dst), im(dst), t);
+            self.mir.divide(re(dst), Self::T0, t);
+        }
+
+        self.promote_real(dst, s1, s2);
     }
 
     fn real(&mut self, dst: Reg, s1: Reg) {
         self.mir.fmov(re(dst), re(s1));
-        self.mir.xor(im(dst), im(dst), im(dst));
+
+        if !self.is_real_reg(s1) {
+            self.mir.xor(im(dst), im(dst), im(dst));
+        }
+
+        self.copy_real(dst, s1);
     }
 
     fn imaginary(&mut self, dst: Reg, s1: Reg) {
         self.mir.fmov(re(dst), im(s1));
-        self.mir.xor(im(dst), im(dst), im(dst));
+
+        if !self.is_real_reg(s1) {
+            self.mir.xor(im(dst), im(dst), im(dst));
+        }
+
+        self.copy_real(dst, s1);
     }
 
     fn conjugate(&mut self, dst: Reg, s1: Reg) {
         self.mir.fmov(re(dst), re(s1));
-        self.mir.fmov(im(dst), im(s1));
-        self.mir.neg(im(dst), im(dst));
+
+        if !self.is_real_reg(s1) {
+            self.mir.fmov(im(dst), im(s1));
+            self.mir.neg(im(dst), im(dst));
+        }
+
+        self.copy_real(dst, s1);
     }
 
     fn complex(&mut self, dst: Reg, s1: Reg, s2: Reg) {
@@ -297,56 +429,103 @@ impl Generator for Complexifier {
     fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.gt(re(dst), re(s1), re(s2));
         self.mir.fmov(im(dst), re(dst));
+        self.set_reg_complex(dst);
     }
 
     fn geq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.geq(re(dst), re(s1), re(s2));
         self.mir.fmov(im(dst), re(dst));
+        self.set_reg_complex(dst);
     }
 
     fn lt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.lt(re(dst), re(s1), re(s2));
         self.mir.fmov(im(dst), re(dst));
+        self.set_reg_complex(dst);
     }
 
     fn leq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.leq(re(dst), re(s1), re(s2));
         self.mir.fmov(im(dst), re(dst));
+        self.set_reg_complex(dst);
     }
 
     fn eq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.eq(re(dst), re(s1), re(s2));
         self.mir.fmov(im(dst), re(dst));
+        self.set_reg_complex(dst);
     }
 
     fn neq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.neq(re(dst), re(s1), re(s2));
         self.mir.fmov(im(dst), re(dst));
+        self.set_reg_complex(dst);
     }
 
     fn and(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.and(re(dst), re(s1), re(s2));
-        self.mir.and(im(dst), im(s1), im(s2));
+
+        if self.is_real_reg(s1) && !self.is_real_reg(s2) {
+            self.mir.xor(im(dst), im(dst), im(dst));
+        } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
+            self.mir.xor(im(dst), im(dst), im(dst));
+        } else if !self.is_real_reg(s1) && !self.is_real_reg(s2) {
+            self.mir.and(im(dst), im(s1), im(s2));
+        }
+
+        self.promote_real(dst, s1, s2);
     }
 
     fn andnot(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.andnot(re(dst), re(s1), re(s2));
-        self.mir.andnot(im(dst), im(s1), im(s2));
+
+        if self.is_real_reg(s1) && !self.is_real_reg(s2) {
+            self.mir.fmov(im(dst), im(s2));
+        } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
+            self.mir.xor(im(dst), im(dst), im(dst));
+        } else if !self.is_real_reg(s1) && !self.is_real_reg(s2) {
+            self.mir.andnot(im(dst), im(s1), im(s2));
+        }
+
+        self.promote_real(dst, s1, s2);
     }
 
     fn or(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.or(re(dst), re(s1), re(s2));
-        self.mir.or(im(dst), im(s1), im(s2));
+
+        if self.is_real_reg(s1) && !self.is_real_reg(s2) {
+            self.mir.fmov(im(dst), im(s2));
+        } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
+            self.mir.fmov(im(dst), im(s1));
+        } else if !self.is_real_reg(s1) && !self.is_real_reg(s2) {
+            self.mir.or(im(dst), im(s1), im(s2));
+        }
+
+        self.promote_real(dst, s1, s2);
     }
 
     fn xor(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.xor(re(dst), re(s1), re(s2));
-        self.mir.xor(im(dst), im(s1), im(s2));
+
+        if self.is_real_reg(s1) && !self.is_real_reg(s2) {
+            self.mir.fmov(im(dst), im(s2));
+        } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
+            self.mir.fmov(im(dst), im(s1));
+        } else if !self.is_real_reg(s1) && !self.is_real_reg(s2) {
+            self.mir.xor(im(dst), im(s1), im(s2));
+        }
+
+        self.promote_real(dst, s1, s2);
     }
 
     fn not(&mut self, dst: Reg, s1: Reg) {
         self.mir.not(re(dst), re(s1));
-        self.mir.not(im(dst), im(s1));
+
+        if !self.is_real_reg(s1) {
+            self.mir.not(im(dst), im(s1));
+        }
+
+        self.copy_real(dst, s1);
     }
 
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
@@ -381,6 +560,16 @@ impl Generator for Complexifier {
     }
 
     fn call_complex(&mut self, op: &str, num_args: usize) -> Result<()> {
+        if self.is_real_reg(Reg::Ret) {
+            self.mir.xor(im(Reg::Ret), im(Reg::Ret), im(Reg::Ret));
+        }
+
+        if self.is_real_reg(Reg::Temp) {
+            self.mir.xor(im(Reg::Temp), im(Reg::Temp), im(Reg::Temp));
+        }
+
+        self.set_reg_complex(Reg::Ret);
+
         self.mir.call(op, num_args)
     }
 
@@ -418,5 +607,6 @@ impl Generator for Complexifier {
         let loc = Loc::Stack(idx);
         self.mir.ifelse(re(dst), re(true_val), re(false_val), loc);
         self.mir.ifelse(im(dst), im(true_val), im(false_val), loc);
+        self.promote_real(dst, true_val, false_val);
     }
 }
