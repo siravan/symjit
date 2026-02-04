@@ -274,7 +274,16 @@ class SymbolicaFunc:
 class Bridge:
     def __init__(self, evaluator):
         if isinstance(evaluator, str):
-            a, b, c = eval(evaluator.replace("𝑖", "j"))
+            s = (
+                evaluator.replace("𝑖", "j")
+                .replace("exp", "2")
+                .replace("ln", "3")
+                .replace("sin", "4")
+                .replace("cos", "5")
+                .replace("sqrt", "6")
+                .replace("conjugate", "7")
+            )
+            a, b, c = eval(s)
         else:
             a, b, c = evaluator.get_instructions()
 

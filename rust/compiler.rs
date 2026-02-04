@@ -3,7 +3,7 @@ use serde::Deserialize;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::{__m256d, _mm256_setzero_pd};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::{anyhow, Result};
 use num_complex::Complex;
@@ -13,6 +13,7 @@ use crate::config::Config;
 use crate::defuns::Defuns;
 use crate::expr::Expr;
 use crate::model::{CellModel, Equation, Program, Variable};
+use crate::symbol::Loc;
 use crate::utils::CompiledFunc;
 use crate::Application;
 
@@ -151,7 +152,7 @@ impl Compiler {
 
         let prog = Program::new(&ml, self.config)?;
         // let df = Defuns::new();
-        let mut app = Application::new(prog, &self.df);
+        let mut app = Application::new(prog, HashSet::new(), &self.df);
 
         #[cfg(target_arch = "aarch64")]
         if let Ok(app) = &mut app {
@@ -267,7 +268,7 @@ impl Application {
     pub fn evaluate<T: Sized + Copy>(&mut self, args: &[T], outs: &mut [T]) {
         if self.prog.config().is_bytecode() {
             let mut stack: Vec<f64> = vec![0.0; self.prog.builder.block().sym_table.num_stack];
-            let mut regs = vec![0.0; 16];
+            let mut regs = [0.0; 32];
 
             let outs: &mut [f64] = unsafe { std::mem::transmute(outs) };
             let args: &[f64] = unsafe { std::mem::transmute(args) };
@@ -412,9 +413,23 @@ impl Application {
         }
     }
 
+    fn evaluate_matrix_bytecode(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
+        let count_params = self.count_params;
+        let count_obs = self.count_obs;
+
+        for i in 0..n {
+            self.evaluate(
+                &args[i * count_params..(i + 1) * count_params],
+                &mut outs[i * count_obs..(i + 1) * count_obs],
+            );
+        }
+    }
+
     /// Generic evaluate function for compiled Symbolica expressions
     pub fn evaluate_matrix(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
-        if self.use_threads {
+        if self.prog.config().is_bytecode() {
+            self.evaluate_matrix_bytecode(args, outs, n);
+        } else if self.use_threads {
             if self.compiled_simd.is_some() {
                 self.evaluate_matrix_with_threads_simd(args, outs, n);
             } else {
@@ -663,16 +678,16 @@ enum Slot {
 #[derive(Debug, Clone, Deserialize)]
 enum Instruction {
     /// `Add(o, [i0,...,i_n])` means `o = i0 + ... + i_n`.
-    Add(Slot, Vec<Slot>),
+    Add(Slot, Vec<Slot>, usize),
     /// `Mul(o, [i0,...,i_n])` means `o = i0 * ... * i_n`.
-    Mul(Slot, Vec<Slot>),
+    Mul(Slot, Vec<Slot>, usize),
     /// `Pow(o, b, e)` means `o = b^e`.
-    Pow(Slot, Slot, i64),
+    Pow(Slot, Slot, i64, bool),
     /// `Powf(o, b, e)` means `o = b^e`.
-    Powf(Slot, Slot, Slot),
+    Powf(Slot, Slot, Slot, bool),
     /// `Fun(o, s, a)` means `o = s(a)`, where `s` is assumed to
     /// be a built-in function such as `sin`.
-    Fun(Slot, BuiltinSymbol, Slot),
+    Fun(Slot, BuiltinSymbol, Slot, bool),
     /// `ExternalFun(o, s, a,...)` means `o = s(a, ...)`, where `s` is an external function.
     ExternalFun(Slot, String, Vec<Slot>),
     /// `Assign(o, v)` means `o = v`.
@@ -753,6 +768,7 @@ struct Translator {
     counts: HashMap<usize, usize>, // Static idx => number of usage on the RHS
     cache: HashMap<usize, Expr>,   // cache of Static variables (Static idx => Expr)
     outs: HashMap<usize, Expr>,    // cache of Outs (Out idx => Expr)
+    reals: HashSet<Loc>,
 }
 
 impl Translator {
@@ -766,6 +782,7 @@ impl Translator {
             counts: HashMap::new(),
             cache: HashMap::new(),
             outs: HashMap::new(),
+            reals: HashSet::new(),
         }
     }
 
@@ -776,36 +793,36 @@ impl Translator {
 
         for line in model.0.iter() {
             match line {
-                Instruction::Add(lhs, args) => {
+                Instruction::Add(lhs, args, is_real) => {
                     let args = self.consume_list(args)?;
                     let lhs = self.produce(lhs)?;
-                    ssa.push(Instruction::Add(lhs, args));
+                    ssa.push(Instruction::Add(lhs, args, *is_real));
                 }
-                Instruction::Mul(lhs, args) => {
+                Instruction::Mul(lhs, args, is_real) => {
                     let args = self.consume_list(args)?;
                     let lhs = self.produce(lhs)?;
-                    ssa.push(Instruction::Mul(lhs, args));
+                    ssa.push(Instruction::Mul(lhs, args, *is_real));
                 }
-                Instruction::Pow(lhs, arg, p) => {
+                Instruction::Pow(lhs, arg, p, is_real) => {
                     let arg = self.consume(arg)?;
                     let lhs = self.produce(lhs)?;
-                    ssa.push(Instruction::Pow(lhs, arg, *p));
+                    ssa.push(Instruction::Pow(lhs, arg, *p, *is_real));
                 }
-                Instruction::Powf(lhs, arg, p) => {
+                Instruction::Powf(lhs, arg, p, is_real) => {
                     let arg = self.consume(arg)?;
                     let p = self.consume(p)?;
                     let lhs = self.produce(lhs)?;
-                    ssa.push(Instruction::Powf(lhs, arg, p));
+                    ssa.push(Instruction::Powf(lhs, arg, p, *is_real));
                 }
                 Instruction::Assign(lhs, rhs) => {
                     let rhs = self.consume(rhs)?;
                     let lhs = self.produce(lhs)?;
                     ssa.push(Instruction::Assign(lhs, rhs));
                 }
-                Instruction::Fun(lhs, fun, arg) => {
+                Instruction::Fun(lhs, fun, arg, is_real) => {
                     let arg = self.consume(arg)?;
                     let lhs = self.produce(lhs)?;
-                    ssa.push(Instruction::Fun(lhs, *fun, arg));
+                    ssa.push(Instruction::Fun(lhs, *fun, arg, *is_real));
                 }
                 Instruction::Join(lhs, cond, true_val, false_val) => {
                     let cond = self.consume(cond)?;
@@ -875,7 +892,7 @@ impl Translator {
     }
 
     /// The second pass. It translates the SSA-form into a Symjit model.
-    fn translate(&mut self, model: &SymbolicaModel) -> Result<CellModel> {
+    fn translate(&mut self, model: &SymbolicaModel) -> Result<(CellModel, HashSet<Loc>)> {
         // self.consts = model.2.iter().map(|x| x.value().re).collect::<Vec<f64>>();
         self.consts = model
             .2
@@ -887,18 +904,20 @@ impl Translator {
 
         for line in ssa.iter() {
             match line {
-                Instruction::Add(lhs, args) => self.translate_nary("plus", lhs, args)?,
-                Instruction::Mul(lhs, args) => self.translate_nary("times", lhs, args)?,
-                Instruction::Pow(lhs, arg, p) => {
+                Instruction::Add(lhs, args, n) => self.translate_nary("plus", lhs, args, *n)?,
+                Instruction::Mul(lhs, args, n) => self.translate_nary("times", lhs, args, *n)?,
+                Instruction::Pow(lhs, arg, p, is_real) => {
                     let p = Expr::from(*p as f64);
-                    self.translate_pow(lhs, arg, &p)?
+                    self.translate_pow(lhs, arg, &p, *is_real)?
                 }
-                Instruction::Powf(lhs, arg, p) => {
-                    let p = self.expr(p);
-                    self.translate_pow(lhs, arg, &p)?
+                Instruction::Powf(lhs, arg, p, is_real) => {
+                    let p = self.expr(p, false);
+                    self.translate_pow(lhs, arg, &p, *is_real)?
                 }
                 Instruction::Assign(lhs, rhs) => self.translate_assign(lhs, rhs)?,
-                Instruction::Fun(lhs, fun, arg) => self.translate_fun(lhs, fun, arg)?,
+                Instruction::Fun(lhs, fun, arg, is_real) => {
+                    self.translate_fun(lhs, fun, arg, *is_real)?
+                }
                 Instruction::Join(lhs, cond, true_val, false_val) => {
                     self.translate_join(lhs, cond, true_val, false_val)?
                 }
@@ -915,29 +934,37 @@ impl Translator {
         }
 
         // Important! Outs are cached and should be written to final outputs.
-        for (k, eq) in self.outs.iter() {
+        for k in 0..self.outs.len() {
             let out = Expr::var(&format!("Out{}", k));
-            self.eqs.push(Expr::equation(&out, eq));
+            self.outs
+                .get(&k)
+                .map(|eq| self.eqs.push(Expr::equation(&out, eq)));
         }
 
         let params: Vec<Variable> = (0..=self.count_params)
-            .map(|idx| self.expr(&Slot::Param(idx)).to_variable().unwrap())
+            .map(|idx| self.expr(&Slot::Param(idx), false).to_variable().unwrap())
             .collect();
 
-        Ok(CellModel {
-            iv: Expr::var("$_").to_variable().unwrap(),
-            params,
-            states: Vec::new(),
-            algs: Vec::new(),
-            odes: Vec::new(),
-            obs: self.eqs.clone(),
-        })
+        Ok((
+            CellModel {
+                iv: Expr::var("$_").to_variable().unwrap(),
+                params,
+                states: Vec::new(),
+                algs: Vec::new(),
+                odes: Vec::new(),
+                obs: self.eqs.clone(),
+            },
+            self.reals.clone(),
+        ))
     }
 
     // The counterpark of consume for the second-pass
-    fn expr(&mut self, slot: &Slot) -> Expr {
+    fn expr(&mut self, slot: &Slot, is_real: bool) -> Expr {
         match slot {
             Slot::Param(idx) => {
+                if is_real {
+                    self.reals.insert(Loc::Param(*idx as u32));
+                }
                 self.count_params = self.count_params.max(*idx);
                 Expr::var(&format!("Param{}", idx))
             }
@@ -981,29 +1008,39 @@ impl Translator {
             return Ok(());
         }
 
-        let lhs = self.expr(lhs);
+        let lhs = self.expr(lhs, false);
         self.eqs.push(Expr::equation(&lhs, &rhs));
         Ok(())
     }
 
-    fn translate_nary(&mut self, op: &str, lhs: &Slot, args: &[Slot]) -> Result<()> {
-        let args: Vec<Expr> = args.iter().map(|x| self.expr(x)).collect();
+    fn translate_nary(&mut self, op: &str, lhs: &Slot, args: &[Slot], n: usize) -> Result<()> {
+        let args: Vec<Expr> = args
+            .iter()
+            .enumerate()
+            .map(|(i, x)| self.expr(x, i < n))
+            .collect();
         let p: Vec<&Expr> = args.iter().collect();
         self.assign(lhs, Expr::nary(op, &p))
     }
 
-    fn translate_pow(&mut self, lhs: &Slot, arg: &Slot, power: &Expr) -> Result<()> {
-        let arg = self.expr(arg);
+    fn translate_pow(&mut self, lhs: &Slot, arg: &Slot, power: &Expr, is_real: bool) -> Result<()> {
+        let arg = self.expr(arg, is_real);
         self.assign(lhs, Expr::binary("power", &arg, power))
     }
 
     fn translate_assign(&mut self, lhs: &Slot, rhs: &Slot) -> Result<()> {
-        let rhs = self.expr(rhs);
+        let rhs = self.expr(rhs, false);
         self.assign(lhs, rhs)
     }
 
-    fn translate_fun(&mut self, lhs: &Slot, fun: &BuiltinSymbol, arg: &Slot) -> Result<()> {
-        let arg = self.expr(arg);
+    fn translate_fun(
+        &mut self,
+        lhs: &Slot,
+        fun: &BuiltinSymbol,
+        arg: &Slot,
+        is_real: bool,
+    ) -> Result<()> {
+        let arg = self.expr(arg, is_real);
 
         let op = match fun.0 {
             2 => "exp",
@@ -1021,12 +1058,12 @@ impl Translator {
     fn translate_external_fun(&mut self, lhs: &Slot, op: &str, args: &[Slot]) -> Result<()> {
         match args.len() {
             1 => {
-                let arg = self.expr(&args[0]);
+                let arg = self.expr(&args[0], false);
                 self.assign(lhs, Expr::unary(op, &arg))?;
             }
             2 => {
-                let l = self.expr(&args[0]);
-                let r = self.expr(&args[1]);
+                let l = self.expr(&args[0], false);
+                let r = self.expr(&args[1], false);
                 self.assign(lhs, Expr::binary(op, &l, &r))?;
             }
             _ => {
@@ -1048,18 +1085,18 @@ impl Translator {
     ) -> Result<()> {
         let cond = Expr::binary(
             "gt",
-            &Expr::unary("abs", &self.expr(cond)),
+            &Expr::unary("abs", &self.expr(cond, false)),
             &Expr::from(f64::EPSILON),
         );
-        let t = self.expr(true_val);
-        let f = self.expr(false_val);
+        let t = self.expr(true_val, false);
+        let f = self.expr(false_val, false);
         self.assign(lhs, cond.ifelse(&t, &f))
     }
 
     fn translate_ifelse(&mut self, cond: &Slot, id: usize) -> Result<()> {
         let cond = Expr::binary(
             "lt",
-            &Expr::unary("abs", &self.expr(cond)),
+            &Expr::unary("abs", &self.expr(cond, false)),
             &Expr::from(f64::EPSILON),
         );
 
@@ -1107,13 +1144,17 @@ impl Compiler {
     pub fn translate(&mut self, json: &str) -> Result<Application> {
         self.config.set_symbolica(true);
 
+        // println!("{:?}", json);
+
         let model: SymbolicaModel = serde_json::from_str(json)?;
         let mut translator = Translator::new();
-        let ml = translator.translate(&model)?;
+        let (ml, reals) = translator.translate(&model)?;
+
+        println!("{:?}", &reals);
 
         let prog = Program::new(&ml, self.config)?;
         let df = Defuns::new();
-        let mut app = Application::new(prog, &df)?;
+        let mut app = Application::new(prog, reals, &df)?;
 
         app.prepare_simd();
 

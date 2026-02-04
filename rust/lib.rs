@@ -397,6 +397,7 @@
 //! used to link symjit to other programming languages.
 //!
 
+use std::collections::HashSet;
 use std::ffi::{c_char, CStr, CString};
 
 mod block;
@@ -518,7 +519,7 @@ pub unsafe extern "C" fn compile(
         };
 
         let df: &Defuns = unsafe { &*df };
-        let app = Application::new(prog, df);
+        let app = Application::new(prog, HashSet::new(), df);
 
         match app {
             Ok(app) => {

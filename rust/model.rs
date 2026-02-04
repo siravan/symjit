@@ -1,11 +1,13 @@
 use anyhow::{anyhow, Result};
 use serde::Deserialize;
+use std::collections::HashSet;
 use std::io::{Read, Write};
 
 use crate::builder::Builder;
 use crate::config::Config;
 use crate::expr::Expr;
 use crate::node::Node;
+use crate::symbol::Loc;
 use crate::utils::Storage;
 
 pub trait Transformer {

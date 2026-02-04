@@ -376,11 +376,13 @@ fn test_symbolica_complex_matrix() -> Result<()> {
         input[2 * i + 1] = Complex::new((2.0 * i as f64).sin(), (2.0 * i as f64).cos());
     }
 
-    let mut outs: Vec<Complex<f64>> = vec![Complex::default(); N];
-    app.evaluate_matrix(&input, &mut outs, N);
+    let v: Vec<f64> = input.into_iter().flat_map(|x| [x.re, x.im]).collect();
 
-    assert_nearly_eq(outs[19].re, 1.0289805626427462);
-    assert_nearly_eq(outs[19].im, -1.1072191382355374);
+    let mut outs: Vec<f64> = vec![0.0; 2 * N];
+    app.evaluate_matrix(&v, &mut outs, N);
+
+    assert_nearly_eq(outs[19 * 2], 1.0289805626427462);
+    assert_nearly_eq(outs[19 * 2 + 1], -1.1072191382355374);
 
     Ok(())
 }

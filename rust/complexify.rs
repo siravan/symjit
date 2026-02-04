@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use std::collections::HashSet;
 
 use crate::code::Func;
 use crate::config::Config;
@@ -30,14 +31,29 @@ fn im(reg: Reg) -> Reg {
     }
 }
 
+fn ϕ(r: Reg) -> usize {
+    match r {
+        Reg::Ret => 0,
+        Reg::Temp => 1,
+        Reg::Left => 0,
+        Reg::Right => 1,
+        Reg::Gen(dst) => dst as usize + 2,
+        Reg::Static(..) => panic!("passing static registers to codegen"),
+    }
+}
+
 pub struct Complexifier {
     mir: Mir,
+    reals_locs: HashSet<Loc>,
+    reals_regs: [bool; 32],
 }
 
 impl Complexifier {
-    pub fn new(config: Config) -> Complexifier {
+    pub fn new(reals_locs: HashSet<Loc>, config: Config) -> Complexifier {
         Complexifier {
             mir: Mir::new(config, &Defuns::new()),
+            reals_locs,
+            reals_regs: [false; 32],
         }
     }
 
@@ -59,6 +75,30 @@ impl Complexifier {
     // temporary registers
     const T0: Reg = Reg::Gen(2);
     const T1: Reg = Reg::Gen(3);
+
+    fn is_real_loc(&self, loc: Loc) -> bool {
+        self.reals_locs.contains(&loc)
+    }
+
+    fn is_real_reg(&self, r: Reg) -> bool {
+        self.reals_regs[ϕ(r)]
+    }
+
+    fn set_loc_real(&mut self, loc: Loc) {
+        self.reals_locs.insert(loc);
+    }
+
+    fn set_reg_real(&mut self, r: Reg) {
+        self.reals_regs[ϕ(r)] = true;
+    }
+
+    fn copy_real(&mut self, dst: Reg, r1: Reg) {
+        self.reals_regs[ϕ(dst)] = self.is_real_reg(r1);
+    }
+
+    fn promote_real(&mut self, dst: Reg, r1: Reg, r2: Reg) {
+        self.reals_regs[ϕ(dst)] = self.is_real_reg(r1) && self.is_real_reg(r2);
+    }
 }
 
 impl Generator for Complexifier {
