@@ -97,9 +97,13 @@ impl Expr {
 
     /// Creates an n-ary operation: `op(args...)`.
     pub fn nary(op: &str, args: &[&Expr]) -> Expr {
-        Expr::Tree {
-            op: op.to_string(),
-            args: args.iter().map(|x| (*x).clone()).collect::<Vec<Expr>>(),
+        if args.len() == 1 {
+            args[0].clone()
+        } else {
+            Expr::Tree {
+                op: op.to_string(),
+                args: args.iter().map(|x| (*x).clone()).collect::<Vec<Expr>>(),
+            }
         }
     }
 

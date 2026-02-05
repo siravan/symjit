@@ -1020,7 +1020,14 @@ impl Translator {
             .map(|(i, x)| self.expr(x, i < n))
             .collect();
         let p: Vec<&Expr> = args.iter().collect();
-        self.assign(lhs, Expr::nary(op, &p))
+
+        if n == 0 || n >= p.len() {
+            self.assign(lhs, Expr::nary(op, &p))
+        } else {
+            let l = Expr::nary(op, &p[..n]);
+            let r = Expr::nary(op, &p[n..]);
+            self.assign(lhs, Expr::nary(op, &[&l, &r]))
+        }
     }
 
     fn translate_pow(&mut self, lhs: &Slot, arg: &Slot, power: &Expr, is_real: bool) -> Result<()> {
@@ -1150,7 +1157,7 @@ impl Compiler {
         let mut translator = Translator::new();
         let (ml, reals) = translator.translate(&model)?;
 
-        println!("{:?}", &reals);
+        // println!("{:?}", &ml);
 
         let prog = Program::new(&ml, self.config)?;
         let df = Defuns::new();

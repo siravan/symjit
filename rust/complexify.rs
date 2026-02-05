@@ -44,16 +44,23 @@ fn ϕ(r: Reg) -> usize {
 
 pub struct Complexifier {
     mir: Mir,
-    reals_locs: HashSet<Loc>,
-    reals_regs: [bool; 32],
+    real_locs: HashSet<Loc>,
+    real_regs: [bool; 32],
 }
 
 impl Complexifier {
-    pub fn new(reals_locs: HashSet<Loc>, config: Config) -> Complexifier {
+    pub fn new(reals: &HashSet<Loc>, config: Config) -> Complexifier {
+        let mut real_locs: HashSet<Loc> = HashSet::new();
+        for loc in reals {
+            if let Loc::Param(idx) = loc {
+                real_locs.insert(Loc::Param(*idx * 2));
+            }
+        }
+
         Complexifier {
             mir: Mir::new(config, &Defuns::new()),
-            reals_locs,
-            reals_regs: [false; 32],
+            real_locs,
+            real_regs: [false; 32],
         }
     }
 
@@ -77,35 +84,35 @@ impl Complexifier {
     const T1: Reg = Reg::Gen(3);
 
     fn is_real_loc(&self, loc: Loc) -> bool {
-        self.reals_locs.contains(&loc)
+        self.real_locs.contains(&loc)
     }
 
     fn is_real_reg(&self, s1: Reg) -> bool {
-        self.reals_regs[ϕ(s1)]
+        self.real_regs[ϕ(s1)]
     }
 
     fn set_loc_real(&mut self, loc: Loc) {
-        self.reals_locs.insert(loc);
+        self.real_locs.insert(loc);
     }
 
     fn set_loc_complex(&mut self, loc: Loc) {
-        self.reals_locs.remove(&loc);
+        self.real_locs.remove(&loc);
     }
 
     fn set_reg_real(&mut self, dst: Reg) {
-        self.reals_regs[ϕ(dst)] = true;
+        self.real_regs[ϕ(dst)] = true;
     }
 
     fn set_reg_complex(&mut self, dst: Reg) {
-        self.reals_regs[ϕ(dst)] = false;
+        self.real_regs[ϕ(dst)] = false;
     }
 
     fn copy_real(&mut self, dst: Reg, s1: Reg) {
-        self.reals_regs[ϕ(dst)] = self.is_real_reg(s1);
+        self.real_regs[ϕ(dst)] = self.is_real_reg(s1);
     }
 
     fn promote_real(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.reals_regs[ϕ(dst)] = self.is_real_reg(s1) && self.is_real_reg(s2);
+        self.real_regs[ϕ(dst)] = self.is_real_reg(s1) && self.is_real_reg(s2);
     }
 
     fn ensure_complex(&mut self, dst: Reg) {
@@ -151,14 +158,14 @@ impl Generator for Complexifier {
         self.copy_real(dst, s1);
     }
 
-    fn fxchg(&mut self, dst: Reg, s1: Reg) {
-        self.mir.fxchg(re(dst), re(s1));
+    fn fxchg(&mut self, s1: Reg, s2: Reg) {
+        self.mir.fxchg(re(s1), re(s2));
 
-        if !self.is_real_reg(s1) {
-            self.mir.fxchg(im(dst), im(s1));
+        if !self.is_real_reg(s1) || !self.is_real_reg(s2) {
+            self.ensure_complex(s1);
+            self.ensure_complex(s2);
+            self.mir.fxchg(im(s1), im(s2));
         }
-
-        self.copy_real(dst, s1);
     }
 
     fn load_const(&mut self, dst: Reg, idx: u32) {
@@ -284,7 +291,12 @@ impl Generator for Complexifier {
 
     fn ceiling(&mut self, dst: Reg, s1: Reg) {
         self.mir.ceiling(re(dst), re(s1));
-        self.mir.ceiling(im(dst), im(s1));
+
+        if !self.is_real_reg(s1) {
+            self.mir.ceiling(im(dst), im(s1));
+        }
+
+        self.copy_real(dst, s1);
     }
 
     fn trunc(&mut self, dst: Reg, s1: Reg) {
@@ -403,22 +415,12 @@ impl Generator for Complexifier {
 
     fn real(&mut self, dst: Reg, s1: Reg) {
         self.mir.fmov(re(dst), re(s1));
-
-        if !self.is_real_reg(s1) {
-            self.mir.xor(im(dst), im(dst), im(dst));
-        }
-
-        self.copy_real(dst, s1);
+        self.set_reg_real(dst);
     }
 
     fn imaginary(&mut self, dst: Reg, s1: Reg) {
         self.mir.fmov(re(dst), im(s1));
-
-        if !self.is_real_reg(s1) {
-            self.mir.xor(im(dst), im(dst), im(dst));
-        }
-
-        self.copy_real(dst, s1);
+        self.set_reg_real(dst);
     }
 
     fn conjugate(&mut self, dst: Reg, s1: Reg) {
@@ -438,6 +440,7 @@ impl Generator for Complexifier {
         // conflict if dst == s2.
         self.mir.fmov(im(dst), re(s2));
         self.mir.fmov(re(dst), re(s1));
+        self.set_reg_complex(dst);
     }
 
     fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
@@ -479,9 +482,7 @@ impl Generator for Complexifier {
     fn and(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.and(re(dst), re(s1), re(s2));
 
-        if self.is_real_reg(s1) && !self.is_real_reg(s2) {
-            self.mir.xor(im(dst), im(dst), im(dst));
-        } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
+        if self.is_real_reg(s1) != self.is_real_reg(s2) {
             self.mir.xor(im(dst), im(dst), im(dst));
         } else if !self.is_real_reg(s1) && !self.is_real_reg(s2) {
             self.mir.and(im(dst), im(s1), im(s2));
@@ -507,7 +508,7 @@ impl Generator for Complexifier {
     fn or(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.or(re(dst), re(s1), re(s2));
 
-        if self.is_real_reg(s1) && !self.is_real_reg(s2) {
+        if self.is_real_reg(s1) != self.is_real_reg(s2) {
             self.mir.fmov(im(dst), im(s2));
         } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
             self.mir.fmov(im(dst), im(s1));
@@ -574,15 +575,13 @@ impl Generator for Complexifier {
     }
 
     fn call_complex(&mut self, op: &str, num_args: usize) -> Result<()> {
-        if self.is_real_reg(Reg::Ret) {
-            self.mir.xor(im(Reg::Ret), im(Reg::Ret), im(Reg::Ret));
-        }
+        self.ensure_complex(Reg::Ret);
 
-        if self.is_real_reg(Reg::Temp) {
-            self.mir.xor(im(Reg::Temp), im(Reg::Temp), im(Reg::Temp));
+        match num_args {
+            1 => {}
+            2 => self.ensure_complex(Reg::Temp),
+            _ => return Err(anyhow!("complex functions expect 1 or 2 arguments.")),
         }
-
-        self.set_reg_complex(Reg::Ret);
 
         self.mir.call(op, num_args)
     }

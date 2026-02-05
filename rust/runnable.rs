@@ -61,7 +61,7 @@ pub struct Application {
 }
 
 impl Application {
-    pub fn new(mut prog: Program, reals: HashSet<Loc>, df: &Defuns) -> Result<Application> {
+    pub fn new(mut prog: Program, mut reals: HashSet<Loc>, df: &Defuns) -> Result<Application> {
         let first_state = 0;
         let first_param = 0;
         let first_obs = first_state + prog.count_states;
@@ -77,7 +77,10 @@ impl Application {
         let mut mir = prog.builder.compile_mir(df)?;
 
         if prog.config().is_complex() {
-            mir = Complexifier::new(reals, *prog.config()).complexify(&mir)?;
+            if !prog.config().propagate_reals() {
+                reals.clear();
+            }
+            mir = Complexifier::new(&reals, *prog.config()).complexify(&mir)?;
         }
 
         let compiled = Self::compile_ty(prog.config().compiler_type(), &mir, &mut prog)?;

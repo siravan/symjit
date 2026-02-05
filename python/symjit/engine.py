@@ -330,6 +330,7 @@ class RustyCompiler:
         sanitize=True,
         dtype="float64",
         action="compile",
+        propagate_reals=False,
         file="",
     ):
         if convert:
@@ -346,6 +347,8 @@ class RustyCompiler:
             | (0x08 if fastmath else 0)
             | (0x10 if sanitize else 0)
             | (0x20 if dtype == "complex128" else 0)
+            # 0x40 is symbolica
+            | (0x80 if propagate_reals else 0)
             | ((opt_level & 0x0F) << 8)
         )
 

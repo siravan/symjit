@@ -1,8 +1,7 @@
 import numbers
-from multiprocessing.sharedctypes import Value
+from asyncio import SelectorEventLoop
 
 import numpy as np
-from sympy.tensor.array.ndim_array import NumberKind
 
 from . import engine, pyengine
 
@@ -274,15 +273,7 @@ class SymbolicaFunc:
 class Bridge:
     def __init__(self, evaluator):
         if isinstance(evaluator, str):
-            s = (
-                evaluator.replace("𝑖", "j")
-                .replace("exp", "2")
-                .replace("ln", "3")
-                .replace("sin", "4")
-                .replace("cos", "5")
-                .replace("sqrt", "6")
-                .replace("conjugate", "7")
-            )
+            s = self.replace_fun(evaluator)
             a, b, c = eval(s)
         else:
             a, b, c = evaluator.get_instructions()
@@ -290,6 +281,17 @@ class Bridge:
         self.instructions = a
         self.count_temps = b
         self.consts = c
+
+    def replace_fun(self, s):
+        return (
+            s.replace("𝑖", "j")
+            .replace("exp", "2")
+            .replace("ln", "3")
+            .replace("sin", "4")
+            .replace("cos", "5")
+            .replace("sqrt", "6")
+            .replace("conjugate", "7")
+        )
 
     def translate(self):
         p = []
@@ -336,7 +338,10 @@ class Bridge:
             else:
                 return [self.process(p) for p in item]
         else:
-            return item
+            try:
+                return int(self.replace_fun(item.get_name().split("::")[1]))
+            except AttributeError:
+                return item
 
     def slot(self, item):
         name = item[0]
