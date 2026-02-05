@@ -77,9 +77,6 @@ impl Application {
         let mut mir = prog.builder.compile_mir(df)?;
 
         if prog.config().is_complex() {
-            if !prog.config().propagate_reals() {
-                reals.clear();
-            }
             mir = Complexifier::new(&reals, *prog.config()).complexify(&mir)?;
         }
 

@@ -1054,7 +1054,13 @@ impl Translator {
             3 => "ln",
             4 => "sin",
             5 => "cos",
-            6 => "root",
+            6 => {
+                if is_real {
+                    "real_root"
+                } else {
+                    "root"
+                }
+            }
             7 => "conjugate",
             _ => return Err(anyhow!("function is not defined.")),
         };

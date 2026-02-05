@@ -241,6 +241,10 @@ impl Generator for ArmGenerator {
         self.emit(arm! {fsqrt d(ϕ(dst)), d(ϕ(s1))});
     }
 
+    fn real_root(&mut self, dst: Reg, s1: Reg) {
+        self.root(dst, s1);
+    }
+
     fn recip(&mut self, dst: Reg, s1: Reg) {
         self.emit(arm! {fmov d(TEMP), #1.0});
         self.emit(arm! {fdiv d(ϕ(dst)), d(TEMP), d(ϕ(s1))});
@@ -792,6 +796,10 @@ impl Generator for ArmSimdGenerator {
 
     fn root(&mut self, dst: Reg, s1: Reg) {
         self.emit(arm! {fsqrt q(ϕ(dst)), q(ϕ(s1))});
+    }
+
+    fn real_root(&mut self, dst: Reg, s1: Reg) {
+        self.root(dst, s1);
     }
 
     fn recip(&mut self, dst: Reg, s1: Reg) {

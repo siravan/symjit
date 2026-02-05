@@ -519,6 +519,10 @@ impl Generator for AmdGenerator {
         uniop!(self, sqrtsd, vsqrtsd, vsqrtpd, dst, s1);
     }
 
+    fn real_root(&mut self, dst: Reg, s1: Reg) {
+        self.root(dst, s1);
+    }
+
     fn recip(&mut self, dst: Reg, s1: Reg) {
         self.load_const_by_name(Reg::Temp, "_one_");
         self.divide(dst, Reg::Temp, s1);

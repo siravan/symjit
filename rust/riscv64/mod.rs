@@ -321,6 +321,10 @@ impl Generator for RiscV {
         self.emit(rvv! {fsqrt.d f(ϕ(dst)), f(ϕ(s1))});
     }
 
+    fn real_root(&mut self, dst: Reg, s1: Reg) {
+        self.root(dst, s1);
+    }
+
     fn recip(&mut self, dst: Reg, s1: Reg) {
         self.emit(rvv! {addi x(Self::t0), x(Self::zero), 1});
         self.emit(rvv! {fcvt.d.w f(Self::fa0), x(Self::t0)});

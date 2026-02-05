@@ -447,6 +447,7 @@ impl Node {
                 "not" => mir.not(reg(dst), reg(r)),
                 "abs" => mir.abs(reg(dst), reg(r)),
                 "root" => mir.root(reg(dst), reg(r)),
+                "real_root" => mir.real_root(reg(dst), reg(r)),
                 "square" => mir.square(reg(dst), reg(r)),
                 "cube" => mir.cube(reg(dst), reg(r)),
                 "recip" => mir.recip(reg(dst), reg(r)),

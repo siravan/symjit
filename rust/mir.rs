@@ -22,6 +22,7 @@ pub enum UniOp {
     Neg,
     Recip,
     Root,
+    RealRoot,
     Round,
     Floor,
     Ceiling,
@@ -347,6 +348,14 @@ impl Mir {
     pub fn root(&mut self, dst: Reg, s1: Reg) {
         self.push(Instruction::Uni {
             op: UniOp::Root,
+            dst,
+            s1,
+        });
+    }
+
+    pub fn real_root(&mut self, dst: Reg, s1: Reg) {
+        self.push(Instruction::Uni {
+            op: UniOp::RealRoot,
             dst,
             s1,
         });
@@ -744,6 +753,7 @@ impl Mir {
             UniOp::Not => f64::from_bits(!s1.to_bits()),
             UniOp::Abs => s1.abs(),
             UniOp::Root => s1.sqrt(),
+            UniOp::RealRoot => s1.sqrt(),
             UniOp::Recip => 1.0 / s1,
             UniOp::Round => s1.round(),
             UniOp::Floor => s1.floor(),
@@ -919,6 +929,7 @@ impl Mir {
             UniOp::Not => ir.not(dst, s1),
             UniOp::Abs => ir.abs(dst, s1),
             UniOp::Root => ir.root(dst, s1),
+            UniOp::RealRoot => ir.real_root(dst, s1),
             UniOp::Recip => ir.recip(dst, s1),
             UniOp::Round => ir.round(dst, s1),
             UniOp::Floor => ir.floor(dst, s1),

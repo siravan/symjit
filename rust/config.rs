@@ -11,7 +11,7 @@ pub const FASTMATH: u32 = 0x08;
 // pub const SANITIZE: u32 = 0x10;
 pub const COMPLEX: u32 = 0x20;
 pub const SYMBOLICA: u32 = 0x40;
-pub const PROP_REALS: u32 = 0x80;
+
 pub const OPT_LEVEL_MASK: u32 = 0x0f00;
 pub const OPT_LEVEL_SHIFT: usize = 8;
 
@@ -174,10 +174,6 @@ impl Config {
         self.test(COMPLEX)
     }
 
-    pub fn propagate_reals(&self) -> bool {
-        self.test(PROP_REALS)
-    }
-
     /// Sets of optimization level. The valid values are 0, 1, 2, which roughly correspond to gcc O0, O1, and O2 levels.
     pub fn set_opt_level(&mut self, opt_level: u8) {
         self.opt = (self.opt & !OPT_LEVEL_MASK) | ((opt_level as u32) << OPT_LEVEL_SHIFT);
@@ -208,10 +204,6 @@ impl Config {
     pub fn set_symbolica(&mut self, enabled: bool) {
         self.opt = (self.opt & !SYMBOLICA) | if enabled { SYMBOLICA } else { 0 };
     }
-
-    pub fn set_propagate_reals(&mut self, enabled: bool) {
-        self.opt = (self.opt & !PROP_REALS) | if enabled { PROP_REALS } else { 0 };
-    }
 }
 
 impl Default for Config {
@@ -231,6 +223,7 @@ const UNARY: &[&str] = &[
     "not",
     "neg",
     "root",
+    "real_root",
     "square",
     "cube",
     "recip",
@@ -274,11 +267,7 @@ const BINARY: &[&str] = &[
 
 impl Config {
     pub fn is_intrinsic_unary(&self, op: &str) -> bool {
-        if op == "root" {
-            !self.is_complex()
-        } else {
-            UNARY.contains(&op)
-        }
+        UNARY.contains(&op)
     }
 
     pub fn is_intrinsic_binary(&self, op: &str) -> bool {

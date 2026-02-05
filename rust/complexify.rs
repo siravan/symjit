@@ -250,8 +250,23 @@ impl Generator for Complexifier {
         }
     }
 
-    fn root(&mut self, _dst: Reg, _s1: Reg) {
-        // complex root compiles into a function call
+    fn root(&mut self, dst: Reg, s1: Reg) {
+        self.ensure_complex(s1);
+        self.mir.fmov(re(Reg::Ret), re(s1));
+        self.mir.fmov(im(Reg::Ret), im(s1));
+        self.mir.call("root", 1).unwrap();
+        self.mir.fmov(re(dst), re(Reg::Ret));
+        self.mir.fmov(im(dst), im(Reg::Ret));
+        self.set_reg_complex(dst);
+    }
+
+    fn real_root(&mut self, dst: Reg, s1: Reg) {
+        if self.is_real_reg(s1) {
+            self.mir.root(re(dst), re(s1));
+            self.set_reg_real(dst);
+        } else {
+            self.root(dst, s1);
+        }
     }
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
