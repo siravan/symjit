@@ -565,6 +565,7 @@ pub unsafe extern "C" fn translate(
     ty: *const c_char,
     opt: u32,
     _df: *const Defuns,
+    num_params: usize,
 ) -> *const CompilerResult {
     let mut res = CompilerResult {
         app: None,
@@ -596,7 +597,7 @@ pub unsafe extern "C" fn translate(
 
     if let Ok(config) = Config::from_name(ty, opt) {
         let mut comp = Compiler::with_config(config);
-        let app = comp.translate(json);
+        let app = comp.translate(json, num_params);
 
         match app {
             Ok(app) => {

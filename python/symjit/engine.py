@@ -121,6 +121,7 @@ class Engine:
             ctypes.c_char_p,
             ctypes.c_uint32,
             ctypes.c_void_p,
+            ctypes.c_size_t,
         ]
         self._translate.restype = ctypes.c_void_p
 
@@ -331,6 +332,7 @@ class RustyCompiler:
         dtype="float64",
         action="compile",
         file="",
+        num_params=1,
     ):
         if convert:
             model = json.dumps(model)
@@ -361,7 +363,7 @@ class RustyCompiler:
             self.symbolica = False
         elif action == "translate":
             self.p = lib._translate(
-                model.encode("utf-8"), ty.encode("utf8"), opt, self.defuns.p
+                model.encode("utf-8"), ty.encode("utf8"), opt, self.defuns.p, num_params
             )
             self.symbolica = True
         elif action == "load":

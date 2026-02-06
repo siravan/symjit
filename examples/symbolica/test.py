@@ -79,4 +79,12 @@ X = np.array([[3.0, 15.0]])
 
 assert (ev.evaluate(X) == f.evaluate(X)).all()
 
+# extra params
+
+ev = E("x+y^2").evaluator({}, {}, [x, y, z])
+f = compile_evaluator(ev, num_params=3)
+
+X = np.array([[4.0, 3.0, 2.0]])
+
+
 print("all tests passed")

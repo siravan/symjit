@@ -1,5 +1,6 @@
 use serde::Deserialize;
 
+use core::num;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::{__m256d, _mm256_setzero_pd};
 
@@ -892,7 +893,11 @@ impl Translator {
     }
 
     /// The second pass. It translates the SSA-form into a Symjit model.
-    fn translate(&mut self, model: &SymbolicaModel) -> Result<(CellModel, HashSet<Loc>)> {
+    fn translate(
+        &mut self,
+        model: &SymbolicaModel,
+        num_params: usize,
+    ) -> Result<(CellModel, HashSet<Loc>)> {
         // self.consts = model.2.iter().map(|x| x.value().re).collect::<Vec<f64>>();
         self.consts = model
             .2
@@ -942,7 +947,7 @@ impl Translator {
             }
         }
 
-        let params: Vec<Variable> = (0..=self.count_params)
+        let params: Vec<Variable> = (0..=self.count_params.max(num_params.max(1) - 1))
             .map(|idx| self.expr(&Slot::Param(idx), false).to_variable().unwrap())
             .collect();
 
@@ -1155,14 +1160,14 @@ impl Compiler {
     /// let mut app = comp.translate(&json)?;
     /// assert!(app.evaluate_single(&[2.0, 3.0]) == 11.0);
     /// ```
-    pub fn translate(&mut self, json: &str) -> Result<Application> {
+    pub fn translate(&mut self, json: &str, num_params: usize) -> Result<Application> {
         self.config.set_symbolica(true);
 
         // println!("{:?}", json);
 
         let model: SymbolicaModel = serde_json::from_str(json)?;
         let mut translator = Translator::new();
-        let (ml, reals) = translator.translate(&model)?;
+        let (ml, reals) = translator.translate(&model, num_params)?;
 
         // println!("{:?}", &reals);
 
