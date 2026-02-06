@@ -61,7 +61,7 @@ pub struct Application {
 }
 
 impl Application {
-    pub fn new(mut prog: Program, mut reals: HashSet<Loc>, df: &Defuns) -> Result<Application> {
+    pub fn new(mut prog: Program, reals: HashSet<Loc>, df: &Defuns) -> Result<Application> {
         let first_state = 0;
         let first_param = 0;
         let first_obs = first_state + prog.count_states;

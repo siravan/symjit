@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Result};
 use serde::Deserialize;
-use std::collections::HashSet;
 use std::io::{Read, Write};
 
 use crate::builder::Builder;

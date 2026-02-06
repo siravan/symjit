@@ -366,11 +366,11 @@ impl Generator for Complexifier {
         if self.is_real_reg(s1) && self.is_real_reg(s2) {
             self.mir.times(re(dst), re(s1), re(s2));
         } else if self.is_real_reg(s1) && !self.is_real_reg(s2) {
-            self.mir.times(re(dst), re(s1), re(s2));
             self.mir.times(im(dst), re(s1), im(s2));
-        } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
             self.mir.times(re(dst), re(s1), re(s2));
+        } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
             self.mir.times(im(dst), im(s1), re(s2));
+            self.mir.times(re(dst), re(s1), re(s2));
         } else {
             self.mir.times(Self::T0, re(s1), re(s2));
             self.mir.times(Self::T1, im(s1), im(s2));
@@ -395,8 +395,8 @@ impl Generator for Complexifier {
         if self.is_real_reg(s1) && self.is_real_reg(s2) {
             self.mir.divide(re(dst), re(s1), re(s2));
         } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
-            self.mir.divide(re(dst), re(s1), re(s2));
             self.mir.divide(im(dst), im(s1), re(s2));
+            self.mir.divide(re(dst), re(s1), re(s2));
         } else if self.is_real_reg(s1) && !self.is_real_reg(s2) {
             self.mir.times(Self::T0, re(s2), re(s2));
             self.mir.times(Self::T1, im(s2), im(s2));

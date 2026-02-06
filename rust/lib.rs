@@ -399,6 +399,8 @@
 
 use std::collections::HashSet;
 use std::ffi::{c_char, CStr, CString};
+use std::fmt::Debug;
+use std::str::FromStr;
 
 mod block;
 mod code;
@@ -452,6 +454,12 @@ pub enum CompilerStatus {
 pub struct CompilerResult {
     app: Option<Application>,
     status: CompilerStatus,
+    msg: CString,
+}
+
+fn error_message<E: Debug>(msg: &str, err: E) -> CString {
+    let s = format!("{:?}: {:?}", msg, err);
+    CString::from_str(&s).unwrap()
 }
 
 /// Compiles a model.
@@ -475,14 +483,15 @@ pub unsafe extern "C" fn compile(
     let mut res = CompilerResult {
         app: None,
         status: CompilerStatus::Incomplete,
+        msg: CString::from_str("Success").unwrap(),
     };
 
     let model = unsafe {
         match CStr::from_ptr(model).to_str() {
             Ok(model) => model,
             Err(msg) => {
-                println!("{}", msg);
                 res.status = CompilerStatus::InvalidUtf8;
+                res.msg = error_message("Invalid encoding", msg);
                 return Box::into_raw(Box::new(res)) as *const _;
             }
         }
@@ -492,8 +501,8 @@ pub unsafe extern "C" fn compile(
         match CStr::from_ptr(ty).to_str() {
             Ok(ty) => ty,
             Err(msg) => {
-                println!("{}", msg);
                 res.status = CompilerStatus::InvalidUtf8;
+                res.msg = error_message("Invalid compiler type", msg);
                 return Box::into_raw(Box::new(res)) as *const _;
             }
         }
@@ -502,8 +511,8 @@ pub unsafe extern "C" fn compile(
     let ml = match CellModel::load(model) {
         Ok(ml) => ml,
         Err(msg) => {
-            println!("{}", msg);
             res.status = CompilerStatus::ParseError;
+            res.msg = error_message("Cannot parse JSON", msg);
             return Box::into_raw(Box::new(res)) as *const _;
         }
     };
@@ -512,8 +521,8 @@ pub unsafe extern "C" fn compile(
         let prog = match Program::new(&ml, config) {
             Ok(prog) => prog,
             Err(msg) => {
-                println!("{}", msg);
                 res.status = CompilerStatus::CompilationError;
+                res.msg = error_message("Compilation error (prog)", msg);
                 return Box::into_raw(Box::new(res)) as *const _;
             }
         };
@@ -523,17 +532,17 @@ pub unsafe extern "C" fn compile(
 
         match app {
             Ok(app) => {
-                res.app = Some(app);
                 res.status = CompilerStatus::Ok;
+                res.app = Some(app);
             }
             Err(msg) => {
-                println!("{}", msg);
-                res.status = CompilerStatus::InvalidCompiler;
+                res.status = CompilerStatus::CompilationError;
+                res.msg = error_message("Compilation error (app)", &msg);
             }
         }
     } else {
-        println!("invalid compiler type: {}", ty);
         res.status = CompilerStatus::InvalidCompiler;
+        res.msg = error_message("Config error", opt);
     }
 
     Box::into_raw(Box::new(res)) as *const _
@@ -560,14 +569,15 @@ pub unsafe extern "C" fn translate(
     let mut res = CompilerResult {
         app: None,
         status: CompilerStatus::Incomplete,
+        msg: CString::from_str("Success").unwrap(),
     };
 
     let json = unsafe {
         match CStr::from_ptr(json).to_str() {
             Ok(json) => json,
             Err(msg) => {
-                println!("{}", msg);
                 res.status = CompilerStatus::InvalidUtf8;
+                res.msg = error_message("Invalid encoding", msg);
                 return Box::into_raw(Box::new(res)) as *const _;
             }
         }
@@ -577,8 +587,8 @@ pub unsafe extern "C" fn translate(
         match CStr::from_ptr(ty).to_str() {
             Ok(ty) => ty,
             Err(msg) => {
-                println!("{}", msg);
                 res.status = CompilerStatus::InvalidUtf8;
+                res.msg = error_message("Invalid compiler type", msg);
                 return Box::into_raw(Box::new(res)) as *const _;
             }
         }
@@ -594,13 +604,13 @@ pub unsafe extern "C" fn translate(
                 res.status = CompilerStatus::Ok;
             }
             Err(msg) => {
-                println!("{}", msg);
                 res.status = CompilerStatus::InvalidCompiler;
+                res.msg = error_message("Compilation error", msg);
             }
         }
     } else {
-        println!("invalid compiler type: {}", ty);
         res.status = CompilerStatus::InvalidCompiler;
+        res.msg = error_message("Config error", opt);
     }
 
     Box::into_raw(Box::new(res)) as *const _
@@ -617,15 +627,7 @@ pub unsafe extern "C" fn translate(
 #[no_mangle]
 pub unsafe extern "C" fn check_status(q: *const CompilerResult) -> *const c_char {
     let q: &CompilerResult = unsafe { &*q };
-    let msg = match q.status {
-        CompilerStatus::Ok => c"Success",
-        CompilerStatus::CompilationError => c"Compilation error",
-        CompilerStatus::Incomplete => c"Incomplete (internal error)",
-        CompilerStatus::InvalidUtf8 => c"The input string is not valid UTF8",
-        CompilerStatus::ParseError => c"Parse error",
-        CompilerStatus::InvalidCompiler => c"Compiler type not found",
-    };
-    msg.as_ptr() as *const _
+    q.msg.as_ptr() as *const _
 }
 
 /// Checks the status of a `CompilerResult`.
@@ -670,6 +672,7 @@ pub unsafe extern "C" fn load(file: *const c_char) -> *const CompilerResult {
     let mut res = CompilerResult {
         app: None,
         status: CompilerStatus::Incomplete,
+        msg: CString::from_str("Success").unwrap(),
     };
 
     let file = unsafe {
@@ -689,11 +692,11 @@ pub unsafe extern "C" fn load(file: *const c_char) -> *const CompilerResult {
             }
             Err(err) => {
                 res.status = CompilerStatus::ParseError;
-                println!("parse error: {:?}", err);
+                res.msg = error_message("File parse error", &err);
             }
         },
         Err(err) => {
-            println!("io error: {:?}", err);
+            res.msg = error_message("File I/O error", &err);
         }
     }
 

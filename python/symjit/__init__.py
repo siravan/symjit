@@ -405,24 +405,23 @@ def compile_evaluator(
         bridge = Bridge(evaluator)
         model = bridge.translate()
         defuns = engine.Defuns(defuns)
-        compiler = engine.RustyCompiler(
-            model,
-            ty=ty,
-            use_simd=use_simd,
-            use_threads=use_threads,
-            cse=cse,
-            fastmath=fastmath,
-            opt_level=opt_level,
-            defuns=defuns,
-            sanitize=sanitize,
-            dtype=dtype,
-            action="translate",
-            convert=True,
-        )
     else:
         raise ValueError("unsupported platform")
 
-    return SymbolicaFunc(compiler)
+    return SymbolicaFunc(
+        model,
+        ty=ty,
+        use_simd=use_simd,
+        use_threads=use_threads,
+        cse=cse,
+        fastmath=fastmath,
+        opt_level=opt_level,
+        defuns=defuns,
+        sanitize=sanitize,
+        dtype=dtype,
+        action="translate",
+        convert=True,
+    )
 
 
 def load_func(file, eqs=[]):
@@ -441,7 +440,12 @@ def load_func(file, eqs=[]):
         """
         compiler = engine.RustyCompiler("", action="load", file=file)
         if compiler.symbolica:
-            return SymbolicaFunc(compiler)
+            f = SymbolicaFunc(None)
+            if compiler.dtype == "complex128":
+                f.complex_compiler = compiler
+            else:
+                f.compiler = compiler
+            return f
         elif compiler.dtype == "float64":
             return Func(compiler, eqs)
         elif compiler.dtype == "complex128":

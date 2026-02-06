@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
+use anyhow::{anyhow, Result};
+
 use petgraph::algo::coloring::dsatur_coloring;
 use petgraph::graph::{NodeIndex, UnGraph};
 
@@ -63,13 +65,11 @@ impl ColoringAllocator {
 
         // allocate registers using a coloring algorithm and
         // replace the static registers with the corresponding
-        // logical (colored) registers
-        let res = allocator.color();
-
-        if res.is_ok() {
+        // logical (colored) registers.
+        // Note that no error is raised if color() does not
+        // work. Instead, it fails silently.
+        if allocator.color().is_ok() {
             mir.code = allocator.code;
-        } else {
-            // println!("Level 3 register allocator requests too many registers ({}), will revert back to level 2.", res.unwrap_err());
         }
     }
 
@@ -273,11 +273,14 @@ impl ColoringAllocator {
         }
     }
 
-    fn color(&mut self) -> Result<(), usize> {
+    fn color(&mut self) -> Result<()> {
         let (coloring, count_colors) = dsatur_coloring(&self.graph);
 
         if count_colors > self.config.count_scratch() as usize {
-            return Err(count_colors);
+            return Err(anyhow!(
+                "Graph coloring exceeds the limit: {:?}",
+                count_colors
+            ));
         }
 
         for (idx, r) in coloring.iter() {
@@ -408,7 +411,7 @@ impl fmt::Debug for GreedyAllocator {
 }
 
 impl GreedyAllocator {
-    pub fn optimize(mir: &mut Mir) {
+    pub fn optimize(mir: &mut Mir) -> Result<()> {
         let count_scratch = mir.config.count_scratch();
 
         let mut allocator = GreedyAllocator {
@@ -424,22 +427,16 @@ impl GreedyAllocator {
         // create single-static-assignment form
         allocator.create(mir);
 
-        // println!("{:?}", &allocator);
-
         // allocate registers using a greedy algorithm and
         // replace the static registers with the corresponding
         // logical (colored) registers
-        let res = allocator.color();
+        allocator.color()?;
+        allocator.contract()?;
 
-        if let Err(err) = res {
-            println!("Level 2 register allocator requests too many registers ({}), will revert back to level 1.", err);
-        } else {
-            // contract the code by removing unnecessary instructions
-            let res = allocator.contract();
-            if res.is_ok() {
-                mir.code = allocator.code;
-            }
-        }
+        // contract the code by removing unnecessary instructions
+        mir.code = allocator.code;
+
+        Ok(())
     }
 
     fn push(&mut self, ins: Instruction) {
@@ -640,7 +637,7 @@ impl GreedyAllocator {
 
     // The second pass.
     // Converts static to logical registers.
-    fn color(&mut self) -> Result<(), usize> {
+    fn color(&mut self) -> Result<()> {
         self.reset_regs();
         let code = std::mem::take(&mut self.code);
 
@@ -763,7 +760,7 @@ impl GreedyAllocator {
 
     // The third pass.
     // Removes unnessasary instructions.
-    fn contract(&mut self) -> Result<(), usize> {
+    fn contract(&mut self) -> Result<()> {
         let code = std::mem::take(&mut self.code);
 
         for ins in code {

@@ -257,7 +257,7 @@ impl Builder {
         }
 
         if opt_level >= 2 {
-            GreedyAllocator::optimize(&mut mir);
+            GreedyAllocator::optimize(&mut mir)?;
         }
 
         if opt_level >= 3 {
@@ -294,7 +294,6 @@ impl Builder {
         count_obs: usize,
         count_params: usize,
     ) -> Result<()> {
-        // println!("{:#?}", mir.used_registers());
         let cap = self.symbol_table().num_stack;
         ir.prologue_indirect(cap, count_states, count_obs, count_params);
 
@@ -307,8 +306,6 @@ impl Builder {
         self.append_const_section(ir);
         self.append_vt_section(mir, ir);
         ir.seal();
-        // println!("{:#?}", &self.block().stmts);
-        // println!("{:02x?}", ir.bytes());
 
         Ok(())
     }
@@ -322,7 +319,6 @@ impl Builder {
         idx_ret: i32,
     ) -> Result<()> {
         self.block().eliminate();
-        // println!("{:#?}", &self.block().stmts);
         let cap = self.symbol_table().num_stack;
         ir.prologue_fast(cap, count_states, count_obs);
 
@@ -335,8 +331,6 @@ impl Builder {
         self.append_const_section(ir);
         self.append_vt_section(mir, ir);
         ir.seal();
-        // println!("{:#?}", &self.block().stmts);
-        // println!("{:02x?}", ir.bytes());
 
         Ok(())
     }

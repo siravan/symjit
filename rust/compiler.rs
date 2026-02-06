@@ -328,10 +328,10 @@ impl Application {
     ) {
         unsafe {
             f(
-                (outs.as_ptr() as *const f64).add(outs_idx),
+                outs.as_ptr().add(outs_idx),
                 std::ptr::null(),
                 0,
-                (args.as_ptr() as *const f64).add(args_idx),
+                args.as_ptr().add(args_idx),
             );
         }
     }
@@ -936,9 +936,10 @@ impl Translator {
         // Important! Outs are cached and should be written to final outputs.
         for k in 0..self.outs.len() {
             let out = Expr::var(&format!("Out{}", k));
-            self.outs
-                .get(&k)
-                .map(|eq| self.eqs.push(Expr::equation(&out, eq)));
+
+            if let Some(eq) = self.outs.get(&k) {
+                self.eqs.push(Expr::equation(&out, eq));
+            }
         }
 
         let params: Vec<Variable> = (0..=self.count_params)
@@ -1163,7 +1164,7 @@ impl Compiler {
         let mut translator = Translator::new();
         let (ml, reals) = translator.translate(&model)?;
 
-        // println!("{:?}", &ml);
+        // println!("{:?}", &reals);
 
         let prog = Program::new(&ml, self.config)?;
         let df = Defuns::new();

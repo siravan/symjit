@@ -241,39 +241,74 @@ class FuncComplex:
 
 
 class SymbolicaFunc:
-    def __init__(self, compiler):
+    def __init__(self, model, dtype="float64", **args):
+        self.model = model
+        self.args = args
+
+        if model is None:
+            self.compiler = None
+            self.complex_compiler = None
+            self.args = {}
+            return
+
+        if dtype == "complex128":
+            self.compile_complex()
+            self.compiler = None
+        else:
+            self.compile_real()
+            self.complex_compiler = None
+
+    def compile_real(self):
+        compiler = engine.RustyCompiler(self.model, dtype="float64", **self.args)
         self.compiler = compiler
-        self.count_states = self.compiler.count_states
-        self.count_params = self.compiler.count_params
-        self.count_obs = self.compiler.count_obs
+
+    def compile_complex(self):
+        compiler = engine.RustyCompiler(self.model, dtype="complex128", **self.args)
+        self.complex_compiler = compiler
 
     def evaluate(self, inputs):
-        args = np.ascontiguousarray(inputs[:, : self.count_params], dtype=np.float64)
-        outs = np.empty((inputs.shape[0], self.count_obs), dtype=np.float64)
-        self.compiler.evaluate_matrix(args, outs)
+        if self.compiler is None:
+            self.compile_real()
+
+        c = self.compiler
+        args = np.ascontiguousarray(inputs[:, : c.count_params].real, dtype=np.float64)
+        outs = np.empty((inputs.shape[0], c.count_obs), dtype=np.float64)
+        c.evaluate_matrix(args, outs)
         return outs
 
     def evaluate_complex(self, inputs):
-        assert inputs.shape[1] == self.count_params // 2
+        if self.complex_compiler is None:
+            self.compile_complex()
+
+        c = self.complex_compiler
+        assert inputs.shape[1] == c.count_params // 2
         args = np.ascontiguousarray(inputs, dtype=np.complex128)
-        outs = np.empty((inputs.shape[0], self.count_obs // 2), dtype=np.complex128)
-        self.compiler.evaluate_matrix(args, outs, 2)
+        outs = np.empty((inputs.shape[0], c.count_obs // 2), dtype=np.complex128)
+        c.evaluate_matrix(args, outs, 2)
         return outs
 
     def dump(self, name, what="scalar"):
         self.compiler.dump(name, what=what)
 
-    def dumps(self, what="scalar"):
-        return self.compiler.dumps(what=what)
+    def dumps(self, what="scalar", dtype="complex128"):
+        if dtype == "complex128" and self.complex_compiler is not None:
+            return self.complex_compiler.dumps(what=what)
+        elif self.compiler is not None:
+            return self.compiler.dumps(what=what)
 
-    def save(self, file):
-        self.compiler.save(file)
+    def save(self, file, dtype="complex128"):
+        if dtype == "complex128":
+            self.compile_complex()
+            self.complex_compiler.save(file)
+        else:
+            self.compile_real()
+            self.compiler.save(file)
 
 
 class Bridge:
     def __init__(self, evaluator):
         if isinstance(evaluator, str):
-            s = self.replace_fun(evaluator)
+            s = evaluator.replace("𝑖", "j")
             a, b, c = eval(s)
         else:
             a, b, c = evaluator.get_instructions()
@@ -282,66 +317,90 @@ class Bridge:
         self.count_temps = b
         self.consts = c
 
-    def replace_fun(self, s):
-        return (
-            s.replace("𝑖", "j")
-            .replace("exp", "2")
-            .replace("ln", "3")
-            .replace("sin", "4")
-            .replace("cos", "5")
-            .replace("sqrt", "6")
-            .replace("conjugate", "7")
-        )
-
     def translate(self):
         p = []
 
         for q in self.instructions:
             op = q[0]
+            args = q[1:]
 
             if op == "add":
-                op = "Add"
+                p.append(self.add(*args))
             elif op == "mul":
-                op = "Mul"
+                p.append(self.mul(*args))
             elif op == "pow":
-                op = "Pow"
+                p.append(self.pow(*args))
             elif op == "powf":
-                op = "Powf"
+                p.append(self.powf(*args))
             elif op == "fun":
-                op = "Fun"
+                p.append(self.fun(*args))
             elif op == "external_fun":
-                op = "ExternalFun"
+                p.append(self.external_fun(*args))
             elif op == "assign":
-                op = "Assign"
+                p.append(self.assign(*args))
             elif op == "if_else":
-                op = "IfElse"
+                p.append(self.if_else(*args))
             elif op == "goto":
-                op = "Goto"
+                p.append(self.goto(*args))
             elif op == "label":
-                op = "Label"
+                p.append(self.label(*args))
             elif op == "join":
-                op = "Join"
+                p.append(self.join(*args))
             else:
                 raise ValueError("undefined instruction")
-
-            p.append({op: self.process(list(q[1:]))})
 
         consts = [self.num(x) for x in self.consts]
         return (p, self.count_temps, consts)
 
-    def process(self, item):
-        if isinstance(item, tuple):
-            return self.slot(item)
-        elif isinstance(item, list):
-            if len(item) == 1 and isinstance(item[0], numbers.Number):
-                return item[0]
-            else:
-                return [self.process(p) for p in item]
+    def add(self, dst, args, n):
+        return {"Add": [self.slot(dst), self.slot_list(args), n]}
+
+    def mul(self, dst, args, n):
+        return {"Mul": [self.slot(dst), self.slot_list(args), n]}
+
+    def pow(self, dst, arg, power, is_real):
+        return {"Pow": [self.slot(dst), self.slot(arg), power, is_real]}
+
+    def powf(self, dst, arg, power, is_real):
+        return {"Pow": [self.slot(dst), self.slot(arg), self.slot(power), is_real]}
+
+    def fun(self, dst, f, arg, is_real):
+        name = f.get_name().split("::")[1]
+
+        if name == "exp":
+            f = 2
+        elif name == "ln":
+            f = 3
+        elif name == "sin":
+            f = 4
+        elif name == "cos":
+            f = 5
+        elif name == "sqrt":
+            f = 6
+        elif name == "conjugate":
+            f = 7
         else:
-            try:
-                return int(self.replace_fun(item.get_name().split("::")[1]))
-            except AttributeError:
-                return item
+            raise ValueError(f"fun {name} is not defined.")
+
+        return {"Fun": [self.slot(dst), f, self.slot(arg), is_real]}
+
+    def external_fun(self, dst, name, args):
+        return {"ExternalFun": [self.slot(dst), name, self.slot_list(args)]}
+
+    def assign(self, dst, arg):
+        return {"Assign": [self.slot(dst), self.slot(arg)]}
+
+    def if_else(self, dst, lbl):
+        return {"Assign": [self.slot(dst), lbl]}
+
+    def goto(self, lbl):
+        return {"Goto": [lbl]}
+
+    def label(self, lbl):
+        return {"Label": [lbl]}
+
+    def join(self, dst, cond, t, f):
+        return {"Join": [self.slot(dst), self.slot(cond), self.slot(t), self.slot(f)]}
 
     def slot(self, item):
         name = item[0]
@@ -357,6 +416,9 @@ class Bridge:
             return {"Const": idx}
         else:
             raise ValueError(f"undefined Slot type: {name}")
+
+    def slot_list(self, item):
+        return [self.slot(s) for s in item]
 
     def num(self, x):
         if isinstance(x, numbers.Number):
