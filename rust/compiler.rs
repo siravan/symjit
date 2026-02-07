@@ -1,6 +1,5 @@
 use serde::Deserialize;
 
-use core::num;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::{__m256d, _mm256_setzero_pd};
 
@@ -501,7 +500,7 @@ impl Application {
     }
 
     #[cfg(not(target_arch = "x86_64"))]
-    pub unsafe fn call_simd(&mut self, args: &[__m256d]) -> Result<Vec<__m256d>> {
+    pub unsafe fn call_simd(&mut self, _args: &[__m256d]) -> Result<Vec<__m256d>> {
         Err(anyhow!("cannot compile SIMD"))
     }
 
@@ -555,8 +554,8 @@ impl Application {
     #[cfg(not(target_arch = "x86_64"))]
     pub unsafe fn call_simd_params(
         &mut self,
-        args: &[__m256d],
-        params: &[f64],
+        _args: &[__m256d],
+        _params: &[f64],
     ) -> Result<Vec<__m256d>> {
         Err(anyhow!("cannot compile SIMD"))
     }
