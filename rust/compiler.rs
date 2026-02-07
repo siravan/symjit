@@ -325,31 +325,29 @@ impl Application {
         outs: &[f64],
         outs_idx: usize,
         f: CompiledFunc<f64>,
+        lanes: usize,
+        arena_size: usize,
     ) {
-        unsafe {
-            f(
-                outs.as_ptr().add(outs_idx),
-                std::ptr::null(),
-                0,
-                args.as_ptr().add(args_idx),
-            );
-        }
-    }
+        if arena_size == 0 {
+            unsafe {
+                f(
+                    outs.as_ptr().add(outs_idx * lanes),
+                    std::ptr::null(),
+                    lanes - 1,
+                    args.as_ptr().add(args_idx * lanes),
+                );
+            }
+        } else {
+            let arena: Vec<f64> = vec![0.0; arena_size];
 
-    fn evaluate_row_simd(
-        args: &[f64],
-        args_idx: usize,
-        outs: &[f64],
-        outs_idx: usize,
-        f: CompiledFunc<f64>,
-    ) {
-        unsafe {
-            f(
-                outs.as_ptr().add(outs_idx),
-                std::ptr::null(),
-                1,
-                args.as_ptr().add(args_idx),
-            );
+            unsafe {
+                f(
+                    outs.as_ptr().add(outs_idx * lanes),
+                    arena.as_ptr() as *const *mut f64,
+                    lanes - 1,
+                    args.as_ptr().add(args_idx * lanes),
+                );
+            }
         }
     }
 
@@ -358,10 +356,19 @@ impl Application {
         let count_params = self.count_params;
         let count_obs = self.count_obs;
         let f = self.compiled.func();
+        let arena_size = self.arena_size;
 
-        (0..n)
-            .into_par_iter()
-            .for_each(|t| Self::evaluate_row(args, t * count_params, outs, t * count_obs, f));
+        (0..n).into_par_iter().for_each(|t| {
+            Self::evaluate_row(
+                args,
+                t * count_params,
+                outs,
+                t * count_obs,
+                f,
+                1,
+                arena_size,
+            )
+        });
     }
 
     /// Generic evaluate function for compiled Symbolica expressions
@@ -369,9 +376,18 @@ impl Application {
         let count_params = self.count_params;
         let count_obs = self.count_obs;
         let f = self.compiled.func();
+        let arena_size = self.arena_size;
 
         for t in 0..n {
-            Self::evaluate_row(args, t * count_params, outs, t * count_obs, f);
+            Self::evaluate_row(
+                args,
+                t * count_params,
+                outs,
+                t * count_obs,
+                f,
+                1,
+                arena_size,
+            );
         }
     }
 
@@ -382,14 +398,31 @@ impl Application {
         if let Some(compiled) = &self.compiled_simd {
             let g = compiled.func();
             let l = compiled.count_lanes();
+            let arena_size = self.arena_size;
 
             (0..n / l).into_par_iter().for_each(|t| {
-                Self::evaluate_row_simd(args, t * count_params * l, outs, t * count_obs * l, g)
+                Self::evaluate_row(
+                    args,
+                    t * count_params,
+                    outs,
+                    t * count_obs,
+                    g,
+                    l,
+                    arena_size,
+                )
             });
 
             let f = self.compiled.func();
             for t in l * (n / l)..n {
-                Self::evaluate_row(args, t * count_params, outs, t * count_obs, f);
+                Self::evaluate_row(
+                    args,
+                    t * count_params,
+                    outs,
+                    t * count_obs,
+                    f,
+                    1,
+                    arena_size,
+                );
             }
         }
     }
@@ -401,14 +434,31 @@ impl Application {
         if let Some(compiled) = &self.compiled_simd {
             let g = compiled.func();
             let l = compiled.count_lanes();
+            let arena_size = self.arena_size;
 
             for t in 0..n / l {
-                Self::evaluate_row_simd(args, t * count_params * l, outs, t * count_obs * l, g);
+                Self::evaluate_row(
+                    args,
+                    t * count_params,
+                    outs,
+                    t * count_obs,
+                    g,
+                    l,
+                    arena_size,
+                );
             }
 
             let f = self.compiled.func();
             for t in l * (n / l)..n {
-                Self::evaluate_row(args, t * count_params, outs, t * count_obs, f);
+                Self::evaluate_row(
+                    args,
+                    t * count_params,
+                    outs,
+                    t * count_obs,
+                    f,
+                    1,
+                    arena_size,
+                );
             }
         }
     }

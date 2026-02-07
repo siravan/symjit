@@ -17,6 +17,7 @@ pub struct Builder {
     pub ft: HashSet<String>, // function table (the name of functions),
     pub count_loops: usize,
     pub config: Config,
+    pub arena_size: usize,
 }
 
 impl Builder {
@@ -27,6 +28,7 @@ impl Builder {
             ft: HashSet::new(),
             count_loops: 0,
             config,
+            arena_size: 0,
         }
     }
 
@@ -295,7 +297,9 @@ impl Builder {
         count_params: usize,
     ) -> Result<()> {
         let cap = self.symbol_table().num_stack;
-        ir.prologue_indirect(cap, count_states, count_obs, count_params);
+        let arena_size = ir.prologue_indirect(cap, count_states, count_obs, count_params);
+        assert!(self.arena_size == 0 || self.arena_size == arena_size);
+        self.arena_size = arena_size;
 
         Self::save_registers(mir, ir);
         mir.rerun(ir)?;

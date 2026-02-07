@@ -92,6 +92,7 @@ const MEM: u8 = Amd::RBP;
 const STATES: u8 = Amd::R13;
 const IDX: u8 = Amd::R12;
 const PARAMS: u8 = Amd::RBX;
+const ARENA: u8 = Amd::R14;
 
 /*
  *  ϕ translates a logical register number (in Reg) to a physical
@@ -297,26 +298,30 @@ impl AmdGenerator {
 
     fn save_nonvolatile_regs(&mut self) {
         if cfg!(target_family = "windows") {
-            self.amd.mov_mem_reg(Amd::RSP, 0x10, PARAMS);
-            self.amd.mov_mem_reg(Amd::RSP, 0x18, IDX);
-            self.amd.mov_mem_reg(Amd::RSP, 0x20, STATES);
-        } else {
-            self.amd.sub_rsp(32);
             self.amd.mov_mem_reg(Amd::RSP, 0x08, PARAMS);
             self.amd.mov_mem_reg(Amd::RSP, 0x10, IDX);
             self.amd.mov_mem_reg(Amd::RSP, 0x18, STATES);
+            self.amd.mov_mem_reg(Amd::RSP, 0x20, ARENA);
+        } else {
+            self.amd.sub_rsp(32);
+            self.amd.mov_mem_reg(Amd::RSP, 0x00, PARAMS);
+            self.amd.mov_mem_reg(Amd::RSP, 0x08, IDX);
+            self.amd.mov_mem_reg(Amd::RSP, 0x10, STATES);
+            self.amd.mov_mem_reg(Amd::RSP, 0x18, ARENA);
         }
     }
 
     fn load_nonvolatile_regs(&mut self) {
         if cfg!(target_family = "windows") {
-            self.amd.mov_reg_mem(PARAMS, Amd::RSP, 0x10);
-            self.amd.mov_reg_mem(IDX, Amd::RSP, 0x18);
-            self.amd.mov_reg_mem(STATES, Amd::RSP, 0x20);
-        } else {
             self.amd.mov_reg_mem(PARAMS, Amd::RSP, 0x08);
             self.amd.mov_reg_mem(IDX, Amd::RSP, 0x10);
             self.amd.mov_reg_mem(STATES, Amd::RSP, 0x18);
+            self.amd.mov_reg_mem(ARENA, Amd::RSP, 0x20);
+        } else {
+            self.amd.mov_reg_mem(PARAMS, Amd::RSP, 0x00);
+            self.amd.mov_reg_mem(IDX, Amd::RSP, 0x08);
+            self.amd.mov_reg_mem(STATES, Amd::RSP, 0x10);
+            self.amd.mov_reg_mem(ARENA, Amd::RSP, 0x18);
             self.amd.add_rsp(32);
         }
     }
@@ -346,6 +351,30 @@ impl AmdGenerator {
         if size != 0 {
             self.amd.add_rsp(size);
         }
+    }
+
+    fn load(&mut self, dst: Reg, base: u8, idx: u32) {
+        select!(
+            self,
+            movsd_xmm_mem,
+            vmovsd_xmm_mem,
+            vmovpd_ymm_mem,
+            ϕ(dst),
+            base,
+            (idx * self.reg_size()) as i32
+        );
+    }
+
+    fn save(&mut self, src: Reg, base: u8, idx: u32) {
+        select!(
+            self,
+            movsd_mem_xmm,
+            vmovsd_mem_xmm,
+            vmovpd_mem_ymm,
+            base,
+            (idx * self.reg_size()) as i32,
+            ϕ(src)
+        );
     }
 }
 
@@ -426,27 +455,11 @@ impl Generator for AmdGenerator {
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
-        select!(
-            self,
-            movsd_xmm_mem,
-            vmovsd_xmm_mem,
-            vmovpd_ymm_mem,
-            ϕ(dst),
-            MEM,
-            (idx * self.reg_size()) as i32
-        );
+        self.load(dst, MEM, idx);
     }
 
-    fn save_mem(&mut self, dst: Reg, idx: u32) {
-        select!(
-            self,
-            movsd_mem_xmm,
-            vmovsd_mem_xmm,
-            vmovpd_mem_ymm,
-            MEM,
-            (idx * self.reg_size()) as i32,
-            ϕ(dst)
-        );
+    fn save_mem(&mut self, src: Reg, idx: u32) {
+        self.save(src, MEM, idx);
     }
 
     fn save_mem_result(&mut self, idx: u32) {
@@ -478,27 +491,11 @@ impl Generator for AmdGenerator {
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
-        select!(
-            self,
-            movsd_xmm_mem,
-            vmovsd_xmm_mem,
-            vmovpd_ymm_mem,
-            ϕ(dst),
-            Amd::RSP,
-            (idx * self.reg_size()) as i32
-        );
+        self.load(dst, ARENA, idx);
     }
 
-    fn save_stack(&mut self, dst: Reg, idx: u32) {
-        select!(
-            self,
-            movsd_mem_xmm,
-            vmovsd_mem_xmm,
-            vmovpd_mem_ymm,
-            Amd::RSP,
-            (idx * self.reg_size()) as i32,
-            ϕ(dst)
-        );
+    fn save_stack(&mut self, src: Reg, idx: u32) {
+        self.save(src, ARENA, idx);
     }
 
     fn save_stack_result(&mut self, idx: u32) {
@@ -761,8 +758,8 @@ impl Generator for AmdGenerator {
         match self.family {
             AmdFamily::AvxScalar | AmdFamily::SSEScalar => {
                 if num_args == 2 {
-                    self.save_stack(Reg::Gen(0), 4);
-                    self.save_stack(Reg::Gen(1), 5);
+                    self.save(Reg::Gen(0), Amd::RSP, 4);
+                    self.save(Reg::Gen(1), Amd::RSP, 5);
                 }
 
                 self.vzeroupper();
@@ -775,8 +772,10 @@ impl Generator for AmdGenerator {
 
                 self.amd.call_indirect(&label);
 
-                self.load_stack(Reg::Ret, 4);
-                self.load_stack(Reg::Temp, 5);
+                self.amd.movsd_xmm_mem(0, Amd::RSP, 4 * 8);
+
+                self.load(Reg::Ret, Amd::RSP, 4);
+                self.load(Reg::Temp, Amd::RSP, 5);
             }
             AmdFamily::AvxVector => match num_args {
                 1 => self.call_complex_vector_unary(&label),
@@ -896,7 +895,7 @@ impl Generator for AmdGenerator {
         count_states: usize,
         count_obs: usize,
         count_params: usize,
-    ) {
+    ) -> usize {
         if self.config.symbolica() {
             return self.prologue_symbolica(cap, count_params, count_obs);
         }
@@ -951,6 +950,7 @@ impl Generator for AmdGenerator {
 
         self.set_label("@main");
         self.sub_rsp(align_stack(cap as u32 * self.reg_size()));
+        0
     }
 
     fn epilogue_indirect(
@@ -1027,7 +1027,11 @@ impl Generator for AmdGenerator {
 }
 
 impl AmdGenerator {
-    fn prologue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
+    fn arena_size(&self, cap: usize) -> usize {
+        cap
+    }
+
+    fn prologue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) -> usize {
         let win = cfg!(target_family = "windows");
         self.amd.push(Amd::RBP);
         self.save_nonvolatile_regs();
@@ -1036,6 +1040,7 @@ impl AmdGenerator {
         self.amd.mov(STATES, if win { Amd::RDX } else { Amd::RSI }); // second arg = states+obs if indirect mode, otherwise null
         self.amd.mov(IDX, if win { Amd::R8 } else { Amd::RDX }); // third arg = index if indirect mode
         self.amd.mov(PARAMS, if win { Amd::R9 } else { Amd::RCX }); // fourth arg = params
+        self.amd.mov(ARENA, STATES);
 
         if self.reg_size() == 32 {
             self.amd.or(IDX, IDX);
@@ -1059,17 +1064,28 @@ impl AmdGenerator {
 
             self.set_label("@main");
         }
-        self.sub_rsp(align_stack(cap as u32 * self.reg_size()));
+
+        let l = self.arena_size(cap);
+        if l == 0 {
+            self.sub_rsp(align_stack(cap as u32 * self.reg_size()));
+            self.amd.mov(ARENA, Amd::RSP);
+        } else {
+            self.sub_rsp(align_stack(6 * self.reg_size()));
+        };
+        l
     }
 
     fn epilogue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
-        self.add_rsp(align_stack(cap as u32 * self.reg_size()));
+        let l = self.arena_size(cap);
+        if l == 0 {
+            self.add_rsp(align_stack(cap as u32 * self.reg_size()));
+        } else {
+            self.add_rsp(align_stack(6 * self.reg_size()));
+        }
 
         if self.reg_size() == 32 {
             self.amd.or(IDX, IDX);
             self.amd.jz("@done");
-
-            self.amd.mov(Amd::RAX, STATES);
 
             for j in 0..4 {
                 for i in 0..count_obs {

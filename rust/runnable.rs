@@ -57,7 +57,7 @@ pub struct Application {
     pub count_params: usize,
     pub count_obs: usize,
     pub count_diffs: usize,
-    // pub size: usize,
+    pub arena_size: usize,
 }
 
 impl Application {
@@ -91,6 +91,8 @@ impl Application {
             && count_obs == 1
             && count_diffs == 0;
 
+        let arena_size = prog.builder.symbol_table().num_stack;
+
         Ok(Application {
             prog,
             mir,
@@ -109,6 +111,7 @@ impl Application {
             count_params,
             count_obs,
             count_diffs,
+            arena_size,
         })
     }
 
@@ -592,6 +595,8 @@ impl Storage for Application {
             && count_obs == 1
             && count_diffs == 0;
 
+        let arena_size = prog.builder.arena_size;
+
         Ok(Application {
             prog,
             mir,
@@ -610,6 +615,7 @@ impl Storage for Application {
             count_params,
             count_obs,
             count_diffs,
+            arena_size,
         })
     }
 }
