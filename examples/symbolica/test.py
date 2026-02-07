@@ -1,8 +1,7 @@
-from ast import Expression
 from builtins import AssertionError
 
 import numpy as np
-from symbolica import *
+from symbolica import E, Expression, S
 from symjit import compile_evaluator
 
 

@@ -1,3 +1,8 @@
+# Version 2.12.3
+
+* Mixed complex-real computation to align with Symbolica 1.3.
+* Symbolica Python interface improvements. 
+
 # Version 2.12.0
 
 * `Compiler` modified to access the output of Symbolica `export_instructions`.
