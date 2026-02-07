@@ -617,10 +617,8 @@ impl Generator for Complexifier {
         _count_states: usize,
         _count_obs: usize,
         _count_params: usize,
-    ) -> usize {
-        0
+    ) {
     }
-
     fn epilogue_indirect(
         &mut self,
         _cap: usize,

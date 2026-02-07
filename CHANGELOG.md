@@ -1,13 +1,7 @@
 # Version 2.12.3
 
-* Mixed complex-real computation (real propagation) to align with Symbolica 1.3.
-* Symbolica Python interface improved.
-
-# Version 2.12.2
-
-* Compiled code save/load capability.
-* Bug fix (complex constants).
-* Various `evaluate` functions.
+* Mixed complex-real computation to align with Symbolica 1.3.
+* Symbolica Python interface improvements. 
 
 # Version 2.12.0
 

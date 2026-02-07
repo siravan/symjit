@@ -125,7 +125,6 @@ impl Storage for Program {
         stream.write_all(&self.count_obs.to_le_bytes())?;
         stream.write_all(&self.count_diffs.to_le_bytes())?;
         stream.write_all(&self.count_loops.to_le_bytes())?;
-        stream.write_all(&self.builder.arena_size.to_le_bytes())?;
         Ok(())
     }
 
@@ -155,11 +154,7 @@ impl Storage for Program {
         stream.read_exact(&mut bytes)?;
         let count_loops = usize::from_le_bytes(bytes);
 
-        stream.read_exact(&mut bytes)?;
-        let arena_size = usize::from_le_bytes(bytes);
-
-        let mut builder = Builder::new(config);
-        builder.arena_size = arena_size;
+        let builder = Builder::new(config);
 
         Ok(Program {
             builder,

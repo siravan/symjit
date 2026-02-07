@@ -80,7 +80,7 @@ pub trait Generator {
         count_states: usize,
         count_obs: usize,
         count_params: usize,
-    ) -> usize;
+    );
     fn epilogue_indirect(
         &mut self,
         cap: usize,

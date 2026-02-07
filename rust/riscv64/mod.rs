@@ -594,7 +594,7 @@ impl Generator for RiscV {
         count_states: usize,
         count_obs: usize,
         _count_params: usize,
-    ) -> usize {
+    ) {
         self.sub_stack(64);
 
         self.emit(rvv! {sd x(Self::ra), x(Self::sp), 0});
@@ -644,7 +644,6 @@ impl Generator for RiscV {
 
         let stack_size = align_stack(cap as u32 * self.reg_size());
         self.sub_stack(stack_size);
-        0
     }
 
     fn epilogue_indirect(

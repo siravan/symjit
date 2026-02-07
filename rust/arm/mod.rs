@@ -485,7 +485,7 @@ impl Generator for ArmGenerator {
         count_states: usize,
         count_obs: usize,
         _count_params: usize,
-    ) -> usize {
+    ) {
         self.emit(arm! {sub sp, sp, #48});
         self.emit(arm! {str lr, [sp, #0]});
         self.emit(arm! {str x(MEM), [sp, #8]});
@@ -517,7 +517,6 @@ impl Generator for ArmGenerator {
 
         let stack_size = align_stack(cap as u32 * self.reg_size());
         self.sub_stack(stack_size);
-        0
     }
 
     fn epilogue_indirect(
@@ -1141,7 +1140,7 @@ impl Generator for ArmSimdGenerator {
         count_states: usize,
         count_obs: usize,
         _count_params: usize,
-    ) -> usize {
+    ) {
         self.emit(arm! {sub sp, sp, #48});
         self.emit(arm! {str lr, [sp, #0]});
         self.emit(arm! {str x(MEM), [sp, #8]});
@@ -1177,7 +1176,6 @@ impl Generator for ArmSimdGenerator {
 
         let stack_size = align_stack(cap as u32 * self.reg_size());
         self.sub_stack(stack_size);
-        0
     }
 
     fn epilogue_indirect(
