@@ -437,7 +437,7 @@ use model::{CellModel, Program};
 
 pub use crate::config::Config;
 use crate::utils::Storage;
-pub use compiler::{Compiler, FastFunc};
+pub use compiler::{Compiler, FastFunc, Translator};
 pub use expr::{double, int, var, Expr};
 pub use runnable::{Application, CompilerType};
 

@@ -76,7 +76,7 @@ impl Complexifier {
 
         mir.rerun(self)?;
 
-        Ok(self.mir.clone())
+        Ok(std::mem::take(&mut self.mir))
     }
 
     // temporary registers

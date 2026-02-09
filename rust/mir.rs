@@ -150,7 +150,7 @@ impl fmt::Debug for Instruction {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Mir {
     pub code: Vec<Instruction>,
     pub consts: Vec<f64>,

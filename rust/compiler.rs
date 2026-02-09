@@ -4,6 +4,7 @@ use serde::Deserialize;
 use std::arch::x86_64::{__m256d, _mm256_setzero_pd};
 
 use std::collections::{HashMap, HashSet};
+use std::num;
 
 use anyhow::{anyhow, Result};
 use num_complex::Complex;
@@ -325,29 +326,13 @@ impl Application {
         outs: &[f64],
         outs_idx: usize,
         f: CompiledFunc<f64>,
+        transpose: bool,
     ) {
         unsafe {
             f(
                 outs.as_ptr().add(outs_idx),
                 std::ptr::null(),
-                0,
-                args.as_ptr().add(args_idx),
-            );
-        }
-    }
-
-    fn evaluate_row_simd(
-        args: &[f64],
-        args_idx: usize,
-        outs: &[f64],
-        outs_idx: usize,
-        f: CompiledFunc<f64>,
-    ) {
-        unsafe {
-            f(
-                outs.as_ptr().add(outs_idx),
-                std::ptr::null(),
-                1,
+                if transpose { 1 } else { 0 },
                 args.as_ptr().add(args_idx),
             );
         }
@@ -359,9 +344,9 @@ impl Application {
         let count_obs = self.count_obs;
         let f = self.compiled.func();
 
-        (0..n)
-            .into_par_iter()
-            .for_each(|t| Self::evaluate_row(args, t * count_params, outs, t * count_obs, f));
+        (0..n).into_par_iter().for_each(|t| {
+            Self::evaluate_row(args, t * count_params, outs, t * count_obs, f, false)
+        });
     }
 
     /// Generic evaluate function for compiled Symbolica expressions
@@ -371,11 +356,17 @@ impl Application {
         let f = self.compiled.func();
 
         for t in 0..n {
-            Self::evaluate_row(args, t * count_params, outs, t * count_obs, f);
+            Self::evaluate_row(args, t * count_params, outs, t * count_obs, f, false);
         }
     }
 
-    fn evaluate_matrix_with_threads_simd(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
+    fn evaluate_matrix_with_threads_simd(
+        &mut self,
+        args: &[f64],
+        outs: &mut [f64],
+        n: usize,
+        transpose: bool,
+    ) {
         let count_params = self.count_params;
         let count_obs = self.count_obs;
 
@@ -384,17 +375,30 @@ impl Application {
             let l = compiled.count_lanes();
 
             (0..n / l).into_par_iter().for_each(|t| {
-                Self::evaluate_row_simd(args, t * count_params * l, outs, t * count_obs * l, g)
+                Self::evaluate_row(
+                    args,
+                    t * count_params * l,
+                    outs,
+                    t * count_obs * l,
+                    g,
+                    transpose,
+                )
             });
 
             let f = self.compiled.func();
             for t in l * (n / l)..n {
-                Self::evaluate_row(args, t * count_params, outs, t * count_obs, f);
+                Self::evaluate_row(args, t * count_params, outs, t * count_obs, f, false);
             }
         }
     }
 
-    fn evaluate_matrix_without_threads_simd(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
+    fn evaluate_matrix_without_threads_simd(
+        &mut self,
+        args: &[f64],
+        outs: &mut [f64],
+        n: usize,
+        transpose: bool,
+    ) {
         let count_params = self.count_params;
         let count_obs = self.count_obs;
 
@@ -403,12 +407,19 @@ impl Application {
             let l = compiled.count_lanes();
 
             for t in 0..n / l {
-                Self::evaluate_row_simd(args, t * count_params * l, outs, t * count_obs * l, g);
+                Self::evaluate_row(
+                    args,
+                    t * count_params * l,
+                    outs,
+                    t * count_obs * l,
+                    g,
+                    transpose,
+                );
             }
 
             let f = self.compiled.func();
             for t in l * (n / l)..n {
-                Self::evaluate_row(args, t * count_params, outs, t * count_obs, f);
+                Self::evaluate_row(args, t * count_params, outs, t * count_obs, f, false);
             }
         }
     }
@@ -431,13 +442,39 @@ impl Application {
             self.evaluate_matrix_bytecode(args, outs, n);
         } else if self.use_threads {
             if self.compiled_simd.is_some() {
-                self.evaluate_matrix_with_threads_simd(args, outs, n);
+                self.evaluate_matrix_with_threads_simd(args, outs, n, true);
             } else {
                 self.evaluate_matrix_with_threads(args, outs, n);
             }
         } else {
             if self.compiled_simd.is_some() {
-                self.evaluate_matrix_without_threads_simd(args, outs, n);
+                self.evaluate_matrix_without_threads_simd(args, outs, n, true);
+            } else {
+                self.evaluate_matrix_without_threads(args, outs, n);
+            }
+        }
+    }
+
+    pub fn evaluate_complex_matrix(
+        &mut self,
+        args: &[Complex<f64>],
+        outs: &mut [Complex<f64>],
+        n: usize,
+    ) {
+        let args = recast_complex_vec(args);
+        let outs = recast_complex_vec_mut(outs);
+
+        if self.prog.config().is_bytecode() {
+            self.evaluate_matrix_bytecode(args, outs, n);
+        } else if self.use_threads {
+            if self.compiled_simd.is_some() {
+                self.evaluate_matrix_with_threads_simd(args, outs, n, true);
+            } else {
+                self.evaluate_matrix_with_threads(args, outs, n);
+            }
+        } else {
+            if self.compiled_simd.is_some() {
+                self.evaluate_matrix_without_threads_simd(args, outs, n, true);
             } else {
                 self.evaluate_matrix_without_threads(args, outs, n);
             }
@@ -649,10 +686,24 @@ impl Application {
     }
 }
 
+pub fn recast_complex_vec(v: &[Complex<f64>]) -> &[f64] {
+    let n = v.len();
+    let p: *const f64 = unsafe { std::mem::transmute(v.as_ptr()) };
+    let q: &[f64] = unsafe { std::slice::from_raw_parts(p, 2 * n) };
+    q
+}
+
+pub fn recast_complex_vec_mut(v: &mut [Complex<f64>]) -> &mut [f64] {
+    let n = v.len();
+    let p: *mut f64 = unsafe { std::mem::transmute(v.as_mut_ptr()) };
+    let q: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(p, 2 * n) };
+    q
+}
+
 /************************* Symbolica *****************************/
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct BuiltinSymbol(u32);
+pub struct BuiltinSymbol(pub u32);
 
 impl<'de> serde::Deserialize<'de> for BuiltinSymbol {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
@@ -662,7 +713,7 @@ impl<'de> serde::Deserialize<'de> for BuiltinSymbol {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
-enum Slot {
+pub enum Slot {
     /// An entry in the list of parameters.
     Param(usize),
     /// An entry in the list of constants.
@@ -759,7 +810,9 @@ struct SymbolicaModel(Vec<Instruction>, usize, Vec<ConstType>);
 
 /// Translates Symbolica IR (generated by export_instructions) into a Symjit Model
 #[derive(Debug, Clone)]
-struct Translator {
+pub struct Translator {
+    config: Config,
+    ssa: Vec<Instruction>,
     consts: Vec<Complex<f64>>, // constants
     count_params: usize,
     count_statics: usize,
@@ -769,11 +822,16 @@ struct Translator {
     cache: HashMap<usize, Expr>,   // cache of Static variables (Static idx => Expr)
     outs: HashMap<usize, Expr>,    // cache of Outs (Out idx => Expr)
     reals: HashSet<Loc>,
+    num_params: usize,
 }
 
 impl Translator {
-    fn new() -> Translator {
+    pub fn new(mut config: Config) -> Translator {
+        config.set_symbolica(true);
+
         Translator {
+            config,
+            ssa: Vec::new(),
             consts: Vec::new(),
             count_params: 0,
             count_statics: 0,
@@ -783,73 +841,144 @@ impl Translator {
             cache: HashMap::new(),
             outs: HashMap::new(),
             reals: HashSet::new(),
+            num_params: 0,
         }
+    }
+
+    fn parse_model(&mut self, model: &SymbolicaModel) -> Result<()> {
+        for c in model.2.iter() {
+            let val = Complex::new(c.value().re, c.value().im);
+            self.consts.push(val);
+        }
+
+        self.convert(model)?;
+        Ok(())
     }
 
     /// The first pass by converting Symbolica IR into
     /// Static-Single-Assingment (SSA) Form
-    fn convert(&mut self, model: &SymbolicaModel) -> Result<Vec<Instruction>> {
-        let mut ssa: Vec<Instruction> = Vec::new();
-
+    fn convert(&mut self, model: &SymbolicaModel) -> Result<()> {
         for line in model.0.iter() {
             match line {
-                Instruction::Add(lhs, args, is_real) => {
-                    let args = self.consume_list(args)?;
-                    let lhs = self.produce(lhs)?;
-                    ssa.push(Instruction::Add(lhs, args, *is_real));
-                }
-                Instruction::Mul(lhs, args, is_real) => {
-                    let args = self.consume_list(args)?;
-                    let lhs = self.produce(lhs)?;
-                    ssa.push(Instruction::Mul(lhs, args, *is_real));
-                }
+                Instruction::Add(lhs, args, num_reals) => self.append_add(lhs, args, *num_reals)?,
+                Instruction::Mul(lhs, args, num_reals) => self.append_mul(lhs, args, *num_reals)?,
                 Instruction::Pow(lhs, arg, p, is_real) => {
-                    let arg = self.consume(arg)?;
-                    let lhs = self.produce(lhs)?;
-                    ssa.push(Instruction::Pow(lhs, arg, *p, *is_real));
+                    self.append_pow(lhs, arg, *p, *is_real)?
                 }
                 Instruction::Powf(lhs, arg, p, is_real) => {
-                    let arg = self.consume(arg)?;
-                    let p = self.consume(p)?;
-                    let lhs = self.produce(lhs)?;
-                    ssa.push(Instruction::Powf(lhs, arg, p, *is_real));
+                    self.append_powf(lhs, arg, p, *is_real)?
                 }
-                Instruction::Assign(lhs, rhs) => {
-                    let rhs = self.consume(rhs)?;
-                    let lhs = self.produce(lhs)?;
-                    ssa.push(Instruction::Assign(lhs, rhs));
-                }
+                Instruction::Assign(lhs, rhs) => self.append_assign(lhs, rhs)?,
                 Instruction::Fun(lhs, fun, arg, is_real) => {
-                    let arg = self.consume(arg)?;
-                    let lhs = self.produce(lhs)?;
-                    ssa.push(Instruction::Fun(lhs, *fun, arg, *is_real));
+                    self.append_fun(lhs, fun, arg, *is_real)?
                 }
                 Instruction::Join(lhs, cond, true_val, false_val) => {
-                    let cond = self.consume(cond)?;
-                    let true_val = self.consume(true_val)?;
-                    let false_val = self.consume(false_val)?;
-                    let lhs = self.produce(lhs)?;
-                    ssa.push(Instruction::Join(lhs, cond, true_val, false_val));
+                    self.append_join(lhs, cond, true_val, false_val)?
                 }
-                Instruction::Label(id) => {
-                    ssa.push(Instruction::Label(*id));
-                }
-                Instruction::IfElse(cond, id) => {
-                    let cond = self.consume(cond)?;
-                    ssa.push(Instruction::IfElse(cond, *id));
-                }
-                Instruction::Goto(id) => {
-                    ssa.push(Instruction::Goto(*id));
-                }
+                Instruction::Label(id) => self.append_label(*id)?,
+                Instruction::IfElse(cond, id) => self.append_if_else(cond, *id)?,
+                Instruction::Goto(id) => self.append_goto(*id)?,
                 Instruction::ExternalFun(lhs, op, args) => {
-                    let args = self.consume_list(args)?;
-                    let lhs = self.produce(lhs)?;
-                    ssa.push(Instruction::ExternalFun(lhs, op.clone(), args));
+                    self.append_external_fun(lhs, op, args)?
                 }
             }
         }
 
-        Ok(ssa)
+        Ok(())
+    }
+
+    pub fn append_constant(&mut self, z: Complex<f64>) -> Result<usize> {
+        self.consts.push(z);
+        Ok(self.consts.len() - 1)
+    }
+
+    pub fn append_add(&mut self, lhs: &Slot, args: &[Slot], num_reals: usize) -> Result<()> {
+        let args = self.consume_list(args)?;
+        let lhs = self.produce(lhs)?;
+        self.ssa.push(Instruction::Add(lhs, args, num_reals));
+        Ok(())
+    }
+
+    pub fn append_mul(&mut self, lhs: &Slot, args: &[Slot], num_reals: usize) -> Result<()> {
+        let args = self.consume_list(args)?;
+        let lhs = self.produce(lhs)?;
+        self.ssa.push(Instruction::Mul(lhs, args, num_reals));
+        Ok(())
+    }
+
+    pub fn append_pow(&mut self, lhs: &Slot, arg: &Slot, p: i64, is_real: bool) -> Result<()> {
+        let arg = self.consume(arg)?;
+        let lhs = self.produce(lhs)?;
+        self.ssa.push(Instruction::Pow(lhs, arg, p, is_real));
+        Ok(())
+    }
+
+    pub fn append_powf(&mut self, lhs: &Slot, arg: &Slot, p: &Slot, is_real: bool) -> Result<()> {
+        let arg = self.consume(arg)?;
+        let p = self.consume(p)?;
+        let lhs = self.produce(lhs)?;
+        self.ssa.push(Instruction::Powf(lhs, arg, p, is_real));
+        Ok(())
+    }
+
+    pub fn append_assign(&mut self, lhs: &Slot, rhs: &Slot) -> Result<()> {
+        let rhs = self.consume(rhs)?;
+        let lhs = self.produce(lhs)?;
+        self.ssa.push(Instruction::Assign(lhs, rhs));
+        Ok(())
+    }
+
+    pub fn append_label(&mut self, id: usize) -> Result<()> {
+        self.ssa.push(Instruction::Label(id));
+        Ok(())
+    }
+
+    pub fn append_if_else(&mut self, cond: &Slot, id: usize) -> Result<()> {
+        let cond = self.consume(cond)?;
+        self.ssa.push(Instruction::IfElse(cond, id));
+        Ok(())
+    }
+
+    pub fn append_goto(&mut self, id: usize) -> Result<()> {
+        self.ssa.push(Instruction::Goto(id));
+        Ok(())
+    }
+
+    pub fn append_external_fun(&mut self, lhs: &Slot, op: &str, args: &[Slot]) -> Result<()> {
+        let args = self.consume_list(args)?;
+        let lhs = self.produce(lhs)?;
+        self.ssa
+            .push(Instruction::ExternalFun(lhs, op.to_string(), args));
+        Ok(())
+    }
+
+    pub fn append_fun(
+        &mut self,
+        lhs: &Slot,
+        fun: &BuiltinSymbol,
+        arg: &Slot,
+        is_real: bool,
+    ) -> Result<()> {
+        let arg = self.consume(arg)?;
+        let lhs = self.produce(lhs)?;
+        self.ssa.push(Instruction::Fun(lhs, *fun, arg, is_real));
+        Ok(())
+    }
+
+    pub fn append_join(
+        &mut self,
+        lhs: &Slot,
+        cond: &Slot,
+        true_val: &Slot,
+        false_val: &Slot,
+    ) -> Result<()> {
+        let cond = self.consume(cond)?;
+        let true_val = self.consume(true_val)?;
+        let false_val = self.consume(false_val)?;
+        let lhs = self.produce(lhs)?;
+        self.ssa
+            .push(Instruction::Join(lhs, cond, true_val, false_val));
+        Ok(())
     }
 
     /// Produces a new Static variable if needed.
@@ -892,19 +1021,8 @@ impl Translator {
     }
 
     /// The second pass. It translates the SSA-form into a Symjit model.
-    fn translate(
-        &mut self,
-        model: &SymbolicaModel,
-        num_params: usize,
-    ) -> Result<(CellModel, HashSet<Loc>)> {
-        // self.consts = model.2.iter().map(|x| x.value().re).collect::<Vec<f64>>();
-        self.consts = model
-            .2
-            .iter()
-            .map(|x| Complex::new(x.value().re, x.value().im))
-            .collect::<Vec<Complex<f64>>>();
-
-        let ssa = self.convert(model)?;
+    fn translate(&mut self) -> Result<(CellModel, HashSet<Loc>)> {
+        let ssa = std::mem::take(&mut self.ssa);
 
         for line in ssa.iter() {
             match line {
@@ -946,7 +1064,7 @@ impl Translator {
             }
         }
 
-        let params: Vec<Variable> = (0..=self.count_params.max(num_params.max(1) - 1))
+        let params: Vec<Variable> = (0..=self.count_params.max(self.num_params.max(1) - 1))
             .map(|idx| self.expr(&Slot::Param(idx), false).to_variable().unwrap())
             .collect();
 
@@ -1140,6 +1258,18 @@ impl Translator {
 
         Ok(())
     }
+
+    pub fn set_num_params(&mut self, num_params: usize) {
+        self.num_params = num_params
+    }
+
+    pub fn compile(&mut self) -> Result<Application> {
+        let (ml, reals) = self.translate()?;
+        let prog = Program::new(&ml, self.config)?;
+        let mut app = Application::new(prog, reals, &Defuns::new())?;
+        app.prepare_simd();
+        Ok(app)
+    }
 }
 
 impl Compiler {
@@ -1160,15 +1290,15 @@ impl Compiler {
     /// assert!(app.evaluate_single(&[2.0, 3.0]) == 11.0);
     /// ```
     pub fn translate(&mut self, json: &str, num_params: usize) -> Result<Application> {
+        let config = Config::default();
         self.config.set_symbolica(true);
-
-        // println!("{:?}", json);
+        let mut translator = Translator::new(config);
 
         let model: SymbolicaModel = serde_json::from_str(json)?;
-        let mut translator = Translator::new();
-        let (ml, reals) = translator.translate(&model, num_params)?;
 
-        // println!("{:?}", &reals);
+        translator.parse_model(&model)?;
+        translator.set_num_params(num_params);
+        let (ml, reals) = translator.translate()?;
 
         let prog = Program::new(&ml, self.config)?;
         let df = Defuns::new();

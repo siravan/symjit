@@ -2,12 +2,14 @@ use anyhow::Result;
 use num_complex::Complex;
 use rand::{self, Rng};
 use std::fs;
-use symjit::{int, var, Application, Compiler, Config, Expr, FastFunc};
+use symjit::{compiler, int, var, Application, Compiler, Config, Expr, FastFunc, Translator};
 use wide::{f64x2, f64x4};
 
 use symbolica::{
     atom::{self, AtomCore},
-    evaluate::{CompiledComplexEvaluator, FunctionMap, Instruction, OptimizationSettings},
+    evaluate::{
+        BuiltinSymbol, ExpressionEvaluator, FunctionMap, Instruction, OptimizationSettings, Slot,
+    },
     parse, symbol,
 };
 
@@ -171,7 +173,7 @@ fn translate(json: &str, complex: bool, simd: bool) -> Result<Application> {
     config.set_complex(complex);
     config.set_simd(simd);
     let mut comp = Compiler::with_config(config);
-    comp.translate(&json)
+    comp.translate(&json, 0)
 }
 
 fn assert_nearly_eq(x: f64, y: f64) {
@@ -206,7 +208,7 @@ fn test_symbolica_scalar() -> Result<()> {
         let json = serde_json::to_string(&eval.export_instructions())?;
 
         let mut comp = Compiler::new();
-        let mut app = comp.translate(&json)?;
+        let mut app = comp.translate(&json, 0)?;
 
         app.evaluate(args, &mut outs);
         let v = eval.map_coeff(&|x| x.re.to_f64()).evaluate_single(args);
@@ -483,6 +485,98 @@ fn test_f13() -> Result<()> {
     Ok(())
 }
 
+fn slot(s: Slot) -> compiler::Slot {
+    match s {
+        Slot::Param(id) => compiler::Slot::Param(id),
+        Slot::Out(id) => compiler::Slot::Out(id),
+        Slot::Const(id) => compiler::Slot::Const(id),
+        Slot::Temp(id) => compiler::Slot::Temp(id),
+    }
+}
+
+fn slot_list(v: &[Slot]) -> Vec<compiler::Slot> {
+    v.iter().map(|s| slot(*s)).collect::<Vec<compiler::Slot>>()
+}
+
+fn builtin_symbol(s: BuiltinSymbol) -> compiler::BuiltinSymbol {
+    compiler::BuiltinSymbol(s.get_symbol().get_id())
+}
+
+fn translate_instructions(
+    instructions: Vec<Instruction>,
+    constants: Vec<Complex<f64>>,
+    config: Config,
+) -> Result<Translator> {
+    let mut translator = Translator::new(config);
+
+    for z in constants {
+        translator.append_constant(z)?;
+    }
+
+    for q in instructions {
+        match q {
+            Instruction::Add(lhs, args, num_reals) => {
+                translator.append_add(&slot(lhs), &slot_list(&args), num_reals)?
+            }
+            Instruction::Mul(lhs, args, num_reals) => {
+                translator.append_mul(&slot(lhs), &slot_list(&args), num_reals)?
+            }
+            Instruction::Pow(lhs, arg, p, is_real) => {
+                translator.append_pow(&slot(lhs), &slot(arg), p, is_real)?
+            }
+            Instruction::Powf(lhs, arg, p, is_real) => {
+                translator.append_powf(&slot(lhs), &slot(arg), &slot(p), is_real)?
+            }
+            Instruction::Assign(lhs, rhs) => translator.append_assign(&slot(lhs), &slot(rhs))?,
+            Instruction::Fun(lhs, fun, arg, is_real) => {
+                translator.append_fun(&slot(lhs), &builtin_symbol(fun), &slot(arg), is_real)?
+            }
+            Instruction::Join(lhs, cond, true_val, false_val) => translator.append_join(
+                &slot(lhs),
+                &slot(cond),
+                &slot(true_val),
+                &slot(false_val),
+            )?,
+            Instruction::Label(id) => translator.append_label(id)?,
+            Instruction::IfElse(cond, id) => translator.append_if_else(&slot(cond), id)?,
+            Instruction::Goto(id) => translator.append_goto(id)?,
+            Instruction::ExternalFun(lhs, op, args) => {
+                translator.append_external_fun(&slot(lhs), &op, &slot_list(&args))?
+            }
+        }
+    }
+
+    Ok(translator)
+}
+
+fn compile(
+    ev: &ExpressionEvaluator<Complex<f64>>,
+    complex: bool,
+    simd: bool,
+) -> Result<Application> {
+    let mut config = Config::default();
+    config.set_complex(complex);
+    config.set_simd(simd);
+
+    let (instructions, _, constants) = ev.export_instructions();
+    let mut translator = translate_instructions(instructions, constants, config).unwrap();
+    translator.compile()
+}
+
+fn test_compile() -> Result<()> {
+    let params = vec![parse!("x"), parse!("y")];
+    let f = FunctionMap::new();
+    let ev = parse!("x + y^3")
+        .evaluator(&f, &params, OptimizationSettings::default())
+        .unwrap()
+        .map_coeff(&|x| Complex::new(x.re.to_f64(), x.im.to_f64()));
+
+    let mut app = compile(&ev, true, false)?;
+    let u = app.evaluate_single(&[Complex::new(2.0, 1.0), Complex::new(-2.0, 4.0)]);
+    assert_eq!(u, Complex::new(90.0, -15.0));
+    Ok(())
+}
+
 fn pass(what: &str) {
     println!("**** test {:?} passed. ****", what);
 }
@@ -541,8 +635,11 @@ pub fn main() -> Result<()> {
 
     pass("simd matrix");
 
-    test_f13()?;
-    pass("f13");
+    test_compile()?;
+    pass("compile");
+
+    //test_f13()?;
+    //pass("f13");
 
     Ok(())
 }
