@@ -418,6 +418,7 @@ mod utils;
 mod allocator;
 mod assembler;
 mod builder;
+mod compactor;
 mod complexify;
 mod generator;
 mod mir;

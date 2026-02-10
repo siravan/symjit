@@ -3,6 +3,7 @@ use std::collections::HashSet;
 
 use crate::allocator::{ColoringAllocator, GreedyAllocator};
 use crate::block::Block;
+use crate::compactor::Compactor;
 use crate::config::Config;
 use crate::defuns::Defuns;
 use crate::generator::Generator;
@@ -17,6 +18,7 @@ pub struct Builder {
     pub ft: HashSet<String>, // function table (the name of functions),
     pub count_loops: usize,
     pub config: Config,
+    pub count_stack: Option<usize>,
 }
 
 impl Builder {
@@ -27,11 +29,19 @@ impl Builder {
             ft: HashSet::new(),
             count_loops: 0,
             config,
+            count_stack: None,
         }
     }
 
     pub fn symbol_table(&mut self) -> &mut SymbolTable {
         &mut self.block().sym_table
+    }
+
+    fn stack_size(&mut self) -> usize {
+        match self.count_stack {
+            Some(size) => size,
+            None => self.symbol_table().num_stack,
+        }
     }
 
     pub fn block(&mut self) -> &mut Block {
@@ -264,6 +274,11 @@ impl Builder {
             ColoringAllocator::optimize(&mut mir);
         }
 
+        // let old_stack_size = self.stack_size();
+        self.count_stack = Compactor::new(self.config).compact(&mut mir).ok();
+        // let new_stack_size = self.stack_size();
+        // println!("compaction: {:?} => {:?}", old_stack_size, new_stack_size);
+
         mir.add_consts(&self.consts);
         mir.populate_labels();
 
@@ -294,7 +309,7 @@ impl Builder {
         count_obs: usize,
         count_params: usize,
     ) -> Result<()> {
-        let cap = self.symbol_table().num_stack;
+        let cap = self.stack_size();
         ir.prologue_indirect(cap, count_states, count_obs, count_params);
 
         Self::save_registers(mir, ir);
@@ -319,7 +334,7 @@ impl Builder {
         idx_ret: i32,
     ) -> Result<()> {
         self.block().eliminate();
-        let cap = self.symbol_table().num_stack;
+        let cap = self.stack_size();
         ir.prologue_fast(cap, count_states, count_obs);
 
         Self::save_registers(mir, ir);

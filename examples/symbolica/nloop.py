@@ -69,3 +69,4 @@ print(symjit_f.evaluate_complex(samples[None, :]).sum())
 g = load_func(f"{n}loop.sjb")
 
 print(g.evaluate_complex(samples[None, :]).sum())
+os.remove(f"{n}loop.sjb")
