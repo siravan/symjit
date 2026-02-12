@@ -70,9 +70,11 @@ impl ColoringAllocator {
         // logical (colored) registers.
         // Note that no error is raised if color() does not
         // work. Instead, it fails silently.
-        self.color()?;
 
-        mir.code = std::mem::take(&mut self.code);
+        if self.color().is_ok() {
+            // checking is_ok because color may fail silently.
+            mir.code = std::mem::take(&mut self.code);
+        }
         Ok(())
     }
 
