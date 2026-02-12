@@ -626,6 +626,19 @@ impl ArmSimdGenerator {
         }
     }
 
+    fn save_d_to_mem(&mut self, d: u8, base: u8, idx: u32) {
+        if idx < 4096 {
+            self.emit(arm! {str d(d), [x(base), #8*idx]});
+        } else if idx < 65536 {
+            self.emit(arm! {movz x(SCRATCH1), #idx});
+            self.emit(arm! {str d(d), [x(base), x(SCRATCH1), lsl #3]});
+        } else {
+            self.emit(arm! {movz x(SCRATCH1), #idx & 0xffff});
+            self.emit(arm! {movk_lsl16 x(SCRATCH1), #idx >> 16});
+            self.emit(arm! {str d(d), [x(base), x(SCRATCH1), lsl #3]});
+        }
+    }
+
     fn load_q_from_mem(&mut self, d: u8, base: u8, idx: u32) {
         if idx < 4096 {
             self.emit(arm! {ldr q(d), [x(base), #self.reg_size()*idx]});
@@ -1139,8 +1152,12 @@ impl Generator for ArmSimdGenerator {
         cap: usize,
         count_states: usize,
         count_obs: usize,
-        _count_params: usize,
+        count_params: usize,
     ) {
+        if self.config.symbolica() {
+            return self.prologue_symbolica(cap, count_params, count_obs);
+        }
+
         self.emit(arm! {sub sp, sp, #48});
         self.emit(arm! {str lr, [sp, #0]});
         self.emit(arm! {str x(MEM), [sp, #8]});
@@ -1183,8 +1200,12 @@ impl Generator for ArmSimdGenerator {
         cap: usize,
         count_states: usize,
         count_obs: usize,
-        _count_params: usize,
+        count_params: usize,
     ) {
+        if self.config.symbolica() {
+            return self.epilogue_symbolica(cap, count_params, count_obs);
+        }
+
         let stack_size = align_stack(cap as u32 * self.reg_size());
         self.add_stack(stack_size);
 
@@ -1228,5 +1249,75 @@ impl Generator for ArmSimdGenerator {
                 self.load_stack(reg(*r), *r as u32 - 14);
             }
         }
+    }
+}
+
+impl ArmSimdGenerator {
+    fn prologue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
+        self.emit(arm! {sub sp, sp, #48});
+        self.emit(arm! {str lr, [sp, #0]});
+        self.emit(arm! {str x(MEM), [sp, #8]});
+        self.emit(arm! {str x(PARAMS), [sp, #16]});
+        self.emit(arm! {str x(STATES), [sp, #24]});
+        self.emit(arm! {str x(IDX), [sp, #32]});
+        self.emit(arm! {str x(CALL), [sp, #40]});
+
+        self.emit(arm! {mov x(MEM), x(0)});
+        self.emit(arm! {mov x(STATES), x(1)});
+        self.emit(arm! {mov x(IDX), x(2)});
+        self.emit(arm! {mov x(PARAMS), x(3)});
+
+        self.emit(arm! {tst x(IDX), x(IDX)});
+        self.jump("@main", 0, |offset, _| arm! {b.eq label(offset)});
+
+        let frame_size = align_stack(count_params as u32 * self.reg_size());
+        self.sub_stack(frame_size);
+        self.emit(arm! {mov x(SCRATCH1), x(PARAMS)});
+        self.emit(arm! {mov x(PARAMS), sp});
+
+        for j in 0..2 {
+            for i in 0..count_params {
+                self.load_d_from_mem(0, SCRATCH1, 8 * (i + j * count_params) as u32);
+                self.save_d_to_mem(0, PARAMS, 8 * (i * 2 + j) as u32);
+            }
+        }
+
+        self.sub_stack(align_stack(count_obs as u32 * 32));
+        self.emit(arm! {mov x(STATES), x(MEM)});
+        self.emit(arm! {mov x(MEM), sp});
+
+        self.set_label("@main");
+
+        let stack_size = align_stack(cap as u32 * self.reg_size());
+        self.sub_stack(stack_size);
+    }
+
+    fn epilogue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
+        let stack_size = align_stack(cap as u32 * self.reg_size());
+        self.add_stack(stack_size);
+
+        self.emit(arm! {tst x(IDX), x(IDX)});
+        self.jump("@done", 0, |offset, _| arm! {b.eq label(offset)});
+
+        for j in 0..2 {
+            for i in 0..count_obs {
+                self.load_d_from_mem(0, MEM, 8 * (i * 2 + j) as u32);
+                self.save_d_to_mem(0, STATES, 8 * (i + j * count_obs) as u32);
+            }
+        }
+
+        let frame_size = align_stack(count_params as u32 * 32) + align_stack(count_obs as u32 * 32);
+        self.add_stack(frame_size);
+        self.set_label("@done");
+
+        self.emit(arm! {ldr lr, [sp, #0]});
+        self.emit(arm! {ldr x(MEM), [sp, #8]});
+        self.emit(arm! {ldr x(PARAMS), [sp, #16]});
+        self.emit(arm! {ldr x(STATES), [sp, #24]});
+        self.emit(arm! {ldr x(IDX), [sp, #32]});
+        self.emit(arm! {ldr x(CALL), [sp, #40]});
+
+        self.emit(arm! {add sp, sp, #48});
+        self.emit(arm! {ret});
     }
 }

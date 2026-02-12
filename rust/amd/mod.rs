@@ -1069,8 +1069,6 @@ impl AmdGenerator {
             self.amd.or(IDX, IDX);
             self.amd.jz("@done");
 
-            self.amd.mov(Amd::RAX, STATES);
-
             for j in 0..4 {
                 for i in 0..count_obs {
                     self.amd.vmovsd_xmm_mem(RET, MEM, 8 * (i * 4 + j) as i32);
