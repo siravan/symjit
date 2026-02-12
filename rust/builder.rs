@@ -267,11 +267,11 @@ impl Builder {
         }
 
         if opt_level >= 2 {
-            GreedyAllocator::optimize(&mut mir)?;
+            GreedyAllocator::new(self.config).optimize(&mut mir)?;
         }
 
         if opt_level >= 3 {
-            ColoringAllocator::optimize(&mut mir);
+            ColoringAllocator::new(self.config).optimize(&mut mir)?;
         }
 
         // let old_stack_size = self.stack_size();

@@ -43,34 +43,37 @@ impl fmt::Debug for ColoringAllocator {
 }
 
 impl ColoringAllocator {
-    pub fn optimize(mir: &mut Mir) {
-        let count_scratch = mir.config.count_scratch();
+    pub fn new(config: Config) -> ColoringAllocator {
+        let count_scratch = config.count_scratch();
 
-        let mut allocator = ColoringAllocator {
+        ColoringAllocator {
             code: Vec::new(),
             regs: vec![Reg::Ret; count_scratch as usize],
             count_statics: 0,
             graph: UnGraph::new_undirected(),
             locs: HashMap::new(),
             loads: HashSet::new(),
-            config: mir.config,
-        };
+            config,
+        }
+    }
 
+    pub fn optimize(&mut self, mir: &mut Mir) -> Result<()> {
         // create single-static-assignment form
-        allocator.create(mir);
+        self.create(mir);
 
         // add edges to the graph based on which register
         // pairs overlap in the same region
-        allocator.add_edges();
+        self.add_edges();
 
         // allocate registers using a coloring algorithm and
         // replace the static registers with the corresponding
         // logical (colored) registers.
         // Note that no error is raised if color() does not
         // work. Instead, it fails silently.
-        if allocator.color().is_ok() {
-            mir.code = allocator.code;
-        }
+        self.color()?;
+
+        mir.code = std::mem::take(&mut self.code);
+        Ok(())
     }
 
     fn push(&mut self, ins: Instruction) {
@@ -411,31 +414,32 @@ impl fmt::Debug for GreedyAllocator {
 }
 
 impl GreedyAllocator {
-    pub fn optimize(mir: &mut Mir) -> Result<()> {
-        let count_scratch = mir.config.count_scratch();
+    pub fn new(config: Config) -> GreedyAllocator {
+        let count_scratch = config.count_scratch();
 
-        let mut allocator = GreedyAllocator {
+        GreedyAllocator {
             code: Vec::new(),
             regs: vec![None; count_scratch as usize],
             count_statics: 0,
             locs: HashMap::new(),
             statics: Vec::new(),
             allocs: vec![Alloc::new(); count_scratch as usize],
-            config: mir.config,
-        };
+            config,
+        }
+    }
 
+    pub fn optimize(&mut self, mir: &mut Mir) -> Result<()> {
         // create single-static-assignment form
-        allocator.create(mir);
+        self.create(mir);
 
         // allocate registers using a greedy algorithm and
         // replace the static registers with the corresponding
         // logical (colored) registers
-        allocator.color()?;
-        allocator.contract()?;
+        self.color()?;
+        self.contract()?;
 
         // contract the code by removing unnecessary instructions
-        mir.code = allocator.code;
-
+        mir.code = std::mem::take(&mut self.code);
         Ok(())
     }
 

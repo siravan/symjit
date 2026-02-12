@@ -4,7 +4,6 @@ use serde::Deserialize;
 use std::arch::x86_64::{__m256d, _mm256_setzero_pd};
 
 use std::collections::{HashMap, HashSet};
-use std::num;
 
 use anyhow::{anyhow, Result};
 use num_complex::Complex;
@@ -339,7 +338,7 @@ impl Application {
     }
 
     /// Generic evaluate function for compiled Symbolica expressions
-    fn evaluate_matrix_with_threads(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
+    pub fn evaluate_matrix_with_threads(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
         let count_params = self.count_params;
         let count_obs = self.count_obs;
         let f = self.compiled.func();
@@ -350,7 +349,7 @@ impl Application {
     }
 
     /// Generic evaluate function for compiled Symbolica expressions
-    fn evaluate_matrix_without_threads(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
+    pub fn evaluate_matrix_without_threads(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
         let count_params = self.count_params;
         let count_obs = self.count_obs;
         let f = self.compiled.func();
@@ -360,7 +359,7 @@ impl Application {
         }
     }
 
-    fn evaluate_matrix_with_threads_simd(
+    pub fn evaluate_matrix_with_threads_simd(
         &mut self,
         args: &[f64],
         outs: &mut [f64],
@@ -372,27 +371,28 @@ impl Application {
 
         if let Some(compiled) = &self.compiled_simd {
             let g = compiled.func();
-            let l = compiled.count_lanes();
+            let lanes = compiled.count_lanes();
+            let dn = if transpose { lanes } else { 1 };
 
-            (0..n / l).into_par_iter().for_each(|t| {
+            (0..n / dn).into_par_iter().for_each(|t| {
                 Self::evaluate_row(
                     args,
-                    t * count_params * l,
+                    t * count_params * lanes,
                     outs,
-                    t * count_obs * l,
+                    t * count_obs * lanes,
                     g,
                     transpose,
                 )
             });
 
             let f = self.compiled.func();
-            for t in l * (n / l)..n {
+            for t in dn * (n / dn)..n {
                 Self::evaluate_row(args, t * count_params, outs, t * count_obs, f, false);
             }
         }
     }
 
-    fn evaluate_matrix_without_threads_simd(
+    pub fn evaluate_matrix_without_threads_simd(
         &mut self,
         args: &[f64],
         outs: &mut [f64],
@@ -404,27 +404,28 @@ impl Application {
 
         if let Some(compiled) = &self.compiled_simd {
             let g = compiled.func();
-            let l = compiled.count_lanes();
+            let lanes = compiled.count_lanes();
+            let dn = if transpose { lanes } else { 1 };
 
-            for t in 0..n / l {
+            for t in 0..n / dn {
                 Self::evaluate_row(
                     args,
-                    t * count_params * l,
+                    t * count_params * lanes,
                     outs,
-                    t * count_obs * l,
+                    t * count_obs * lanes,
                     g,
                     transpose,
                 );
             }
 
             let f = self.compiled.func();
-            for t in l * (n / l)..n {
+            for t in dn * (n / dn)..n {
                 Self::evaluate_row(args, t * count_params, outs, t * count_obs, f, false);
             }
         }
     }
 
-    fn evaluate_matrix_bytecode(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
+    pub fn evaluate_matrix_bytecode(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
         let count_params = self.count_params;
         let count_obs = self.count_obs;
 
