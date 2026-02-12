@@ -102,10 +102,6 @@ impl Config {
     }
 
     pub fn use_simd(&self) -> bool {
-        // TODO! To implement Symbolica arm64 SIMD.
-        if self.symbolica() && self.is_arm64() {
-            return false;
-        }
         self.test(USE_SIMD) && (self.has_avx() || self.is_arm64())
     }
 
@@ -152,7 +148,7 @@ impl Config {
 
     fn available_registers(&self) -> u8 {
         if self.is_arm64() || self.is_riscv64() {
-            16  // todo! it should be 32, but this causes a bug for complex numbers
+            16 // todo! it should be 32, but this causes a bug for complex numbers
         } else {
             16
         }

@@ -1272,17 +1272,17 @@ impl ArmSimdGenerator {
 
         let frame_size = align_stack(count_params as u32 * self.reg_size());
         self.sub_stack(frame_size);
-        self.emit(arm! {mov x(SCRATCH1), x(PARAMS)});
+        self.emit(arm! {mov x(SCRATCH2), x(PARAMS)});
         self.emit(arm! {mov x(PARAMS), sp});
 
         for j in 0..2 {
             for i in 0..count_params {
-                self.load_d_from_mem(0, SCRATCH1, 8 * (i + j * count_params) as u32);
-                self.save_d_to_mem(0, PARAMS, 8 * (i * 2 + j) as u32);
+                self.load_d_from_mem(0, SCRATCH2, (i + j * count_params) as u32);
+                self.save_d_to_mem(0, PARAMS, (i * 2 + j) as u32);
             }
         }
 
-        self.sub_stack(align_stack(count_obs as u32 * 32));
+        self.sub_stack(align_stack(count_obs as u32 * self.reg_size()));
         self.emit(arm! {mov x(STATES), x(MEM)});
         self.emit(arm! {mov x(MEM), sp});
 
@@ -1301,12 +1301,13 @@ impl ArmSimdGenerator {
 
         for j in 0..2 {
             for i in 0..count_obs {
-                self.load_d_from_mem(0, MEM, 8 * (i * 2 + j) as u32);
-                self.save_d_to_mem(0, STATES, 8 * (i + j * count_obs) as u32);
+                self.load_d_from_mem(0, MEM, (i * 2 + j) as u32);
+                self.save_d_to_mem(0, STATES, (i + j * count_obs) as u32);
             }
         }
 
-        let frame_size = align_stack(count_params as u32 * 32) + align_stack(count_obs as u32 * 32);
+        let frame_size = align_stack(count_params as u32 * self.reg_size())
+            + align_stack(count_obs as u32 * self.reg_size());
         self.add_stack(frame_size);
         self.set_label("@done");
 
