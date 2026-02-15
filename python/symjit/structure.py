@@ -1,5 +1,4 @@
 import numbers
-from ast import Expression
 
 from sympy import (
     Abs,
@@ -25,7 +24,6 @@ from sympy import (
     asinh,
     atan,
     atanh,
-    conjugate,
     diff,
     im,
     log,
@@ -33,9 +31,6 @@ from sympy import (
     sqrt,
     symbols,
 )
-from sympy.printing.conventions import Derivative
-
-from . import expression
 
 
 def tree_node(op, args):
@@ -180,9 +175,7 @@ def var(sym, val=0.0):
 
 def expr(y):
     try:
-        if expression.is_expression(y):  # y is a Symbolica Expression?
-            return expression.walk_tree(y)
-        elif isinstance(y, Sum) or isinstance(y, Product):
+        if isinstance(y, Sum) or isinstance(y, Product):
             return loops(y)
         elif isinstance(y, numbers.Number) or y.is_number:
             return {"type": "Const", "val": float(y)}
@@ -194,6 +187,9 @@ def expr(y):
             return boolean(y)
         elif y.is_Piecewise:
             return piecewise(y.args)
+        elif hasattr(y, "evaluate_complex"):
+            print("Use `compile_evaluator` to compile Symbolica expressions.")
+            raise ValueError("Direct Symbolica expression support is deprecated.")
         else:
             return tree(y)
     except ValueError:
@@ -214,7 +210,7 @@ def ode(y):
 
 
 def is_singular(y):
-    return not hasattr(y, "__iter__") or expression.is_expression(y)
+    return not hasattr(y, "__iter__")
 
 
 def model(states, eqs, params=None, obs=None):
@@ -278,16 +274,10 @@ def model_jac(iv, states, odes, params=None):
     n = len(states)
     eqs = []
 
-    if expression.is_expression(iv):
-        for i in range(n):
-            for j in range(n):
-                df = odes[i].derivative(states[j])
-                eqs.append(df)
-    else:
-        for i in range(n):
-            for j in range(n):
-                df = diff(odes[i], states[j])
-                eqs.append(df)
+    for i in range(n):
+        for j in range(n):
+            df = diff(odes[i], states[j])
+            eqs.append(df)
 
     if params is None:
         params = []

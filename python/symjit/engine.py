@@ -333,6 +333,7 @@ class RustyCompiler:
         action="compile",
         file="",
         num_params=1,
+        order="fortran",
     ):
         if convert:
             model = json.dumps(model)
@@ -341,6 +342,9 @@ class RustyCompiler:
         if dtype not in ["float64", "complex128"]:
             raise ValueError("`dtype` should be `float64` or `complex128`")
 
+        if order not in ["c", "fortran"]:
+            raise ValueError("`order` should be either `c` or `fortran`")
+
         opt = (
             (0x01 if use_simd else 0)
             | (0x02 if use_threads else 0)
@@ -348,7 +352,7 @@ class RustyCompiler:
             | (0x08 if fastmath else 0)
             | (0x10 if sanitize else 0)
             | (0x20 if dtype == "complex128" else 0)
-            # 0x40 is symbolica
+            | (0x40 if order == "c" else 0)
             | ((opt_level & 0x0F) << 8)
         )
 

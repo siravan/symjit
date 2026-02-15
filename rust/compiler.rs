@@ -827,9 +827,7 @@ pub struct Translator {
 }
 
 impl Translator {
-    pub fn new(mut config: Config) -> Translator {
-        config.set_symbolica(true);
-
+    pub fn new(config: Config) -> Translator {
         Translator {
             config,
             ssa: Vec::new(),
@@ -1065,15 +1063,21 @@ impl Translator {
             }
         }
 
-        let params: Vec<Variable> = (0..=self.count_params.max(self.num_params.max(1) - 1))
+        let mut params: Vec<Variable> = (0..=self.count_params.max(self.num_params.max(1) - 1))
             .map(|idx| self.expr(&Slot::Param(idx), false).to_variable().unwrap())
             .collect();
+
+        let mut states: Vec<Variable> = Vec::new();
+
+        if !self.config.symbolica() {
+            (params, states) = (states, params)
+        }
 
         Ok((
             CellModel {
                 iv: Expr::var("$_").to_variable().unwrap(),
                 params,
-                states: Vec::new(),
+                states,
                 algs: Vec::new(),
                 odes: Vec::new(),
                 obs: self.eqs.clone(),
@@ -1291,9 +1295,7 @@ impl Compiler {
     /// assert!(app.evaluate_single(&[2.0, 3.0]) == 11.0);
     /// ```
     pub fn translate(&mut self, json: &str, num_params: usize) -> Result<Application> {
-        let config = Config::default();
-        self.config.set_symbolica(true);
-        let mut translator = Translator::new(config);
+        let mut translator = Translator::new(self.config);
 
         let model: SymbolicaModel = serde_json::from_str(json)?;
 

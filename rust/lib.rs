@@ -936,6 +936,10 @@ pub unsafe extern "C" fn evaluate_matrix(
     let q: &mut CompilerResult = unsafe { &mut *q };
 
     if let Some(app) = &mut q.app {
+        if app.count_params == 0 {
+            return false;
+        }
+
         let args: &[f64] = unsafe { std::slice::from_raw_parts(args, nargs) };
         let outs: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(outs, nouts) };
         let n = nargs / app.count_params;
