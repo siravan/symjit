@@ -1,24 +1,21 @@
-// use crate::utils::f64x4;
-
-pub struct Matrix {
-    pub p: Vec<*mut f64>,
+pub struct Matrix<'a> {
+    pub p: Vec<&'a mut [f64]>,
     pub ncols: usize,
 }
 
-impl Matrix {
-    pub fn new() -> Matrix {
+impl<'a> Matrix<'a> {
+    pub fn new() -> Matrix<'a> {
         Matrix {
             p: Vec::new(),
             ncols: 0,
         }
     }
 
-    pub fn from_buf(buf: &mut [f64], nrows: usize, ncols: usize) -> Matrix {
+    pub fn from_buf(buf: &'a mut [f64], nrows: usize, ncols: usize) -> Matrix<'a> {
         assert!(buf.len() >= nrows * ncols);
-        let mut p: Vec<*mut f64> = Vec::with_capacity(nrows);
-        for row in 0..nrows {
-            let q = &mut buf[row * ncols] as *mut f64;
-            p.push(q);
+        let mut p: Vec<&mut [f64]> = Vec::with_capacity(nrows);
+        for row in buf.chunks_mut(ncols) {
+            p.push(row);
         }
 
         Matrix { p, ncols }
@@ -30,41 +27,31 @@ impl Matrix {
         } else {
             self.ncols.min(n)
         };
-        self.p.push(v);
+        let q = unsafe { std::slice::from_raw_parts_mut(v, self.ncols) };
+        self.p.push(q);
     }
 
     pub fn get(&self, row: usize, col: usize) -> f64 {
-        let u: &[f64] = unsafe { std::slice::from_raw_parts(self.p[row], self.ncols) };
-        u[col]
+        self.p[row][col]
     }
 
-    // pub fn get_simd(&self, row: usize, col: usize) -> f64x4 {
-    //     let u: &[f64] = unsafe { std::slice::from_raw_parts(self.p[row], self.ncols) };
-    //     f64x4::from_slice(&u[col..col + 4])
-    // }
-
-    pub fn set(&self, row: usize, col: usize, val: f64) {
-        let u: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(self.p[row], self.ncols) };
-        u[col] = val;
+    pub fn set(&mut self, row: usize, col: usize, val: f64) {
+        self.p[row][col] = val;
     }
-
-    // pub fn set_simd(&self, row: usize, col: usize, val: f64x4) {
-    //     let u: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(self.p[row], self.ncols) };
-    //     val.copy_to_slice(&mut u[col..col + 4]);
-    // }
 }
 
-pub fn combine_matrixes(a: &Matrix, b: &Matrix) -> Matrix {
+pub fn combine_matrixes<'a>(a: &'a mut Matrix, b: &'a mut Matrix) -> Matrix<'a> {
     assert!(a.ncols == b.ncols);
-    let mut p = a.p.clone();
-    p.extend(&b.p);
-    Matrix { p, ncols: a.ncols }
+    let mut c = Matrix::new();
+    c.p.extend(std::mem::take(&mut a.p));
+    c.p.extend(std::mem::take(&mut b.p));
+    c
 }
 
-impl Default for Matrix {
+impl<'a> Default for Matrix<'a> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-unsafe impl Sync for Matrix {}
+unsafe impl<'a> Sync for Matrix<'a> {}

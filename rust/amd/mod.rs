@@ -924,7 +924,7 @@ impl Generator for AmdGenerator {
         }
 
         for i in 0..count_states {
-            self.amd.mov_reg_mem(Amd::RAX, STATES, 8 * i as i32);
+            self.amd.mov_reg_mem(Amd::RAX, STATES, 2 * 8 * i as i32);
             let k = i as u32 * self.reg_size();
             select!(
                 self,
@@ -971,7 +971,7 @@ impl Generator for AmdGenerator {
 
         for i in 0..count_obs {
             self.amd
-                .mov_reg_mem(Amd::RAX, STATES, 8 * (count_states + i) as i32);
+                .mov_reg_mem(Amd::RAX, STATES, 2 * 8 * (count_states + i) as i32);
             let k = (count_states + i) as u32 * self.reg_size();
             select!(
                 self,

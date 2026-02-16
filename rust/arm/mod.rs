@@ -506,7 +506,7 @@ impl Generator for ArmGenerator {
         self.emit(arm! {mov x(MEM), sp});
 
         for i in 0..count_states {
-            self.load_x_from_mem(SCRATCH2, STATES, i as u32);
+            self.load_x_from_mem(SCRATCH2, STATES, 2 * i as u32);
             self.emit(arm! {ldr d(0), [x(SCRATCH2), x(IDX), lsl #3]});
             self.save_d_to_mem(0, MEM, i as u32);
         }
@@ -533,7 +533,7 @@ impl Generator for ArmGenerator {
         self.jump("@done", 0, |offset, _| arm! {b.eq label(offset)});
 
         for i in 0..count_obs {
-            self.load_x_from_mem(SCRATCH2, STATES, (count_states + i) as u32);
+            self.load_x_from_mem(SCRATCH2, STATES, 2 * (count_states + i) as u32);
             let k = (count_states + i) as u32;
             self.load_d_from_mem(0, MEM, k);
             self.emit(arm! {str d(0), [x(SCRATCH2), x(IDX), lsl #3]});
@@ -1182,7 +1182,7 @@ impl Generator for ArmSimdGenerator {
         // self.emit(arm! {lsr x(IDX), x(IDX), #1});
 
         for i in 0..count_states {
-            self.load_x_from_mem(SCRATCH2, STATES, i as u32);
+            self.load_x_from_mem(SCRATCH2, STATES, 2 * i as u32);
             self.emit(arm! {ldr q(0), [x(SCRATCH2), x(IDX), lsl #4]});
             self.save_q_to_mem(0, MEM, i as u32);
         }
@@ -1213,7 +1213,7 @@ impl Generator for ArmSimdGenerator {
         self.jump("@done", 0, |offset, _| arm! {b.eq label(offset)});
 
         for i in 0..count_obs {
-            self.load_x_from_mem(SCRATCH2, STATES, (count_states + i) as u32);
+            self.load_x_from_mem(SCRATCH2, STATES, 2 * (count_states + i) as u32);
             let k = (count_states + i) as u32;
             self.load_q_from_mem(0, MEM, k);
             self.emit(arm! {str q(0), [x(SCRATCH2), x(IDX), lsl #4]});

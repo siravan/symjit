@@ -883,10 +883,11 @@ pub unsafe extern "C" fn execute_vectorized(
 
     if let Some(app) = &mut q.app {
         let h = usize::max(app.count_states, app.count_obs);
-        let buf: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(buf, h * n) };
-        let states = Matrix::from_buf(buf, h, n);
-        let mut obs = Matrix::from_buf(buf, h, n);
-        app.exec_vectorized(&states, &mut obs);
+        let p: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(buf, h * n) };
+        let mut states = Matrix::from_buf(p, h, n);
+        let p: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(buf, h * n) };
+        let mut obs = Matrix::from_buf(p, h, n);
+        app.exec_vectorized(&mut states, &mut obs);
         true
     } else {
         false
@@ -1204,7 +1205,7 @@ pub unsafe extern "C" fn callable_filter(
 ///     deallocated eventually.
 ///
 #[no_mangle]
-pub unsafe extern "C" fn create_matrix() -> *const Matrix {
+pub unsafe extern "C" fn create_matrix<'a>() -> *const Matrix<'a> {
     let mat = Matrix::new();
     Box::into_raw(Box::new(mat)) as *const Matrix
 }
@@ -1245,11 +1246,11 @@ pub unsafe extern "C" fn add_row(mat: *mut Matrix, v: *mut f64, n: usize) {
 #[no_mangle]
 pub unsafe extern "C" fn execute_matrix(
     q: *mut CompilerResult,
-    states: *const Matrix,
+    states: *mut Matrix,
     obs: *mut Matrix,
 ) -> bool {
     let q: &mut CompilerResult = unsafe { &mut *q };
-    let states: &Matrix = unsafe { &*states };
+    let states: &mut Matrix = unsafe { &mut *states };
     let obs: &mut Matrix = unsafe { &mut *obs };
 
     if let Some(app) = &mut q.app {

@@ -356,7 +356,7 @@ impl Application {
         self.compiled_fast.as_ref().map(|c| c.func())
     }
 
-    pub fn exec_vectorized(&mut self, states: &Matrix, obs: &mut Matrix) {
+    pub fn exec_vectorized(&mut self, states: &mut Matrix, obs: &mut Matrix) {
         if !self.compiled.support_indirect() {
             self.exec_vectorized_simple(states, obs);
             return;
@@ -397,10 +397,11 @@ impl Application {
     }
 
     fn exec_single(t: usize, v: &Matrix, params: &[f64], f: CompiledFunc<f64>) {
-        f(std::ptr::null(), v.p.as_ptr(), t, params.as_ptr());
+        let p = v.p.as_ptr();
+        f(std::ptr::null(), p, t, params.as_ptr());
     }
 
-    pub fn exec_vectorized_scalar(&mut self, states: &Matrix, obs: &mut Matrix, threads: bool) {
+    pub fn exec_vectorized_scalar(&mut self, states: &mut Matrix, obs: &mut Matrix, threads: bool) {
         assert!(states.ncols == obs.ncols);
         let n = states.ncols;
         let f = self.compiled.func();
@@ -420,7 +421,7 @@ impl Application {
 
     pub fn exec_vectorized_simd(
         &mut self,
-        states: &Matrix,
+        states: &mut Matrix,
         obs: &mut Matrix,
         threads: bool,
         l: usize,

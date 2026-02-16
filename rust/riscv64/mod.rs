@@ -721,7 +721,7 @@ impl RiscV {
         self.emit(rvv! {fld f(Self::fa0), x(Self::t0), 0});
         self.emit(rvv! {fsd f(Self::fa0), x(Self::t1), 0});
 
-        self.emit(rvv! {addi x(STATES), x(STATES), 8});
+        self.emit(rvv! {addi x(STATES), x(STATES), 2*8});
         self.emit(rvv! {addi x(Self::t1), x(Self::t1), 8});
     }
 
@@ -732,7 +732,7 @@ impl RiscV {
         self.emit(rvv! {fld f(Self::fa0), x(Self::t1), 0});
         self.emit(rvv! {fsd f(Self::fa0), x(Self::t0), 0});
 
-        self.emit(rvv! {addi x(STATES), x(STATES), 8});
+        self.emit(rvv! {addi x(STATES), x(STATES), 2*8});
         self.emit(rvv! {addi x(Self::t1), x(Self::t1), 8});
     }
 }
