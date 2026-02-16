@@ -170,6 +170,7 @@ fn test_memory(n: usize) -> Result<()> {
 
 fn translate(json: &str, complex: bool, simd: bool) -> Result<Application> {
     let mut config = Config::default();
+    config.set_symbolica(true);
     config.set_complex(complex);
     config.set_simd(simd);
     let mut comp = Compiler::with_config(config);
@@ -594,6 +595,8 @@ pub fn main() -> Result<()> {
 
     #[cfg(target_arch = "x86_64")]
     test_simd()?;
+
+    println!("Symbolica:");
 
     // print!("testing memory leaks...");
     // test_memory(1000)?;

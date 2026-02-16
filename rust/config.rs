@@ -206,7 +206,7 @@ impl Default for Config {
     fn default() -> Config {
         Config::new(
             CompilerType::Native,
-            USE_SIMD | USE_THREADS | (2 << OPT_LEVEL_SHIFT),
+            USE_SIMD | USE_THREADS | SYMBOLICA | (2 << OPT_LEVEL_SHIFT),
         )
         .unwrap()
     }
