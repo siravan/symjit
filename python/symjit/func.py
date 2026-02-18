@@ -391,13 +391,13 @@ class Bridge:
         return {"Assign": [self.slot(dst), self.slot(arg)]}
 
     def if_else(self, dst, lbl):
-        return {"Assign": [self.slot(dst), lbl]}
+        return {"IfElse": [self.slot(dst), lbl]}
 
     def goto(self, lbl):
-        return {"Goto": [lbl]}
+        return {"Goto": lbl}
 
     def label(self, lbl):
-        return {"Label": [lbl]}
+        return {"Label": lbl}
 
     def join(self, dst, cond, t, f):
         return {"Join": [self.slot(dst), self.slot(cond), self.slot(t), self.slot(f)]}

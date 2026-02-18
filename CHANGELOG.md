@@ -1,3 +1,12 @@
+# Version 2.13.2
+
+* `Bridge` encoder bugs fixed.
+
+# Version 2.13.1
+
+* `order=fortran` added to `compile_evaluator`.
+* Matrix uses fat pointers now.
+
 # Version 2.12.3
 
 * Mixed complex-real computation to align with Symbolica 1.3.
