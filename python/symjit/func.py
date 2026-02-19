@@ -244,6 +244,10 @@ class SymbolicaFunc:
     def __init__(self, model, dtype="float64", **args):
         self.model = model
         self.args = args
+        self.cache = {}
+        self.cache_mode = False
+        self.cache_complex = False
+        self.samples = None
 
         if model is None:
             self.compiler = None
@@ -270,9 +274,19 @@ class SymbolicaFunc:
         if self.compiler is None:
             self.compile_real()
 
+        if len(self.cache) > 0:
+            h = hash(inputs.sum())
+            if h in self.cache:
+                return self.cache[h]
+
         c = self.compiler
+        outs = np.zeros((inputs.shape[0], c.count_obs), dtype=np.float64)
+
+        if self.cache_mode and inputs.shape[0] == 1:
+            self.samples.append(inputs)
+            return outs
+
         args = np.ascontiguousarray(inputs[:, : c.count_params].real, dtype=np.float64)
-        outs = np.empty((inputs.shape[0], c.count_obs), dtype=np.float64)
         c.evaluate_matrix(args, outs)
         return outs
 
@@ -280,12 +294,48 @@ class SymbolicaFunc:
         if self.complex_compiler is None:
             self.compile_complex()
 
+        if len(self.cache) > 0:
+            h = hash(inputs.sum())
+            if h in self.cache:
+                return self.cache[h]
+
         c = self.complex_compiler
         assert inputs.shape[1] == c.count_params // 2
+        outs = np.zeros((inputs.shape[0], c.count_obs // 2), dtype=np.complex128)
+
+        if self.cache_mode and inputs.shape[0] == 1:
+            self.cache_complex = True
+            self.samples.append(inputs)
+            return outs
+
         args = np.ascontiguousarray(inputs, dtype=np.complex128)
-        outs = np.empty((inputs.shape[0], c.count_obs // 2), dtype=np.complex128)
         c.evaluate_matrix(args, outs, 2)
         return outs
+
+    def start_caching(self):
+        self.cache = {}
+        self.cache_mode = True
+        self.cache_complex = False
+        self.samples = []
+
+    def stop_caching(self):
+        self.cache_mode = False
+
+        if len(self.samples) == 0:
+            return
+
+        inputs = np.concatenate(self.samples)
+
+        if self.cache_complex:
+            outs = self.evaluate_complex(inputs)
+        else:
+            outs = self.evaluate(inputs)
+
+        for i, s in enumerate(self.samples):
+            h = hash(s.sum())
+            self.cache[h] = outs[i, None]
+
+        self.samples = None
 
     def dump(self, name, what="scalar"):
         self.compiler.dump(name, what=what)
