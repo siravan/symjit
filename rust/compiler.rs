@@ -341,10 +341,10 @@ impl Application {
     pub fn evaluate_matrix_with_threads(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
         let count_params = self.count_params;
         let count_obs = self.count_obs;
-        let f = self.compiled.func();
+        let f_scalar = self.compiled.func();
 
         (0..n).into_par_iter().for_each(|t| {
-            Self::evaluate_row(args, t * count_params, outs, t * count_obs, f, false);
+            Self::evaluate_row(args, t * count_params, outs, t * count_obs, f_scalar, false);
         });
     }
 
@@ -352,10 +352,10 @@ impl Application {
     pub fn evaluate_matrix_without_threads(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
         let count_params = self.count_params;
         let count_obs = self.count_obs;
-        let f = self.compiled.func();
+        let f_scalar = self.compiled.func();
 
         for t in 0..n {
-            Self::evaluate_row(args, t * count_params, outs, t * count_obs, f, false);
+            Self::evaluate_row(args, t * count_params, outs, t * count_obs, f_scalar, false);
         }
     }
 
@@ -364,38 +364,33 @@ impl Application {
         args: &[f64],
         outs: &mut [f64],
         n: usize,
-        transpose: bool,
     ) {
         let count_params = self.count_params;
         let count_obs = self.count_obs;
 
         if let Some(compiled) = &self.compiled_simd {
-            let g = compiled.func();
+            let f_simd = compiled.func();
+            let f_scalar = self.compiled.func();
             let lanes = compiled.count_lanes();
-            let dn = if transpose { lanes } else { 1 };
-            let f = self.compiled.func();
 
-            let scalars: <Vec<Option<usize>>> = (0..n / dn).into_par_iter().map(|k| {
+            (0..n / lanes).into_par_iter().for_each(|k| {
+                let top = k * lanes;
                 if Self::evaluate_row(
                     args,
-                    k * count_params * lanes,
+                    top * count_params,
                     outs,
-                    k * count_obs * lanes,
-                    g,
-                    transpose,
-                ) == 0 { None } else { Some(k) }
-            }).collect();
-
-            for k in scalars {
-                if let Some(k) = k {
-                    for t in k*dn..(k+1)*dn {
-                        Self::evaluate_row(args, t * count_params, outs, t * count_obs, f, false);
+                    top * count_obs,
+                    f_simd,
+                    true,
+                ) != 0 {
+                    for i in 0..lanes {
+                        Self::evaluate_row(args, (top + i) * count_params, outs, (top + i) * count_obs, f_scalar, false);
                     }
                 }
-            }
+            });
 
-            for t in dn * (n / dn)..n {
-                Self::evaluate_row(args, t * count_params, outs, t * count_obs, f, false);
+            for t in lanes * (n / lanes)..n {
+                Self::evaluate_row(args, t * count_params, outs, t * count_obs, f_scalar, false);
             }
         }
     }
@@ -405,42 +400,33 @@ impl Application {
         args: &[f64],
         outs: &mut [f64],
         n: usize,
-        transpose: bool,
     ) {
         let count_params = self.count_params;
         let count_obs = self.count_obs;
 
         if let Some(compiled) = &self.compiled_simd {
-            let g = compiled.func();
+            let f_simd = compiled.func();
+            let f_scalar = self.compiled.func();
             let lanes = compiled.count_lanes();
-            let dn = if transpose { lanes } else { 1 };
-            let mut scalars: Vec<usize> = Vec::new();
 
-            for k in 0..n / dn {
+            for k in 0..n / lanes {
+                let top = k * lanes;
                 if Self::evaluate_row(
                     args,
-                    k * count_params * lanes,
+                    top * count_params,
                     outs,
-                    k * count_obs * lanes,
-                    g,
-                    transpose,
+                    top * count_obs,
+                    f_simd,
+                    true,
                 ) != 0 {
-                    scalars.push(k);
-                }
-            }
-
-            let f = self.compiled.func();
-
-            for k in scalars {
-                if let Some(k) = k {
-                    for t in k*dn..(k+1)*dn {
-                        Self::evaluate_row(args, t * count_params, outs, t * count_obs, f, false);
+                    for i in 0..lanes {
+                        Self::evaluate_row(args, (top + i) * count_params, outs, (top + i) * count_obs, f_scalar, false);
                     }
                 }
             }
 
-            for t in dn * (n / dn)..n {
-                Self::evaluate_row(args, t * count_params, outs, t * count_obs, f, false);
+            for t in lanes * (n / lanes)..n {
+                Self::evaluate_row(args, t * count_params, outs, t * count_obs, f_scalar, false);
             }
         }
     }
@@ -463,13 +449,13 @@ impl Application {
             self.evaluate_matrix_bytecode(args, outs, n);
         } else if self.use_threads {
             if self.compiled_simd.is_some() {
-                self.evaluate_matrix_with_threads_simd(args, outs, n, true);
+                self.evaluate_matrix_with_threads_simd(args, outs, n);
             } else {
                 self.evaluate_matrix_with_threads(args, outs, n);
             }
         } else {
             if self.compiled_simd.is_some() {
-                self.evaluate_matrix_without_threads_simd(args, outs, n, true);
+                self.evaluate_matrix_without_threads_simd(args, outs, n);
             } else {
                 self.evaluate_matrix_without_threads(args, outs, n);
             }
@@ -489,13 +475,13 @@ impl Application {
             self.evaluate_matrix_bytecode(args, outs, n);
         } else if self.use_threads {
             if self.compiled_simd.is_some() {
-                self.evaluate_matrix_with_threads_simd(args, outs, n, true);
+                self.evaluate_matrix_with_threads_simd(args, outs, n);
             } else {
                 self.evaluate_matrix_with_threads(args, outs, n);
             }
         } else {
             if self.compiled_simd.is_some() {
-                self.evaluate_matrix_without_threads_simd(args, outs, n, true);
+                self.evaluate_matrix_without_threads_simd(args, outs, n);
             } else {
                 self.evaluate_matrix_without_threads(args, outs, n);
             }
