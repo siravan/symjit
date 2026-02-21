@@ -385,8 +385,19 @@ impl Generator for AmdGenerator {
     }
 
     fn branch_if(&mut self, cond: Reg, label: &str) {
-        self.amd.vucomisd(ϕ(cond), ϕ(cond));
-        self.amd.jpe(label);
+        match self.family {
+            Amd::AvxScalar | Amd::AvxSSE => {
+                self.amd.vucomisd(ϕ(cond), ϕ(cond));
+                self.amd.jpe(label);
+            }
+            Amd::AvxVector {
+                self.amd.vmovmskpd(Amd::RAX, ϕ(cond));
+                self.amd.cmp_imm(Amd::RAX, 15);
+                self.amd.je(label);
+                self.amd.or(Amd::RAX, Amd::RAX);
+                self.amd.jne("@epilogue");
+            }
+        }
     }
 
     //***********************************
@@ -960,6 +971,9 @@ impl Generator for AmdGenerator {
         count_obs: usize,
         count_params: usize,
     ) {
+        self.amd.xor(Amd::RAX, Amd::RAX);
+        self.set_label("@epilogue");
+
         if self.config.symbolica() {
             return self.epilogue_symbolica(cap, count_params, count_obs);
         }
@@ -971,7 +985,7 @@ impl Generator for AmdGenerator {
 
         for i in 0..count_obs {
             self.amd
-                .mov_reg_mem(Amd::RAX, STATES, 2 * 8 * (count_states + i) as i32);
+                .mov_reg_mem(Amd::RCX, STATES, 2 * 8 * (count_states + i) as i32);
             let k = (count_states + i) as u32 * self.reg_size();
             select!(
                 self,
@@ -987,7 +1001,7 @@ impl Generator for AmdGenerator {
                 movsd_indexed_xmm,
                 vmovsd_indexed_xmm,
                 vmovpd_indexed_ymm,
-                Amd::RAX,
+                Amd::RCX,
                 IDX,
                 8,
                 RET

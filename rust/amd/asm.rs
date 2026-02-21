@@ -705,6 +705,12 @@ impl Amd {
         self.modrm_reg(reg, rm);
     }
 
+    pub fn vmovmskpd(&mut self, reg: u8, rm: u8) {
+        self.vex_pd(reg, 0, rm, 0);
+        self.append_byte(0x50);
+        self.modrm_reg(reg, rm);
+    }
+
     /*******************************************/
     pub fn vzeroupper(&mut self) {
         self.append_bytes(&[0xC5, 0xF8, 0x77]);
@@ -821,6 +827,41 @@ impl Amd {
         self.rex(0, rm);
         self.append_byte(0x81);
         self.modrm_reg(0, rm);
+        self.append_word(imm);
+    }
+
+    pub fn or_imm(&mut self, rm: u8, imm: u32) {
+        self.rex(0, rm);
+        self.append_byte(0x81);
+        self.modrm_reg(1, rm);
+        self.append_word(imm);
+    }
+
+    pub fn and_imm(&mut self, rm: u8, imm: u32) {
+        self.rex(0, rm);
+        self.append_byte(0x81);
+        self.modrm_reg(4, rm);
+        self.append_word(imm);
+    }
+
+    pub fn sub_imm(&mut self, rm: u8, imm: u32) {
+        self.rex(0, rm);
+        self.append_byte(0x81);
+        self.modrm_reg(5, rm);
+        self.append_word(imm);
+    }
+
+    pub fn xor_imm(&mut self, rm: u8, imm: u32) {
+        self.rex(0, rm);
+        self.append_byte(0x81);
+        self.modrm_reg(6, rm);
+        self.append_word(imm);
+    }
+
+    pub fn cmp_imm(&mut self, rm: u8, imm: u32) {
+        self.rex(0, rm);
+        self.append_byte(0x81);
+        self.modrm_reg(7, rm);
         self.append_word(imm);
     }
 
