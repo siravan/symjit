@@ -4,7 +4,7 @@ use std::io::{Read, Write};
 
 use crate::machine::MachineCode;
 
-pub type CompiledFunc<T> = fn(*const T, *const &mut [T], usize, *const T);
+pub type CompiledFunc<T> = fn(*const T, *const &mut [T], usize, *const T) -> i32;
 
 pub trait Compiled<T: Sized + Copy + Default> {
     fn exec(&mut self, params: &[T]);

@@ -326,14 +326,14 @@ impl Application {
         outs_idx: usize,
         f: CompiledFunc<f64>,
         transpose: bool,
-    ) {
+    ) -> i32 {
         unsafe {
             f(
                 outs.as_ptr().add(outs_idx),
                 std::ptr::null(),
                 if transpose { 1 } else { 0 },
                 args.as_ptr().add(args_idx),
-            );
+            )
         }
     }
 
@@ -373,19 +373,29 @@ impl Application {
             let g = compiled.func();
             let lanes = compiled.count_lanes();
             let dn = if transpose { lanes } else { 1 };
+            let scalars: Vec<usize> = Vec::new();
 
-            (0..n / dn).into_par_iter().for_each(|t| {
-                Self::evaluate_row(
+            (0..n / dn).into_par_iter().for_each(|k| {
+                if Self::evaluate_row(
                     args,
-                    t * count_params * lanes,
+                    k * count_params * lanes,
                     outs,
-                    t * count_obs * lanes,
+                    k * count_obs * lanes,
                     g,
                     transpose,
-                )
+                ) != 0 {
+                    for t in k*dn..(k+1)*dn {
+                        scalars.push(t);
+                    }
+                }
             });
 
             let f = self.compiled.func();
+
+            for t in scalars {
+                Self::evaluate_row(args, t * count_params, outs, t * count_obs, f, false);
+            }
+
             for t in dn * (n / dn)..n {
                 Self::evaluate_row(args, t * count_params, outs, t * count_obs, f, false);
             }
@@ -406,19 +416,29 @@ impl Application {
             let g = compiled.func();
             let lanes = compiled.count_lanes();
             let dn = if transpose { lanes } else { 1 };
+            let scalars: Vec<usize> = Vec::new();
 
-            for t in 0..n / dn {
-                Self::evaluate_row(
+            for k in 0..n / dn {
+                if Self::evaluate_row(
                     args,
-                    t * count_params * lanes,
+                    k * count_params * lanes,
                     outs,
-                    t * count_obs * lanes,
+                    k * count_obs * lanes,
                     g,
                     transpose,
-                );
+                ) != 0 {
+                    for t in k*dn..(k+1)*dn {
+                        scalars.push(t);
+                    }
+                }
             }
 
             let f = self.compiled.func();
+
+            for t in scalars {
+                Self::evaluate_row(args, t * count_params, outs, t * count_obs, f, false);
+            }
+
             for t in dn * (n / dn)..n {
                 Self::evaluate_row(args, t * count_params, outs, t * count_obs, f, false);
             }

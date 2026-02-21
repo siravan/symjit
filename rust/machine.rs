@@ -43,7 +43,7 @@ impl<T: Clone + Default> MachineCode<T> {
 
         let f: CompiledFunc<T> = if valid {
             unsafe {
-                std::mem::transmute::<*mut u8, fn(*const T, *const &mut [T], usize, *const T)>(p)
+                std::mem::transmute::<*mut u8, fn(*const T, *const &mut [T], usize, *const T) -> i32>(p)
             }
         } else {
             Self::invalid
@@ -59,7 +59,7 @@ impl<T: Clone + Default> MachineCode<T> {
         }
     }
 
-    fn invalid(_a: *const T, _b: *const &mut [T], _c: usize, _d: *const T) {
+    fn invalid(_a: *const T, _b: *const &mut [T], _c: usize, _d: *const T) -> i32 {
         if cfg!(target_arch = "x86_64") {
             panic!("invalid processor architecture; expect x86_64");
         } else if cfg!(target_arch = "aarch64") {
