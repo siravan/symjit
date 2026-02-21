@@ -373,8 +373,9 @@ impl Application {
             let g = compiled.func();
             let lanes = compiled.count_lanes();
             let dn = if transpose { lanes } else { 1 };
+            let f = self.compiled.func();
 
-            let scalars = (0..n / dn).into_par_iter().map(|k| {
+            let scalars: <Vec<Option<usize>>> = (0..n / dn).into_par_iter().map(|k| {
                 if Self::evaluate_row(
                     args,
                     k * count_params * lanes,
@@ -383,13 +384,11 @@ impl Application {
                     g,
                     transpose,
                 ) == 0 { None } else { Some(k) }
-            }).collect::<Vec<Option<usize>>>::();
-
-            let f = self.compiled.func();
+            }).collect();
 
             for k in scalars {
                 if let Some(k) = k {
-                    for t = k*dn..(k+1)*dn {
+                    for t in k*dn..(k+1)*dn {
                         Self::evaluate_row(args, t * count_params, outs, t * count_obs, f, false);
                     }
                 }
@@ -434,7 +433,7 @@ impl Application {
 
             for k in scalars {
                 if let Some(k) = k {
-                    for t = k*dn..(k+1)*dn {
+                    for t in k*dn..(k+1)*dn {
                         Self::evaluate_row(args, t * count_params, outs, t * count_obs, f, false);
                     }
                 }
