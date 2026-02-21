@@ -344,7 +344,7 @@ impl Application {
         let f = self.compiled.func();
 
         (0..n).into_par_iter().for_each(|t| {
-            Self::evaluate_row(args, t * count_params, outs, t * count_obs, f, false)
+            Self::evaluate_row(args, t * count_params, outs, t * count_obs, f, false);
         });
     }
 
@@ -385,6 +385,8 @@ impl Application {
                 ) == 0 { None } else { Some(k) }
             }).collect::<Vec<Option<usize>>>::();
 
+            let f = self.compiled.func();
+
             for k in scalars {
                 if let Some(k) = k {
                     for t = k*dn..(k+1)*dn {
@@ -413,7 +415,7 @@ impl Application {
             let g = compiled.func();
             let lanes = compiled.count_lanes();
             let dn = if transpose { lanes } else { 1 };
-            let scalars: Vec<usize> = Vec::new();
+            let mut scalars: Vec<usize> = Vec::new();
 
             for k in 0..n / dn {
                 if Self::evaluate_row(
@@ -424,16 +426,18 @@ impl Application {
                     g,
                     transpose,
                 ) != 0 {
-                    for t in k*dn..(k+1)*dn {
-                        scalars.push(t);
-                    }
+                    scalars.push(k);
                 }
             }
 
             let f = self.compiled.func();
 
-            for t in scalars {
-                Self::evaluate_row(args, t * count_params, outs, t * count_obs, f, false);
+            for k in scalars {
+                if let Some(k) = k {
+                    for t = k*dn..(k+1)*dn {
+                        Self::evaluate_row(args, t * count_params, outs, t * count_obs, f, false);
+                    }
+                }
             }
 
             for t in dn * (n / dn)..n {
