@@ -335,9 +335,23 @@ macro_rules! arm {
     (b.le label($ofs:expr)) => { 0x5400000D | ofs_pc!($ofs) };
     (b.gt label($ofs:expr)) => { 0x5400000C | ofs_pc!($ofs) };
     (b.ge label($ofs:expr)) => { 0x5400000A | ofs_pc!($ofs) };
+
     (tst x($rn:expr), x($rm:expr)) => {
         0xea00001f | rn!($rn) | rm!($rm)
     };
+
+    (and x($rd:expr), x($rn:expr), x($rm:expr)) => {
+        0x8a000000 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
+    (orr x($rd:expr), x($rn:expr), x($rm:expr)) => {
+        0xaa000000 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
+    (eor x($rd:expr), x($rn:expr), x($rm:expr)) => {
+        0xca000000 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
     (blr x($rn:expr)) => { 0xd63f0000 | rn!($rn) };
     (ret) => { 0xd65f03c0 };
     (nop) => { 0x91000000 };
@@ -376,6 +390,14 @@ macro_rules! arm {
     // dup q(0), q(1)[0] means dup v0.2d, v1.d[0]
     (dup q($rd:expr), q($rn:expr)[0]) => {
         0x4e080400 | rd!($rd) | rn!($rn)
+    };
+
+    (umov x($rd:expr), v($rn:expr).d[0]) => {
+        0x4e083c00 | rd!($rd) | rn!($rn)
+    };
+
+    (umov x($rd:expr), v($rn:expr).d[1]) => {
+        0x4e183c00 | rd!($rd) | rn!($rn)
     };
 
     (str q($rd:expr), [x($rn:expr), #$ofs:expr]) => {
