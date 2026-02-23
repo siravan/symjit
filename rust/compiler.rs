@@ -14,7 +14,7 @@ use crate::defuns::Defuns;
 use crate::expr::Expr;
 use crate::model::{CellModel, Equation, Program, Variable};
 use crate::symbol::Loc;
-use crate::utils::CompiledFunc;
+use crate::utils::{bool_to_f64, CompiledFunc};
 use crate::Application;
 
 // #[derive(Debug)]
@@ -359,12 +359,7 @@ impl Application {
         }
     }
 
-    pub fn evaluate_matrix_with_threads_simd(
-        &mut self,
-        args: &[f64],
-        outs: &mut [f64],
-        n: usize,
-    ) {
+    pub fn evaluate_matrix_with_threads_simd(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
         let count_params = self.count_params;
         let count_obs = self.count_obs;
 
@@ -382,9 +377,17 @@ impl Application {
                     top * count_obs,
                     f_simd,
                     true,
-                ) != 0 {
+                ) != 0
+                {
                     for i in 0..lanes {
-                        Self::evaluate_row(args, (top + i) * count_params, outs, (top + i) * count_obs, f_scalar, false);
+                        Self::evaluate_row(
+                            args,
+                            (top + i) * count_params,
+                            outs,
+                            (top + i) * count_obs,
+                            f_scalar,
+                            false,
+                        );
                     }
                 }
             });
@@ -418,9 +421,17 @@ impl Application {
                     top * count_obs,
                     f_simd,
                     true,
-                ) != 0 {
+                ) != 0
+                {
                     for i in 0..lanes {
-                        Self::evaluate_row(args, (top + i) * count_params, outs, (top + i) * count_obs, f_scalar, false);
+                        Self::evaluate_row(
+                            args,
+                            (top + i) * count_params,
+                            outs,
+                            (top + i) * count_obs,
+                            f_scalar,
+                            false,
+                        );
                     }
                 }
             }
@@ -1249,7 +1260,7 @@ impl Translator {
 
         self.eqs.push(Expr::equation(
             &Expr::Special,
-            &Expr::IfElse {
+            &Expr::BranchIf {
                 cond: Box::new(cond),
                 id,
             },
@@ -1258,10 +1269,10 @@ impl Translator {
     }
 
     fn translate_goto(&mut self, id: usize) -> Result<()> {
-        let cond = Expr::from(f64::from_bits(!0)); // cond = true
+        let cond = Expr::from(bool_to_f64(true));
         self.eqs.push(Expr::equation(
             &Expr::Special,
-            &Expr::IfElse {
+            &Expr::BranchIf {
                 cond: Box::new(cond),
                 id,
             },

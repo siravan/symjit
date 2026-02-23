@@ -337,7 +337,7 @@ impl Equation {
                 let label = format!("L.{}", id);
                 builder.block().add_label(&label);
             }
-            Expr::IfElse { cond, id } => {
+            Expr::BranchIf { cond, id } => {
                 let cond = cond.transform(builder)?;
                 let label = format!("L.{}", id);
                 builder.block().add_branch(cond, &label);

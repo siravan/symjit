@@ -36,7 +36,7 @@ pub enum Expr {
     Var { name: String },
     Special,
     Label { id: usize },
-    IfElse { cond: Box<Expr>, id: usize },
+    BranchIf { cond: Box<Expr>, id: usize },
 }
 
 impl From<f64> for Expr {
