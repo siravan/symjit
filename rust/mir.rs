@@ -110,6 +110,9 @@ pub enum Instruction {
         label: String,
     },
     Branch {
+        label: String,
+    },
+    BranchIf {
         cond: Reg,
         label: String,
     },
@@ -145,7 +148,8 @@ impl fmt::Debug for Instruction {
                 &dst, cond, &true_val, &false_val
             ),
             Self::Label { label } => write!(f, "{:?}:", &label),
-            Self::Branch { cond, label } => write!(f, "if {:?} goto {:?}", &cond, label),
+            Self::Branch { label } => write!(f, "goto {:?}", label),
+            Self::BranchIf { cond, label } => write!(f, "if {:?} goto {:?}", &cond, label),
         }
     }
 }
@@ -266,8 +270,14 @@ impl Mir {
         })
     }
 
-    pub fn branch_if(&mut self, cond: Reg, label: &str) {
+    pub fn branch(&mut self, label: &str) {
         self.push(Instruction::Branch {
+            label: label.to_string(),
+        });
+    }
+
+    pub fn branch_if(&mut self, cond: Reg, label: &str) {
+        self.push(Instruction::BranchIf {
             cond,
             label: label.to_string(),
         });
@@ -910,7 +920,8 @@ impl Mir {
                     )
                 }
                 Instruction::Label { .. } => {}
-                Instruction::Branch { cond, label } => {
+                Instruction::Branch { label } => ip = self.labels.get(label).unwrap() - 1,
+                Instruction::BranchIf { cond, label } => {
                     if Self::get(regs, *cond) != 0.0 {
                         ip = self.labels.get(label).unwrap() - 1
                     }
@@ -1018,7 +1029,8 @@ impl Mir {
                     }
                 }
                 Instruction::Label { label } => ir.set_label(label),
-                Instruction::Branch { cond, label } => ir.branch_if(*cond, label),
+                Instruction::Branch { label } => ir.branch(label),
+                Instruction::BranchIf { cond, label } => ir.branch_if(*cond, label),
             }
         }
 

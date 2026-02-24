@@ -130,9 +130,15 @@ impl Compactor {
                         label: label.clone(),
                     });
                 }
-                Instruction::Branch { cond, label } => {
+                Instruction::Branch { label } => {
                     self.depth -= 1;
                     self.push(Instruction::Branch {
+                        label: label.clone(),
+                    });
+                }
+                Instruction::BranchIf { cond, label } => {
+                    self.depth -= 1;
+                    self.push(Instruction::BranchIf {
                         cond: *cond,
                         label: label.clone(),
                     });

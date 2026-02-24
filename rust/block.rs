@@ -42,8 +42,14 @@ impl Block {
         });
     }
 
-    pub fn add_branch(&mut self, cond: Node, label: &str) {
+    pub fn add_branch(&mut self, label: &str) {
         self.stmts.push(Statement::Branch {
+            label: label.to_string(),
+        })
+    }
+
+    pub fn add_branch_if(&mut self, cond: Node, label: &str) {
+        self.stmts.push(Statement::BranchIf {
             cond,
             label: label.to_string(),
         })
@@ -272,7 +278,7 @@ impl Block {
                     // but needs improvement for general multi-block situations
                     depth += 1;
                 }
-                Statement::Branch { .. } => {
+                Statement::Branch { .. } | Statement::BranchIf { .. } => {
                     // assert!(depth > 0);
                     depth -= 1;
                 }
@@ -313,8 +319,11 @@ impl Block {
                     // TODO: Just copying here, may need to change the logic
                     self.stmts.push(Statement::Label { label });
                 }
-                Statement::Branch { cond, label } => {
-                    self.stmts.push(Statement::Branch { cond, label });
+                Statement::Branch { label } => {
+                    self.stmts.push(Statement::Branch { label });
+                }
+                Statement::BranchIf { cond, label } => {
+                    self.stmts.push(Statement::BranchIf { cond, label });
                 }
             }
         }

@@ -36,6 +36,7 @@ pub enum Expr {
     Var { name: String },
     Special,
     Label { id: usize },
+    Branch { id: usize },
     BranchIf { cond: Box<Expr>, id: usize },
 }
 

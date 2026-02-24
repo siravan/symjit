@@ -160,9 +160,13 @@ impl Generator for ArmGenerator {
         self.a.set_label(label);
     }
 
+    fn branch(&mut self, label: &str) {
+        self.emit(arm! {tst x(0), x(0)});
+        self.jump(label, 0, |offset, _| arm! {b.eq label(offset)});
+    }
+
     fn branch_if(&mut self, cond: Reg, label: &str) {
         self.emit(arm! {fcmp d(ϕ(cond)), #0.0});
-        // self.jump(label, arm! {b.ne label(0)});
         self.jump(label, 0, |offset, _| arm! {b.ne label(offset)});
     }
 
@@ -720,6 +724,11 @@ impl Generator for ArmSimdGenerator {
 
     fn set_label(&mut self, label: &str) {
         self.a.set_label(label);
+    }
+
+    fn branch(&mut self, label: &str) {
+        self.emit(arm! {tst x(0), x(0)});
+        self.jump(label, 0, |offset, _| arm! {b.eq label(offset)});
     }
 
     fn branch_if(&mut self, cond: Reg, label: &str) {

@@ -841,6 +841,7 @@ pub struct Translator {
     outs: HashMap<usize, Expr>,    // cache of Outs (Out idx => Expr)
     reals: HashSet<Loc>,
     num_params: usize,
+    has_jump: bool,
 }
 
 impl Translator {
@@ -858,6 +859,7 @@ impl Translator {
             outs: HashMap::new(),
             reals: HashSet::new(),
             num_params: 0,
+            has_jump: false,
         }
     }
 
@@ -950,6 +952,7 @@ impl Translator {
     }
 
     pub fn append_if_else(&mut self, cond: &Slot, id: usize) -> Result<()> {
+        self.has_jump = true;
         let cond = self.consume(cond)?;
         self.ssa.push(Instruction::IfElse(cond, id));
         Ok(())
@@ -1138,19 +1141,21 @@ impl Translator {
 
     // The counterpart of produce for the second-pass
     fn assign(&mut self, lhs: &Slot, rhs: Expr) -> Result<()> {
-        if let Slot::Static(idx) = lhs {
-            // Important! If a static variable is used only once, it
-            // is pushed into the cache to be incorporated into the
-            // destination expression tree.
-            if self.counts.get(idx).is_some_and(|c| *c == 1) {
-                self.cache.insert(*idx, rhs);
+        if !self.has_jump {
+            if let Slot::Static(idx) = lhs {
+                // Important! If a static variable is used only once, it
+                // is pushed into the cache to be incorporated into the
+                // destination expression tree.
+                if self.counts.get(idx).is_some_and(|c| *c == 1) {
+                    self.cache.insert(*idx, rhs);
+                    return Ok(());
+                }
+            }
+
+            if let Slot::Out(idx) = lhs {
+                self.outs.insert(*idx, rhs.clone());
                 return Ok(());
             }
-        }
-
-        if let Slot::Out(idx) = lhs {
-            self.outs.insert(*idx, rhs.clone());
-            return Ok(());
         }
 
         let lhs = self.expr(lhs, false);
@@ -1252,11 +1257,13 @@ impl Translator {
     }
 
     fn translate_ifelse(&mut self, cond: &Slot, id: usize) -> Result<()> {
-        let cond = Expr::binary(
-            "lt",
-            &Expr::unary("abs", &self.expr(cond, false)),
-            &Expr::from(f64::EPSILON),
-        );
+        // let cond = Expr::binary(
+        //     "lt",
+        //     &Expr::unary("abs", &self.expr(cond, false)),
+        //     &Expr::from(f64::EPSILON),
+        // );
+
+        let cond = Expr::binary("eq", &self.expr(cond, false), &Expr::from(0.0));
 
         self.eqs.push(Expr::equation(
             &Expr::Special,
@@ -1269,14 +1276,8 @@ impl Translator {
     }
 
     fn translate_goto(&mut self, id: usize) -> Result<()> {
-        let cond = Expr::from(bool_to_f64(true));
-        self.eqs.push(Expr::equation(
-            &Expr::Special,
-            &Expr::BranchIf {
-                cond: Box::new(cond),
-                id,
-            },
-        ));
+        self.eqs
+            .push(Expr::equation(&Expr::Special, &Expr::Branch { id }));
 
         Ok(())
     }

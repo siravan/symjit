@@ -11,6 +11,7 @@ pub trait Generator {
     fn seal(&mut self);
     fn align(&mut self);
     fn set_label(&mut self, label: &str);
+    fn branch(&mut self, label: &str);
     fn branch_if(&mut self, cond: Reg, label: &str);
 
     /***********************************/

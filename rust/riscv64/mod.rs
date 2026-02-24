@@ -247,6 +247,10 @@ impl Generator for RiscV {
         self.a.set_label(label);
     }
 
+    fn branch(&mut self, label: &str) {
+        self.jump(label, 0, |offset, _| rvv! {j offset});
+    }
+
     fn branch_if(&mut self, cond: Reg, label: &str) {
         self.emit(rvv! {fmv.x.d x(Self::t0), f(ϕ(cond))});
         self.emit(rvv! {beq x(Self::t0), x(Self::zero), 8});

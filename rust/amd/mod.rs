@@ -384,21 +384,26 @@ impl Generator for AmdGenerator {
         self.amd.a.set_label(label);
     }
 
+    fn branch(&mut self, label: &str) {
+        self.amd.xor(Amd::RAX, Amd::RAX);
+        self.amd.jz(label);
+    }
+
     fn branch_if(&mut self, cond: Reg, label: &str) {
-           match self.family {
-               AmdFamily::AvxScalar | AmdFamily::SSEScalar => {
-                   self.amd.vucomisd(ϕ(cond), ϕ(cond));
-                   self.amd.jpe(label);
-               }
-               AmdFamily::AvxVector => {
-                   self.amd.vmovmskpd(Amd::RAX, ϕ(cond));
-                   self.amd.cmp_imm(Amd::RAX, 15);
-                   self.amd.jz(label);
-                   self.amd.or(Amd::RAX, Amd::RAX);
-                   self.amd.jnz("@epilogue");
-               }
-           }
-       }
+        match self.family {
+            AmdFamily::AvxScalar | AmdFamily::SSEScalar => {
+                self.amd.vucomisd(ϕ(cond), ϕ(cond));
+                self.amd.jpe(label);
+            }
+            AmdFamily::AvxVector => {
+                self.amd.vmovmskpd(Amd::RAX, ϕ(cond));
+                self.amd.cmp_imm(Amd::RAX, 15);
+                self.amd.jz(label);
+                self.amd.or(Amd::RAX, Amd::RAX);
+                self.amd.jnz("@epilogue");
+            }
+        }
+    }
 
     //***********************************
 
