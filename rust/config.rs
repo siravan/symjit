@@ -147,11 +147,7 @@ impl Config {
     }
 
     fn available_registers(&self) -> u8 {
-        if self.is_arm64() || self.is_riscv64() {
-            16 // todo! it should be 32, but this causes a bug for complex numbers
-        } else {
-            16
-        }
+        16
     }
 
     pub fn count_scratch(&self) -> u8 {

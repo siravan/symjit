@@ -842,6 +842,7 @@ pub struct Translator {
     reals: HashSet<Loc>,
     num_params: usize,
     has_jump: bool,
+    last_label: usize,
 }
 
 impl Translator {
@@ -860,6 +861,7 @@ impl Translator {
             reals: HashSet::new(),
             num_params: 0,
             has_jump: false,
+            last_label: 0,
         }
     }
 
@@ -959,6 +961,7 @@ impl Translator {
     }
 
     pub fn append_goto(&mut self, id: usize) -> Result<()> {
+        self.last_label = self.last_label.max(id);
         self.ssa.push(Instruction::Goto(id));
         Ok(())
     }
@@ -1062,10 +1065,7 @@ impl Translator {
                 Instruction::Join(lhs, cond, true_val, false_val) => {
                     self.translate_join(lhs, cond, true_val, false_val)?
                 }
-                Instruction::Label(id) => {
-                    self.eqs
-                        .push(Expr::equation(&Expr::Special, &Expr::Label { id: *id }));
-                }
+                Instruction::Label(id) => self.translate_label(*id)?,
                 Instruction::IfElse(cond, id) => self.translate_ifelse(cond, *id)?,
                 Instruction::Goto(id) => self.translate_goto(*id)?,
                 Instruction::ExternalFun(lhs, op, args) => {
@@ -1239,21 +1239,39 @@ impl Translator {
         Ok(())
     }
 
+    fn translate_label(&mut self, id: usize) -> Result<()> {
+        self.eqs
+            .push(Expr::equation(&Expr::Special, &Expr::Label { id }));
+        Ok(())
+    }
+
     fn translate_join(
         &mut self,
         lhs: &Slot,
-        cond: &Slot,
+        _cond: &Slot,
         true_val: &Slot,
         false_val: &Slot,
     ) -> Result<()> {
-        let cond = Expr::binary(
-            "gt",
-            &Expr::unary("abs", &self.expr(cond, false)),
-            &Expr::from(f64::EPSILON),
-        );
-        let t = self.expr(true_val, false);
-        let f = self.expr(false_val, false);
-        self.assign(lhs, cond.ifelse(&t, &f))
+        // Join is essentially a Φ-function.
+        if let Some(Equation {
+            lhs: Expr::Special,
+            rhs: Expr::Label { id },
+        }) = self.eqs.pop()
+        {
+            let t = self.expr(true_val, false);
+            let f = self.expr(false_val, false);
+            self.last_label += 1;
+
+            self.assign(&lhs.clone(), f)?;
+            self.translate_goto(self.last_label)?;
+            self.translate_label(id)?;
+            self.assign(lhs, t)?;
+            self.translate_label(self.last_label)?;
+        } else {
+            panic!("A join instruction should follow a label.");
+        }
+
+        Ok(())
     }
 
     fn translate_ifelse(&mut self, cond: &Slot, id: usize) -> Result<()> {
@@ -1278,7 +1296,6 @@ impl Translator {
     fn translate_goto(&mut self, id: usize) -> Result<()> {
         self.eqs
             .push(Expr::equation(&Expr::Special, &Expr::Branch { id }));
-
         Ok(())
     }
 
