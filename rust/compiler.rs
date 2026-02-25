@@ -338,7 +338,7 @@ impl Application {
     }
 
     /// Generic evaluate function for compiled Symbolica expressions
-    pub fn evaluate_matrix_with_threads(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
+    fn evaluate_matrix_with_threads(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
         let count_params = self.count_params;
         let count_obs = self.count_obs;
         let f_scalar = self.compiled.func();
@@ -349,7 +349,7 @@ impl Application {
     }
 
     /// Generic evaluate function for compiled Symbolica expressions
-    pub fn evaluate_matrix_without_threads(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
+    fn evaluate_matrix_without_threads(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
         let count_params = self.count_params;
         let count_obs = self.count_obs;
         let f_scalar = self.compiled.func();
@@ -359,7 +359,7 @@ impl Application {
         }
     }
 
-    pub fn evaluate_matrix_with_threads_simd(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
+    fn evaluate_matrix_with_threads_simd(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
         let count_params = self.count_params;
         let count_obs = self.count_obs;
 
@@ -398,12 +398,7 @@ impl Application {
         }
     }
 
-    pub fn evaluate_matrix_without_threads_simd(
-        &mut self,
-        args: &[f64],
-        outs: &mut [f64],
-        n: usize,
-    ) {
+    fn evaluate_matrix_without_threads_simd(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
         let count_params = self.count_params;
         let count_obs = self.count_obs;
 

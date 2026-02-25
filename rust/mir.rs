@@ -1134,6 +1134,19 @@ impl Mir {
             }
         };
 
+        if let Instruction::Load { dst, loc } = *q0 {
+            if let Instruction::Save {
+                src: src_q1,
+                loc: loc_q1,
+            } = *q1
+            {
+                if loc == loc_q1 && dst == src_q1 {
+                    code.push(Instruction::Nop);
+                    return true;
+                }
+            }
+        };
+
         false
     }
 

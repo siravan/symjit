@@ -6,7 +6,7 @@ ev = E("if(y, x + 1, x + 2)").evaluator(
     {}, {}, [S("x"), S("y")], conditionals=[S("if")]
 )
 
-f_with_simd = compile_evaluator(ev, use_threads=False, ty="bytecode")
+f_with_simd = compile_evaluator(ev, use_threads=False)
 
 print(f_with_simd.dumps())
 
