@@ -49,7 +49,7 @@ pub struct Complexifier {
 }
 
 impl Complexifier {
-    pub fn new(reals: &HashSet<Loc>, config: Config) -> Complexifier {
+    pub fn new(reals: &HashSet<Loc>, config: Config, df: &Defuns) -> Complexifier {
         let mut real_locs: HashSet<Loc> = HashSet::new();
         for loc in reals {
             if let Loc::Param(idx) = loc {
@@ -58,19 +58,13 @@ impl Complexifier {
         }
 
         Complexifier {
-            mir: Mir::new(config, &Defuns::new()),
+            mir: Mir::new(config, df),
             real_locs,
             real_regs: [false; 32],
         }
     }
 
     pub fn complexify(&mut self, mir: &Mir) -> Result<Mir> {
-        if mir.df.len() != 0 {
-            return Err(anyhow!(
-                "Complex functions do not support user-defined functions"
-            ));
-        }
-
         self.mir.consts = mir.consts.clone();
         self.mir.labels = mir.labels.clone();
 

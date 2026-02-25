@@ -14,7 +14,7 @@ use crate::defuns::Defuns;
 use crate::expr::Expr;
 use crate::model::{CellModel, Equation, Program, Variable};
 use crate::symbol::Loc;
-use crate::utils::{bool_to_f64, CompiledFunc};
+use crate::utils::CompiledFunc;
 use crate::Application;
 
 // #[derive(Debug)]
@@ -825,6 +825,7 @@ struct SymbolicaModel(Vec<Instruction>, usize, Vec<ConstType>);
 #[derive(Debug, Clone)]
 pub struct Translator {
     config: Config,
+    df: Defuns,
     ssa: Vec<Instruction>,
     consts: Vec<Complex<f64>>, // constants
     count_params: usize,
@@ -841,9 +842,10 @@ pub struct Translator {
 }
 
 impl Translator {
-    pub fn new(config: Config) -> Translator {
+    pub fn new(config: Config, df: &Defuns) -> Translator {
         Translator {
             config,
+            df: df.clone(),
             ssa: Vec::new(),
             consts: Vec::new(),
             count_params: 0,
@@ -1101,7 +1103,7 @@ impl Translator {
         ))
     }
 
-    // The counterpark of consume for the second-pass
+    // The counterpart of consume for the second-pass
     fn expr(&mut self, slot: &Slot, is_real: bool) -> Expr {
         match slot {
             Slot::Param(idx) => {
@@ -1235,9 +1237,23 @@ impl Translator {
     }
 
     fn translate_label(&mut self, id: usize) -> Result<()> {
-        self.eqs
-            .push(Expr::equation(&Expr::Special, &Expr::Label { id }));
+        self.eqs.push(Expr::special(&Expr::Label { id }));
         Ok(())
+    }
+
+    fn current_cond(&mut self) -> Expr {
+        Expr::var(&format!("__Static{}", self.count_statics))
+    }
+
+    fn new_cond(&mut self) -> Expr {
+        self.count_statics += 1;
+        self.current_cond()
+    }
+
+    fn free_cond(&mut self) -> Expr {
+        let s = self.current_cond();
+        self.count_statics -= 1;
+        s
     }
 
     fn translate_join(
@@ -1255,13 +1271,20 @@ impl Translator {
         {
             let t = self.expr(true_val, false);
             let f = self.expr(false_val, false);
-            self.last_label += 1;
 
-            self.assign(&lhs.clone(), f)?;
-            self.translate_goto(self.last_label)?;
-            self.translate_label(id)?;
-            self.assign(lhs, t)?;
-            self.translate_label(self.last_label)?;
+            if self.config.simd_branch() {
+                let cond = self.free_cond();
+                self.translate_label(id)?;
+                self.assign(lhs, cond.ifelse(&f, &t))?;
+            } else {
+                self.last_label += 1;
+
+                self.assign(&lhs.clone(), f)?;
+                self.translate_goto(self.last_label)?;
+                self.translate_label(id)?;
+                self.assign(lhs, t)?;
+                self.translate_label(self.last_label)?;
+            }
         } else {
             panic!("A join instruction should follow a label.");
         }
@@ -1276,21 +1299,29 @@ impl Translator {
         //     &Expr::from(f64::EPSILON),
         // );
 
-        let cond = Expr::binary("eq", &self.expr(cond, false), &Expr::from(0.0));
+        let cond = &Expr::binary("eq", &self.expr(cond, false), &Expr::from(0.0));
+        let c = self.new_cond();
 
-        self.eqs.push(Expr::equation(
-            &Expr::Special,
-            &Expr::BranchIf {
-                cond: Box::new(cond),
-                id,
-            },
-        ));
+        self.eqs.push(Expr::equation(&c, cond));
+
+        self.eqs.push(Expr::special(&Expr::BranchIf {
+            cond: Box::new(c),
+            id,
+        }));
         Ok(())
     }
 
     fn translate_goto(&mut self, id: usize) -> Result<()> {
-        self.eqs
-            .push(Expr::equation(&Expr::Special, &Expr::Branch { id }));
+        if self.config.simd_branch() {
+            let cond = self.current_cond();
+            self.eqs.push(Expr::special(&Expr::BranchIf {
+                cond: Box::new(Expr::unary("not", &cond)),
+                id,
+            }));
+        } else {
+            self.eqs
+                .push(Expr::equation(&Expr::Special, &Expr::Branch { id }));
+        }
         Ok(())
     }
 
@@ -1301,7 +1332,7 @@ impl Translator {
     pub fn compile(&mut self) -> Result<Application> {
         let (ml, reals) = self.translate()?;
         let prog = Program::new(&ml, self.config)?;
-        let mut app = Application::new(prog, reals, &Defuns::new())?;
+        let mut app = Application::new(prog, reals, &self.df)?;
         app.prepare_simd();
         Ok(app)
     }
@@ -1324,8 +1355,8 @@ impl Compiler {
     /// let mut app = comp.translate(&json)?;
     /// assert!(app.evaluate_single(&[2.0, 3.0]) == 11.0);
     /// ```
-    pub fn translate(&mut self, json: &str, num_params: usize) -> Result<Application> {
-        let mut translator = Translator::new(self.config);
+    pub fn translate(&mut self, json: &str, df: &Defuns, num_params: usize) -> Result<Application> {
+        let mut translator = Translator::new(self.config, df);
 
         let model: SymbolicaModel = serde_json::from_str(json)?;
 

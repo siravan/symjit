@@ -116,6 +116,14 @@ impl Expr {
         }
     }
 
+    /// Creates an special equation Special ~ rhs.
+    pub fn special(rhs: &Expr) -> Equation {
+        Equation {
+            lhs: Expr::Special,
+            rhs: rhs.clone(),
+        }
+    }
+
     /// Converts a variable Expr to a Variable type needed by the next stage.
     pub fn to_variable(&self) -> Result<Variable> {
         if let Expr::Var { name } = self {

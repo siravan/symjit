@@ -11,6 +11,7 @@ pub const FASTMATH: u32 = 0x08;
 // pub const SANITIZE: u32 = 0x10;
 pub const COMPLEX: u32 = 0x20;
 pub const SYMBOLICA: u32 = 0x40;
+pub const SIMD_BRANCH: u32 = 0x80;
 
 pub const OPT_LEVEL_MASK: u32 = 0x0f00;
 pub const OPT_LEVEL_SHIFT: usize = 8;
@@ -105,6 +106,10 @@ impl Config {
         self.test(USE_SIMD) && (self.has_avx() || self.is_arm64())
     }
 
+    pub fn simd_branch(&self) -> bool {
+        self.test(SIMD_BRANCH) && (self.has_avx() || self.is_arm64())
+    }
+
     pub fn use_threads(&self) -> bool {
         self.test(USE_THREADS)
     }
@@ -185,6 +190,11 @@ impl Config {
     /// Enables SIMD mode.
     pub fn set_simd(&mut self, enabled: bool) {
         self.opt = (self.opt & !USE_SIMD) | if enabled { USE_SIMD } else { 0 };
+    }
+
+    /// Enables forced SIMD branching mode.
+    pub fn set_simd_branch(&mut self, enabled: bool) {
+        self.opt = (self.opt & !SIMD_BRANCH) | if enabled { SIMD_BRANCH } else { 0 };
     }
 
     /// Enables Complex Numbers.

@@ -399,8 +399,11 @@ impl Generator for AmdGenerator {
                 self.amd.vmovmskpd(Amd::RAX, ϕ(cond));
                 self.amd.cmp_imm(Amd::RAX, 15);
                 self.amd.jz(label);
-                self.amd.or(Amd::RAX, Amd::RAX);
-                self.amd.jnz("@epilogue");
+
+                if !self.config.simd_branch() {
+                    self.amd.or(Amd::RAX, Amd::RAX);
+                    self.amd.jnz("@epilogue");
+                }
             }
         }
     }

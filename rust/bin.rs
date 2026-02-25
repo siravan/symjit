@@ -2,7 +2,9 @@ use anyhow::Result;
 use num_complex::Complex;
 use rand::{self, Rng};
 use std::fs;
-use symjit::{compiler, int, var, Application, Compiler, Config, Expr, FastFunc, Translator};
+use symjit::{
+    compiler, int, var, Application, Compiler, Config, Defuns, Expr, FastFunc, Translator,
+};
 use wide::{f64x2, f64x4};
 
 use symbolica::{
@@ -174,7 +176,8 @@ fn translate(json: &str, complex: bool, simd: bool) -> Result<Application> {
     config.set_complex(complex);
     config.set_simd(simd);
     let mut comp = Compiler::with_config(config);
-    comp.translate(&json, 0)
+
+    comp.translate(&json, &Defuns::new(), 0)
 }
 
 fn assert_nearly_eq(x: f64, y: f64) {
@@ -209,7 +212,7 @@ fn test_symbolica_scalar() -> Result<()> {
         let json = serde_json::to_string(&eval.export_instructions())?;
 
         let mut comp = Compiler::new();
-        let mut app = comp.translate(&json, 0)?;
+        let mut app = comp.translate(&json, &Defuns::new(), 0)?;
 
         app.evaluate(args, &mut outs);
         let v = eval.map_coeff(&|x| x.re.to_f64()).evaluate_single(args);
@@ -508,7 +511,7 @@ fn translate_instructions(
     constants: Vec<Complex<f64>>,
     config: Config,
 ) -> Result<Translator> {
-    let mut translator = Translator::new(config);
+    let mut translator = Translator::new(config, &Defuns::new());
 
     for z in constants {
         translator.append_constant(z)?;

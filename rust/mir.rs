@@ -716,15 +716,15 @@ impl Mir {
     }
 
     pub fn find_op(&self, op: &str) -> Result<Func> {
+        let op = if self.config.is_complex() {
+            &format!("cplx_{}", &op)
+        } else {
+            op
+        };
+
         if let Some(f) = self.df.funcs.get(op) {
             Ok(f.clone())
         } else {
-            let op = if self.config.is_complex() {
-                &format!("cplx_{}", &op)
-            } else {
-                op
-            };
-
             VirtualTable::from_str(op)
         }
     }

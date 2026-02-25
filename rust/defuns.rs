@@ -1,4 +1,4 @@
-use crate::code::{BinaryFunc, Func, UnaryFunc};
+use crate::code::{BinaryFunc, BinaryFuncCplx, Func, UnaryFunc, UnaryFuncCplx};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default)]
@@ -35,6 +35,16 @@ impl Defuns {
 
     pub fn add_binary(&mut self, name: &str, f: BinaryFunc) {
         self.funcs.insert(name.to_string(), Func::Binary(f));
+    }
+
+    pub fn add_unary_complex(&mut self, name: &str, f: UnaryFuncCplx) {
+        self.funcs
+            .insert(format!("cplx_{}", name), Func::UnaryCplx(f));
+    }
+
+    pub fn add_binary_complex(&mut self, name: &str, f: BinaryFuncCplx) {
+        self.funcs
+            .insert(format!("cplx_{}", name), Func::BinaryCplx(f));
     }
 
     pub fn len(&self) -> usize {

@@ -432,7 +432,7 @@ mod arm;
 #[allow(non_upper_case_globals)]
 mod riscv64;
 
-use defuns::Defuns;
+pub use defuns::Defuns;
 use matrix::Matrix;
 use model::{CellModel, Program};
 
@@ -565,7 +565,7 @@ pub unsafe extern "C" fn translate(
     json: *const c_char,
     ty: *const c_char,
     opt: u32,
-    _df: *const Defuns,
+    df: *const Defuns,
     num_params: usize,
 ) -> *const CompilerResult {
     let mut res = CompilerResult {
@@ -597,8 +597,9 @@ pub unsafe extern "C" fn translate(
     };
 
     if let Ok(config) = Config::from_name(ty, opt) {
+        let df: &Defuns = unsafe { &*df };
         let mut comp = Compiler::with_config(config);
-        let app = comp.translate(json, num_params);
+        let app = comp.translate(json, df, num_params);
 
         match app {
             Ok(app) => {

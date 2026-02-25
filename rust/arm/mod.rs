@@ -732,9 +732,17 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn branch_if(&mut self, cond: Reg, label: &str) {
-        self.emit(arm! {fcmp d(ϕ(cond)), #0.0});
-        // self.jump(label, arm! {b.ne label(0)});
+        self.emit(arm! {umov x(0), v(ϕ(cond)).d[0]});
+        self.emit(arm! {umov x(1), v(ϕ(cond)).d[1]});
+        // self.emit(arm! {fcmp d(ϕ(cond)), #0.0});
+        self.emit(arm! {tst x(0), x(1)});
         self.jump(label, 0, |offset, _| arm! {b.ne label(offset)});
+
+        if !self.config.simd_branch() {
+            self.emit(arm! {orr x(0), x(0), x(1)});
+            self.emit(arm! {tst x(0), x(0)});
+            self.jump("@epilogue", 0, |offset, _| arm! {b.ne label(offset)});
+        }
     }
 
     //***********************************
@@ -1211,6 +1219,9 @@ impl Generator for ArmSimdGenerator {
         count_obs: usize,
         count_params: usize,
     ) {
+        self.emit(arm! {eor x(0), x(0), x(0)});
+        self.set_label("@epilogue");
+
         if self.config.symbolica() {
             return self.epilogue_symbolica(cap, count_params, count_obs);
         }
