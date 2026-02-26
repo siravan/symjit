@@ -397,6 +397,7 @@ impl Generator for AmdGenerator {
             }
             AmdFamily::AvxVector => {
                 self.amd.vmovmskpd(Amd::RAX, ϕ(cond));
+                self.amd.and_imm(Amd::RAX, 15);
                 self.amd.cmp_imm(Amd::RAX, 15);
                 self.amd.jz(label);
 

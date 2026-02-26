@@ -1256,42 +1256,6 @@ impl Translator {
         s
     }
 
-    fn translate_join(
-        &mut self,
-        lhs: &Slot,
-        _cond: &Slot,
-        true_val: &Slot,
-        false_val: &Slot,
-    ) -> Result<()> {
-        // Join is essentially a Φ-function.
-        if let Some(Equation {
-            lhs: Expr::Special,
-            rhs: Expr::Label { id },
-        }) = self.eqs.pop()
-        {
-            let t = self.expr(true_val, false);
-            let f = self.expr(false_val, false);
-
-            if self.config.simd_branch() {
-                let cond = self.free_cond();
-                self.translate_label(id)?;
-                self.assign(lhs, cond.ifelse(&f, &t))?;
-            } else {
-                self.last_label += 1;
-
-                self.assign(&lhs.clone(), f)?;
-                self.translate_goto(self.last_label)?;
-                self.translate_label(id)?;
-                self.assign(lhs, t)?;
-                self.translate_label(self.last_label)?;
-            }
-        } else {
-            panic!("A join instruction should follow a label.");
-        }
-
-        Ok(())
-    }
-
     fn translate_ifelse(&mut self, cond: &Slot, id: usize) -> Result<()> {
         // let cond = Expr::binary(
         //     "lt",
@@ -1301,9 +1265,7 @@ impl Translator {
 
         let cond = &Expr::binary("eq", &self.expr(cond, false), &Expr::from(0.0));
         let c = self.new_cond();
-
         self.eqs.push(Expr::equation(&c, cond));
-
         self.eqs.push(Expr::special(&Expr::BranchIf {
             cond: Box::new(c),
             id,
@@ -1313,15 +1275,30 @@ impl Translator {
 
     fn translate_goto(&mut self, id: usize) -> Result<()> {
         if self.config.simd_branch() {
-            let cond = self.current_cond();
-            self.eqs.push(Expr::special(&Expr::BranchIf {
-                cond: Box::new(Expr::unary("not", &cond)),
-                id,
-            }));
+            // let cond = self.current_cond();
+            // self.eqs.push(Expr::special(&Expr::BranchIf {
+            //     cond: Box::new(Expr::unary("not", &cond)),
+            //     id,
+            // }));
         } else {
             self.eqs
                 .push(Expr::equation(&Expr::Special, &Expr::Branch { id }));
         }
+        Ok(())
+    }
+
+    fn translate_join(
+        &mut self,
+        lhs: &Slot,
+        _cond: &Slot,
+        true_val: &Slot,
+        false_val: &Slot,
+    ) -> Result<()> {
+        // Join is essentially a Φ-function.
+        let t = self.expr(true_val, false);
+        let f = self.expr(false_val, false);
+        let cond = self.free_cond();
+        self.assign(lhs, cond.ifelse(&f, &t))?;
         Ok(())
     }
 
