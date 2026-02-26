@@ -12,7 +12,7 @@ pub trait Generator {
     fn align(&mut self);
     fn set_label(&mut self, label: &str);
     fn branch(&mut self, label: &str);
-    fn branch_if(&mut self, cond: Reg, label: &str);
+    fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool);
 
     /***********************************/
     fn fmov(&mut self, dst: Reg, s1: Reg);

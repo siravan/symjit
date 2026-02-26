@@ -48,10 +48,11 @@ impl Block {
         })
     }
 
-    pub fn add_branch_if(&mut self, cond: Node, label: &str) {
+    pub fn add_branch_if(&mut self, cond: Node, label: &str, is_else: bool) {
         self.stmts.push(Statement::BranchIf {
             cond,
             label: label.to_string(),
+            is_else,
         })
     }
 
@@ -322,8 +323,17 @@ impl Block {
                 Statement::Branch { label } => {
                     self.stmts.push(Statement::Branch { label });
                 }
-                Statement::BranchIf { cond, label } => {
-                    self.stmts.push(Statement::BranchIf { cond, label });
+                Statement::BranchIf {
+                    cond,
+                    label,
+                    is_else,
+                } => {
+                    let cond = self.rewrite_cse(&cs, &mut ls, cond);
+                    self.stmts.push(Statement::BranchIf {
+                        cond,
+                        label,
+                        is_else,
+                    });
                 }
             }
         }

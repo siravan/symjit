@@ -13,7 +13,7 @@ pub struct Compactor {
     stack: HashMap<Loc, Loc>,  // the map of old Stack slots to new Stack slots
     pool: Vec<Loc>,            // the pool of Stack slots available to reuse
     count_stack: u32,          // next stack id to use if the pool is empty
-    depth: usize,              // loop depth
+    depth: isize,              // loop depth
 }
 
 impl Compactor {
@@ -136,11 +136,16 @@ impl Compactor {
                         label: label.clone(),
                     });
                 }
-                Instruction::BranchIf { cond, label } => {
+                Instruction::BranchIf {
+                    cond,
+                    label,
+                    is_else,
+                } => {
                     self.depth -= 1;
                     self.push(Instruction::BranchIf {
                         cond: *cond,
                         label: label.clone(),
+                        is_else: *is_else,
                     });
                 }
                 _ => {

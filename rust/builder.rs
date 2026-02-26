@@ -152,7 +152,7 @@ impl Builder {
         let cond = self.create_binary("leq", var, end)?;
 
         let label = format!(".L{}", loop_id);
-        self.block().add_branch_if(cond, &label);
+        self.block().add_branch_if(cond, &label, false);
 
         Ok(accum_var)
     }

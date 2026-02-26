@@ -389,16 +389,25 @@ impl Generator for AmdGenerator {
         self.amd.jz(label);
     }
 
-    fn branch_if(&mut self, cond: Reg, label: &str) {
+    fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
         match self.family {
             AmdFamily::AvxScalar | AmdFamily::SSEScalar => {
                 self.amd.vucomisd(ϕ(cond), ϕ(cond));
-                self.amd.jpe(label);
+
+                if is_else {
+                    self.amd.jpo(label);
+                } else {
+                    self.amd.jpe(label);
+                }
             }
             AmdFamily::AvxVector => {
                 self.amd.vmovmskpd(Amd::RAX, ϕ(cond));
                 self.amd.and_imm(Amd::RAX, 15);
-                self.amd.cmp_imm(Amd::RAX, 15);
+
+                if !is_else {
+                    self.amd.cmp_imm(Amd::RAX, 15);
+                }
+
                 self.amd.jz(label);
 
                 if !self.config.simd_branch() {

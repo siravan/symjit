@@ -115,6 +115,7 @@ pub enum Instruction {
     BranchIf {
         cond: Reg,
         label: String,
+        is_else: bool,
     },
 }
 
@@ -149,7 +150,17 @@ impl fmt::Debug for Instruction {
             ),
             Self::Label { label } => write!(f, "{:?}:", &label),
             Self::Branch { label } => write!(f, "goto {:?}", label),
-            Self::BranchIf { cond, label } => write!(f, "if {:?} goto {:?}", &cond, label),
+            Self::BranchIf {
+                cond,
+                label,
+                is_else,
+            } => {
+                if *is_else {
+                    write!(f, "if not {:?} goto {:?}", &cond, label)
+                } else {
+                    write!(f, "if {:?} goto {:?}", &cond, label)
+                }
+            }
         }
     }
 }
@@ -276,10 +287,11 @@ impl Mir {
         });
     }
 
-    pub fn branch_if(&mut self, cond: Reg, label: &str) {
+    pub fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
         self.push(Instruction::BranchIf {
             cond,
             label: label.to_string(),
+            is_else,
         });
     }
 
@@ -921,8 +933,12 @@ impl Mir {
                 }
                 Instruction::Label { .. } => {}
                 Instruction::Branch { label } => ip = self.labels.get(label).unwrap() - 1,
-                Instruction::BranchIf { cond, label } => {
-                    if Self::get(regs, *cond) != 0.0 {
+                Instruction::BranchIf {
+                    cond,
+                    label,
+                    is_else,
+                } => {
+                    if (Self::get(regs, *cond) != 0.0) ^ is_else {
                         ip = self.labels.get(label).unwrap() - 1
                     }
                 }
@@ -1030,7 +1046,11 @@ impl Mir {
                 }
                 Instruction::Label { label } => ir.set_label(label),
                 Instruction::Branch { label } => ir.branch(label),
-                Instruction::BranchIf { cond, label } => ir.branch_if(*cond, label),
+                Instruction::BranchIf {
+                    cond,
+                    label,
+                    is_else,
+                } => ir.branch_if(*cond, label, *is_else),
             }
         }
 

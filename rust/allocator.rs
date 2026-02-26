@@ -258,9 +258,18 @@ impl ColoringAllocator {
                     }
                 }
                 Instruction::BranchIf { .. } => {
-                    if let Instruction::BranchIf { cond, label } = ins.clone() {
+                    if let Instruction::BranchIf {
+                        cond,
+                        label,
+                        is_else,
+                    } = ins.clone()
+                    {
                         let cond = self.consume(cond);
-                        self.push(Instruction::BranchIf { cond, label });
+                        self.push(Instruction::BranchIf {
+                            cond,
+                            label,
+                            is_else,
+                        });
                     }
                 }
                 _ => {
@@ -360,9 +369,18 @@ impl ColoringAllocator {
                     }
                 }
                 Instruction::BranchIf { .. } => {
-                    if let Instruction::BranchIf { cond, label } = ins.clone() {
+                    if let Instruction::BranchIf {
+                        cond,
+                        label,
+                        is_else,
+                    } = ins.clone()
+                    {
                         let cond = self.alloc(cond);
-                        self.push(Instruction::BranchIf { cond, label });
+                        self.push(Instruction::BranchIf {
+                            cond,
+                            label,
+                            is_else,
+                        });
                     }
                 }
                 _ => {
@@ -587,9 +605,18 @@ impl GreedyAllocator {
                     }
                 }
                 Instruction::BranchIf { .. } => {
-                    if let Instruction::BranchIf { cond, label } = ins.clone() {
+                    if let Instruction::BranchIf {
+                        cond,
+                        label,
+                        is_else,
+                    } = ins.clone()
+                    {
                         let cond = self.consume(ip, cond);
-                        self.push(Instruction::BranchIf { cond, label });
+                        self.push(Instruction::BranchIf {
+                            cond,
+                            label,
+                            is_else,
+                        });
                     }
                 }
                 _ => {
@@ -763,9 +790,18 @@ impl GreedyAllocator {
                     self.locs.insert(cond, 0);
                 }
                 Instruction::BranchIf { .. } => {
-                    if let Instruction::BranchIf { cond, label } = ins.clone() {
+                    if let Instruction::BranchIf {
+                        cond,
+                        label,
+                        is_else,
+                    } = ins.clone()
+                    {
                         let cond = self.deallocate(ip, cond);
-                        self.push(Instruction::BranchIf { cond, label });
+                        self.push(Instruction::BranchIf {
+                            cond,
+                            label,
+                            is_else,
+                        });
                         self.reset_allocs();
                     }
                 }

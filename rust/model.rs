@@ -341,10 +341,10 @@ impl Equation {
                 let label = format!("L.{}", id);
                 builder.block().add_branch(&label);
             }
-            Expr::BranchIf { cond, id } => {
+            Expr::BranchIf { cond, id, is_else } => {
                 let cond = cond.transform(builder)?;
                 let label = format!("L.{}", id);
-                builder.block().add_branch_if(cond, &label);
+                builder.block().add_branch_if(cond, &label, *is_else);
             }
             _ => return Err(anyhow!("Special expressions are Label and IfElse")),
         }

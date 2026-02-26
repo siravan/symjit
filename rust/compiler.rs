@@ -839,6 +839,8 @@ pub struct Translator {
     num_params: usize,
     has_jump: bool,
     last_label: usize,
+    depth: usize,
+    conds: Vec<Slot>,
 }
 
 impl Translator {
@@ -859,6 +861,8 @@ impl Translator {
             num_params: 0,
             has_jump: false,
             last_label: 0,
+            depth: 0,
+            conds: Vec::new(),
         }
     }
 
@@ -890,10 +894,14 @@ impl Translator {
                     self.append_fun(lhs, fun, arg, *is_real)?
                 }
                 Instruction::Join(lhs, cond, true_val, false_val) => {
+                    self.depth -= 1;
                     self.append_join(lhs, cond, true_val, false_val)?
                 }
                 Instruction::Label(id) => self.append_label(*id)?,
-                Instruction::IfElse(cond, id) => self.append_if_else(cond, *id)?,
+                Instruction::IfElse(cond, id) => {
+                    self.append_if_else(cond, *id)?;
+                    self.depth += 1;
+                }
                 Instruction::Goto(id) => self.append_goto(*id)?,
                 Instruction::ExternalFun(lhs, op, args) => {
                     self.append_external_fun(lhs, op, args)?
@@ -1005,6 +1013,13 @@ impl Translator {
     fn produce(&mut self, slot: &Slot) -> Result<Slot> {
         match slot {
             Slot::Temp(idx) => {
+                if self.depth > 0 {
+                    if let Some(Slot::Static(s)) = self.temps.get(idx) {
+                        *self.counts.get_mut(s).unwrap() += 1;
+                        return Ok(Slot::Static(*s));
+                    }
+                }
+
                 let s = Slot::Static(self.count_statics);
                 self.counts.insert(self.count_statics, 0);
                 self.count_statics += 1;
@@ -1241,21 +1256,6 @@ impl Translator {
         Ok(())
     }
 
-    fn current_cond(&mut self) -> Expr {
-        Expr::var(&format!("__Static{}", self.count_statics))
-    }
-
-    fn new_cond(&mut self) -> Expr {
-        self.count_statics += 1;
-        self.current_cond()
-    }
-
-    fn free_cond(&mut self) -> Expr {
-        let s = self.current_cond();
-        self.count_statics -= 1;
-        s
-    }
-
     fn translate_ifelse(&mut self, cond: &Slot, id: usize) -> Result<()> {
         // let cond = Expr::binary(
         //     "lt",
@@ -1263,27 +1263,46 @@ impl Translator {
         //     &Expr::from(f64::EPSILON),
         // );
 
-        let cond = &Expr::binary("eq", &self.expr(cond, false), &Expr::from(0.0));
-        let c = self.new_cond();
-        self.eqs.push(Expr::equation(&c, cond));
+        self.conds.push(*cond);
+        let if_clause = Expr::binary("eq", &self.expr(cond, false), &Expr::from(0.0));
         self.eqs.push(Expr::special(&Expr::BranchIf {
-            cond: Box::new(c),
+            cond: Box::new(if_clause),
             id,
+            is_else: false,
         }));
         Ok(())
     }
 
     fn translate_goto(&mut self, id: usize) -> Result<()> {
         if self.config.simd_branch() {
-            // let cond = self.current_cond();
-            // self.eqs.push(Expr::special(&Expr::BranchIf {
-            //     cond: Box::new(Expr::unary("not", &cond)),
-            //     id,
-            // }));
+            // TODO: the commented out area should be uncommented, except it causes
+            // a bug in some programs. The effects are not local and likely related
+            // to instruction movements.
+
+            let cond = self.conds.pop().unwrap();
+            self.conds.push(cond);
+            /*
+            let if_clause = Expr::binary("eq", &self.expr(&cond, false), &Expr::from(0.0));
+            self.eqs.push(Expr::special(&Expr::BranchIf {
+                cond: Box::new(if_clause),
+                id,
+                is_else: true,
+            }));
+            */
+            let if_clause = Expr::binary("plus", &Expr::from(1.0), &Expr::from(0.0));
+            self.last_label += 1;
+            let id = self.last_label;
+            self.eqs.push(Expr::special(&Expr::BranchIf {
+                cond: Box::new(if_clause),
+                id,
+                is_else: true,
+            }));
+            //self.eqs.push(Expr::special(&Expr::BranchIf { id }));
+            self.translate_label(id)?;
         } else {
-            self.eqs
-                .push(Expr::equation(&Expr::Special, &Expr::Branch { id }));
+            self.eqs.push(Expr::special(&Expr::Branch { id }));
         }
+
         Ok(())
     }
 
@@ -1297,8 +1316,9 @@ impl Translator {
         // Join is essentially a Φ-function.
         let t = self.expr(true_val, false);
         let f = self.expr(false_val, false);
-        let cond = self.free_cond();
-        self.assign(lhs, cond.ifelse(&f, &t))?;
+        let cond = self.conds.pop().unwrap();
+        let mask = Expr::binary("eq", &self.expr(&cond, false), &Expr::from(0.0));
+        self.assign(lhs, mask.ifelse(&f, &t))?;
         Ok(())
     }
 

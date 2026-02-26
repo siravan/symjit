@@ -141,8 +141,8 @@ impl Generator for Complexifier {
         self.mir.branch(label);
     }
 
-    fn branch_if(&mut self, cond: Reg, label: &str) {
-        self.mir.branch_if(re(cond), label);
+    fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
+        self.mir.branch_if(re(cond), label, is_else);
     }
 
     /***********************************/

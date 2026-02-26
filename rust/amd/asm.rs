@@ -899,6 +899,13 @@ impl Amd {
         self.jump(label);
     }
 
+    pub fn jpo(&mut self, label: &str) {
+        // jump if parity even is true if vucomisd returns
+        // an unordered result
+        self.append_bytes(&[0x0f, 0x8b]);
+        self.jump(label);
+    }
+
     pub fn nop(&mut self) {
         self.append_byte(0x90);
     }

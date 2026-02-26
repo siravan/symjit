@@ -26,6 +26,7 @@ pub enum Statement {
     BranchIf {
         cond: Node,
         label: String,
+        is_else: bool,
     },
 }
 
@@ -65,9 +66,13 @@ impl Statement {
             Statement::Branch { label } => {
                 ir.branch(label);
             }
-            Statement::BranchIf { cond, label } => {
+            Statement::BranchIf {
+                cond,
+                label,
+                is_else,
+            } => {
                 let cond = cond.compile_tree(ir)?;
-                ir.branch_if(reg(cond), label);
+                ir.branch_if(reg(cond), label, *is_else);
             }
         };
 

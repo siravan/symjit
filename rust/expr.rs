@@ -31,13 +31,28 @@ use crate::utils::bool_to_f64;
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type")]
 pub enum Expr {
-    Tree { op: String, args: Vec<Expr> },
-    Const { val: f64 },
-    Var { name: String },
+    Tree {
+        op: String,
+        args: Vec<Expr>,
+    },
+    Const {
+        val: f64,
+    },
+    Var {
+        name: String,
+    },
     Special,
-    Label { id: usize },
-    Branch { id: usize },
-    BranchIf { cond: Box<Expr>, id: usize },
+    Label {
+        id: usize,
+    },
+    Branch {
+        id: usize,
+    },
+    BranchIf {
+        cond: Box<Expr>,
+        id: usize,
+        is_else: bool,
+    },
 }
 
 impl From<f64> for Expr {
