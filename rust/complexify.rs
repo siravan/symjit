@@ -42,6 +42,13 @@ fn ϕ(r: Reg) -> usize {
     }
 }
 
+enum Types {
+    RR,
+    CR,
+    RC,
+    CC,
+}
+
 pub struct Complexifier {
     mir: Mir,
     real_locs: HashSet<Loc>,
@@ -114,6 +121,18 @@ impl Complexifier {
             self.mir.xor(im(dst), im(dst), im(dst));
         }
         self.set_reg_complex(dst);
+    }
+
+    fn types(&self, s1: Reg, s2: Reg) -> Types {
+        if self.is_real_reg(s1) && self.is_real_reg(s2) {
+            Types::RR
+        } else if self.is_real_reg(s1) && !self.is_real_reg(s2) {
+            Types::RC
+        } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
+            Types::CR
+        } else {
+            Types::CC
+        }
     }
 }
 
@@ -335,13 +354,20 @@ impl Generator for Complexifier {
     fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.plus(re(dst), re(s1), re(s2));
 
-        if self.is_real_reg(s1) && !self.is_real_reg(s2) {
-            self.mir.fmov(im(dst), im(s2));
-        } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
-            self.mir.fmov(im(dst), im(s1));
-        } else if !self.is_real_reg(s1) && !self.is_real_reg(s2) {
-            self.mir.plus(im(dst), im(s1), im(s2));
+        match self.types(s1, s2) {
+            Types::RC => self.mir.fmov(im(dst), im(s2)),
+            Types::CR => self.mir.fmov(im(dst), im(s1)),
+            Types::CC => self.mir.plus(im(dst), im(s1), im(s2)),
+            Types::RR => {}
         }
+
+        // if self.is_real_reg(s1) && !self.is_real_reg(s2) {
+        //     self.mir.fmov(im(dst), im(s2));
+        // } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
+        //     self.mir.fmov(im(dst), im(s1));
+        // } else if !self.is_real_reg(s1) && !self.is_real_reg(s2) {
+        //     self.mir.plus(im(dst), im(s1), im(s2));
+        // }
 
         self.promote_real(dst, s1, s2);
     }
@@ -349,37 +375,67 @@ impl Generator for Complexifier {
     fn minus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.minus(re(dst), re(s1), re(s2));
 
-        if self.is_real_reg(s1) && !self.is_real_reg(s2) {
-            self.mir.neg(im(dst), im(s2));
-        } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
-            self.mir.fmov(im(dst), im(s1));
-        } else if !self.is_real_reg(s1) && !self.is_real_reg(s2) {
-            self.mir.minus(im(dst), im(s1), im(s2));
+        match self.types(s1, s2) {
+            Types::RC => self.mir.neg(im(dst), im(s2)),
+            Types::CR => self.mir.fmov(im(dst), im(s1)),
+            Types::CC => self.mir.minus(im(dst), im(s1), im(s2)),
+            Types::RR => {}
         }
+
+        // if self.is_real_reg(s1) && !self.is_real_reg(s2) {
+        //     self.mir.neg(im(dst), im(s2));
+        // } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
+        //     self.mir.fmov(im(dst), im(s1));
+        // } else if !self.is_real_reg(s1) && !self.is_real_reg(s2) {
+        //     self.mir.minus(im(dst), im(s1), im(s2));
+        // }
 
         self.promote_real(dst, s1, s2);
     }
 
     fn times(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        if self.is_real_reg(s1) && self.is_real_reg(s2) {
-            self.mir.times(re(dst), re(s1), re(s2));
-        } else if self.is_real_reg(s1) && !self.is_real_reg(s2) {
-            self.mir.times(im(dst), re(s1), im(s2));
-            self.mir.times(re(dst), re(s1), re(s2));
-        } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
-            self.mir.times(im(dst), im(s1), re(s2));
-            self.mir.times(re(dst), re(s1), re(s2));
-        } else {
-            self.mir.times(Self::T0, re(s1), re(s2));
-            self.mir.times(Self::T1, im(s1), im(s2));
-            self.mir.minus(Self::T0, Self::T0, Self::T1);
+        match self.types(s1, s2) {
+            Types::RR => self.mir.times(re(dst), re(s1), re(s2)),
+            Types::RC => {
+                self.mir.times(im(dst), re(s1), im(s2));
+                self.mir.times(re(dst), re(s1), re(s2));
+            }
+            Types::CR => {
+                self.mir.times(im(dst), im(s1), re(s2));
+                self.mir.times(re(dst), re(s1), re(s2));
+            }
+            Types::CC => {
+                self.mir.times(Self::T0, re(s1), re(s2));
+                self.mir.times(Self::T1, im(s1), im(s2));
+                self.mir.minus(Self::T0, Self::T0, Self::T1);
 
-            self.mir.times(Self::T1, re(s1), im(s2));
-            self.mir.times(im(dst), im(s1), re(s2));
-            self.mir.plus(im(dst), im(dst), Self::T1);
+                self.mir.times(Self::T1, re(s1), im(s2));
+                self.mir.times(im(dst), im(s1), re(s2));
+                self.mir.plus(im(dst), im(dst), Self::T1);
 
-            self.mir.fmov(re(dst), Self::T0);
+                self.mir.fmov(re(dst), Self::T0);
+            }
         }
+
+        // if self.is_real_reg(s1) && self.is_real_reg(s2) {
+        //     self.mir.times(re(dst), re(s1), re(s2));
+        // } else if self.is_real_reg(s1) && !self.is_real_reg(s2) {
+        //     self.mir.times(im(dst), re(s1), im(s2));
+        //     self.mir.times(re(dst), re(s1), re(s2));
+        // } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
+        //     self.mir.times(im(dst), im(s1), re(s2));
+        //     self.mir.times(re(dst), re(s1), re(s2));
+        // } else {
+        //     self.mir.times(Self::T0, re(s1), re(s2));
+        //     self.mir.times(Self::T1, im(s1), im(s2));
+        //     self.mir.minus(Self::T0, Self::T0, Self::T1);
+
+        //     self.mir.times(Self::T1, re(s1), im(s2));
+        //     self.mir.times(im(dst), im(s1), re(s2));
+        //     self.mir.plus(im(dst), im(dst), Self::T1);
+
+        //     self.mir.fmov(re(dst), Self::T0);
+        // }
 
         self.promote_real(dst, s1, s2);
     }
@@ -390,38 +446,74 @@ impl Generator for Complexifier {
         // except for powi_mod which needs to be modified (TODO)
         let t = re(Reg::Temp);
 
-        if self.is_real_reg(s1) && self.is_real_reg(s2) {
-            self.mir.divide(re(dst), re(s1), re(s2));
-        } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
-            self.mir.divide(im(dst), im(s1), re(s2));
-            self.mir.divide(re(dst), re(s1), re(s2));
-        } else if self.is_real_reg(s1) && !self.is_real_reg(s2) {
-            self.mir.times(Self::T0, re(s2), re(s2));
-            self.mir.times(Self::T1, im(s2), im(s2));
-            self.mir.plus(t, Self::T0, Self::T1);
+        match self.types(s1, s2) {
+            Types::RR => self.mir.divide(re(dst), re(s1), re(s2)),
+            Types::CR => {
+                self.mir.divide(im(dst), im(s1), re(s2));
+                self.mir.divide(re(dst), re(s1), re(s2));
+            }
+            Types::RC => {
+                self.mir.times(Self::T0, re(s2), re(s2));
+                self.mir.times(Self::T1, im(s2), im(s2));
+                self.mir.plus(t, Self::T0, Self::T1);
 
-            self.mir.times(Self::T0, re(s1), re(s2));
-            self.mir.times(Self::T1, re(s1), im(s2));
-            self.mir.neg(im(dst), Self::T1);
+                self.mir.times(Self::T0, re(s1), re(s2));
+                self.mir.times(Self::T1, re(s1), im(s2));
+                self.mir.neg(im(dst), Self::T1);
 
-            self.mir.divide(im(dst), im(dst), t);
-            self.mir.divide(re(dst), Self::T0, t);
-        } else {
-            self.mir.times(Self::T0, re(s2), re(s2));
-            self.mir.times(Self::T1, im(s2), im(s2));
-            self.mir.plus(t, Self::T0, Self::T1);
+                self.mir.divide(im(dst), im(dst), t);
+                self.mir.divide(re(dst), Self::T0, t);
+            }
+            Types::CC => {
+                self.mir.times(Self::T0, re(s2), re(s2));
+                self.mir.times(Self::T1, im(s2), im(s2));
+                self.mir.plus(t, Self::T0, Self::T1);
 
-            self.mir.times(Self::T0, re(s1), re(s2));
-            self.mir.times(Self::T1, im(s1), im(s2));
-            self.mir.plus(Self::T0, Self::T0, Self::T1);
+                self.mir.times(Self::T0, re(s1), re(s2));
+                self.mir.times(Self::T1, im(s1), im(s2));
+                self.mir.plus(Self::T0, Self::T0, Self::T1);
 
-            self.mir.times(Self::T1, re(s1), im(s2));
-            self.mir.times(im(dst), im(s1), re(s2));
-            self.mir.minus(im(dst), im(dst), Self::T1);
+                self.mir.times(Self::T1, re(s1), im(s2));
+                self.mir.times(im(dst), im(s1), re(s2));
+                self.mir.minus(im(dst), im(dst), Self::T1);
 
-            self.mir.divide(im(dst), im(dst), t);
-            self.mir.divide(re(dst), Self::T0, t);
+                self.mir.divide(im(dst), im(dst), t);
+                self.mir.divide(re(dst), Self::T0, t);
+            }
         }
+
+        // if self.is_real_reg(s1) && self.is_real_reg(s2) {
+        //     self.mir.divide(re(dst), re(s1), re(s2));
+        // } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
+        //     self.mir.divide(im(dst), im(s1), re(s2));
+        //     self.mir.divide(re(dst), re(s1), re(s2));
+        // } else if self.is_real_reg(s1) && !self.is_real_reg(s2) {
+        //     self.mir.times(Self::T0, re(s2), re(s2));
+        //     self.mir.times(Self::T1, im(s2), im(s2));
+        //     self.mir.plus(t, Self::T0, Self::T1);
+
+        //     self.mir.times(Self::T0, re(s1), re(s2));
+        //     self.mir.times(Self::T1, re(s1), im(s2));
+        //     self.mir.neg(im(dst), Self::T1);
+
+        //     self.mir.divide(im(dst), im(dst), t);
+        //     self.mir.divide(re(dst), Self::T0, t);
+        // } else {
+        //     self.mir.times(Self::T0, re(s2), re(s2));
+        //     self.mir.times(Self::T1, im(s2), im(s2));
+        //     self.mir.plus(t, Self::T0, Self::T1);
+
+        //     self.mir.times(Self::T0, re(s1), re(s2));
+        //     self.mir.times(Self::T1, im(s1), im(s2));
+        //     self.mir.plus(Self::T0, Self::T0, Self::T1);
+
+        //     self.mir.times(Self::T1, re(s1), im(s2));
+        //     self.mir.times(im(dst), im(s1), re(s2));
+        //     self.mir.minus(im(dst), im(dst), Self::T1);
+
+        //     self.mir.divide(im(dst), im(dst), t);
+        //     self.mir.divide(re(dst), Self::T0, t);
+        // }
 
         self.promote_real(dst, s1, s2);
     }
@@ -458,90 +550,132 @@ impl Generator for Complexifier {
 
     fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.gt(re(dst), re(s1), re(s2));
-        self.mir.fmov(im(dst), re(dst));
-        self.set_reg_complex(dst);
+        self.set_reg_real(dst);
+        // self.mir.fmov(im(dst), re(dst));
+        // self.set_reg_complex(dst);
     }
 
     fn geq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.geq(re(dst), re(s1), re(s2));
-        self.mir.fmov(im(dst), re(dst));
-        self.set_reg_complex(dst);
+        self.set_reg_real(dst);
+        // self.mir.fmov(im(dst), re(dst));
+        // self.set_reg_complex(dst);
     }
 
     fn lt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.lt(re(dst), re(s1), re(s2));
-        self.mir.fmov(im(dst), re(dst));
-        self.set_reg_complex(dst);
+        self.set_reg_real(dst);
+        // self.mir.fmov(im(dst), re(dst));
+        // self.set_reg_complex(dst);
     }
 
     fn leq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.leq(re(dst), re(s1), re(s2));
-        self.mir.fmov(im(dst), re(dst));
-        self.set_reg_complex(dst);
+        self.set_reg_real(dst);
+        // self.mir.fmov(im(dst), re(dst));
+        // self.set_reg_complex(dst);
     }
 
     fn eq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.eq(re(dst), re(s1), re(s2));
-        self.mir.fmov(im(dst), re(dst));
-        self.set_reg_complex(dst);
+        self.set_reg_real(dst);
+        // self.mir.fmov(im(dst), re(dst));
+        // self.set_reg_complex(dst);
     }
 
     fn neq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.neq(re(dst), re(s1), re(s2));
-        self.mir.fmov(im(dst), re(dst));
-        self.set_reg_complex(dst);
+        self.set_reg_real(dst);
+        // self.mir.fmov(im(dst), re(dst));
+        // self.set_reg_complex(dst);
     }
 
     fn and(&mut self, dst: Reg, s1: Reg, s2: Reg) {
+        // self.mir.and(re(dst), re(s1), re(s2));
+
+        match self.types(s1, s2) {
+            Types::RR => {}
+            Types::RC => self.mir.and(im(dst), re(s1), im(s2)),
+            Types::CR => self.mir.and(im(dst), im(s1), re(s2)),
+            Types::CC => self.mir.and(im(dst), im(s1), im(s2)),
+        }
+
         self.mir.and(re(dst), re(s1), re(s2));
 
-        if self.is_real_reg(s1) != self.is_real_reg(s2) {
-            self.mir.xor(im(dst), im(dst), im(dst));
-        } else if !self.is_real_reg(s1) && !self.is_real_reg(s2) {
-            self.mir.and(im(dst), im(s1), im(s2));
-        }
+        // if self.is_real_reg(s1) != self.is_real_reg(s2) {
+        //     self.mir.xor(im(dst), im(dst), im(dst));
+        // } else if !self.is_real_reg(s1) && !self.is_real_reg(s2) {
+        //     self.mir.and(im(dst), im(s1), im(s2));
+        // }
 
         self.promote_real(dst, s1, s2);
     }
 
     fn andnot(&mut self, dst: Reg, s1: Reg, s2: Reg) {
+        // self.mir.andnot(re(dst), re(s1), re(s2));
+
+        match self.types(s1, s2) {
+            Types::RR => {}
+            Types::RC => self.mir.andnot(im(dst), re(s1), im(s2)),
+            Types::CR => self.mir.andnot(im(dst), im(s1), re(s2)),
+            Types::CC => self.mir.andnot(im(dst), im(s1), im(s2)),
+        }
+
         self.mir.andnot(re(dst), re(s1), re(s2));
 
-        if self.is_real_reg(s1) && !self.is_real_reg(s2) {
-            self.mir.fmov(im(dst), im(s2));
-        } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
-            self.mir.xor(im(dst), im(dst), im(dst));
-        } else if !self.is_real_reg(s1) && !self.is_real_reg(s2) {
-            self.mir.andnot(im(dst), im(s1), im(s2));
-        }
+        // if self.is_real_reg(s1) && !self.is_real_reg(s2) {
+        //     self.mir.fmov(im(dst), im(s2));
+        // } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
+        //     self.mir.xor(im(dst), im(dst), im(dst));
+        // } else if !self.is_real_reg(s1) && !self.is_real_reg(s2) {
+        //     self.mir.andnot(im(dst), im(s1), im(s2));
+        // }
 
         self.promote_real(dst, s1, s2);
     }
 
     fn or(&mut self, dst: Reg, s1: Reg, s2: Reg) {
+        // self.mir.or(re(dst), re(s1), re(s2));
+
+        match self.types(s1, s2) {
+            Types::RR => {}
+            Types::RC => self.mir.or(im(dst), re(s1), im(s2)),
+            Types::CR => self.mir.or(im(dst), im(s1), re(s2)),
+            Types::CC => self.mir.or(im(dst), im(s1), im(s2)),
+        }
+
         self.mir.or(re(dst), re(s1), re(s2));
 
-        if self.is_real_reg(s1) != self.is_real_reg(s2) {
-            self.mir.fmov(im(dst), im(s2));
-        } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
-            self.mir.fmov(im(dst), im(s1));
-        } else if !self.is_real_reg(s1) && !self.is_real_reg(s2) {
-            self.mir.or(im(dst), im(s1), im(s2));
-        }
+        // if self.is_real_reg(s1) != self.is_real_reg(s2) {
+        //     self.mir.fmov(im(dst), im(s2));
+        // } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
+        //     self.mir.fmov(im(dst), im(s1));
+        // } else if !self.is_real_reg(s1) && !self.is_real_reg(s2) {
+        //     self.mir.or(im(dst), im(s1), im(s2));
+        // }
 
         self.promote_real(dst, s1, s2);
     }
 
     fn xor(&mut self, dst: Reg, s1: Reg, s2: Reg) {
+        // self.mir.xor(re(dst), re(s1), re(s2));
+
+        match self.types(s1, s2) {
+            Types::RR => {}
+            Types::RC => self.mir.xor(im(dst), re(s1), im(s2)),
+            Types::CR => self.mir.xor(im(dst), im(s1), re(s2)),
+            Types::CC => self.mir.xor(im(dst), im(s1), im(s2)),
+        }
+
         self.mir.xor(re(dst), re(s1), re(s2));
 
-        if self.is_real_reg(s1) && !self.is_real_reg(s2) {
-            self.mir.fmov(im(dst), im(s2));
-        } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
-            self.mir.fmov(im(dst), im(s1));
-        } else if !self.is_real_reg(s1) && !self.is_real_reg(s2) {
-            self.mir.xor(im(dst), im(s1), im(s2));
-        }
+        // if self.is_real_reg(s1) && !self.is_real_reg(s2) {
+        //     self.mir.fmov(im(dst), im(s2));
+        // } else if !self.is_real_reg(s1) && self.is_real_reg(s2) {
+        //     self.mir.fmov(im(dst), im(s1));
+        // } else if !self.is_real_reg(s1) && !self.is_real_reg(s2) {
+        //     self.mir.xor(im(dst), im(s1), im(s2));
+        // }
 
         self.promote_real(dst, s1, s2);
     }
