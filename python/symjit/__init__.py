@@ -410,6 +410,10 @@ def compile_evaluator(
     defuns = engine.Defuns(defuns)
     bridge = Bridge(evaluator)
     model = bridge.translate()
+    # if isinstance(evaluator, str):
+    #     model = evaluator
+    # else:
+    #    model = str(evaluator.get_instructions())
 
     if order == "c":
         return SymbolicaFunc(

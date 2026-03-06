@@ -402,32 +402,32 @@ use std::ffi::{c_char, CStr, CString};
 use std::fmt::Debug;
 use std::str::FromStr;
 
+mod allocator;
+mod amd;
+mod arm;
+mod assembler;
 mod block;
+mod builder;
 mod code;
+mod compactor;
 pub mod compiler;
+mod complexify;
 mod config;
 mod defuns;
 pub mod expr;
+mod generator;
+mod instruction;
 mod machine;
 mod matrix;
 mod memory;
-mod model;
-mod runnable;
-mod utils;
-
-mod allocator;
-mod assembler;
-mod builder;
-mod compactor;
-mod complexify;
-mod generator;
 mod mir;
+mod model;
 mod node;
+mod parser;
+mod runnable;
 mod statement;
 mod symbol;
-
-mod amd;
-mod arm;
+mod utils;
 
 #[allow(non_upper_case_globals)]
 mod riscv64;
@@ -599,7 +599,7 @@ pub unsafe extern "C" fn translate(
     if let Ok(config) = Config::from_name(ty, opt) {
         let df: &Defuns = unsafe { &*df };
         let mut comp = Compiler::with_config(config);
-        let app = comp.translate(json, df, num_params);
+        let app = comp.translate(json.to_string(), df, num_params);
 
         match app {
             Ok(app) => {

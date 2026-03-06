@@ -412,7 +412,7 @@ class Bridge:
         return {"Pow": [self.slot(dst), self.slot(arg), power, is_real]}
 
     def powf(self, dst, arg, power, is_real):
-        return {"Pow": [self.slot(dst), self.slot(arg), self.slot(power), is_real]}
+        return {"Powf": [self.slot(dst), self.slot(arg), self.slot(power), is_real]}
 
     def fun(self, dst, f, arg, is_real):
         name = f.get_name().split("::")[1]
