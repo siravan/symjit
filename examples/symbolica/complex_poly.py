@@ -31,6 +31,8 @@ e = p.evaluator({}, {}, vars)
 f1 = compile_evaluator(e, dtype="complex128", opt_level=1)
 f2 = compile_evaluator(e, dtype="complex128", opt_level=2)
 
+# print(f1.dumps())
+
 m = len(vars)
 X = np.random.random((20, m)) + np.random.random((20, m)) * 1j
 

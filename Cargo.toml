@@ -25,6 +25,7 @@ spec_math = "0.1.6"
 petgraph= "0.8.3"
 hashbrown = "0.16.0"
 num-complex = "0.4"
+regex = "1.12"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_System_Memory"] }

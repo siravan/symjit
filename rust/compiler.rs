@@ -10,7 +10,7 @@ use rayon::prelude::*;
 use crate::config::Config;
 use crate::defuns::Defuns;
 use crate::expr::Expr;
-use crate::instruction::{BuiltinSymbol, ConstType, Instruction, Slot, SymbolicaModel};
+use crate::instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
 use crate::model::{CellModel, Equation, Program, Variable};
 use crate::parser::Parser;
 use crate::symbol::Loc;
@@ -1253,8 +1253,6 @@ impl Compiler {
         translator.parse_model(&model)?;
         translator.set_num_params(num_params);
         let (ml, reals) = translator.translate()?;
-
-        // println!("{:#?}", &translator.consts);
 
         let prog = Program::new(&ml, self.config)?;
         let df = Defuns::new();
