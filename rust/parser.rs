@@ -1,7 +1,4 @@
 use anyhow::{anyhow, Result};
-use regex::Regex;
-
-use std::str::FromStr;
 
 use crate::instruction::{
     BuiltinSymbol, ComplexRational, ConstType, Instruction, Rational, Slot, SymbolicaModel, Value,
@@ -14,7 +11,8 @@ enum Token {
     LeftBracket,
     RightBracket,
     Comma,
-    Number(i64),
+    Number(i64, i64),
+    Imaginary(i64, i64),
     Ident(String),
     True,
     False,
@@ -54,6 +52,50 @@ impl Tokenizer {
     fn eof(&self) -> bool {
         self.pos >= self.buf.as_bytes().len()
     }
+
+    fn parse_num(&mut self) -> Option<Token> {
+        let sign = if self.head() == '-' {
+            self.advance();
+            -1
+        } else if self.head() == '+' {
+            self.advance();
+            1
+        } else {
+            1
+        };
+
+        let mut num = 0;
+
+        while self.head().is_digit(10) && !self.eof() {
+            num = num * 10 + self.head().to_digit(10).unwrap() as i64;
+            self.advance();
+        }
+
+        let is_imaginary = if self.head() == '𝑖' {
+            self.advance();
+            true
+        } else {
+            false
+        };
+
+        let den = if self.head() == '/' {
+            self.advance();
+            let mut d = 0;
+            while self.head().is_digit(10) && !self.eof() {
+                d = d * 10 + self.head().to_digit(10).unwrap() as i64;
+                self.advance();
+            }
+            d
+        } else {
+            1
+        };
+
+        if is_imaginary {
+            Some(Token::Imaginary(sign * num, den))
+        } else {
+            Some(Token::Number(sign * num, den))
+        }
+    }
 }
 
 impl Iterator for Tokenizer {
@@ -84,21 +126,7 @@ impl Iterator for Tokenizer {
                     self.advance();
                     Some(Token::RightBracket)
                 }
-                '0'..='9' | '-' => {
-                    let mut val = 0;
-                    let sign = if self.head() == '-' {
-                        self.advance();
-                        -1
-                    } else {
-                        1
-                    };
-
-                    while self.head().is_digit(10) && !self.eof() {
-                        val = val * 10 + self.head().to_digit(10).unwrap() as i64;
-                        self.advance();
-                    }
-                    Some(Token::Number(sign * val))
-                }
+                '0'..='9' | '-' | '+' => self.parse_num(),
                 '\'' => {
                     let mut s = String::new();
                     self.advance();
@@ -175,7 +203,7 @@ impl Parser {
     }
 
     fn parse_num(&mut self) -> Result<i64> {
-        if let Some(Token::Number(num)) = self.next() {
+        if let Some(Token::Number(num, 1)) = self.next() {
             Ok(num)
         } else {
             Err(anyhow!("expects a number"))
@@ -433,41 +461,34 @@ impl Parser {
     }
 
     fn parse_const(&mut self) -> Result<ConstType> {
-        let mut item: String = String::new();
-        loop {
-            let c = self.lex.head();
-            if c == ',' || c == ']' {
-                break;
-            }
-            item.push(c);
-            self.lex.advance();
-        }
+        // number is a/b + c/d*𝑖
+        let mut a = 0;
+        let mut b = 1;
+        let mut c = 0;
+        let mut d = 1;
 
-        if item.is_empty() {
+        if self.lex.head() == ']' {
             return Ok(ConstType::Single(0.0));
         }
 
-        let re = Regex::new(
-            r"(?<a>-?[0-9]+)(/(?<b>[0-9]+))?((?<s>[+|-])(?<c>[0-9]+)𝑖(/(?<d>[0-9]+))?)?",
-        )?;
+        match self.lex.next() {
+            Some(Token::Imaginary(x, y)) => {
+                c = x;
+                d = y;
+            }
+            Some(Token::Number(x, y)) => {
+                a = x;
+                b = y;
 
-        let caps = re.captures(&item).unwrap();
-
-        let a = caps
-            .name("a")
-            .map_or(0, |x| i64::from_str(x.into()).unwrap());
-        let b = caps
-            .name("b")
-            .map_or(1, |x| i64::from_str(x.into()).unwrap());
-        let s = caps
-            .name("s")
-            .map_or(1, |x| if x.as_str() == "-" { -1 } else { 1 });
-        let c = caps
-            .name("c")
-            .map_or(0, |x| i64::from_str(x.into()).unwrap());
-        let d = caps
-            .name("d")
-            .map_or(1, |x| i64::from_str(x.into()).unwrap());
+                if self.lex.head() == '-' || self.lex.head() == '+' {
+                    if let Some(Token::Imaginary(x, y)) = self.lex.next() {
+                        c = x;
+                        d = y;
+                    }
+                }
+            }
+            _ => return Err(anyhow!("expects a number")),
+        }
 
         if c == 0 {
             Ok(ConstType::Single((a as f64) / (b as f64)))
@@ -478,7 +499,7 @@ impl Parser {
                     denominator: Value::Single(b as f64),
                 },
                 im: Rational {
-                    numerator: Value::Single((s * c) as f64),
+                    numerator: Value::Single(c as f64),
                     denominator: Value::Single(d as f64),
                 },
             }))
