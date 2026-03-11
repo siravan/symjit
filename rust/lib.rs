@@ -416,7 +416,7 @@ mod config;
 mod defuns;
 pub mod expr;
 mod generator;
-mod instruction;
+pub mod instruction;
 mod machine;
 mod matrix;
 mod memory;
@@ -439,6 +439,7 @@ use model::{CellModel, Program};
 pub use compiler::{Compiler, FastFunc, Translator};
 pub use config::Config;
 pub use expr::{double, int, var, Expr};
+pub use instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
 pub use runnable::{Application, CompilerType};
 pub use utils::Storage;
 

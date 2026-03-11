@@ -10,7 +10,7 @@ use rayon::prelude::*;
 use crate::config::Config;
 use crate::defuns::Defuns;
 use crate::expr::Expr;
-use crate::instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
+pub use crate::instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
 use crate::model::{CellModel, Equation, Program, Variable};
 use crate::parser::Parser;
 use crate::symbol::Loc;
@@ -760,7 +760,7 @@ impl Translator {
         }
     }
 
-    fn parse_model(&mut self, model: &SymbolicaModel) -> Result<()> {
+    pub fn parse_model(&mut self, model: &SymbolicaModel) -> Result<()> {
         for c in model.2.iter() {
             let val = Complex::new(c.value().re, c.value().im);
             self.consts.push(val);
@@ -949,7 +949,7 @@ impl Translator {
     }
 
     /// The second pass. It translates the SSA-form into a Symjit model.
-    fn translate(&mut self) -> Result<(CellModel, HashSet<Loc>)> {
+    pub fn translate(&mut self) -> Result<(CellModel, HashSet<Loc>)> {
         let ssa = std::mem::take(&mut self.ssa);
 
         for line in ssa.iter() {
