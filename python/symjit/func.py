@@ -1,5 +1,4 @@
 import numbers
-from asyncio import SelectorEventLoop
 
 import numpy as np
 

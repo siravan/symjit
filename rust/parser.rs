@@ -50,7 +50,7 @@ impl Tokenizer {
     }
 
     fn eof(&self) -> bool {
-        self.pos >= self.buf.as_bytes().len()
+        self.pos >= self.buf.len()
     }
 
     fn parse_num(&mut self) -> Option<Token> {
@@ -66,7 +66,7 @@ impl Tokenizer {
 
         let mut num = 0;
 
-        while self.head().is_digit(10) && !self.eof() {
+        while self.head().is_ascii_digit() && !self.eof() {
             num = num * 10 + self.head().to_digit(10).unwrap() as i64;
             self.advance();
         }
@@ -81,7 +81,7 @@ impl Tokenizer {
         let den = if self.head() == '/' {
             self.advance();
             let mut d = 0;
-            while self.head().is_digit(10) && !self.eof() {
+            while self.head().is_ascii_digit() && !self.eof() {
                 d = d * 10 + self.head().to_digit(10).unwrap() as i64;
                 self.advance();
             }

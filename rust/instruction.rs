@@ -21,7 +21,7 @@ pub enum Slot {
     Temp(usize),
     /// An entry in the list of results.
     Out(usize),
-    /// Static-Single-Assingment Form
+    /// Static-Single-Assignment Form
     Static(usize),
 }
 

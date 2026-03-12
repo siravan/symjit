@@ -1,3 +1,8 @@
+# Version 2.13.3
+
+* `get_instructions` parser added.
+* Complex logical/boolean instructions changed to real only.
+
 # Version 2.13.2
 
 * `Bridge` encoder bugs fixed.

@@ -1,8 +1,9 @@
+#[cfg(feature = "testing")]
+mod testing {
 use anyhow::Result;
-use num_complex::Complex;
 use rand::{self, Rng};
 use std::fs;
-use symjit::{int, var, Application, Compiler, Config, Defuns, Expr, FastFunc};
+use symjit::{int, var, Application, Compiler, Config, Defuns, Expr, FastFunc, Complex};
 use wide::{f64x2, f64x4};
 
 use symbolica::{
@@ -548,5 +549,15 @@ pub fn main() -> Result<()> {
     //test_f13()?;
     //pass("f13");
 
+    Ok(())
+}
+}
+
+use anyhow::Result;
+
+// run `cargo run --release --features testing` for testing
+fn main() -> Result<()> {
+    #[cfg(feature = "testing")]
+    testing::main()?;
     Ok(())
 }
