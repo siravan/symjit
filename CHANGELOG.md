@@ -1,3 +1,12 @@
+# Version 2.13.5
+
+* `symjit-crate` Symbolica dependency is removed.
+* `Complex` is re-exported.
+
+# Version 2.14.4
+
+* Parser complex constants parsing is fixed.
+
 # Version 2.13.3
 
 * `get_instructions` parser added.
