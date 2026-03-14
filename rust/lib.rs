@@ -969,7 +969,7 @@ pub unsafe extern "C" fn ptr_states(q: *mut CompilerResult) -> *mut f64 {
         if let Some(f) = &mut app.compiled {
             &mut f.mem_mut()[app.first_state] as *mut f64
         } else {
-            std::ptr::null_mut()
+            &mut app.bytecode.mem_mut()[app.first_state] as *mut f64
         }
     } else {
         std::ptr::null_mut()
@@ -1010,7 +1010,7 @@ pub unsafe extern "C" fn ptr_obs(q: *mut CompilerResult) -> *const f64 {
         if let Some(f) = &app.compiled {
             &f.mem()[app.first_obs] as *const f64
         } else {
-            std::ptr::null()
+            &app.bytecode.mem()[app.first_obs] as *const f64
         }
     } else {
         std::ptr::null()
@@ -1035,7 +1035,7 @@ pub unsafe extern "C" fn ptr_diffs(q: *mut CompilerResult) -> *const f64 {
         if let Some(f) = &app.compiled {
             &f.mem()[app.first_diff] as *const f64
         } else {
-            std::ptr::null()
+            &app.bytecode.mem()[app.first_diff] as *const f64
         }
     } else {
         std::ptr::null()

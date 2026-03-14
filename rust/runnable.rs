@@ -57,7 +57,6 @@ pub struct Application {
     pub count_params: usize,
     pub count_obs: usize,
     pub count_diffs: usize,
-    // pub size: usize,
 }
 
 impl Application {
@@ -144,9 +143,8 @@ impl Application {
             prog.count_obs,
             prog.count_params,
         )?;
-        let code = MachineCode::new(arch, generator.bytes(), mem, false, lanes);
-        //let compiled: Box<dyn Compiled<f64>> = Box::new(code);
-        Ok(code)
+
+        Ok(MachineCode::new(arch, generator.bytes(), mem, false, lanes))
     }
 
     fn compile_fast<G: Generator>(
@@ -164,10 +162,15 @@ impl Application {
             prog.count_obs,
             idx_ret as i32,
         )?;
-        let code = MachineCode::new(arch, generator.bytes(), mem, true, 1);
-        //let compiled: Box<dyn Compiled<f64>> = Box::new(code);
 
-        Ok(code)
+        Ok(MachineCode::new(arch, generator.bytes(), mem, true, 1))
+    }
+
+    fn compile_bytecode(mir: Mir, prog: &mut Program) -> Result<CompiledMir> {
+        let mem: Vec<f64> = vec![0.0; prog.mem_size()];
+        let stack: Vec<f64> = vec![0.0; prog.builder.block().sym_table.num_stack];
+
+        Ok(CompiledMir::new(mir, mem, stack))
     }
 
     fn compile_sse(mir: &Mir, prog: &mut Program) -> Result<MachineCode<f64>> {
@@ -268,15 +271,6 @@ impl Application {
 
     fn compile_riscv_fast(mir: &Mir, prog: &mut Program, idx_ret: u32) -> Result<MachineCode<f64>> {
         Self::compile_fast(mir, prog, RiscV::new(*prog.config()), idx_ret, "riscv64")
-    }
-
-    fn compile_bytecode(mir: Mir, prog: &mut Program) -> Result<CompiledMir> {
-        // println!("{:#?}", &mir);
-        let mem: Vec<f64> = vec![0.0; prog.mem_size()];
-        let stack: Vec<f64> = vec![0.0; prog.builder.block().sym_table.num_stack];
-        let code = CompiledMir::new(mir, mem, stack);
-        // let compiled: Box<dyn Compiled<f64>> = Box::new(code);
-        Ok(code)
     }
 
     /**********************************************************/
