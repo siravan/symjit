@@ -21,6 +21,21 @@ pub struct Builder {
     pub count_stack: Option<usize>,
 }
 
+impl Default for Builder {
+    fn default() -> Self {
+        let config = Config::default();
+
+        Builder {
+            primary_block: Block::new(config),
+            consts: Vec::new(),
+            ft: HashSet::new(),
+            count_loops: 0,
+            config,
+            count_stack: None,
+        }
+    }
+}
+
 impl Builder {
     pub fn new(config: Config) -> Builder {
         Builder {

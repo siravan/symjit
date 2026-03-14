@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fs;
 use std::io::Write;
+use std::rc::Rc;
 
 use anyhow::Result;
 use num_complex::Complex;
@@ -165,7 +166,7 @@ impl fmt::Debug for Instruction {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub struct Mir {
     pub code: Vec<Instruction>,
     pub consts: Vec<f64>,
@@ -830,7 +831,7 @@ impl Mir {
     }
 
     pub fn exec_instruction(
-        &mut self,
+        &self,
         mem: &mut [f64],
         stack: &mut [f64],
         regs: &mut [f64],
@@ -1452,7 +1453,7 @@ impl Mir {
 
 #[derive(Clone)]
 pub struct CompiledMir {
-    pub mir: Mir,
+    pub mir: Rc<Mir>,
     pub mem: Vec<f64>,
     pub stack: Vec<f64>,
     pub regs: Vec<f64>,
@@ -1463,7 +1464,7 @@ impl CompiledMir {
         let regs = vec![0.0; 16];
 
         CompiledMir {
-            mir,
+            mir: Rc::new(mir),
             mem,
             stack,
             regs,

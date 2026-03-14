@@ -79,6 +79,8 @@ impl Application {
             mir = Complexifier::new(&reals, *prog.config(), df).complexify(&mir)?;
         }
 
+        prog.clear();
+
         // let compiled = Self::compile_ty(prog.config().compiler_type(), &mir, &mut prog)?;
         let compiled = match prog.config().compiler_type() {
             CompilerType::AmdAVX => Some(Self::compile_avx(&mir, &mut prog)?),

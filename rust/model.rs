@@ -114,6 +114,10 @@ impl Program {
     pub fn mem_size(&self) -> usize {
         self.count_states + self.count_obs + self.count_diffs + 1
     }
+
+    pub fn clear(&mut self) {
+        std::mem::take(&mut self.builder);
+    }
 }
 
 impl Storage for Program {
