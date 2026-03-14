@@ -202,6 +202,11 @@ impl Config {
         self.opt = (self.opt & !COMPLEX) | if enabled { COMPLEX } else { 0 };
     }
 
+    /// Enables Multi-threading.
+    pub fn set_threads(&mut self, enabled: bool) {
+        self.opt = (self.opt & !USE_THREADS) | if enabled { USE_THREADS } else { 0 };
+    }
+
     /// Enables Symbolica Mode.
     pub fn set_symbolica(&mut self, enabled: bool) {
         self.opt = (self.opt & !SYMBOLICA) | if enabled { SYMBOLICA } else { 0 };
@@ -212,7 +217,7 @@ impl Default for Config {
     fn default() -> Config {
         Config::new(
             CompilerType::Native,
-            USE_SIMD | USE_THREADS | SYMBOLICA | (2 << OPT_LEVEL_SHIFT),
+            USE_SIMD | SYMBOLICA | (2 << OPT_LEVEL_SHIFT),
         )
         .unwrap()
     }

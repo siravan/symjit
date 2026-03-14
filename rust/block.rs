@@ -36,6 +36,7 @@ impl Block {
 
     pub fn clear(&mut self) {
         self.stmts.clear();
+        self.sym_table.syms.clear();
     }
 
     // add_* functions create a new Statement

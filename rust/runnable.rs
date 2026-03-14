@@ -79,8 +79,6 @@ impl Application {
             mir = Complexifier::new(&reals, *prog.config(), df).complexify(&mir)?;
         }
 
-        prog.clear(); // deletes the expression tree to save space (not needed from this point)
-
         // let compiled = Self::compile_ty(prog.config().compiler_type(), &mir, &mut prog)?;
         let compiled = match prog.config().compiler_type() {
             CompilerType::AmdAVX => Some(Self::compile_avx(&mir, &mut prog)?),
@@ -106,6 +104,10 @@ impl Application {
 
         // bytecode takes the ownership of mir
         let bytecode = Self::compile_bytecode(mir, &mut prog)?;
+
+        if prog.config().symbolica() {
+            prog.clear(); // deletes the expression tree to save space (not needed from this point)
+        }
 
         Ok(Application {
             prog,
