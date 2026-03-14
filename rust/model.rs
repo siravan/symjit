@@ -13,7 +13,7 @@ pub trait Transformer {
 }
 
 /// Collects the intermediate code (builder) and interface variables
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Program {
     pub builder: Builder,
     pub count_states: usize,

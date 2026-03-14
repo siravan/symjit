@@ -5,14 +5,17 @@ use std::io::{Read, Write};
 use super::memory::*;
 use super::utils::*;
 
+// #[derive(Clone)]
 pub struct MachineCode<T: Default> {
-    machine_code: Vec<u8>,
+    // machine_code: Vec<u8>,
     #[allow(dead_code)]
     code: Memory, // code needs to be here for f to stay valid
     f: CompiledFunc<T>,
     _mem: Vec<T>,
     leaky: bool,
     lanes: usize,
+    size: usize,
+    pages: *const u8,
 }
 
 impl<T: Clone + Default> MachineCode<T> {
@@ -34,28 +37,31 @@ impl<T: Clone + Default> MachineCode<T> {
         let mut code = Memory::new(BranchProtection::None);
 
         // alignment is set to 4096 to allow for using adrp instruction in arm64
-        let p: *mut u8 = code.allocate(size, 4096).unwrap();
-
-        let v = unsafe { std::slice::from_raw_parts_mut(p, size) };
+        let pages: *mut u8 = code.allocate(size, 4096).unwrap();
+        let v = unsafe { std::slice::from_raw_parts_mut(pages, size) };
         v.copy_from_slice(&machine_code[..]);
 
         code.set_readable_and_executable().unwrap();
 
         let f: CompiledFunc<T> = if valid {
             unsafe {
-                std::mem::transmute::<*mut u8, fn(*const T, *const &mut [T], usize, *const T) -> i32>(p)
+                std::mem::transmute::<*mut u8, fn(*const T, *const &mut [T], usize, *const T) -> i32>(
+                    pages,
+                )
             }
         } else {
             Self::invalid
         };
 
         MachineCode {
-            machine_code,
+            // machine_code,
             code,
             f,
             _mem,
             leaky,
             lanes,
+            size,
+            pages,
         }
     }
 
@@ -69,6 +75,11 @@ impl<T: Clone + Default> MachineCode<T> {
         } else {
             panic!("invalid processor architecture; unknown");
         }
+    }
+
+    fn machine_code(&self) -> &[u8] {
+        let v: &[u8] = unsafe { std::slice::from_raw_parts(self.pages, self.size) };
+        v
     }
 }
 
@@ -116,27 +127,26 @@ impl<T: Clone + Default> Storage for MachineCode<T> {
 
         let header: usize = self.lanes | (if self.leaky { 0x010000 } else { 0 }) | arch << 24;
         let mem_size: usize = self._mem.len();
-        let size: usize = self.machine_code.len();
 
         stream.write_all(&Self::MAGIC.to_le_bytes())?;
         stream.write_all(&header.to_le_bytes())?;
         stream.write_all(&mem_size.to_le_bytes())?;
-        stream.write_all(&size.to_le_bytes())?;
-        stream.write_all(&self.machine_code)?;
+        stream.write_all(&self.size.to_le_bytes())?;
+        stream.write_all(self.machine_code())?;
 
         Ok(())
     }
 }
 
-impl<T: Default> Drop for MachineCode<T> {
-    fn drop(&mut self) {
-        if !self.leaky {
-            unsafe {
-                self.code.free_memory();
-            }
-        }
-    }
-}
+// impl<T: Default> Drop for MachineCode<T> {
+//     fn drop(&mut self) {
+//         if !self.leaky {
+//             unsafe {
+//                 self.code.free_memory();
+//             }
+//         }
+//     }
+// }
 
 impl<T: Sized + Copy + Default> Compiled<T> for MachineCode<T> {
     #[inline]
@@ -172,11 +182,11 @@ impl<T: Sized + Copy + Default> Compiled<T> for MachineCode<T> {
 
     fn dump(&self, name: &str) {
         let mut fs = fs::File::create(name).unwrap();
-        let _ = fs.write(&self.machine_code[..]);
+        let _ = fs.write(self.machine_code());
     }
 
     fn dumps(&self) -> Vec<u8> {
-        self.machine_code.clone()
+        self.machine_code().to_vec()
     }
 
     fn func(&self) -> CompiledFunc<T> {

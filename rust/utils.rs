@@ -6,7 +6,7 @@ use crate::machine::MachineCode;
 
 pub type CompiledFunc<T> = fn(*const T, *const &mut [T], usize, *const T) -> i32;
 
-pub trait Compiled<T: Sized + Copy + Default> {
+pub trait Compiled<T: Sized + Copy + Default + Clone> {
     fn exec(&mut self, params: &[T]);
     fn evaluate(&mut self, args: &[T], outs: &mut [T]);
     fn evaluate_single(&mut self, args: &[T]) -> T;

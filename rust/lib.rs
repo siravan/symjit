@@ -966,7 +966,7 @@ pub unsafe extern "C" fn evaluate_matrix(
 pub unsafe extern "C" fn ptr_states(q: *mut CompilerResult) -> *mut f64 {
     let q: &mut CompilerResult = unsafe { &mut *q };
     if let Some(app) = &mut q.app {
-        &mut app.compiled.mem_mut()[app.first_state] as *mut f64
+        &mut app.compiled.borrow_mut().mem_mut()[app.first_state] as *mut f64
     } else {
         std::ptr::null_mut()
     }
@@ -1003,7 +1003,7 @@ pub unsafe extern "C" fn ptr_params(q: *mut CompilerResult) -> *mut f64 {
 pub unsafe extern "C" fn ptr_obs(q: *mut CompilerResult) -> *const f64 {
     let q: &CompilerResult = unsafe { &*q };
     if let Some(app) = &q.app {
-        &app.compiled.mem()[app.first_obs] as *const f64
+        &app.compiled.borrow().mem()[app.first_obs] as *const f64
     } else {
         std::ptr::null()
     }
@@ -1024,7 +1024,7 @@ pub unsafe extern "C" fn ptr_obs(q: *mut CompilerResult) -> *const f64 {
 pub unsafe extern "C" fn ptr_diffs(q: *mut CompilerResult) -> *const f64 {
     let q: &CompilerResult = unsafe { &*q };
     if let Some(app) = &q.app {
-        &app.compiled.mem()[app.first_diff] as *const f64
+        &app.compiled.borrow().mem()[app.first_diff] as *const f64
     } else {
         std::ptr::null()
     }

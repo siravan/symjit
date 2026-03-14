@@ -224,19 +224,13 @@ impl Application {
     /// to `compile`).
     pub fn call(&mut self, args: &[f64]) -> Vec<f64> {
         {
-            let mem = self.compiled.mem_mut();
-            let states = &mut mem[self.first_state..self.first_state + self.count_states];
-            states.copy_from_slice(args);
+            &mut self.compiled.borrow_mut().mem_mut()
+                [self.first_state..self.first_state + self.count_states]
+                .copy_from_slice(args);
         }
 
-        self.compiled.exec(&self.params[..]);
-
-        let obs = {
-            let mem = self.compiled.mem();
-            &mem[self.first_obs..self.first_obs + self.count_obs]
-        };
-
-        obs.to_vec()
+        self.compiled.borrow_mut().exec(&self.params[..]);
+        self.compiled.borrow().mem()[self.first_obs..self.first_obs + self.count_obs].to_vec()
     }
 
     /// Sets the params and calls the compiled function.
@@ -248,19 +242,13 @@ impl Application {
     /// to `compile`).
     pub fn call_params(&mut self, args: &[f64], params: &[f64]) -> Vec<f64> {
         {
-            let mem = self.compiled.mem_mut();
-            let states = &mut mem[self.first_state..self.first_state + self.count_states];
-            states.copy_from_slice(args);
+            self.compiled.borrow_mut().mem_mut()
+                [self.first_state..self.first_state + self.count_states]
+                .copy_from_slice(args);
         }
 
-        self.compiled.exec(params);
-
-        let obs = {
-            let mem = self.compiled.mem();
-            &mem[self.first_obs..self.first_obs + self.count_obs]
-        };
-
-        obs.to_vec()
+        self.compiled.borrow_mut().exec(params);
+        self.compiled.borrow().mem()[self.first_obs..self.first_obs + self.count_obs].to_vec()
     }
 
     /// Generic evaluate function for compiled Symbolica expressions
@@ -278,7 +266,7 @@ impl Application {
             return;
         }
 
-        let f = self.compiled.func();
+        let f = self.compiled.borrow().func();
 
         f(
             outs.as_ptr() as *mut f64,
@@ -300,7 +288,7 @@ impl Application {
     #[inline(always)]
     pub fn evaluate_simd<T: Sized + Copy>(&mut self, args: &[T], outs: &mut [T]) {
         if let Some(g) = &mut self.compiled_simd {
-            let f = g.func();
+            let f = g.borrow().func();
 
             f(
                 outs.as_ptr() as *mut f64,
@@ -341,7 +329,7 @@ impl Application {
     fn evaluate_matrix_with_threads(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
         let count_params = self.count_params;
         let count_obs = self.count_obs;
-        let f_scalar = self.compiled.func();
+        let f_scalar = self.compiled.borrow().func();
 
         (0..n).into_par_iter().for_each(|t| {
             Self::evaluate_row(args, t * count_params, outs, t * count_obs, f_scalar, false);
@@ -352,7 +340,7 @@ impl Application {
     fn evaluate_matrix_without_threads(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
         let count_params = self.count_params;
         let count_obs = self.count_obs;
-        let f_scalar = self.compiled.func();
+        let f_scalar = self.compiled.borrow().func();
 
         for t in 0..n {
             Self::evaluate_row(args, t * count_params, outs, t * count_obs, f_scalar, false);
@@ -364,9 +352,9 @@ impl Application {
         let count_obs = self.count_obs;
 
         if let Some(compiled) = &self.compiled_simd {
-            let f_simd = compiled.func();
-            let f_scalar = self.compiled.func();
-            let lanes = compiled.count_lanes();
+            let f_simd = compiled.borrow().func();
+            let f_scalar = self.compiled.borrow().func();
+            let lanes = compiled.borrow().count_lanes();
 
             (0..n / lanes).into_par_iter().for_each(|k| {
                 let top = k * lanes;
@@ -403,9 +391,9 @@ impl Application {
         let count_obs = self.count_obs;
 
         if let Some(compiled) = &self.compiled_simd {
-            let f_simd = compiled.func();
-            let f_scalar = self.compiled.func();
-            let lanes = compiled.count_lanes();
+            let f_simd = compiled.borrow().func();
+            let f_scalar = self.compiled.borrow().func();
+            let lanes = compiled.borrow().count_lanes();
 
             for k in 0..n / lanes {
                 let top = k * lanes;
@@ -519,24 +507,26 @@ impl Application {
     pub fn call_simd(&mut self, args: &[__m256d]) -> Result<Vec<__m256d>> {
         if let Some(f) = &mut self.compiled_simd {
             {
-                let mem = f.mem_mut();
-                let states = unsafe {
+                unsafe {
                     simd_slice_mut(
-                        &mut mem[self.first_state * 4..(self.first_state + self.count_states) * 4],
+                        &mut f.borrow_mut().mem_mut()
+                            [self.first_state * 4..(self.first_state + self.count_states) * 4],
                     )
-                };
-                states.copy_from_slice(args);
+                    .copy_from_slice(args);
+                }
             }
 
-            f.exec(&self.params);
+            f.borrow_mut().exec(&self.params);
 
             {
-                let mem = f.mem();
-                let obs = unsafe {
-                    simd_slice(&mem[self.first_obs * 4..(self.first_obs + self.count_obs) * 4])
+                let res = unsafe {
+                    let mut res = vec![_mm256_setzero_pd(); self.count_obs];
+                    res.copy_from_slice(simd_slice(
+                        &f.borrow().mem()
+                            [self.first_obs * 4..(self.first_obs + self.count_obs) * 4],
+                    ));
+                    res
                 };
-                let mut res = unsafe { vec![_mm256_setzero_pd(); self.count_obs] };
-                res.copy_from_slice(obs);
                 Ok(res)
             }
         } else {
@@ -571,24 +561,26 @@ impl Application {
     pub fn call_simd_params(&mut self, args: &[__m256d], params: &[f64]) -> Result<Vec<__m256d>> {
         if let Some(f) = &mut self.compiled_simd {
             {
-                let mem = f.mem_mut();
-                let states = unsafe {
+                unsafe {
                     simd_slice_mut(
-                        &mut mem[self.first_state * 4..(self.first_state + self.count_states) * 4],
+                        &mut f.borrow_mut().mem_mut()
+                            [self.first_state * 4..(self.first_state + self.count_states) * 4],
                     )
-                };
-                states.copy_from_slice(args);
+                    .copy_from_slice(args);
+                }
             }
 
-            f.exec(params);
+            f.borrow_mut().exec(params);
 
             {
-                let mem = f.mem();
-                let obs = unsafe {
-                    simd_slice(&mem[self.first_obs * 4..(self.first_obs + self.count_obs) * 4])
+                let res = unsafe {
+                    let mut res = vec![_mm256_setzero_pd(); self.count_obs];
+                    res.copy_from_slice(simd_slice(
+                        &f.borrow().mem()
+                            [self.first_obs * 4..(self.first_obs + self.count_obs) * 4],
+                    ));
+                    res
                 };
-                let mut res = unsafe { vec![_mm256_setzero_pd(); self.count_obs] };
-                res.copy_from_slice(obs);
                 Ok(res)
             }
         } else {
