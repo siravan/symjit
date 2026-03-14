@@ -116,7 +116,7 @@ impl Program {
     }
 
     pub fn clear(&mut self) {
-        std::mem::take(&mut self.builder);
+        self.builder.block().clear();
     }
 }
 

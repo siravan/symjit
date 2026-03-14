@@ -79,7 +79,7 @@ impl Application {
             mir = Complexifier::new(&reals, *prog.config(), df).complexify(&mir)?;
         }
 
-        prog.clear();
+        prog.clear(); // deletes the expression tree to save space (not needed from this point)
 
         // let compiled = Self::compile_ty(prog.config().compiler_type(), &mir, &mut prog)?;
         let compiled = match prog.config().compiler_type() {
@@ -104,6 +104,7 @@ impl Application {
             && count_obs == 1
             && count_diffs == 0;
 
+        // bytecode takes the ownership of mir
         let bytecode = Self::compile_bytecode(mir, &mut prog)?;
 
         Ok(Application {
@@ -279,19 +280,19 @@ impl Application {
 
     #[inline]
     pub fn exec(&mut self) {
-        if let Some(f) = &mut self.compiled {
-            f.exec(&self.params[..])
+        if let Some(compiled) = &mut self.compiled {
+            compiled.exec(&self.params[..])
         } else {
             self.bytecode.exec(&self.params[..]);
         }
     }
 
     pub fn exec_callable(&mut self, xx: &[f64]) -> f64 {
-        if let Some(f) = &mut self.compiled {
-            let mem = f.mem_mut();
+        if let Some(compiled) = &mut self.compiled {
+            let mem = compiled.mem_mut();
             mem[self.first_state..self.first_state + self.count_states].copy_from_slice(xx);
-            f.exec(&self.params[..]);
-            f.mem()[self.first_obs]
+            compiled.exec(&self.params[..]);
+            compiled.mem()[self.first_obs]
         } else {
             let mem = self.bytecode.mem_mut();
             mem[self.first_state..self.first_state + self.count_states].copy_from_slice(xx);
@@ -347,8 +348,8 @@ impl Application {
     }
 
     pub fn exec_vectorized(&mut self, states: &mut Matrix, obs: &mut Matrix) {
-        if let Some(f) = &self.compiled {
-            if !f.support_indirect() {
+        if let Some(compiled) = &self.compiled {
+            if !compiled.support_indirect() {
                 self.exec_vectorized_simple(states, obs);
                 return;
             }
@@ -368,19 +369,19 @@ impl Application {
         let n = states.ncols;
         let params = &self.params[..];
 
-        if let Some(f) = &mut self.compiled {
+        if let Some(compiled) = &mut self.compiled {
             for t in 0..n {
                 {
-                    let mem = f.mem_mut();
+                    let mem = compiled.mem_mut();
                     for i in 0..self.count_states {
                         mem[self.first_state + i] = states.get(i, t);
                     }
                 }
 
-                f.exec(params);
+                compiled.exec(params);
 
                 {
-                    let mem = f.mem_mut();
+                    let mem = compiled.mem_mut();
                     for i in 0..self.count_obs {
                         obs.set(i, t, mem[self.first_obs + i]);
                     }
@@ -413,10 +414,10 @@ impl Application {
     }
 
     pub fn exec_vectorized_scalar(&mut self, states: &mut Matrix, obs: &mut Matrix, threads: bool) {
-        if let Some(f) = &mut self.compiled {
+        if let Some(compiled) = &mut self.compiled {
             assert!(states.ncols == obs.ncols);
             let n = states.ncols;
-            let f = f.func();
+            let f = compiled.func();
             let params = &self.params[..];
             let v = combine_matrixes(states, obs);
 
@@ -439,7 +440,7 @@ impl Application {
         threads: bool,
         l: usize,
     ) {
-        if let Some(f) = &mut self.compiled {
+        if let Some(compiled) = &mut self.compiled {
             assert!(states.ncols == obs.ncols);
             let n = states.ncols;
             let params = &self.params[..];
@@ -457,7 +458,7 @@ impl Application {
                 }
             }
 
-            let f = f.func();
+            let f = compiled.func();
 
             if threads {
                 (n0..n)

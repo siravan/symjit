@@ -34,6 +34,10 @@ impl Block {
         }
     }
 
+    pub fn clear(&mut self) {
+        self.stmts.clear();
+    }
+
     // add_* functions create a new Statement
 
     pub fn add_label(&mut self, label: &str) {

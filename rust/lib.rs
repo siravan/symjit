@@ -530,7 +530,14 @@ pub unsafe extern "C" fn compile(
             }
         };
 
-        let df: &Defuns = unsafe { &*df };
+        let df: &Defuns = unsafe {
+            if df == std::ptr::null() {
+                &Defuns::new()
+            } else {
+                &*df
+            }
+        };
+
         let app = Application::new(prog, HashSet::new(), df);
 
         match app {
