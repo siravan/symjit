@@ -1450,11 +1450,12 @@ impl Mir {
 
 /********************************************************/
 
+#[derive(Clone)]
 pub struct CompiledMir {
-    mir: Mir,
-    mem: Vec<f64>,
-    stack: Vec<f64>,
-    regs: Vec<f64>,
+    pub mir: Mir,
+    pub mem: Vec<f64>,
+    pub stack: Vec<f64>,
+    pub regs: Vec<f64>,
 }
 
 impl CompiledMir {

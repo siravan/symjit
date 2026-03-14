@@ -1,14 +1,16 @@
 use anyhow::{anyhow, Result};
 use std::fs;
 use std::io::{Read, Write};
+use std::rc::Rc;
 
 use super::memory::*;
 use super::utils::*;
 
+#[derive(Clone)]
 pub struct MachineCode<T: Default> {
     machine_code: Vec<u8>,
     #[allow(dead_code)]
-    code: Memory, // code needs to be here for f to stay valid
+    code: Rc<Memory>, // code needs to be here for f to stay valid
     f: CompiledFunc<T>,
     _mem: Vec<T>,
     leaky: bool,
@@ -43,7 +45,9 @@ impl<T: Clone + Default> MachineCode<T> {
 
         let f: CompiledFunc<T> = if valid {
             unsafe {
-                std::mem::transmute::<*mut u8, fn(*const T, *const &mut [T], usize, *const T) -> i32>(p)
+                std::mem::transmute::<*mut u8, fn(*const T, *const &mut [T], usize, *const T) -> i32>(
+                    p,
+                )
             }
         } else {
             Self::invalid
@@ -51,7 +55,7 @@ impl<T: Clone + Default> MachineCode<T> {
 
         MachineCode {
             machine_code,
-            code,
+            code: Rc::new(code),
             f,
             _mem,
             leaky,
@@ -128,15 +132,15 @@ impl<T: Clone + Default> Storage for MachineCode<T> {
     }
 }
 
-impl<T: Default> Drop for MachineCode<T> {
-    fn drop(&mut self) {
-        if !self.leaky {
-            unsafe {
-                self.code.free_memory();
-            }
-        }
-    }
-}
+// impl<T: Default> Drop for MachineCode<T> {
+//     fn drop(&mut self) {
+//         if !self.leaky {
+//             unsafe {
+//                 self.code.free_memory();
+//             }
+//         }
+//     }
+// }
 
 impl<T: Sized + Copy + Default> Compiled<T> for MachineCode<T> {
     #[inline]

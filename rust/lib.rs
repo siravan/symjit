@@ -442,7 +442,7 @@ pub use expr::{double, int, var, Expr};
 pub use instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
 pub use num_complex::{Complex, ComplexFloat};
 pub use runnable::{Application, CompilerType};
-pub use utils::Storage;
+pub use utils::{Compiled, Storage};
 
 #[derive(Debug, Clone, Copy)]
 pub enum CompilerStatus {
@@ -966,7 +966,11 @@ pub unsafe extern "C" fn evaluate_matrix(
 pub unsafe extern "C" fn ptr_states(q: *mut CompilerResult) -> *mut f64 {
     let q: &mut CompilerResult = unsafe { &mut *q };
     if let Some(app) = &mut q.app {
-        &mut app.compiled.mem_mut()[app.first_state] as *mut f64
+        if let Some(f) = &mut app.compiled {
+            &mut f.mem_mut()[app.first_state] as *mut f64
+        } else {
+            std::ptr::null_mut()
+        }
     } else {
         std::ptr::null_mut()
     }
@@ -1003,7 +1007,11 @@ pub unsafe extern "C" fn ptr_params(q: *mut CompilerResult) -> *mut f64 {
 pub unsafe extern "C" fn ptr_obs(q: *mut CompilerResult) -> *const f64 {
     let q: &CompilerResult = unsafe { &*q };
     if let Some(app) = &q.app {
-        &app.compiled.mem()[app.first_obs] as *const f64
+        if let Some(f) = &app.compiled {
+            &f.mem()[app.first_obs] as *const f64
+        } else {
+            std::ptr::null()
+        }
     } else {
         std::ptr::null()
     }
@@ -1024,7 +1032,11 @@ pub unsafe extern "C" fn ptr_obs(q: *mut CompilerResult) -> *const f64 {
 pub unsafe extern "C" fn ptr_diffs(q: *mut CompilerResult) -> *const f64 {
     let q: &CompilerResult = unsafe { &*q };
     if let Some(app) = &q.app {
-        &app.compiled.mem()[app.first_diff] as *const f64
+        if let Some(f) = &app.compiled {
+            &f.mem()[app.first_diff] as *const f64
+        } else {
+            std::ptr::null()
+        }
     } else {
         std::ptr::null()
     }

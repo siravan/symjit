@@ -14,7 +14,7 @@ pub use crate::instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
 use crate::model::{CellModel, Equation, Program, Variable};
 use crate::parser::Parser;
 use crate::symbol::Loc;
-use crate::utils::CompiledFunc;
+use crate::utils::{Compiled, CompiledFunc};
 use crate::Application;
 
 // #[derive(Debug)]
@@ -223,20 +223,24 @@ impl Application {
     /// The output is a `Vec<f64>`, corresponding to the observables (the expressions passed
     /// to `compile`).
     pub fn call(&mut self, args: &[f64]) -> Vec<f64> {
-        {
-            let mem = self.compiled.mem_mut();
-            let states = &mut mem[self.first_state..self.first_state + self.count_states];
-            states.copy_from_slice(args);
+        if let Some(f) = &mut self.compiled {
+            {
+                let mem = f.mem_mut();
+                let states = &mut mem[self.first_state..self.first_state + self.count_states];
+                states.copy_from_slice(args);
+            }
+
+            f.exec(&self.params[..]);
+
+            let obs = {
+                let mem = f.mem();
+                &mem[self.first_obs..self.first_obs + self.count_obs]
+            };
+
+            obs.to_vec()
+        } else {
+            Vec::new()
         }
-
-        self.compiled.exec(&self.params[..]);
-
-        let obs = {
-            let mem = self.compiled.mem();
-            &mem[self.first_obs..self.first_obs + self.count_obs]
-        };
-
-        obs.to_vec()
     }
 
     /// Sets the params and calls the compiled function.
@@ -247,45 +251,50 @@ impl Application {
     /// The output is a `Vec<f64>`, corresponding to the observables (the expressions passed
     /// to `compile`).
     pub fn call_params(&mut self, args: &[f64], params: &[f64]) -> Vec<f64> {
-        {
-            let mem = self.compiled.mem_mut();
-            let states = &mut mem[self.first_state..self.first_state + self.count_states];
-            states.copy_from_slice(args);
+        if let Some(f) = &mut self.compiled {
+            {
+                let mem = f.mem_mut();
+                let states = &mut mem[self.first_state..self.first_state + self.count_states];
+                states.copy_from_slice(args);
+            }
+
+            f.exec(params);
+
+            let obs = {
+                let mem = f.mem();
+                &mem[self.first_obs..self.first_obs + self.count_obs]
+            };
+
+            obs.to_vec()
+        } else {
+            Vec::new()
         }
-
-        self.compiled.exec(params);
-
-        let obs = {
-            let mem = self.compiled.mem();
-            &mem[self.first_obs..self.first_obs + self.count_obs]
-        };
-
-        obs.to_vec()
     }
 
     /// Generic evaluate function for compiled Symbolica expressions
     #[inline(always)]
     pub fn evaluate<T: Sized + Copy>(&mut self, args: &[T], outs: &mut [T]) {
         if self.prog.config().is_bytecode() {
-            let mut stack: Vec<f64> = vec![0.0; self.prog.builder.block().sym_table.num_stack];
             let mut regs = [0.0; 32];
-
             let outs: &mut [f64] = unsafe { std::mem::transmute(outs) };
             let args: &[f64] = unsafe { std::mem::transmute(args) };
-
-            self.mir.exec_instruction(outs, &mut stack, &mut regs, args);
+            self.bytecode
+                .mir
+                .exec_instruction(outs, &mut self.bytecode.stack, &mut regs, args);
 
             return;
         }
 
-        let f = self.compiled.func();
+        if let Some(f) = &self.compiled {
+            let f = f.func();
 
-        f(
-            outs.as_ptr() as *mut f64,
-            std::ptr::null(),
-            0,
-            args.as_ptr() as *const f64,
-        );
+            f(
+                outs.as_ptr() as *mut f64,
+                std::ptr::null(),
+                0,
+                args.as_ptr() as *const f64,
+            );
+        }
     }
 
     /// Generic evaluate_single function for compiled Symbolica expressions
@@ -298,8 +307,8 @@ impl Application {
 
     /// Generic SIMD evaluate function for compiled Symbolica expressions
     #[inline(always)]
-    pub fn evaluate_simd<T: Sized + Copy>(&mut self, args: &[T], outs: &mut [T]) {
-        if let Some(g) = &mut self.compiled_simd {
+    pub fn evaluate_simd<T: Sized + Copy>(&self, args: &[T], outs: &mut [T]) {
+        if let Some(g) = &self.compiled_simd {
             let f = g.func();
 
             f(
@@ -313,7 +322,7 @@ impl Application {
 
     /// Generic SIMD evaluate_single function for compiled Symbolica expressions
     #[inline(always)]
-    pub fn evaluate_simd_single<T: Sized + Copy + Default>(&mut self, args: &[T]) -> T {
+    pub fn evaluate_simd_single<T: Sized + Copy + Default>(&self, args: &[T]) -> T {
         let mut outs = [T::default(); 1];
         self.evaluate_simd(args, &mut outs);
         outs[0]
@@ -338,101 +347,123 @@ impl Application {
     }
 
     /// Generic evaluate function for compiled Symbolica expressions
-    fn evaluate_matrix_with_threads(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
-        let count_params = self.count_params;
-        let count_obs = self.count_obs;
-        let f_scalar = self.compiled.func();
+    fn evaluate_matrix_with_threads(&self, args: &[f64], outs: &mut [f64], n: usize) {
+        if let Some(f) = &self.compiled {
+            let count_params = self.count_params;
+            let count_obs = self.count_obs;
+            let f_scalar = f.func();
 
-        (0..n).into_par_iter().for_each(|t| {
-            Self::evaluate_row(args, t * count_params, outs, t * count_obs, f_scalar, false);
-        });
+            (0..n).into_par_iter().for_each(|t| {
+                Self::evaluate_row(args, t * count_params, outs, t * count_obs, f_scalar, false);
+            });
+        }
     }
 
     /// Generic evaluate function for compiled Symbolica expressions
-    fn evaluate_matrix_without_threads(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
-        let count_params = self.count_params;
-        let count_obs = self.count_obs;
-        let f_scalar = self.compiled.func();
+    fn evaluate_matrix_without_threads(&self, args: &[f64], outs: &mut [f64], n: usize) {
+        if let Some(f) = &self.compiled {
+            let count_params = self.count_params;
+            let count_obs = self.count_obs;
+            let f_scalar = f.func();
 
-        for t in 0..n {
-            Self::evaluate_row(args, t * count_params, outs, t * count_obs, f_scalar, false);
-        }
-    }
-
-    fn evaluate_matrix_with_threads_simd(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
-        let count_params = self.count_params;
-        let count_obs = self.count_obs;
-
-        if let Some(compiled) = &self.compiled_simd {
-            let f_simd = compiled.func();
-            let f_scalar = self.compiled.func();
-            let lanes = compiled.count_lanes();
-
-            (0..n / lanes).into_par_iter().for_each(|k| {
-                let top = k * lanes;
-                if Self::evaluate_row(
-                    args,
-                    top * count_params,
-                    outs,
-                    top * count_obs,
-                    f_simd,
-                    true,
-                ) != 0
-                {
-                    for i in 0..lanes {
-                        Self::evaluate_row(
-                            args,
-                            (top + i) * count_params,
-                            outs,
-                            (top + i) * count_obs,
-                            f_scalar,
-                            false,
-                        );
-                    }
-                }
-            });
-
-            for t in lanes * (n / lanes)..n {
+            for t in 0..n {
                 Self::evaluate_row(args, t * count_params, outs, t * count_obs, f_scalar, false);
             }
         }
     }
 
-    fn evaluate_matrix_without_threads_simd(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
-        let count_params = self.count_params;
-        let count_obs = self.count_obs;
+    fn evaluate_matrix_with_threads_simd(&self, args: &[f64], outs: &mut [f64], n: usize) {
+        if let Some(f) = &self.compiled {
+            let count_params = self.count_params;
+            let count_obs = self.count_obs;
 
-        if let Some(compiled) = &self.compiled_simd {
-            let f_simd = compiled.func();
-            let f_scalar = self.compiled.func();
-            let lanes = compiled.count_lanes();
+            if let Some(compiled) = &self.compiled_simd {
+                let f_simd = compiled.func();
+                let f_scalar = f.func();
+                let lanes = compiled.count_lanes();
 
-            for k in 0..n / lanes {
-                let top = k * lanes;
-                if Self::evaluate_row(
-                    args,
-                    top * count_params,
-                    outs,
-                    top * count_obs,
-                    f_simd,
-                    true,
-                ) != 0
-                {
-                    for i in 0..lanes {
-                        Self::evaluate_row(
-                            args,
-                            (top + i) * count_params,
-                            outs,
-                            (top + i) * count_obs,
-                            f_scalar,
-                            false,
-                        );
+                (0..n / lanes).into_par_iter().for_each(|k| {
+                    let top = k * lanes;
+                    if Self::evaluate_row(
+                        args,
+                        top * count_params,
+                        outs,
+                        top * count_obs,
+                        f_simd,
+                        true,
+                    ) != 0
+                    {
+                        for i in 0..lanes {
+                            Self::evaluate_row(
+                                args,
+                                (top + i) * count_params,
+                                outs,
+                                (top + i) * count_obs,
+                                f_scalar,
+                                false,
+                            );
+                        }
                     }
+                });
+
+                for t in lanes * (n / lanes)..n {
+                    Self::evaluate_row(
+                        args,
+                        t * count_params,
+                        outs,
+                        t * count_obs,
+                        f_scalar,
+                        false,
+                    );
                 }
             }
+        }
+    }
 
-            for t in lanes * (n / lanes)..n {
-                Self::evaluate_row(args, t * count_params, outs, t * count_obs, f_scalar, false);
+    fn evaluate_matrix_without_threads_simd(&self, args: &[f64], outs: &mut [f64], n: usize) {
+        if let Some(f) = &self.compiled {
+            let count_params = self.count_params;
+            let count_obs = self.count_obs;
+
+            if let Some(compiled) = &self.compiled_simd {
+                let f_simd = compiled.func();
+                let f_scalar = f.func();
+                let lanes = compiled.count_lanes();
+
+                for k in 0..n / lanes {
+                    let top = k * lanes;
+                    if Self::evaluate_row(
+                        args,
+                        top * count_params,
+                        outs,
+                        top * count_obs,
+                        f_simd,
+                        true,
+                    ) != 0
+                    {
+                        for i in 0..lanes {
+                            Self::evaluate_row(
+                                args,
+                                (top + i) * count_params,
+                                outs,
+                                (top + i) * count_obs,
+                                f_scalar,
+                                false,
+                            );
+                        }
+                    }
+                }
+
+                for t in lanes * (n / lanes)..n {
+                    Self::evaluate_row(
+                        args,
+                        t * count_params,
+                        outs,
+                        t * count_obs,
+                        f_scalar,
+                        false,
+                    );
+                }
             }
         }
     }
@@ -495,7 +526,7 @@ impl Application {
     }
 
     /// Generic evaluate function for compiled Symbolica expressions
-    pub fn evaluate_simd_matrix<T: Sized + Copy>(&mut self, args: &[T], outs: &mut [T], n: usize) {
+    pub fn evaluate_simd_matrix<T: Sized + Copy>(&self, args: &[T], outs: &mut [T], n: usize) {
         let args_size = args.len() / n;
         let outs_size = outs.len() / n;
 
