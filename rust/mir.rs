@@ -93,6 +93,7 @@ pub enum Instruction {
     Call {
         label: String,
         f: Func,
+        num_args: usize,
     },
     Fused {
         op: FusedOp,
@@ -717,12 +718,13 @@ impl Mir {
         };
     }
 
-    pub fn call(&mut self, op: &str, _num_args: usize) -> Result<()> {
+    pub fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
         let f = self.find_op(op)?;
 
         self.push(Instruction::Call {
             f,
             label: op.to_string(),
+            num_args,
         });
 
         Ok(())
@@ -907,6 +909,9 @@ impl Mir {
                         Self::set(regs, Reg::Ret, z.re);
                         Self::set(regs, Reg::Temp, z.im);
                     }
+                    Func::Slice(f, env) => {
+                        todo!();
+                    }
                 },
                 Instruction::Fused { op, dst, a, b, c } => {
                     Self::exec_fused(regs, *op, *dst, *a, *b, *c);
@@ -1021,11 +1026,14 @@ impl Mir {
                 Instruction::LoadConst { dst, idx } => {
                     ir.load_const(*dst, *idx);
                 }
-                Instruction::Call { label, f } => match f {
-                    Func::Unary(_) => ir.call(label, 1)?,
-                    Func::Binary(_) => ir.call(label, 2)?,
-                    Func::UnaryCplx(_) => ir.call_complex(label, 1)?,
-                    Func::BinaryCplx(_) => ir.call_complex(label, 2)?,
+                Instruction::Call { label, f, num_args } => match f {
+                    Func::Unary(_) => ir.call(label, *num_args)?,
+                    Func::Binary(_) => ir.call(label, *num_args)?,
+                    Func::UnaryCplx(_) => ir.call_complex(label, *num_args)?,
+                    Func::BinaryCplx(_) => ir.call_complex(label, *num_args)?,
+                    Func::Slice(f, env) => {
+                        todo!();
+                    }
                 },
                 Instruction::Fused { op, dst, a, b, c } => match op {
                     FusedOp::MulAdd => ir.fused_mul_add(*dst, *a, *b, *c),

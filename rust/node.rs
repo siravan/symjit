@@ -10,7 +10,7 @@ use std::rc::Rc;
 // use crate::generator::Generator;
 use crate::mir::Mir;
 use crate::symbol::{Loc, Symbol};
-use crate::utils::reg;
+use crate::utils::{reg, Reg};
 
 pub struct Pool {
     available: u32,
@@ -545,6 +545,34 @@ impl Node {
         }
 
         Ok((dst, l, r))
+    }
+
+    pub fn address(&self) -> Result<usize> {
+        if let Node::Var { sym, .. } = &self {
+            match sym.borrow().loc {
+                Loc::Stack(idx) => Ok(idx as usize),
+                _ => Err(anyhow!("only stack locations can be used for slicing.")),
+            }
+        } else {
+            Err(anyhow!("Only stack variables have an address."))
+        }
+    }
+
+    pub fn call_external(&self) -> Result<(i32, i32)> {
+        if let Node::Binary {
+            op, left, right, ..
+        } = self
+        {
+            if op != "_call_" {
+                return Err(anyhow!("external fun main node should be `_call_`"));
+            }
+
+            let l = left.as_int_const().unwrap();
+            let r = right.as_int_const().unwrap();
+            Ok((l, r))
+        } else {
+            unreachable!();
+        }
     }
 
     pub fn is_const(&self, val_: f64) -> bool {

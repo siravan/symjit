@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 
+use crate::code::Func;
 use crate::config::Config;
 use crate::generator::Generator;
 use crate::utils::align_stack;
@@ -760,10 +761,18 @@ impl Generator for AmdGenerator {
         }
     }
 
-    fn add_func(&mut self, f: &str, p: crate::code::Func) {
-        let label = format!("_func_{}_", f);
+    fn add_func(&mut self, op: &str, f: Func) {
+        let label = format!("_func_{}_", op);
         self.set_label(label.as_str());
-        self.append_quad(p.func_ptr());
+
+        if let Func::Slice(h, env) = f {
+            self.append_quad(h as u64);
+            let label = format!("_env_{}_", op);
+            self.set_label(label.as_str());
+            self.append_quad(env as u64);
+        } else {
+            self.append_quad(f.func_ptr());
+        }
     }
 
     fn call(&mut self, op: &str, num_args: usize) -> Result<()> {

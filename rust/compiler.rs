@@ -971,7 +971,7 @@ impl Translator {
             Slot::Out(idx) => Ok(Slot::Out(*idx)),
             Slot::Param(idx) => Ok(Slot::Param(*idx)),
             Slot::Const(idx) => Ok(Slot::Const(*idx)),
-            Slot::Static(_) => Err(anyhow!("Undefined Static.")),
+            Slot::Static(_) | Slot::Arg(_) => Err(anyhow!("Undefined Static/Arg.")),
         }
     }
 
@@ -1073,6 +1073,7 @@ impl Translator {
                 .cache
                 .remove(idx)
                 .unwrap_or(Expr::var(&format!("__Static{}", idx))),
+            Slot::Arg(idx) => Expr::var(&format!("__Arg{}", idx)),
         }
     }
 
@@ -1156,21 +1157,25 @@ impl Translator {
     }
 
     fn translate_external_fun(&mut self, lhs: &Slot, op: &str, args: &[Slot]) -> Result<()> {
-        match args.len() {
-            1 => {
-                let arg = self.expr(&args[0], false);
-                self.assign(lhs, Expr::unary(op, &arg))?;
+        let n = args.len();
+        let args: Vec<Expr> = args.iter().map(|a| self.expr(a, false)).collect();
+
+        if self.config.is_intrinsic_unary(op) && n == 1 {
+            self.assign(lhs, Expr::unary(op, &args[0]))?;
+        } else if self.config.is_intrinsic_binary(op) && n == 2 {
+            self.assign(lhs, Expr::binary(op, &args[0], &args[1]))?;
+        } else {
+            let slice: Vec<Slot> = (0..n).map(|i| Slot::Arg(i)).collect();
+
+            for i in 0..n {
+                self.assign(&slice[i], args[i].clone())?;
             }
-            2 => {
-                let l = self.expr(&args[0], false);
-                let r = self.expr(&args[1], false);
-                self.assign(lhs, Expr::binary(op, &l, &r))?;
-            }
-            _ => {
-                return Err(anyhow!(
-                    "only unary and binary external functions are supported"
-                ))
-            }
+
+            let op = format!("${}", op);
+            self.assign(
+                lhs,
+                Expr::binary(&op, &Expr::from(0), &Expr::from(n as i32)),
+            )?;
         }
 
         Ok(())

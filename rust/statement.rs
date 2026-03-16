@@ -45,6 +45,7 @@ impl Statement {
     }
 
     pub fn compile(&mut self, ir: &mut Mir) -> Result<()> {
+        println!("{:?}", self);
         match self {
             Statement::Assign { lhs, rhs } => {
                 let r = rhs.compile_tree(ir)?;
@@ -56,9 +57,17 @@ impl Statement {
                 arg,
                 num_args,
             } => {
-                let _ = arg.compile_tree(ir)?;
-                ir.call(op.as_str(), *num_args)?;
-                Self::save_result(ir, lhs);
+                if op.starts_with("$") {
+                    let (l, r) = arg.call_external()?;
+                    let n = (r - l) as usize;
+                    ir.call(op.as_str(), *num_args)?;
+                    Self::save_result(ir, lhs);
+                    println!("calling {} with {} arguments.", op, n);
+                } else {
+                    let _ = arg.compile_tree(ir)?;
+                    ir.call(op.as_str(), *num_args)?;
+                    Self::save_result(ir, lhs);
+                }
             }
             Statement::Label { label } => {
                 ir.set_label(label);

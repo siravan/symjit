@@ -23,6 +23,7 @@ pub enum Slot {
     Out(usize),
     /// Static-Single-Assignment Form
     Static(usize),
+    Arg(usize),
 }
 
 #[derive(Debug, Clone, Deserialize)]

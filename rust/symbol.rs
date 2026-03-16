@@ -56,6 +56,7 @@ pub struct SymbolTable {
 
 impl SymbolTable {
     const SPILL_AREA: usize = 16;
+    const ARG_COUNT: usize = 16;
 
     pub fn new(is_complex: bool) -> SymbolTable {
         let mut s = SymbolTable {
@@ -75,6 +76,10 @@ impl SymbolTable {
         */
         for i in 0..SymbolTable::SPILL_AREA {
             s.add_stack(&format!("μ{}", i));
+        }
+
+        for i in 0..SymbolTable::ARG_COUNT {
+            s.add_stack(&format!("__Arg{}", i));
         }
 
         if is_complex {

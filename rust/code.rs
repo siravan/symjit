@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use num_complex::Complex;
 use spec_math::cephes64;
+use std::ffi::c_void;
 use std::fmt;
 
 /*
@@ -38,6 +39,7 @@ pub enum Func {
     Binary(BinaryFunc),
     UnaryCplx(UnaryFuncCplx),
     BinaryCplx(BinaryFuncCplx),
+    Slice(*const c_void, *mut c_void),
 }
 
 impl Func {
@@ -47,6 +49,7 @@ impl Func {
             Func::Binary(f) => *f as usize as u64,
             Func::UnaryCplx(f) => *f as usize as u64,
             Func::BinaryCplx(f) => *f as usize as u64,
+            Func::Slice(..) => 0,
         }
     }
 }
@@ -128,6 +131,7 @@ impl VirtualTable {
             "cplx_log" => Func::UnaryCplx(Self::cplx_log),
             // Complex Binary Functions
             "cplx_power" => Func::BinaryCplx(Self::cplx_power),
+            // "trampoline" => Func::Trampoline(Self::closure_trampoline),
             _ => {
                 return Err(anyhow!("op_code {} is not found or is not supported", op));
             }
@@ -397,5 +401,18 @@ impl VirtualTable {
 
     pub extern "C" fn cplx_power(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).powc(*z);
+    }
+
+    extern "C" fn closure_trampoline(
+        env: *mut c_void,
+        slice_ptr: *const f64,
+        slice_len: usize,
+    ) -> f64 {
+        // Reconstruct the closure and the slice from the raw C arguments
+        let closure: fn(&[f64]) -> f64 = unsafe { std::mem::transmute(env) };
+        let slice = unsafe { std::slice::from_raw_parts(slice_ptr, slice_len) };
+
+        // Execute the actual Rust closure
+        closure(slice)
     }
 }
