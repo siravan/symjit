@@ -830,6 +830,13 @@ impl Amd {
         self.append_word(imm);
     }
 
+    pub fn mov_imm(&mut self, rm: u8, imm: u32) {
+        self.rex(0, rm);
+        self.append_byte(0xc7);
+        self.modrm_reg(0, rm);
+        self.append_word(imm);
+    }
+
     pub fn or_imm(&mut self, rm: u8, imm: u32) {
         self.rex(0, rm);
         self.append_byte(0x81);

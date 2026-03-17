@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use super::utils::reg;
+use super::utils::{is_external_func, reg};
 use crate::mir::Mir;
 use crate::node::Node;
 use crate::symbol::Loc;
@@ -45,7 +45,6 @@ impl Statement {
     }
 
     pub fn compile(&mut self, ir: &mut Mir) -> Result<()> {
-        println!("{:?}", self);
         match self {
             Statement::Assign { lhs, rhs } => {
                 let r = rhs.compile_tree(ir)?;
@@ -57,12 +56,10 @@ impl Statement {
                 arg,
                 num_args,
             } => {
-                if op.starts_with("$") {
+                if is_external_func(op) {
                     let (l, r) = arg.call_external()?;
-                    let n = (r - l) as usize;
-                    ir.call(op.as_str(), *num_args)?;
+                    ir.call(op.as_str(), (r - l) as usize)?;
                     Self::save_result(ir, lhs);
-                    println!("calling {} with {} arguments.", op, n);
                 } else {
                     let _ = arg.compile_tree(ir)?;
                     ir.call(op.as_str(), *num_args)?;

@@ -822,11 +822,16 @@ impl GreedyAllocator {
 
         for ins in code {
             match ins {
+                // This rule is commented out to prevent eliding Args during
+                // external calls. If needed, we can restore this rule as long
+                // as Args are added to self.locs.
+                /*
                 Instruction::Save { src, loc } => {
                     if !matches!(loc, Loc::Stack(_)) || self.locs.contains_key(&loc) {
                         self.push(Instruction::Save { src, loc })
                     }
                 }
+                */
                 Instruction::Mov { dst, s1 } => {
                     if dst != s1 {
                         self.push(Instruction::Mov { dst, s1 });

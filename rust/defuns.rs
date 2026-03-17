@@ -1,19 +1,22 @@
-use crate::code::{BinaryFunc, BinaryFuncCplx, Func, UnaryFunc, UnaryFuncCplx};
 use std::collections::HashMap;
 use std::ffi::c_void;
+
+use crate::code::{BinaryFunc, BinaryFuncCplx, Func, UnaryFunc, UnaryFuncCplx};
+use crate::config::SLICE_CAP;
 
 #[derive(Debug, Clone, Default)]
 pub struct Defuns {
     pub funcs: HashMap<String, Func>,
 }
 
-extern "C" fn closure_trampoline<F>(
+pub extern "C" fn closure_trampoline<F, T>(
     env: *mut c_void,
-    slice_ptr: *const f64,
+    slice_ptr: *const T,
     slice_len: usize,
-) -> f64
+) -> T
 where
-    F: Fn(&[f64]) -> f64,
+    F: Fn(&[T]) -> T,
+    T: Sized + Copy + Default,
 {
     // Reconstruct the closure and the slice from the raw C arguments
     let closure = unsafe { &mut *(env as *mut F) };
@@ -21,6 +24,33 @@ where
 
     // Execute the actual Rust closure
     closure(slice)
+}
+
+extern "C" fn closure_trampoline_simd<F, T>(
+    env: *mut c_void,
+    slice_ptr: *const T,
+    slice_len: usize,
+    step: usize,
+) -> T
+where
+    F: Fn(&[T]) -> T,
+    T: Sized + Copy + Default,
+{
+    // Reconstruct the closure and the slice from the raw C arguments
+    let closure = unsafe { &mut *(env as *mut F) };
+    let mut slice = [T::default(); SLICE_CAP];
+    assert!(slice_len <= SLICE_CAP);
+    let mut p = slice_ptr;
+
+    for i in 0..slice_len {
+        unsafe {
+            slice[i] = *p;
+            p = p.add(step);
+        }
+    }
+
+    // Execute the actual Rust closure
+    closure(&slice[..slice_len])
 }
 
 impl Defuns {
@@ -64,14 +94,24 @@ impl Defuns {
             .insert(format!("cplx_{}", name), Func::BinaryCplx(f));
     }
 
-    pub fn add_sliced_func<F>(&mut self, name: &str, mut closure: F)
+    pub fn add_sliced_func<F, T>(&mut self, name: &str, mut closure: F)
     where
-        F: Fn(&[f64]) -> f64,
+        F: Fn(&[T]) -> T,
+        T: Copy + Sized + Default,
     {
         let env_ptr = &mut closure as *mut _ as *mut c_void;
-        let trampoline = closure_trampoline::<F> as *const c_void;
+        let trampoline = closure_trampoline::<F, T> as *const c_void;
+        let trampoline_simd = closure_trampoline_simd::<F, T> as *const c_void;
         let op = format!("${}", name);
-        self.funcs.insert(op, Func::Slice(trampoline, env_ptr));
+
+        self.funcs.insert(
+            op,
+            Func::Slice {
+                f_scalar: trampoline,
+                f_simd: trampoline_simd,
+                env: env_ptr,
+            },
+        );
     }
 
     pub fn len(&self) -> usize {

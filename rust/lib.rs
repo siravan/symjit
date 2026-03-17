@@ -531,7 +531,7 @@ pub unsafe extern "C" fn compile(
         };
 
         let df: &Defuns = unsafe {
-            if df == std::ptr::null() {
+            if df.is_null() {
                 &Defuns::new()
             } else {
                 &*df

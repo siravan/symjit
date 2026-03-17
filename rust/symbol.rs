@@ -4,6 +4,8 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
+use crate::config::SLICE_CAP;
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Loc {
     Stack(u32),
@@ -56,7 +58,6 @@ pub struct SymbolTable {
 
 impl SymbolTable {
     const SPILL_AREA: usize = 16;
-    const ARG_COUNT: usize = 16;
 
     pub fn new(is_complex: bool) -> SymbolTable {
         let mut s = SymbolTable {
@@ -78,7 +79,7 @@ impl SymbolTable {
             s.add_stack(&format!("μ{}", i));
         }
 
-        for i in 0..SymbolTable::ARG_COUNT {
+        for i in 0..SLICE_CAP {
             s.add_stack(&format!("__Arg{}", i));
         }
 

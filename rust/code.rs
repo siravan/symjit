@@ -39,7 +39,11 @@ pub enum Func {
     Binary(BinaryFunc),
     UnaryCplx(UnaryFuncCplx),
     BinaryCplx(BinaryFuncCplx),
-    Slice(*const c_void, *mut c_void),
+    Slice {
+        f_scalar: *const c_void,
+        f_simd: *const c_void,
+        env: *mut c_void,
+    },
 }
 
 impl Func {
@@ -49,7 +53,7 @@ impl Func {
             Func::Binary(f) => *f as usize as u64,
             Func::UnaryCplx(f) => *f as usize as u64,
             Func::BinaryCplx(f) => *f as usize as u64,
-            Func::Slice(..) => 0,
+            Func::Slice { .. } => 0,
         }
     }
 }

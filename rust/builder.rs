@@ -297,8 +297,6 @@ impl Builder {
         mir.add_consts(&self.consts);
         mir.populate_labels();
 
-        // println!("{:?}", &mir);
-
         Ok(mir)
     }
 

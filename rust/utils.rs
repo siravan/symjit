@@ -74,3 +74,7 @@ impl fmt::Debug for Reg {
 pub fn reg(r: u8) -> Reg {
     Reg::Gen(r)
 }
+
+pub fn is_external_func(op: &str) -> bool {
+    op.starts_with("$")
+}

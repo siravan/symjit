@@ -14,6 +14,7 @@ use crate::defuns::Defuns;
 use crate::generator::Generator;
 use crate::machine::MachineCode;
 use crate::symbol::Loc;
+use crate::utils::is_external_func;
 use crate::utils::{bool_to_f64, Compiled, CompiledFunc, Reg};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -720,7 +721,6 @@ impl Mir {
 
     pub fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
         let f = self.find_op(op)?;
-
         self.push(Instruction::Call {
             f,
             label: op.to_string(),
@@ -731,7 +731,7 @@ impl Mir {
     }
 
     pub fn find_op(&self, op: &str) -> Result<Func> {
-        let op = if self.config.is_complex() {
+        let op = if self.config.is_complex() && !is_external_func(op) {
             &format!("cplx_{}", &op)
         } else {
             op
@@ -882,7 +882,7 @@ impl Mir {
                 Instruction::LoadConst { dst, idx } => {
                     Self::set(regs, *dst, self.consts[*idx as usize]);
                 }
-                Instruction::Call { f, .. } => match f {
+                Instruction::Call { f, num_args, .. } => match f {
                     Func::Unary(p) => Self::set(regs, Reg::Ret, p(Self::get(regs, Reg::Left))),
                     Func::Binary(p) => Self::set(
                         regs,
@@ -909,8 +909,18 @@ impl Mir {
                         Self::set(regs, Reg::Ret, z.re);
                         Self::set(regs, Reg::Temp, z.im);
                     }
-                    Func::Slice(f, env) => {
+                    Func::Slice { env, .. } => {
                         todo!();
+                        /*
+                        let val: f64 = unsafe {
+                            crate::defuns::closure_trampoline::<fn(&[f64]) -> f64, f64>(
+                                *env,
+                                stack.as_ptr().add(crate::config::SLICE_CAP),
+                                *num_args,
+                            )
+                        };
+                        Self::set(regs, Reg::Ret, val);
+                        */
                     }
                 },
                 Instruction::Fused { op, dst, a, b, c } => {
@@ -1031,9 +1041,7 @@ impl Mir {
                     Func::Binary(_) => ir.call(label, *num_args)?,
                     Func::UnaryCplx(_) => ir.call_complex(label, *num_args)?,
                     Func::BinaryCplx(_) => ir.call_complex(label, *num_args)?,
-                    Func::Slice(f, env) => {
-                        todo!();
-                    }
+                    Func::Slice { .. } => ir.call(label, *num_args)?,
                 },
                 Instruction::Fused { op, dst, a, b, c } => match op {
                     FusedOp::MulAdd => ir.fused_mul_add(*dst, *a, *b, *c),

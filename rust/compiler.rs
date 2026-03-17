@@ -7,7 +7,7 @@ use anyhow::{anyhow, Result};
 use num_complex::Complex;
 use rayon::prelude::*;
 
-use crate::config::Config;
+use crate::config::{Config, SLICE_CAP};
 use crate::defuns::Defuns;
 use crate::expr::Expr;
 pub use crate::instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
@@ -1158,6 +1158,7 @@ impl Translator {
 
     fn translate_external_fun(&mut self, lhs: &Slot, op: &str, args: &[Slot]) -> Result<()> {
         let n = args.len();
+        assert!(n <= SLICE_CAP);
         let args: Vec<Expr> = args.iter().map(|a| self.expr(a, false)).collect();
 
         if self.config.is_intrinsic_unary(op) && n == 1 {
@@ -1165,7 +1166,7 @@ impl Translator {
         } else if self.config.is_intrinsic_binary(op) && n == 2 {
             self.assign(lhs, Expr::binary(op, &args[0], &args[1]))?;
         } else {
-            let slice: Vec<Slot> = (0..n).map(|i| Slot::Arg(i)).collect();
+            let slice: Vec<Slot> = (0..n).map(Slot::Arg).collect();
 
             for i in 0..n {
                 self.assign(&slice[i], args[i].clone())?;
