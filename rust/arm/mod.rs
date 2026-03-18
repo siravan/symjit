@@ -5,7 +5,7 @@ use anyhow::{anyhow, Result};
 
 use crate::assembler::{Assembler, Jumper};
 use crate::code::Func;
-use crate::config::{Config, SLICE_CAP};
+use crate::config::{Config, SLICE_CAP, SPILL_AREA};
 use crate::generator::Generator;
 use crate::utils::{align_stack, is_external_func, reg, Reg};
 
@@ -433,7 +433,7 @@ impl Generator for ArmGenerator {
     fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
         if is_external_func(op) {
             self.load_x_from_label(0, &format!("_env_{}_", op));
-            let ofs = SLICE_CAP as u32 * self.reg_size();
+            let ofs = SPILL_AREA as u32 * self.reg_size();
             self.emit(arm! {add x(1), x(31), #ofs});
             self.emit(arm! {movz x(2), #num_args});
         }
@@ -745,7 +745,7 @@ impl ArmSimdGenerator {
             |offset, _| arm! {ldr x(CALL), [x(CALL), #offset & 0x0fff]},
         );
 
-        let ofs = SLICE_CAP as u32 * self.reg_size();
+        let ofs = SPILL_AREA as u32 * self.reg_size();
 
         self.load_x_from_label(0, &format!("_env_{}_", op));
         self.emit(arm! {add x(1), x(31), #ofs});
@@ -755,7 +755,7 @@ impl ArmSimdGenerator {
         self.emit(arm! {str d(0), [sp, #0]});
 
         self.load_x_from_label(0, &format!("_env_{}_", op));
-        self.emit(arm! {add x(1), x(31), #ofs+1});
+        self.emit(arm! {add x(1), x(31), #ofs+8});
         self.emit(arm! {movz x(2), #num_args});
         self.emit(arm! {movz x(3), #2});
         self.emit(arm! {blr x(CALL)});
