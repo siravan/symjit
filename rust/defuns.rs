@@ -1,6 +1,8 @@
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::ffi::c_void;
 
+use crate::code::VirtualTable;
 use crate::code::{BinaryFunc, BinaryFuncCplx, Func, UnaryFunc, UnaryFuncCplx};
 use crate::config::SLICE_CAP;
 
@@ -94,11 +96,15 @@ impl Defuns {
             .insert(format!("cplx_{}", name), Func::BinaryCplx(f));
     }
 
-    pub fn add_sliced_func<F, T>(&mut self, name: &str, mut closure: F)
+    pub fn add_sliced_func<F, T>(&mut self, name: &str, mut closure: F) -> Result<()>
     where
         F: Fn(&[T]) -> T,
         T: Copy + Sized + Default,
     {
+        if VirtualTable::from_str(name).is_ok() {
+            return Err(anyhow!("cannot redefine function {}.", &name));
+        }
+
         let env_ptr = &mut closure as *mut _ as *mut c_void;
         let trampoline = closure_trampoline::<F, T> as *const c_void;
         let trampoline_simd = closure_trampoline_simd::<F, T> as *const c_void;
@@ -112,6 +118,8 @@ impl Defuns {
                 env: env_ptr,
             },
         );
+
+        Ok(())
     }
 
     pub fn len(&self) -> usize {

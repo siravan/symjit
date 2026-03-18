@@ -10,6 +10,7 @@ use petgraph::matrix_graph::Zero;
 
 use crate::code::{Func, VirtualTable};
 use crate::config::Config;
+use crate::config::SPILL_AREA;
 use crate::defuns::Defuns;
 use crate::generator::Generator;
 use crate::machine::MachineCode;
@@ -913,11 +914,7 @@ impl Mir {
                         let f: fn(*mut std::ffi::c_void, *const f64, usize) -> f64 =
                             std::mem::transmute(*f_scalar);
 
-                        let val = f(
-                            *env,
-                            stack.as_ptr().add(crate::config::SLICE_CAP),
-                            *num_args,
-                        );
+                        let val = f(*env, stack.as_ptr().add(SPILL_AREA), *num_args);
 
                         Self::set(regs, Reg::Ret, val);
                     },

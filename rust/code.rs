@@ -406,17 +406,4 @@ impl VirtualTable {
     pub extern "C" fn cplx_power(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).powc(*z);
     }
-
-    extern "C" fn closure_trampoline(
-        env: *mut c_void,
-        slice_ptr: *const f64,
-        slice_len: usize,
-    ) -> f64 {
-        // Reconstruct the closure and the slice from the raw C arguments
-        let closure: fn(&[f64]) -> f64 = unsafe { std::mem::transmute(env) };
-        let slice = unsafe { std::slice::from_raw_parts(slice_ptr, slice_len) };
-
-        // Execute the actual Rust closure
-        closure(slice)
-    }
 }

@@ -121,12 +121,12 @@ impl ArmGenerator {
     }
 
     fn load_x_from_label(&mut self, dst: u8, label: &str) {
-        self.jump_abs(&label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
+        self.jump_abs(label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
             arm! {adrp x(9), label((offset - pg as i32) as u32)}
         });
 
         self.jump_abs(
-            &label,
+            label,
             dst as u32,
             |offset, dst| arm! {ldr x(dst), [x(9), #offset & 0x0fff]},
         );
@@ -722,12 +722,12 @@ impl ArmSimdGenerator {
     }
 
     fn load_x_from_label(&mut self, dst: u8, label: &str) {
-        self.jump_abs(&label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
+        self.jump_abs(label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
             arm! {adrp x(9), label((offset - pg as i32) as u32)}
         });
 
         self.jump_abs(
-            &label,
+            label,
             dst as u32,
             |offset, dst| arm! {ldr x(dst), [x(9), #offset & 0x0fff]},
         );
@@ -1080,11 +1080,7 @@ impl Generator for ArmSimdGenerator {
 
     fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
         if is_external_func(op) {
-            self.load_x_from_label(0, &format!("_env_{}_", op));
-            let ofs = SLICE_CAP as u32 * self.reg_size();
-            self.emit(arm! {add x(1), x(31), #ofs});
-            self.emit(arm! {movz x(2), #num_args});
-            self.emit(arm! {movz x(3), #2});
+            return self.call_external(op, num_args);
         }
 
         let label = format!("_func_{}_", op);

@@ -4,7 +4,7 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
-use crate::config::SLICE_CAP;
+use crate::config::{SLICE_CAP, SPILL_AREA};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Loc {
@@ -57,8 +57,6 @@ pub struct SymbolTable {
 }
 
 impl SymbolTable {
-    const SPILL_AREA: usize = 16;
-
     pub fn new(is_complex: bool) -> SymbolTable {
         let mut s = SymbolTable {
             syms: HashMap::new(),
@@ -75,7 +73,7 @@ impl SymbolTable {
                passed in registers (up to 4 in Windows and 8 otherwise).
            2. To preserve registers XMM6-XMM15 in Windows (if needed).
         */
-        for i in 0..SymbolTable::SPILL_AREA {
+        for i in 0..SPILL_AREA {
             s.add_stack(&format!("μ{}", i));
         }
 

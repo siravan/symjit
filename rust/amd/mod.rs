@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 
 use crate::code::Func;
-use crate::config::{Config, SLICE_CAP};
+use crate::config::{Config, SLICE_CAP, SPILL_AREA};
 use crate::generator::Generator;
 use crate::utils::align_stack;
 use crate::utils::{is_external_func, reg, DataType, Reg};
@@ -291,7 +291,7 @@ impl AmdGenerator {
     }
 
     fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
-        let cap = SLICE_CAP as u32;
+        let cap = SPILL_AREA as u32;
 
         match self.family {
             AmdFamily::AvxScalar | AmdFamily::SSEScalar => {

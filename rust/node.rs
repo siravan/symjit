@@ -10,7 +10,7 @@ use std::rc::Rc;
 // use crate::generator::Generator;
 use crate::mir::Mir;
 use crate::symbol::{Loc, Symbol};
-use crate::utils::{reg, Reg};
+use crate::utils::reg;
 
 pub struct Pool {
     available: u32,

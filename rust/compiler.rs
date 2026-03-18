@@ -7,6 +7,7 @@ use anyhow::{anyhow, Result};
 use num_complex::Complex;
 use rayon::prelude::*;
 
+use crate::code::VirtualTable;
 use crate::config::{Config, SLICE_CAP};
 use crate::defuns::Defuns;
 use crate::expr::Expr;
@@ -1161,7 +1162,15 @@ impl Translator {
         assert!(n <= SLICE_CAP);
         let args: Vec<Expr> = args.iter().map(|a| self.expr(a, false)).collect();
 
-        if self.config.is_intrinsic_unary(op) && n == 1 {
+        if VirtualTable::from_str(op).is_ok() {
+            if n == 1 {
+                self.assign(lhs, Expr::unary(op, &args[0]))?;
+            } else if n == 2 {
+                self.assign(lhs, Expr::binary(op, &args[0], &args[1]))?;
+            } else {
+                return Err(anyhow!("wrong number of arguments to {:?}", op));
+            }
+        } else if self.config.is_intrinsic_unary(op) && n == 1 {
             self.assign(lhs, Expr::unary(op, &args[0]))?;
         } else if self.config.is_intrinsic_binary(op) && n == 2 {
             self.assign(lhs, Expr::binary(op, &args[0], &args[1]))?;
