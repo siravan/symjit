@@ -1,11 +1,13 @@
 #[macro_use]
 mod macros;
 
-use crate::assembler::{Assembler, Jumper};
-use crate::config::Config;
-use crate::generator::Generator;
-use crate::utils::{align_stack, reg, Reg};
 use anyhow::{anyhow, Result};
+
+use crate::assembler::{Assembler, Jumper};
+use crate::code::Func;
+use crate::config::{Config, SLICE_CAP};
+use crate::generator::Generator;
+use crate::utils::{align_stack, is_external_func, reg, Reg};
 
 const SP: u8 = 31;
 
@@ -118,6 +120,18 @@ impl ArmGenerator {
         }
     }
 
+    fn load_x_from_label(&mut self, dst: u8, label: &str) {
+        self.jump_abs(&label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
+            arm! {adrp x(9), label((offset - pg as i32) as u32)}
+        });
+
+        self.jump_abs(
+            &label,
+            dst as u32,
+            |offset, dst| arm! {ldr x(dst), [x(9), #offset & 0x0fff]},
+        );
+    }
+
     fn sub_stack(&mut self, size: u32) {
         self.emit(arm! {sub sp, sp, #size & 0x0fff});
         if size >> 12 != 0 {
@@ -193,12 +207,6 @@ impl Generator for ArmGenerator {
 
     fn load_const(&mut self, dst: Reg, idx: u32) {
         let label = format!("_const_{}_", idx);
-        // self.jump(label.as_str(), arm! {ldr d(ϕ(dst)), label(0)});
-        // self.a.jump(
-        //     &label,
-        //     ϕ(dst) as u32,
-        //     |offset, dst| arm! {ldr d(dst), label(offset)},
-        // );
         self.jump_abs(&label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
             arm! {adrp x(0), label((offset - pg as i32) as u32)}
         });
@@ -397,16 +405,40 @@ impl Generator for ArmGenerator {
         }
     }
 
-    fn add_func(&mut self, f: &str, p: crate::code::Func) {
-        let label = format!("_func_{}_", f);
-        self.set_label(label.as_str());
-        self.append_quad(p.func_ptr());
+    fn add_func(&mut self, op: &str, f: Func) {
+        if let Func::Slice {
+            f_scalar,
+            f_simd,
+            env,
+        } = f
+        {
+            let label = format!("_func_{}_", op);
+            self.set_label(label.as_str());
+            self.append_quad(f_scalar as u64);
+
+            let label = format!("_simd_{}_", op);
+            self.set_label(label.as_str());
+            self.append_quad(f_simd as u64);
+
+            let label = format!("_env_{}_", op);
+            self.set_label(label.as_str());
+            self.append_quad(env as u64);
+        } else {
+            let label = format!("_func_{}_", op);
+            self.set_label(label.as_str());
+            self.append_quad(f.func_ptr());
+        }
     }
 
-    fn call(&mut self, op: &str, _num_args: usize) -> Result<()> {
+    fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
+        if is_external_func(op) {
+            self.load_x_from_label(0, &format!("_env_{}_", op));
+            let ofs = SLICE_CAP as u32 * self.reg_size();
+            self.emit(arm! {add x(1), x(31), #ofs});
+            self.emit(arm! {movz x(2), #num_args});
+        }
+
         let label = format!("_func_{}_", op);
-        //self.a
-        //    .jump(&label, 0, |offset, _code| arm! {ldr x(0), label(offset)});
 
         self.jump_abs(&label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
             arm! {adrp x(9), label((offset - pg as i32) as u32)}
@@ -689,6 +721,51 @@ impl ArmSimdGenerator {
         }
     }
 
+    fn load_x_from_label(&mut self, dst: u8, label: &str) {
+        self.jump_abs(&label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
+            arm! {adrp x(9), label((offset - pg as i32) as u32)}
+        });
+
+        self.jump_abs(
+            &label,
+            dst as u32,
+            |offset, dst| arm! {ldr x(dst), [x(9), #offset & 0x0fff]},
+        );
+    }
+
+    fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
+        let label = format!("_simd_{}_", op);
+        self.jump_abs(&label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
+            arm! {adrp x(CALL), label((offset - pg as i32) as u32)}
+        });
+
+        self.jump_abs(
+            &label,
+            0,
+            |offset, _| arm! {ldr x(CALL), [x(CALL), #offset & 0x0fff]},
+        );
+
+        let ofs = SLICE_CAP as u32 * self.reg_size();
+
+        self.load_x_from_label(0, &format!("_env_{}_", op));
+        self.emit(arm! {add x(1), x(31), #ofs});
+        self.emit(arm! {movz x(2), #num_args});
+        self.emit(arm! {movz x(3), #2});
+        self.emit(arm! {blr x(CALL)});
+        self.emit(arm! {str d(0), [sp, #0]});
+
+        self.load_x_from_label(0, &format!("_env_{}_", op));
+        self.emit(arm! {add x(1), x(31), #ofs+1});
+        self.emit(arm! {movz x(2), #num_args});
+        self.emit(arm! {movz x(3), #2});
+        self.emit(arm! {blr x(CALL)});
+        self.emit(arm! {str d(0), [sp, #8]});
+
+        self.emit(arm! {ldr q(0), [sp, #0]});
+
+        Ok(())
+    }
+
     fn sub_stack(&mut self, size: u32) {
         self.emit(arm! {sub sp, sp, #size & 0x0fff});
         if size >> 12 != 0 {
@@ -774,12 +851,6 @@ impl Generator for ArmSimdGenerator {
 
     fn load_const(&mut self, dst: Reg, idx: u32) {
         let label = format!("_const_{}_", idx);
-        // self.jump(label.as_str(), arm! {ldr d(ϕ(dst)), label(0)});
-        // self.a.jump(
-        //     &label,
-        //     ϕ(dst) as u32,
-        //     |offset, dst| arm! {ldr d(dst), label(offset)},
-        // );
         self.jump_abs(&label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
             arm! {adrp x(0), label((offset - pg as i32) as u32)}
         });
@@ -982,16 +1053,41 @@ impl Generator for ArmSimdGenerator {
         }
     }
 
-    fn add_func(&mut self, f: &str, p: crate::code::Func) {
-        let label = format!("_func_{}_", f);
-        self.set_label(label.as_str());
-        self.append_quad(p.func_ptr());
+    fn add_func(&mut self, op: &str, f: Func) {
+        if let Func::Slice {
+            f_scalar,
+            f_simd,
+            env,
+        } = f
+        {
+            let label = format!("_func_{}_", op);
+            self.set_label(label.as_str());
+            self.append_quad(f_scalar as u64);
+
+            let label = format!("_simd_{}_", op);
+            self.set_label(label.as_str());
+            self.append_quad(f_simd as u64);
+
+            let label = format!("_env_{}_", op);
+            self.set_label(label.as_str());
+            self.append_quad(env as u64);
+        } else {
+            let label = format!("_func_{}_", op);
+            self.set_label(label.as_str());
+            self.append_quad(f.func_ptr());
+        }
     }
 
     fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
+        if is_external_func(op) {
+            self.load_x_from_label(0, &format!("_env_{}_", op));
+            let ofs = SLICE_CAP as u32 * self.reg_size();
+            self.emit(arm! {add x(1), x(31), #ofs});
+            self.emit(arm! {movz x(2), #num_args});
+            self.emit(arm! {movz x(3), #2});
+        }
+
         let label = format!("_func_{}_", op);
-        //self.a
-        //    .jump(&label, 0, |offset, _code| arm! {ldr x(0), label(offset)});
 
         self.jump_abs(&label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
             arm! {adrp x(CALL), label((offset - pg as i32) as u32)}

@@ -909,19 +909,18 @@ impl Mir {
                         Self::set(regs, Reg::Ret, z.re);
                         Self::set(regs, Reg::Temp, z.im);
                     }
-                    Func::Slice { env, .. } => {
-                        todo!();
-                        /*
-                        let val: f64 = unsafe {
-                            crate::defuns::closure_trampoline::<fn(&[f64]) -> f64, f64>(
-                                *env,
-                                stack.as_ptr().add(crate::config::SLICE_CAP),
-                                *num_args,
-                            )
-                        };
+                    Func::Slice { env, f_scalar, .. } => unsafe {
+                        let f: fn(*mut std::ffi::c_void, *const f64, usize) -> f64 =
+                            std::mem::transmute(*f_scalar);
+
+                        let val = f(
+                            *env,
+                            stack.as_ptr().add(crate::config::SLICE_CAP),
+                            *num_args,
+                        );
+
                         Self::set(regs, Reg::Ret, val);
-                        */
-                    }
+                    },
                 },
                 Instruction::Fused { op, dst, a, b, c } => {
                     Self::exec_fused(regs, *op, *dst, *a, *b, *c);
