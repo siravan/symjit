@@ -60,7 +60,7 @@ pub struct Application {
 }
 
 impl Application {
-    pub fn new(mut prog: Program, reals: HashSet<Loc>, df: &Defuns) -> Result<Application> {
+    pub fn new(mut prog: Program, reals: HashSet<Loc>, df: Defuns) -> Result<Application> {
         let first_state = 0;
         let first_param = 0;
         let first_obs = first_state + prog.count_states;
@@ -76,6 +76,7 @@ impl Application {
         let mut mir = prog.builder.compile_mir(df)?;
 
         if prog.config().is_complex() {
+            let df = std::mem::take(&mut mir.df);
             mir = Complexifier::new(&reals, *prog.config(), df).complexify(&mir)?;
         }
 
@@ -612,7 +613,7 @@ impl Storage for Application {
         let count_diffs = prog.count_diffs;
 
         let params = vec![0.0; count_params + 1];
-        let mir = Mir::new(*prog.config(), &Defuns::new());
+        let mir = Mir::new(*prog.config(), Defuns::new());
 
         let use_simd = prog.config().use_simd() && prog.count_loops == 0;
         let use_threads = prog.config().use_threads() && prog.mem_size() < 128;

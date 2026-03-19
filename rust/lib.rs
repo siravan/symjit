@@ -427,21 +427,23 @@ mod parser;
 mod runnable;
 mod statement;
 mod symbol;
+mod types;
 mod utils;
 
 #[allow(non_upper_case_globals)]
 mod riscv64;
 
-pub use defuns::Defuns;
 use matrix::Matrix;
 use model::{CellModel, Program};
 
 pub use compiler::{Compiler, FastFunc, Translator};
 pub use config::Config;
+pub use defuns::Defuns;
 pub use expr::{double, int, var, Expr};
 pub use instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
 pub use num_complex::{Complex, ComplexFloat};
 pub use runnable::{Application, CompilerType};
+pub use types::{ElemType, Element};
 pub use utils::{Compiled, Storage};
 
 #[derive(Debug, Clone, Copy)]
@@ -530,11 +532,11 @@ pub unsafe extern "C" fn compile(
             }
         };
 
-        let df: &Defuns = unsafe {
+        let df: Defuns = unsafe {
             if df.is_null() {
-                &Defuns::new()
+                Defuns::new()
             } else {
-                &*df
+                (&*df).clone()
             }
         };
 
@@ -574,7 +576,7 @@ pub unsafe extern "C" fn translate(
     json: *const c_char,
     ty: *const c_char,
     opt: u32,
-    df: *const Defuns,
+    df: *mut Defuns,
     num_params: usize,
 ) -> *const CompilerResult {
     let mut res = CompilerResult {
@@ -606,9 +608,9 @@ pub unsafe extern "C" fn translate(
     };
 
     if let Ok(config) = Config::from_name(ty, opt) {
-        let df: &Defuns = unsafe { &*df };
+        let df: Box<Defuns> = Box::from_raw(df);
         let mut comp = Compiler::with_config(config);
-        let app = comp.translate(json.to_string(), df, num_params);
+        let app = comp.translate(json.to_string(), *df, num_params);
 
         match app {
             Ok(app) => {

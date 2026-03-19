@@ -803,6 +803,7 @@ impl Generator for AmdGenerator {
             f_scalar,
             f_simd,
             env,
+            ..
         } = f
         {
             let label = format!("_func_{}_", op);

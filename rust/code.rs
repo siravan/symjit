@@ -42,7 +42,7 @@ pub enum Func {
     Slice {
         f_scalar: *const c_void,
         f_simd: *const c_void,
-        env: *mut c_void,
+        env: *const c_void,
     },
 }
 

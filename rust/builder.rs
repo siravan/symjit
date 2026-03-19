@@ -268,7 +268,7 @@ impl Builder {
         Ok(node)
     }
 
-    pub fn compile_mir(&mut self, df: &Defuns) -> Result<Mir> {
+    pub fn compile_mir(&mut self, df: Defuns) -> Result<Mir> {
         let opt_level = self.config.opt_level();
 
         let mut mir = Mir::new(self.config, df);

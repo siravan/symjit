@@ -410,6 +410,7 @@ impl Generator for ArmGenerator {
             f_scalar,
             f_simd,
             env,
+            ..
         } = f
         {
             let label = format!("_func_{}_", op);
@@ -1058,6 +1059,7 @@ impl Generator for ArmSimdGenerator {
             f_scalar,
             f_simd,
             env,
+            ..
         } = f
         {
             let label = format!("_func_{}_", op);

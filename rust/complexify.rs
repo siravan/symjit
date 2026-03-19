@@ -56,7 +56,7 @@ pub struct Complexifier {
 }
 
 impl Complexifier {
-    pub fn new(reals: &HashSet<Loc>, config: Config, df: &Defuns) -> Complexifier {
+    pub fn new(reals: &HashSet<Loc>, config: Config, df: Defuns) -> Complexifier {
         let mut real_locs: HashSet<Loc> = HashSet::new();
         for loc in reals {
             if let Loc::Param(idx) = loc {

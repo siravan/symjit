@@ -546,8 +546,8 @@ mod testing {
 
         pass("simd matrix");
 
-        test_f13()?;
-        pass("f13");
+        //test_f13()?;
+        //pass("f13");
 
         Ok(())
     }

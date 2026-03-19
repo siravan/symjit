@@ -188,12 +188,12 @@ impl fmt::Debug for Mir {
 }
 
 impl Mir {
-    pub fn new(config: Config, df: &Defuns) -> Mir {
+    pub fn new(config: Config, df: Defuns) -> Mir {
         Mir {
             code: Vec::new(),
             consts: Vec::new(),
             labels: HashMap::new(),
-            df: df.clone(),
+            df,
             config,
         }
     }
@@ -911,7 +911,7 @@ impl Mir {
                         Self::set(regs, Reg::Temp, z.im);
                     }
                     Func::Slice { env, f_scalar, .. } => unsafe {
-                        let f: fn(*mut std::ffi::c_void, *const f64, usize) -> f64 =
+                        let f: fn(*const std::ffi::c_void, *const f64, usize) -> f64 =
                             std::mem::transmute(*f_scalar);
 
                         let val = f(*env, stack.as_ptr().add(SPILL_AREA), *num_args);

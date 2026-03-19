@@ -153,7 +153,7 @@ impl Compiler {
 
         let prog = Program::new(&ml, self.config)?;
         // let df = Defuns::new();
-        let mut app = Application::new(prog, HashSet::new(), &self.df);
+        let mut app = Application::new(prog, HashSet::new(), std::mem::take(&mut self.df));
 
         #[cfg(target_arch = "aarch64")]
         if let Ok(app) = &mut app {
@@ -770,10 +770,10 @@ pub struct Translator {
 }
 
 impl Translator {
-    pub fn new(config: Config, df: &Defuns) -> Translator {
+    pub fn new(config: Config, df: Defuns) -> Translator {
         Translator {
             config,
-            df: df.clone(),
+            df,
             ssa: Vec::new(),
             consts: Vec::new(),
             count_params: 0,
@@ -1259,7 +1259,7 @@ impl Translator {
     pub fn compile(&mut self) -> Result<Application> {
         let (ml, reals) = self.translate()?;
         let prog = Program::new(&ml, self.config)?;
-        let mut app = Application::new(prog, reals, &self.df)?;
+        let mut app = Application::new(prog, reals, std::mem::take(&mut self.df))?;
         app.prepare_simd();
         Ok(app)
     }
@@ -1285,7 +1285,7 @@ impl Compiler {
     pub fn translate(
         &mut self,
         json: String,
-        df: &Defuns,
+        df: Defuns,
         num_params: usize,
     ) -> Result<Application> {
         let mut translator = Translator::new(self.config, df);
@@ -1302,7 +1302,7 @@ impl Compiler {
 
         let prog = Program::new(&ml, self.config)?;
         let df = Defuns::new();
-        let mut app = Application::new(prog, reals, &df)?;
+        let mut app = Application::new(prog, reals, df)?;
 
         app.prepare_simd();
 
