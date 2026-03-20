@@ -1,5 +1,5 @@
 use std::fmt;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use num_complex::Complex;
@@ -14,7 +14,7 @@ use crate::config::SLICE_CAP;
 use crate::types::{ElemType, Element};
 
 #[derive(Debug, Clone)]
-pub struct PhantomBox {
+pub struct RawBox {
     func_ptr: *mut c_void,
     elem_type: ElemType,
 }
@@ -33,6 +33,8 @@ where
 
     // Execute the actual Rust closure
     let val = closure(&slice[..slice_len]);
+
+    // Important! We need to unbox closure to prevent it from dropping
     let _ = Box::into_raw(closure);
     val
 }
@@ -61,6 +63,8 @@ where
 
     // Execute the actual Rust closure
     let val = closure(&slice[..slice_len]);
+
+    // Important! We need to unbox closure to prevent it from dropping
     let _ = Box::into_raw(closure);
     val
 }
@@ -68,7 +72,7 @@ where
 #[derive(Clone, Default)]
 pub struct Defuns {
     pub funcs: HashMap<String, Func>,
-    pub boxes: Vec<Rc<PhantomBox>>,
+    pub boxes: Vec<Arc<RawBox>>,
 }
 
 impl fmt::Debug for Defuns {
@@ -169,12 +173,9 @@ impl Defuns {
             },
         );
 
-        let func_ptr = Box::into_raw(ext); // leaking the closure
+        let func_ptr = Box::into_raw(ext);
 
-        println!("{:?}", func_ptr);
-        //
-
-        self.boxes.push(Rc::new(PhantomBox {
+        self.boxes.push(Arc::new(RawBox {
             func_ptr: func_ptr as *mut _,
             elem_type: T::get_type(),
         }));
@@ -191,37 +192,33 @@ impl Defuns {
     }
 }
 
-impl Drop for PhantomBox {
+impl Drop for RawBox {
     fn drop(&mut self) {
-        println!("{:?}", self.elem_type);
         unsafe {
             match self.elem_type {
                 ElemType::RealF64 => {
                     let p: *mut ExternalFunction<f64> = self.func_ptr as *mut _;
-                    let f: Box<ExternalFunction<f64>> = Box::from_raw(p);
-                    println!("{:?}", f(&[1.0, 2.0]));
+                    let _: Box<ExternalFunction<f64>> = Box::from_raw(p);
                 }
                 ElemType::ComplexF64 => {
-                    let p: &mut ExternalFunction<Complex<f64>> = std::mem::transmute(self.func_ptr);
-                    let _ = Box::from_raw(p);
+                    let p: *mut ExternalFunction<Complex<f64>> = self.func_ptr as *mut _;
+                    let _: Box<ExternalFunction<Complex<f64>>> = Box::from_raw(p);
                 }
                 ElemType::RealF64x2 => {
-                    let p: &mut ExternalFunction<f64x2> = std::mem::transmute(self.func_ptr);
-                    let _ = Box::from_raw(p);
+                    let p: *mut ExternalFunction<f64x2> = self.func_ptr as *mut _;
+                    let _: Box<ExternalFunction<f64x2>> = Box::from_raw(p);
                 }
                 ElemType::ComplexF64x2 => {
-                    let p: &mut ExternalFunction<Complex<f64x2>> =
-                        std::mem::transmute(self.func_ptr);
-                    let _ = Box::from_raw(p);
+                    let p: *mut ExternalFunction<Complex<f64x2>> = self.func_ptr as *mut _;
+                    let _: Box<ExternalFunction<Complex<f64x2>>> = Box::from_raw(p);
                 }
                 ElemType::RealF64x4 => {
-                    let p: &mut ExternalFunction<f64x4> = std::mem::transmute(self.func_ptr);
-                    let _ = Box::from_raw(p);
+                    let p: *mut ExternalFunction<f64x4> = self.func_ptr as *mut _;
+                    let _: Box<ExternalFunction<f64x4>> = Box::from_raw(p);
                 }
                 ElemType::ComplexF64x4 => {
-                    let p: &mut ExternalFunction<Complex<f64x4>> =
-                        std::mem::transmute(self.func_ptr);
-                    let _ = Box::from_raw(p);
+                    let p: *mut ExternalFunction<Complex<f64x4>> = self.func_ptr as *mut _;
+                    let _: Box<ExternalFunction<Complex<f64x4>>> = Box::from_raw(p);
                 }
                 _ => {}
             }
