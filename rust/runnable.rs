@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 use std::io::{Read, Write};
+use std::rc::Rc;
 
 use crate::amd::{AmdFamily, AmdGenerator};
 use crate::arm::{ArmGenerator, ArmSimdGenerator};
@@ -38,6 +39,8 @@ pub enum CompilerType {
     Debug,
 }
 
+type ExternalFunction<T> = Box<dyn Fn(&[T]) -> T + Send + Sync>;
+
 #[derive(Clone)]
 pub struct Application {
     pub prog: Program,
@@ -57,10 +60,11 @@ pub struct Application {
     pub count_params: usize,
     pub count_obs: usize,
     pub count_diffs: usize,
+    // pub v: Vec<Rc<Box<ExternalFunction<f64>>>>,
 }
 
 impl Application {
-    pub fn new(mut prog: Program, reals: HashSet<Loc>, df: Defuns) -> Result<Application> {
+    pub fn new(mut prog: Program, reals: HashSet<Loc>, mut df: Defuns) -> Result<Application> {
         let first_state = 0;
         let first_param = 0;
         let first_obs = first_state + prog.count_states;
@@ -72,6 +76,8 @@ impl Application {
         let count_diffs = prog.count_diffs;
 
         let params = vec![0.0; count_params + 1];
+
+        // let v = std::mem::take(&mut df.boxes);
 
         let mut mir = prog.builder.compile_mir(df)?;
 
@@ -128,6 +134,7 @@ impl Application {
             count_params,
             count_obs,
             count_diffs,
+            //v,
         })
     }
 
@@ -644,6 +651,7 @@ impl Storage for Application {
             count_params,
             count_obs,
             count_diffs,
+            //v: Vec::new(),
         })
     }
 }
