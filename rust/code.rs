@@ -43,6 +43,8 @@ pub enum Func {
         f_scalar: *const c_void,
         f_simd: *const c_void,
         env: *const c_void,
+        complex: bool,
+        shuffle: bool,
     },
 }
 

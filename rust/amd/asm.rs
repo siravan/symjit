@@ -533,9 +533,16 @@ impl Amd {
 
     pub fn vcmpordpd(&mut self, reg: u8, vreg: u8, rm: u8) {
         self.vex_pd(reg, vreg, rm, 0);
-        self.append_byte(0xC2);
+        self.append_byte(0xc2);
         self.modrm_reg(reg, rm);
         self.append_byte(7);
+    }
+
+    pub fn vshufpd(&mut self, reg: u8, vreg: u8, rm: u8, imm8: u8) {
+        self.vex_pd(reg, vreg, rm, 0);
+        self.append_byte(0xc6);
+        self.modrm_reg(reg, rm);
+        self.append_byte(imm8);
     }
 
     /******************* SSE scalar double ******************/

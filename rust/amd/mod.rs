@@ -1,10 +1,11 @@
-use anyhow::{anyhow, Result};
+use std::collections::HashMap;
 
 use crate::code::Func;
-use crate::config::{Config, SLICE_CAP, SPILL_AREA};
+use crate::config::{Config, SPILL_AREA};
 use crate::generator::Generator;
 use crate::utils::align_stack;
 use crate::utils::{is_external_func, reg, DataType, Reg};
+use anyhow::{anyhow, Result};
 
 mod asm;
 mod fused;
@@ -87,6 +88,7 @@ pub struct AmdGenerator {
     amd: Amd,
     family: AmdFamily,
     config: Config,
+    funcs: HashMap<String, Func>,
 }
 
 #[cfg(target_family = "windows")]
@@ -122,6 +124,7 @@ impl AmdGenerator {
             amd: Amd::new(DataType::F64),
             family,
             config,
+            funcs: HashMap::new(),
         }
     }
 
@@ -293,27 +296,46 @@ impl AmdGenerator {
     fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
         let cap = SPILL_AREA as u32;
 
+        let (complex, shuffle) = if let Some(Func::Slice {
+            complex, shuffle, ..
+        }) = self.funcs.get(op)
+        {
+            (*complex, *shuffle)
+        } else {
+            (false, false)
+        };
+
+        self.amd.mov_reg_label(ARGS[0], &format!("_env_{}_", op));
+        self.amd
+            .lea_mem(ARGS[1], STACK, (cap * self.reg_size()) as i32);
+        self.amd.mov_imm(ARGS[2], num_args as u32);
+        self.amd.lea_mem(ARGS[3], STACK, 4 * self.reg_size() as i32);
+        self.vzeroupper();
+
         match self.family {
             AmdFamily::AvxScalar | AmdFamily::SSEScalar => {
-                self.amd.mov_reg_label(ARGS[0], &format!("_env_{}_", op));
-                self.amd
-                    .lea_mem(ARGS[1], STACK, (cap * self.reg_size()) as i32);
-                self.amd.mov_imm(ARGS[2], num_args as u32);
-                self.vzeroupper();
                 self.amd.call_indirect(&format!("_func_{}_", op));
+                self.load_stack(Reg::Ret, 4);
+                if complex {
+                    self.load_stack(Reg::Temp, 5);
+                }
             }
             AmdFamily::AvxVector => {
-                for i in 0..4 {
-                    self.amd.mov_reg_label(ARGS[0], &format!("_env_{}_", op));
+                self.amd.call_indirect(&format!("_simd_{}_", op));
+
+                if shuffle {
                     self.amd
-                        .lea_mem(ARGS[1], STACK, (cap * self.reg_size() + 8 * i) as i32);
-                    self.amd.mov_imm(ARGS[2], num_args as u32);
-                    self.amd.mov_imm(ARGS[3], 4);
-                    self.vzeroupper();
-                    self.amd.call_indirect(&format!("_simd_{}_", op));
-                    self.amd.movsd_mem_xmm(STACK, (32 + 8 * i) as i32, 0);
+                        .vmovpd_ymm_mem(2, STACK, 4 * self.reg_size() as i32);
+                    self.amd
+                        .vmovpd_ymm_mem(3, STACK, 5 * self.reg_size() as i32);
+                    self.amd.vshufpd(0, 2, 3, 0);
+                    self.amd.vshufpd(1, 2, 3, 0x0f);
+                } else {
+                    self.load_stack(Reg::Ret, 4);
+                    if complex {
+                        self.load_stack(Reg::Temp, 5);
+                    }
                 }
-                self.amd.vmovpd_ymm_mem(0, STACK, 32);
             }
         }
 
@@ -808,15 +830,19 @@ impl Generator for AmdGenerator {
         {
             let label = format!("_func_{}_", op);
             self.set_label(label.as_str());
+            // let f_scalar = trampoline_homogenous::<f64> as *const c_void;
             self.append_quad(f_scalar as u64);
 
             let label = format!("_simd_{}_", op);
             self.set_label(label.as_str());
+            // let f_simd = trampoline_heterogenous::<f64x4, f64> as *const c_void;
             self.append_quad(f_simd as u64);
 
             let label = format!("_env_{}_", op);
             self.set_label(label.as_str());
             self.append_quad(env as u64);
+
+            self.funcs.insert(op.to_string(), f);
         } else {
             let label = format!("_func_{}_", op);
             self.set_label(label.as_str());
