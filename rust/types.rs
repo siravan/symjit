@@ -3,7 +3,6 @@ use wide::{f64x2, f64x4};
 
 #[derive(Clone, Debug)]
 pub enum ElemType {
-    None,
     RealF64,
     ComplexF64,
     RealF64x2,

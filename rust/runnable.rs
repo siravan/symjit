@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 use std::io::{Read, Write};
-use std::rc::Rc;
 
 use crate::amd::{AmdFamily, AmdGenerator};
 use crate::arm::{ArmGenerator, ArmSimdGenerator};
@@ -39,8 +38,6 @@ pub enum CompilerType {
     Debug,
 }
 
-type ExternalFunction<T> = Box<dyn Fn(&[T]) -> T + Send + Sync>;
-
 #[derive(Clone)]
 pub struct Application {
     pub prog: Program,
@@ -64,7 +61,7 @@ pub struct Application {
 }
 
 impl Application {
-    pub fn new(mut prog: Program, reals: HashSet<Loc>, mut df: Defuns) -> Result<Application> {
+    pub fn new(mut prog: Program, reals: HashSet<Loc>, df: Defuns) -> Result<Application> {
         let first_state = 0;
         let first_param = 0;
         let first_obs = first_state + prog.count_states;

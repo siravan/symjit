@@ -305,6 +305,8 @@ impl AmdGenerator {
             (false, false)
         };
 
+        println!("call external: {:?}, {}, {}", self.funcs, complex, shuffle);
+
         self.amd.mov_reg_label(ARGS[0], &format!("_env_{}_", op));
         self.amd
             .lea_mem(ARGS[1], STACK, (cap * self.reg_size()) as i32);

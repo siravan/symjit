@@ -174,7 +174,7 @@ mod testing {
         config.set_simd(simd);
         let mut comp = Compiler::with_config(config);
 
-        comp.translate(json.to_string(), &Defuns::new(), 0)
+        comp.translate(json.to_string(), Defuns::new(), 0)
     }
 
     fn assert_nearly_eq(x: f64, y: f64) {
@@ -209,7 +209,7 @@ mod testing {
             let json = serde_json::to_string(&eval.export_instructions())?;
 
             let mut comp = Compiler::new();
-            let mut app = comp.translate(json.to_string(), &Defuns::new(), 0)?;
+            let mut app = comp.translate(json.to_string(), Defuns::new(), 0)?;
 
             app.evaluate(args, &mut outs);
             let v = eval.map_coeff(&|x| x.re.to_f64()).evaluate_single(args);
@@ -273,7 +273,7 @@ mod testing {
             f64x4::new([1.0, 2.0, 3.0, 4.0]),
             f64x4::new([5.0, 2.0, 1.0, 2.0]),
         ];
-        let u = app.evaluate_simd_single(&v);
+        let u = app.evaluate_single(&v);
 
         assert_eq!(u, f64x4::new([26.0, 6.0, 4.0, 8.0]));
 
@@ -294,7 +294,7 @@ mod testing {
         let mut app = translate(&json, false, true)?;
 
         let v = vec![f64x2::new([1.0, 2.0]), f64x2::new([5.0, 2.0])];
-        let u = app.evaluate_simd_single(&v);
+        let u = app.evaluate_single(&v);
 
         assert_eq!(u, f64x2::new([26.0, 6.0]));
 
@@ -324,7 +324,7 @@ mod testing {
                 f64x4::new([-2.0, 1.0, 3.0, 7.0]),
             ),
         ];
-        let u = app.evaluate_simd_single(&v);
+        let u = app.evaluate_single(&v);
 
         let res = Complex::new(
             f64x4::new([22.0, 5.0, -5.0, -41.0]),
@@ -353,7 +353,7 @@ mod testing {
             Complex::new(f64x2::new([1.0, 2.0]), f64x2::new([3.0, 5.0])),
             Complex::new(f64x2::new([5.0, 2.0]), f64x2::new([-2.0, 1.0])),
         ];
-        let u = app.evaluate_simd_single(&v);
+        let u = app.evaluate_single(&v);
 
         let res = Complex::new(f64x2::new([22.0, 5.0]), f64x2::new([-17.0, 9.0]));
 
@@ -410,7 +410,7 @@ mod testing {
         }
 
         let mut outs: Vec<f64x4> = vec![f64x4::default(); N];
-        app.evaluate_simd_matrix(&input, &mut outs, N);
+        app.evaluate_matrix(&input, &mut outs, N);
 
         // note: 2474655 = 19^2 * (19^3 - 4) and so forth
         assert_eq!(
@@ -441,7 +441,7 @@ mod testing {
         }
 
         let mut outs: Vec<f64x2> = vec![f64x2::default(); N];
-        app.evaluate_simd_matrix(&input, &mut outs, N);
+        app.evaluate_matrix(&input, &mut outs, N);
 
         assert_eq!(outs[19], f64x2::new([2474655.0, 5152224.0]));
 

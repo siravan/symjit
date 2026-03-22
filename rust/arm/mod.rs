@@ -5,7 +5,7 @@ use anyhow::{anyhow, Result};
 
 use crate::assembler::{Assembler, Jumper};
 use crate::code::Func;
-use crate::config::{Config, SLICE_CAP, SPILL_AREA};
+use crate::config::{Config, SPILL_AREA};
 use crate::generator::Generator;
 use crate::utils::{align_stack, is_external_func, reg, Reg};
 

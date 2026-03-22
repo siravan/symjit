@@ -15,6 +15,7 @@ pub use crate::instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
 use crate::model::{CellModel, Equation, Program, Variable};
 use crate::parser::Parser;
 use crate::symbol::Loc;
+use crate::types::{ElemType, Element};
 use crate::utils::{Compiled, CompiledFunc};
 use crate::Application;
 
@@ -273,12 +274,15 @@ impl Application {
     }
 
     /// Generic evaluate function for compiled Symbolica expressions
-    #[inline(always)]
-    pub fn evaluate<T: Sized + Copy>(&mut self, args: &[T], outs: &mut [T]) {
+    pub fn evaluate<T>(&mut self, args: &[T], outs: &mut [T])
+    where
+        T: Element,
+    {
+        let args = recast_as_f64(args);
+        let outs = recast_as_f64_mut(outs);
+
         if self.prog.config().is_bytecode() {
             let mut regs = [0.0; 32];
-            let outs: &mut [f64] = unsafe { std::mem::transmute(outs) };
-            let args: &[f64] = unsafe { std::mem::transmute(args) };
             self.bytecode
                 .mir
                 .exec_instruction(outs, &mut self.bytecode.stack, &mut regs, args);
@@ -286,49 +290,36 @@ impl Application {
             return;
         }
 
-        if let Some(f) = &self.compiled {
-            let f = f.func();
+        let simd = match T::get_type() {
+            ElemType::RealF64x2
+            | ElemType::RealF64x4
+            | ElemType::ComplexF64x2
+            | ElemType::ComplexF64x4 => true,
+            _ => false,
+        };
 
-            f(
-                outs.as_ptr() as *mut f64,
-                std::ptr::null(),
-                0,
-                args.as_ptr() as *const f64,
-            );
+        if let Some(f) = &self.compiled {
+            if !simd {
+                f.func()(outs.as_mut_ptr(), std::ptr::null(), 0, args.as_ptr());
+            } else if let Some(g) = &self.compiled_simd {
+                g.func()(outs.as_mut_ptr(), std::ptr::null(), 0, args.as_ptr());
+            }
         }
     }
 
     /// Generic evaluate_single function for compiled Symbolica expressions
     #[inline(always)]
-    pub fn evaluate_single<T: Sized + Copy + Default>(&mut self, args: &[T]) -> T {
+    pub fn evaluate_single<T: Sized + Copy + Default>(&mut self, args: &[T]) -> T
+    where
+        T: Element,
+    {
         let mut outs = [T::default(); 1];
         self.evaluate(args, &mut outs);
         outs[0]
     }
 
-    /// Generic SIMD evaluate function for compiled Symbolica expressions
-    #[inline(always)]
-    pub fn evaluate_simd<T: Sized + Copy>(&self, args: &[T], outs: &mut [T]) {
-        if let Some(g) = &self.compiled_simd {
-            let f = g.func();
-
-            f(
-                outs.as_ptr() as *mut f64,
-                std::ptr::null(),
-                0,
-                args.as_ptr() as *const f64,
-            );
-        }
-    }
-
-    /// Generic SIMD evaluate_single function for compiled Symbolica expressions
-    #[inline(always)]
-    pub fn evaluate_simd_single<T: Sized + Copy + Default>(&self, args: &[T]) -> T {
-        let mut outs = [T::default(); 1];
-        self.evaluate_simd(args, &mut outs);
-        outs[0]
-    }
-
+    /// Evaluates a single logical row. It could be a combinatino of multiple
+    /// physical rows because of implicit SIMD.
     fn evaluate_row(
         args: &[f64],
         args_idx: usize,
@@ -347,7 +338,6 @@ impl Application {
         }
     }
 
-    /// Generic evaluate function for compiled Symbolica expressions
     fn evaluate_matrix_with_threads(&self, args: &[f64], outs: &mut [f64], n: usize) {
         if let Some(f) = &self.compiled {
             let count_params = self.count_params;
@@ -360,7 +350,6 @@ impl Application {
         }
     }
 
-    /// Generic evaluate function for compiled Symbolica expressions
     fn evaluate_matrix_without_threads(&self, args: &[f64], outs: &mut [f64], n: usize) {
         if let Some(f) = &self.compiled {
             let count_params = self.count_params;
@@ -373,7 +362,13 @@ impl Application {
         }
     }
 
-    fn evaluate_matrix_with_threads_simd(&self, args: &[f64], outs: &mut [f64], n: usize) {
+    fn evaluate_matrix_with_threads_simd(
+        &self,
+        args: &[f64],
+        outs: &mut [f64],
+        n: usize,
+        transpose: bool,
+    ) {
         if let Some(f) = &self.compiled {
             let count_params = self.count_params;
             let count_obs = self.count_obs;
@@ -391,7 +386,7 @@ impl Application {
                         outs,
                         top * count_obs,
                         f_simd,
-                        true,
+                        transpose,
                     ) != 0
                     {
                         for i in 0..lanes {
@@ -421,7 +416,13 @@ impl Application {
         }
     }
 
-    fn evaluate_matrix_without_threads_simd(&self, args: &[f64], outs: &mut [f64], n: usize) {
+    fn evaluate_matrix_without_threads_simd(
+        &self,
+        args: &[f64],
+        outs: &mut [f64],
+        n: usize,
+        transpose: bool,
+    ) {
         if let Some(f) = &self.compiled {
             let count_params = self.count_params;
             let count_obs = self.count_obs;
@@ -439,7 +440,7 @@ impl Application {
                         outs,
                         top * count_obs,
                         f_simd,
-                        true,
+                        transpose,
                     ) != 0
                     {
                         for i in 0..lanes {
@@ -469,7 +470,7 @@ impl Application {
         }
     }
 
-    pub fn evaluate_matrix_bytecode(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
+    fn evaluate_matrix_bytecode(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
         let count_params = self.count_params;
         let count_obs = self.count_obs;
 
@@ -482,57 +483,38 @@ impl Application {
     }
 
     /// Generic evaluate function for compiled Symbolica expressions
-    pub fn evaluate_matrix(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
+    /// The main entry point to compute matrices.
+    /// The actual dispatched method depends on the configuration and the
+    /// type of the arguments.
+    pub fn evaluate_matrix<T>(&mut self, args: &[T], outs: &mut [T], n: usize)
+    where
+        T: Element,
+    {
+        let args = recast_as_f64(args);
+        let outs = recast_as_f64_mut(outs);
+
+        let transpose = match T::get_type() {
+            ElemType::RealF64x2
+            | ElemType::RealF64x4
+            | ElemType::ComplexF64x2
+            | ElemType::ComplexF64x4 => false,
+            _ => true,
+        };
+
         if self.prog.config().is_bytecode() {
             self.evaluate_matrix_bytecode(args, outs, n);
-        } else if self.use_threads {
+        } else if self.use_threads && n > 1 {
             if self.compiled_simd.is_some() {
-                self.evaluate_matrix_with_threads_simd(args, outs, n);
+                self.evaluate_matrix_with_threads_simd(args, outs, n, transpose);
             } else {
                 self.evaluate_matrix_with_threads(args, outs, n);
             }
         } else {
             if self.compiled_simd.is_some() {
-                self.evaluate_matrix_without_threads_simd(args, outs, n);
+                self.evaluate_matrix_without_threads_simd(args, outs, n, transpose);
             } else {
                 self.evaluate_matrix_without_threads(args, outs, n);
             }
-        }
-    }
-
-    pub fn evaluate_complex_matrix(
-        &mut self,
-        args: &[Complex<f64>],
-        outs: &mut [Complex<f64>],
-        n: usize,
-    ) {
-        let args = recast_complex_vec(args);
-        let outs = recast_complex_vec_mut(outs);
-
-        if self.prog.config().is_bytecode() {
-            self.evaluate_matrix_bytecode(args, outs, n);
-        } else if self.use_threads {
-            if self.compiled_simd.is_some() {
-                self.evaluate_matrix_with_threads_simd(args, outs, n);
-            } else {
-                self.evaluate_matrix_with_threads(args, outs, n);
-            }
-        } else {
-            if self.compiled_simd.is_some() {
-                self.evaluate_matrix_without_threads_simd(args, outs, n);
-            } else {
-                self.evaluate_matrix_without_threads(args, outs, n);
-            }
-        }
-    }
-
-    /// Generic evaluate function for compiled Symbolica expressions
-    pub fn evaluate_simd_matrix<T: Sized + Copy>(&self, args: &[T], outs: &mut [T], n: usize) {
-        let args_size = args.len() / n;
-        let outs_size = outs.len() / n;
-
-        for (p, q) in args.chunks(args_size).zip(outs.chunks_mut(outs_size)) {
-            self.evaluate_simd(p, q);
         }
     }
 
@@ -546,7 +528,6 @@ impl Application {
     /// Note: currently, this function only works on X86-64 CPUs with the AVX extension. Intel
     /// introduced the AVX instruction set in 2011; therefore, most intel and AMD processors
     /// support it. If SIMD is not supported, this function returns `None`.
-    ///
     #[cfg(target_arch = "x86_64")]
     pub fn call_simd(&mut self, args: &[__m256d]) -> Result<Vec<__m256d>> {
         if let Some(f) = &mut self.compiled_simd {
@@ -742,6 +723,26 @@ pub fn recast_complex_vec_mut(v: &mut [Complex<f64>]) -> &mut [f64] {
     let n = v.len();
     let p: *mut f64 = unsafe { std::mem::transmute(v.as_mut_ptr()) };
     let q: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(p, 2 * n) };
+    q
+}
+
+pub fn recast_as_f64<T>(v: &[T]) -> &[f64]
+where
+    T: Sized,
+{
+    let s = std::mem::size_of::<T>() / std::mem::size_of::<f64>();
+    let p: *const f64 = v.as_ptr() as _;
+    let q: &[f64] = unsafe { std::slice::from_raw_parts(p, s * v.len()) };
+    q
+}
+
+pub fn recast_as_f64_mut<T>(v: &mut [T]) -> &mut [f64]
+where
+    T: Sized,
+{
+    let s = std::mem::size_of::<T>() / std::mem::size_of::<f64>();
+    let p: *mut f64 = v.as_ptr() as _;
+    let q: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(p, s * v.len()) };
     q
 }
 

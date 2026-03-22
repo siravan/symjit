@@ -20,49 +20,6 @@ pub struct RawBox {
     elem_type: ElemType,
 }
 
-pub extern "C" fn closure_trampoline<T>(
-    env: *const c_void,
-    slice_ptr: *const T,
-    slice_len: usize,
-) -> T
-where
-    T: Sized + Copy + Default,
-{
-    // Reconstruct the closure and the slice from the raw C arguments
-    // let closure: Box<ExternalFunction<T>> = unsafe { std::mem::transmute(env) };
-    let closure = unsafe { &*(env as *const ExternalFunction<T>) };
-    let slice = unsafe { from_raw_parts(slice_ptr, slice_len) };
-
-    // Execute the actual Rust closure
-    closure(&slice)
-}
-
-extern "C" fn closure_trampoline_simd<T>(
-    env: *mut c_void,
-    slice_ptr: *const T,
-    slice_len: usize,
-    step: usize,
-) -> T
-where
-    T: Sized + Copy + Default,
-{
-    // Reconstruct the closure and the slice from the raw C arguments
-    let closure = unsafe { &*(env as *const ExternalFunction<T>) };
-    let mut slice = [T::default(); SLICE_CAP];
-    assert!(slice_len <= SLICE_CAP);
-    let mut p = slice_ptr;
-
-    for i in 0..slice_len {
-        unsafe {
-            slice[i] = *p;
-            p = p.add(step);
-        }
-    }
-
-    // Execute the actual Rust closure
-    closure(&slice[..slice_len])
-}
-
 pub unsafe extern "C" fn trampoline_homogenous<T>(
     env: *const c_void,
     slice_ptr: *const T,
@@ -107,15 +64,15 @@ pub unsafe extern "C" fn trampoline_call_simd<T, F>(
     slice_len: usize,
     res: *mut T,
 ) where
-    T: Sized + Copy + Default,
-    F: Sized + Copy + Default,
+    T: Sized + Copy + Default + Element,
+    F: Sized + Copy + Default + Element,
 {
     assert!(slice_len <= SLICE_CAP && size_of::<T>() < size_of::<F>());
 
     let closure = &*(env as *const ExternalFunction<F>);
     let buf = [F::default(); SLICE_CAP];
     let step = size_of::<F>() / size_of::<T>();
-    let slice = from_raw_parts(slice_ptr as *const T, slice_len);
+    let slice = from_raw_parts(slice_ptr, slice_len);
     let p = from_raw_parts_mut(buf.as_ptr() as *mut T, step * slice_len);
 
     for j in 0..slice_len {
@@ -126,6 +83,23 @@ pub unsafe extern "C" fn trampoline_call_simd<T, F>(
 
     let val = closure(&buf[..slice_len]);
     *res = *(&val as *const F as *const T);
+    // let q = from_raw_parts(&val as *const F as *const f64, 8);
+    // let mut res: *mut f64 = res as _;
+    // *res = q[0];
+    // res = res.add(1);
+
+    // match F::get_type() {
+    //     ElemType::ComplexF64 => {
+    //         *res = q[1];
+    //     }
+    //     ElemType::ComplexF64x2 => {
+    //         *res = q[2];
+    //     }
+    //     ElemType::ComplexF64x4 => {
+    //         *res = q[4];
+    //     }
+    //     _ => {}
+    // }
 }
 
 #[derive(Clone, Default)]
@@ -182,32 +156,6 @@ impl Defuns {
         self.funcs
             .insert(format!("cplx_{}", name), Func::BinaryCplx(f));
     }
-
-    // pub fn add_sliced_func<F, T>(&mut self, name: &str, mut closure: F) -> Result<()>
-    // where
-    //     F: Fn(&[T]) -> T,
-    //     T: Copy + Sized + Default,
-    // {
-    //     if VirtualTable::from_str(name).is_ok() {
-    //         return Err(anyhow!("cannot redefine function {}.", &name));
-    //     }
-
-    //     let env_ptr = &mut closure as *mut _ as *mut c_void;
-    //     let trampoline = closure_trampoline::<F, T> as *const c_void;
-    //     let trampoline_simd = closure_trampoline_simd::<F, T> as *const c_void;
-    //     let op = format!("${}", name);
-
-    //     self.funcs.insert(
-    //         op,
-    //         Func::Slice {
-    //             f_scalar: trampoline,
-    //             f_simd: trampoline_simd,
-    //             env: env_ptr,
-    //         },
-    //     );
-
-    //     Ok(())
-    // }
 
     pub fn add_sliced_func<T>(&mut self, name: &str, closure: ExternalFunction<T>) -> Result<()>
     where
@@ -297,7 +245,6 @@ impl Drop for RawBox {
                     let p: *mut ExternalFunction<Complex<f64x4>> = self.func_ptr as *mut _;
                     let _: Box<ExternalFunction<Complex<f64x4>>> = Box::from_raw(p);
                 }
-                _ => {}
             }
         }
     }
