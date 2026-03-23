@@ -404,6 +404,7 @@ use std::str::FromStr;
 
 mod allocator;
 mod amd;
+mod applet;
 mod arm;
 mod assembler;
 mod block;
@@ -436,6 +437,7 @@ mod riscv64;
 use matrix::Matrix;
 use model::{CellModel, Program};
 
+pub use applet::Applet;
 pub use compiler::{Compiler, FastFunc, Translator};
 pub use config::Config;
 pub use defuns::Defuns;

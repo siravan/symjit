@@ -3,7 +3,9 @@ mod testing {
     use anyhow::Result;
     use rand::{self, Rng};
     use std::fs;
-    use symjit::{int, var, Application, Compiler, Complex, Config, Defuns, Expr, FastFunc};
+    use symjit::{
+        int, var, Applet, Application, Compiler, Complex, Config, Defuns, Expr, FastFunc,
+    };
     use wide::{f64x2, f64x4};
 
     use symbolica::{
@@ -149,7 +151,7 @@ mod testing {
 
     /********************** Using export_instructinos ************************/
 
-    fn translate(json: &str, complex: bool, simd: bool) -> Result<Application> {
+    fn translate(json: &str, complex: bool, simd: bool) -> Result<Applet> {
         let mut config = Config::default();
         // let mut config = Config::from_name("bytecode", Config::default().opt)?;
         config.set_symbolica(true);
@@ -157,7 +159,7 @@ mod testing {
         config.set_simd(simd);
         let mut comp = Compiler::with_config(config);
 
-        comp.translate(json.to_string(), Defuns::new(), 0)
+        comp.translate(json.to_string(), Defuns::new(), 0)?.seal()
     }
 
     fn assert_nearly_eq(x: f64, y: f64) {

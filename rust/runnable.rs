@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use std::io::{Read, Write};
 
 use crate::amd::{AmdFamily, AmdGenerator};
+use crate::applet::Applet;
 use crate::arm::{ArmGenerator, ArmSimdGenerator};
 use crate::complexify::Complexifier;
 use crate::defuns::Defuns;
@@ -57,7 +58,6 @@ pub struct Application {
     pub count_params: usize,
     pub count_obs: usize,
     pub count_diffs: usize,
-    // pub v: Vec<Rc<Box<ExternalFunction<f64>>>>,
 }
 
 impl Application {
@@ -131,8 +131,11 @@ impl Application {
             count_params,
             count_obs,
             count_diffs,
-            //v,
         })
+    }
+
+    pub fn seal(self) -> Result<Applet> {
+        Applet::new(self)
     }
 
     /********************* compile_* functions *************************/

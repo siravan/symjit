@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use std::fs;
 use std::io::{Read, Write};
-use std::rc::Rc;
+use std::sync::Arc;
 
 use super::memory::*;
 use super::utils::*;
@@ -10,7 +10,7 @@ use super::utils::*;
 pub struct MachineCode<T: Default> {
     // machine_code: Vec<u8>,
     #[allow(dead_code)]
-    code: Rc<Memory>, // code needs to be here for f to stay valid
+    code: Arc<Memory>, // code needs to be here for f to stay valid
     f: CompiledFunc<T>,
     _mem: Vec<T>,
     leaky: bool,
@@ -18,6 +18,9 @@ pub struct MachineCode<T: Default> {
     size: usize,
     pages: *const u8,
 }
+
+unsafe impl Send for MachineCode<f64> {}
+unsafe impl Sync for MachineCode<f64> {}
 
 impl<T: Clone + Default> MachineCode<T> {
     const MAGIC: usize = 0x6a7c68ec7656d6d;
@@ -56,7 +59,7 @@ impl<T: Clone + Default> MachineCode<T> {
 
         MachineCode {
             // machine_code,
-            code: Rc::new(code),
+            code: Arc::new(code),
             f,
             _mem,
             leaky,
@@ -206,5 +209,3 @@ impl<T: Sized + Copy + Default> Compiled<T> for MachineCode<T> {
         Some(self)
     }
 }
-
-unsafe impl<T: Default> Sync for MachineCode<T> {}

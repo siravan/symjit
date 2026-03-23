@@ -63,6 +63,9 @@ where
         res[i] = closure(&buf[..slice_len]);
     }
 
+    // a return value of true signals the SIMD kernel to shuffle the result.
+    // For example, if T = Complex<f64x2>, at this stage `res` is
+    // `x1 y1 x2 y2` but should be `x1 x2 y1 y2`.
     true
 }
 
