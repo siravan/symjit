@@ -911,12 +911,19 @@ impl Mir {
                         Self::set(regs, Reg::Temp, z.im);
                     }
                     Func::Slice { env, f_scalar, .. } => unsafe {
-                        let f: fn(*const std::ffi::c_void, *const f64, usize) -> f64 =
+                        let f: fn(*const std::ffi::c_void, *const f64, usize, *mut f64) -> bool =
                             std::mem::transmute(*f_scalar);
 
-                        let val = f(*env, stack.as_ptr().add(SPILL_AREA), *num_args);
+                        let mut val: Complex<f64> = Complex::default();
+                        f(
+                            *env,
+                            stack.as_ptr().add(SPILL_AREA),
+                            *num_args,
+                            &mut val as *mut _ as *mut f64,
+                        );
 
-                        Self::set(regs, Reg::Ret, val);
+                        Self::set(regs, Reg::Ret, val.re);
+                        Self::set(regs, Reg::Temp, val.im);
                     },
                 },
                 Instruction::Fused { op, dst, a, b, c } => {

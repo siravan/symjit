@@ -20,17 +20,22 @@ pub struct RawBox {
     elem_type: ElemType,
 }
 
+unsafe impl Send for RawBox {}
+unsafe impl Sync for RawBox {}
+
 pub unsafe extern "C" fn trampoline_homogenous<T>(
     env: *const c_void,
     slice_ptr: *const T,
     slice_len: usize,
     res: *mut T,
-) where
+) -> bool
+where
     T: Sized + Copy + Default,
 {
     let closure = &*(env as *const ExternalFunction<T>);
-    let slice = from_raw_parts(slice_ptr as *const T, slice_len);
+    let slice = from_raw_parts(slice_ptr, slice_len);
     *res = closure(slice);
+    false
 }
 
 pub unsafe extern "C" fn trampoline_call_scalar<T, F>(
@@ -38,7 +43,8 @@ pub unsafe extern "C" fn trampoline_call_scalar<T, F>(
     slice_ptr: *const T,
     slice_len: usize,
     res: *mut T,
-) where
+) -> bool
+where
     T: Sized + Copy + Default,
     F: Sized + Copy + Default,
 {
@@ -56,6 +62,22 @@ pub unsafe extern "C" fn trampoline_call_scalar<T, F>(
         }
         res[i] = closure(&buf[..slice_len]);
     }
+
+    true
+}
+
+unsafe fn real<T: Element>(x: T) -> f64 {
+    let p = &x as *const _ as *const f64;
+    *p
+}
+
+unsafe fn imag<T: Element>(x: T) -> f64 {
+    match T::get_type(x) {
+        ElemType::RealF64(_) | ElemType::RealF64x2(_) | ElemType::RealF64x4(_) => 0.0,
+        ElemType::ComplexF64(x) => x.re,
+        ElemType::ComplexF64x2(x) => real(x.re),
+        ElemType::ComplexF64x4(x) => real(x.re),
+    }
 }
 
 pub unsafe extern "C" fn trampoline_call_simd<T, F>(
@@ -63,9 +85,10 @@ pub unsafe extern "C" fn trampoline_call_simd<T, F>(
     slice_ptr: *const T,
     slice_len: usize,
     res: *mut T,
-) where
-    T: Sized + Copy + Default + Element,
-    F: Sized + Copy + Default + Element,
+) -> bool
+where
+    T: Sized + Copy + Element,
+    F: Sized + Copy + Element,
 {
     assert!(slice_len <= SLICE_CAP && size_of::<T>() < size_of::<F>());
 
@@ -82,24 +105,11 @@ pub unsafe extern "C" fn trampoline_call_simd<T, F>(
     }
 
     let val = closure(&buf[..slice_len]);
-    *res = *(&val as *const F as *const T);
-    // let q = from_raw_parts(&val as *const F as *const f64, 8);
-    // let mut res: *mut f64 = res as _;
-    // *res = q[0];
-    // res = res.add(1);
-
-    // match F::get_type() {
-    //     ElemType::ComplexF64 => {
-    //         *res = q[1];
-    //     }
-    //     ElemType::ComplexF64x2 => {
-    //         *res = q[2];
-    //     }
-    //     ElemType::ComplexF64x4 => {
-    //         *res = q[4];
-    //     }
-    //     _ => {}
-    // }
+    let mut res: *mut f64 = res as _;
+    *res = real(val);
+    res = res.add(1);
+    *res = imag(val);
+    false
 }
 
 #[derive(Clone, Default)]
@@ -159,7 +169,7 @@ impl Defuns {
 
     pub fn add_sliced_func<T>(&mut self, name: &str, closure: ExternalFunction<T>) -> Result<()>
     where
-        T: Copy + Sized + Default + Element,
+        T: Copy + Sized + Element,
     {
         if VirtualTable::from_str(name).is_ok() {
             return Err(anyhow!("cannot redefine function {}.", &name));
@@ -168,21 +178,17 @@ impl Defuns {
         let ext = Box::new(closure);
         let env = ext.as_ref() as *const _ as *const c_void;
 
-        let trampoline: *const c_void = match T::get_type() {
-            ElemType::RealF64 | ElemType::ComplexF64 => trampoline_homogenous::<T> as *const c_void,
+        let trampoline: *const c_void = match T::get_type(T::default()) {
+            ElemType::RealF64(_) | ElemType::ComplexF64(_) => {
+                trampoline_homogenous::<T> as *const c_void
+            }
             _ => trampoline_call_simd::<f64, T> as *const c_void,
         };
 
-        let trampoline_simd: *const c_void = match T::get_type() {
-            ElemType::RealF64 => trampoline_call_scalar::<f64x4, T> as *const c_void,
-            ElemType::ComplexF64 => trampoline_call_scalar::<Complex<f64x4>, T> as *const c_void,
+        let trampoline_simd: *const c_void = match T::get_type(T::default()) {
+            ElemType::RealF64(_) => trampoline_call_scalar::<f64x4, T> as *const c_void,
+            ElemType::ComplexF64(_) => trampoline_call_scalar::<Complex<f64x4>, T> as *const c_void,
             _ => trampoline_homogenous::<T> as *const c_void,
-        };
-
-        let (complex, shuffle) = match T::get_type() {
-            ElemType::ComplexF64 => (true, true),
-            ElemType::ComplexF64x2 | ElemType::ComplexF64x4 => (true, false),
-            _ => (false, false),
         };
 
         let op = format!("${}", name);
@@ -193,8 +199,6 @@ impl Defuns {
                 f_scalar: trampoline,
                 f_simd: trampoline_simd,
                 env,
-                complex,
-                shuffle,
             },
         );
 
@@ -202,7 +206,7 @@ impl Defuns {
 
         self.boxes.push(Arc::new(RawBox {
             func_ptr: func_ptr as *mut _,
-            elem_type: T::get_type(),
+            elem_type: T::get_type(T::default()),
         }));
 
         Ok(())
@@ -221,27 +225,27 @@ impl Drop for RawBox {
     fn drop(&mut self) {
         unsafe {
             match self.elem_type {
-                ElemType::RealF64 => {
+                ElemType::RealF64(_) => {
                     let p: *mut ExternalFunction<f64> = self.func_ptr as *mut _;
                     let _: Box<ExternalFunction<f64>> = Box::from_raw(p);
                 }
-                ElemType::ComplexF64 => {
+                ElemType::ComplexF64(_) => {
                     let p: *mut ExternalFunction<Complex<f64>> = self.func_ptr as *mut _;
                     let _: Box<ExternalFunction<Complex<f64>>> = Box::from_raw(p);
                 }
-                ElemType::RealF64x2 => {
+                ElemType::RealF64x2(_) => {
                     let p: *mut ExternalFunction<f64x2> = self.func_ptr as *mut _;
                     let _: Box<ExternalFunction<f64x2>> = Box::from_raw(p);
                 }
-                ElemType::ComplexF64x2 => {
+                ElemType::ComplexF64x2(_) => {
                     let p: *mut ExternalFunction<Complex<f64x2>> = self.func_ptr as *mut _;
                     let _: Box<ExternalFunction<Complex<f64x2>>> = Box::from_raw(p);
                 }
-                ElemType::RealF64x4 => {
+                ElemType::RealF64x4(_) => {
                     let p: *mut ExternalFunction<f64x4> = self.func_ptr as *mut _;
                     let _: Box<ExternalFunction<f64x4>> = Box::from_raw(p);
                 }
-                ElemType::ComplexF64x4 => {
+                ElemType::ComplexF64x4(_) => {
                     let p: *mut ExternalFunction<Complex<f64x4>> = self.func_ptr as *mut _;
                     let _: Box<ExternalFunction<Complex<f64x4>>> = Box::from_raw(p);
                 }

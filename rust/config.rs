@@ -17,7 +17,7 @@ pub const OPT_LEVEL_MASK: u32 = 0x0f00;
 pub const OPT_LEVEL_SHIFT: usize = 8;
 
 pub const SPILL_AREA: usize = 16;
-pub const SLICE_CAP: usize = 16;
+pub const SLICE_CAP: usize = 64;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Config {

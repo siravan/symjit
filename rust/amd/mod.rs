@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::code::Func;
 use crate::config::{Config, SPILL_AREA};
 use crate::generator::Generator;
@@ -88,7 +86,6 @@ pub struct AmdGenerator {
     amd: Amd,
     family: AmdFamily,
     config: Config,
-    funcs: HashMap<String, Func>,
 }
 
 #[cfg(target_family = "windows")]
@@ -124,7 +121,6 @@ impl AmdGenerator {
             amd: Amd::new(DataType::F64),
             family,
             config,
-            funcs: HashMap::new(),
         }
     }
 
@@ -296,17 +292,6 @@ impl AmdGenerator {
     fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
         let cap = SPILL_AREA as u32;
 
-        let (complex, shuffle) = if let Some(Func::Slice {
-            complex, shuffle, ..
-        }) = self.funcs.get(op)
-        {
-            (*complex, *shuffle)
-        } else {
-            (false, false)
-        };
-
-        println!("call external: {:?}, {}, {}", self.funcs, complex, shuffle);
-
         self.amd.mov_reg_label(ARGS[0], &format!("_env_{}_", op));
         self.amd
             .lea_mem(ARGS[1], STACK, (cap * self.reg_size()) as i32);
@@ -318,26 +303,38 @@ impl AmdGenerator {
             AmdFamily::AvxScalar | AmdFamily::SSEScalar => {
                 self.amd.call_indirect(&format!("_func_{}_", op));
                 self.load_stack(Reg::Ret, 4);
-                if complex {
+                if self.config.is_complex() {
                     self.load_stack(Reg::Temp, 5);
                 }
             }
             AmdFamily::AvxVector => {
                 self.amd.call_indirect(&format!("_simd_{}_", op));
 
-                if shuffle {
+                let l1 = format!(".P{}", self.amd.a.ip());
+                let l2 = format!(".Q{}", self.amd.a.ip());
+
+                self.amd.or(Amd::RAX, Amd::RAX);
+                self.amd.jz(&l1);
+
+                self.amd
+                    .vmovpd_ymm_mem(2, STACK, 4 * self.reg_size() as i32);
+                self.amd
+                    .vmovpd_ymm_mem(3, STACK, 5 * self.reg_size() as i32);
+                self.amd.vshufpd(0, 2, 3, 0);
+                self.amd.vshufpd(1, 2, 3, 0x0f);
+
+                self.amd.jmp(&l2);
+                self.set_label(&l1);
+
+                self.load_stack(Reg::Ret, 4);
+                if self.config.is_complex() {
                     self.amd
-                        .vmovpd_ymm_mem(2, STACK, 4 * self.reg_size() as i32);
+                        .vmovpd_ymm_mem(0, STACK, 4 * self.reg_size() as i32);
                     self.amd
-                        .vmovpd_ymm_mem(3, STACK, 5 * self.reg_size() as i32);
-                    self.amd.vshufpd(0, 2, 3, 0);
-                    self.amd.vshufpd(1, 2, 3, 0x0f);
-                } else {
-                    self.load_stack(Reg::Ret, 4);
-                    if complex {
-                        self.load_stack(Reg::Temp, 5);
-                    }
+                        .vmovpd_ymm_mem(1, STACK, 5 * self.reg_size() as i32);
                 }
+
+                self.set_label(&l2);
             }
         }
 
@@ -843,8 +840,6 @@ impl Generator for AmdGenerator {
             let label = format!("_env_{}_", op);
             self.set_label(label.as_str());
             self.append_quad(env as u64);
-
-            self.funcs.insert(op.to_string(), f);
         } else {
             let label = format!("_func_{}_", op);
             self.set_label(label.as_str());

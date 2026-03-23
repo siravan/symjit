@@ -82,24 +82,6 @@ mod testing {
         Ok(())
     }
 
-    #[cfg(target_arch = "x86_64")]
-    fn test_simd() -> Result<()> {
-        use std::arch::x86_64::_mm256_loadu_pd;
-
-        let x = Expr::var("x");
-        let p = Expr::var("p"); // parameter
-
-        let expr = &x.square() * &p;
-        let mut comp = Compiler::new();
-        let mut app = comp.compile_params(&[x], &[expr], &[p])?;
-
-        let a = &[1.0, 2.0, 3.0, 4.0];
-        let a = unsafe { _mm256_loadu_pd(a.as_ptr()) };
-        let res = app.call_simd_params(&[a], &[5.0])?;
-        println!("simd\t{:?}", &res);
-        Ok(())
-    }
-
     fn test_fast() -> Result<()> {
         let x = Expr::var("x");
         let y = Expr::var("y");
@@ -169,6 +151,7 @@ mod testing {
 
     fn translate(json: &str, complex: bool, simd: bool) -> Result<Application> {
         let mut config = Config::default();
+        // let mut config = Config::from_name("bytecode", Config::default().opt)?;
         config.set_symbolica(true);
         config.set_complex(complex);
         config.set_simd(simd);
@@ -501,9 +484,6 @@ mod testing {
             test_external(p)?;
         }
 
-        #[cfg(target_arch = "x86_64")]
-        test_simd()?;
-
         println!("Symbolica:");
 
         // print!("testing memory leaks...");
@@ -546,8 +526,8 @@ mod testing {
 
         pass("simd matrix");
 
-        //test_f13()?;
-        //pass("f13");
+        test_f13()?;
+        pass("f13");
 
         Ok(())
     }

@@ -1,6 +1,3 @@
-#[cfg(target_arch = "x86_64")]
-use std::arch::x86_64::{__m256d, _mm256_setzero_pd};
-
 use std::collections::{HashMap, HashSet};
 
 use anyhow::{anyhow, Result};
@@ -154,7 +151,8 @@ impl Compiler {
 
         let prog = Program::new(&ml, self.config)?;
         // let df = Defuns::new();
-        let mut app = Application::new(prog, HashSet::new(), std::mem::take(&mut self.df));
+        let mut app = Application::new(prog, HashSet::new(), std::mem::take(&mut self.df))?;
+        // app.prepare_simd();
 
         #[cfg(target_arch = "aarch64")]
         if let Ok(app) = &mut app {
@@ -163,7 +161,7 @@ impl Compiler {
             std::fs::remove_file("dump.bin")?;
         };
 
-        app
+        Ok(app)
     }
 
     /// Registers a user-defined unary function.
@@ -175,23 +173,6 @@ impl Compiler {
     pub fn def_binary(&mut self, op: &str, f: extern "C" fn(f64, f64) -> f64) {
         self.df.add_binary(op, f)
     }
-}
-
-#[cfg(target_arch = "x86_64")]
-unsafe fn simd_slice(a: &[f64]) -> &[__m256d] {
-    assert!(a.len() & 3 == 0);
-    let p: *const f64 = a.as_ptr();
-    let v = unsafe { std::slice::from_raw_parts(p as *const __m256d, a.len() >> 2) };
-    v
-}
-
-#[cfg(target_arch = "x86_64")]
-unsafe fn simd_slice_mut(a: &mut [f64]) -> &mut [__m256d] {
-    assert!(a.len() & 3 == 0);
-    let p: *mut f64 = a.as_mut_ptr();
-    let v: &mut [__m256d] =
-        unsafe { std::slice::from_raw_parts_mut(p as *mut __m256d, a.len() >> 2) };
-    v
 }
 
 pub enum FastFunc<'a> {
@@ -290,13 +271,13 @@ impl Application {
             return;
         }
 
-        let simd = match T::get_type() {
-            ElemType::RealF64x2
-            | ElemType::RealF64x4
-            | ElemType::ComplexF64x2
-            | ElemType::ComplexF64x4 => true,
-            _ => false,
-        };
+        let simd = matches!(
+            T::get_type(T::default()),
+            ElemType::RealF64x2(_)
+                | ElemType::RealF64x4(_)
+                | ElemType::ComplexF64x2(_)
+                | ElemType::ComplexF64x4(_)
+        );
 
         if let Some(f) = &self.compiled {
             if !simd {
@@ -309,9 +290,9 @@ impl Application {
 
     /// Generic evaluate_single function for compiled Symbolica expressions
     #[inline(always)]
-    pub fn evaluate_single<T: Sized + Copy + Default>(&mut self, args: &[T]) -> T
+    pub fn evaluate_single<T>(&mut self, args: &[T]) -> T
     where
-        T: Element,
+        T: Element + Copy,
     {
         let mut outs = [T::default(); 1];
         self.evaluate(args, &mut outs);
@@ -377,8 +358,9 @@ impl Application {
                 let f_simd = compiled.func();
                 let f_scalar = f.func();
                 let lanes = compiled.count_lanes();
+                let step = if transpose { lanes } else { 1 };
 
-                (0..n / lanes).into_par_iter().for_each(|k| {
+                (0..n / step).into_par_iter().for_each(|k| {
                     let top = k * lanes;
                     if Self::evaluate_row(
                         args,
@@ -402,7 +384,7 @@ impl Application {
                     }
                 });
 
-                for t in lanes * (n / lanes)..n {
+                for t in step * (n / step)..n {
                     Self::evaluate_row(
                         args,
                         t * count_params,
@@ -431,8 +413,9 @@ impl Application {
                 let f_simd = compiled.func();
                 let f_scalar = f.func();
                 let lanes = compiled.count_lanes();
+                let step = if transpose { lanes } else { 1 };
 
-                for k in 0..n / lanes {
+                for k in 0..n / step {
                     let top = k * lanes;
                     if Self::evaluate_row(
                         args,
@@ -456,7 +439,7 @@ impl Application {
                     }
                 }
 
-                for t in lanes * (n / lanes)..n {
+                for t in step * (n / step)..n {
                     Self::evaluate_row(
                         args,
                         t * count_params,
@@ -493,13 +476,13 @@ impl Application {
         let args = recast_as_f64(args);
         let outs = recast_as_f64_mut(outs);
 
-        let transpose = match T::get_type() {
-            ElemType::RealF64x2
-            | ElemType::RealF64x4
-            | ElemType::ComplexF64x2
-            | ElemType::ComplexF64x4 => false,
-            _ => true,
-        };
+        let transpose = !matches!(
+            T::get_type(T::default()),
+            ElemType::RealF64x2(_)
+                | ElemType::RealF64x4(_)
+                | ElemType::ComplexF64x2(_)
+                | ElemType::ComplexF64x4(_)
+        );
 
         if self.prog.config().is_bytecode() {
             self.evaluate_matrix_bytecode(args, outs, n);
@@ -516,111 +499,6 @@ impl Application {
                 self.evaluate_matrix_without_threads(args, outs, n);
             }
         }
-    }
-
-    /// Calls the compiled SIMD function.
-    ///
-    /// `args` is a slice of __m256d values, corresponding to the states.
-    ///
-    /// The output is an `Result` wrapping `Vec<__m256d>`, corresponding to the observables
-    /// (the expressions passed to `compile`).
-    ///
-    /// Note: currently, this function only works on X86-64 CPUs with the AVX extension. Intel
-    /// introduced the AVX instruction set in 2011; therefore, most intel and AMD processors
-    /// support it. If SIMD is not supported, this function returns `None`.
-    #[cfg(target_arch = "x86_64")]
-    pub fn call_simd(&mut self, args: &[__m256d]) -> Result<Vec<__m256d>> {
-        if let Some(f) = &mut self.compiled_simd {
-            {
-                let mem = f.mem_mut();
-                let states = unsafe {
-                    simd_slice_mut(
-                        &mut mem[self.first_state * 4..(self.first_state + self.count_states) * 4],
-                    )
-                };
-                states.copy_from_slice(args);
-            }
-
-            f.exec(&self.params);
-
-            {
-                let mem = f.mem();
-                let obs = unsafe {
-                    simd_slice(&mem[self.first_obs * 4..(self.first_obs + self.count_obs) * 4])
-                };
-                let mut res = unsafe { vec![_mm256_setzero_pd(); self.count_obs] };
-                res.copy_from_slice(obs);
-                Ok(res)
-            }
-        } else {
-            self.prepare_simd();
-            if self.compiled_simd.is_some() {
-                self.call_simd(args)
-            } else {
-                Err(anyhow!("cannot compile SIMD"))
-            }
-        }
-    }
-
-    #[cfg(not(target_arch = "x86_64"))]
-    pub unsafe fn call_simd(&mut self, _args: &[__m256d]) -> Result<Vec<__m256d>> {
-        Err(anyhow!("cannot compile SIMD"))
-    }
-
-    /// Sets the params and calls the compiled SIMD function.
-    ///
-    /// `args` is a slice of __m256d values, corresponding to the states.
-    ///
-    /// `params` is a slice of f64 values.
-    ///
-    /// The output is a `Result` wrapping a `Vec<__m256d>`, corresponding to the observables
-    /// (the expressions passed to `compile`).
-    ///
-    /// Note: currently, this function only works on X86-64 CPUs with the AVX extension. Intel
-    /// introduced the AVX instruction set in 2011; therefore, most intel and AMD processors
-    /// support it. If SIMD is not supported, this function returns `None`.
-    ///
-    #[cfg(target_arch = "x86_64")]
-    pub fn call_simd_params(&mut self, args: &[__m256d], params: &[f64]) -> Result<Vec<__m256d>> {
-        if let Some(f) = &mut self.compiled_simd {
-            {
-                let mem = f.mem_mut();
-                let states = unsafe {
-                    simd_slice_mut(
-                        &mut mem[self.first_state * 4..(self.first_state + self.count_states) * 4],
-                    )
-                };
-                states.copy_from_slice(args);
-            }
-
-            f.exec(params);
-
-            {
-                let mem = f.mem();
-                let obs = unsafe {
-                    simd_slice(&mem[self.first_obs * 4..(self.first_obs + self.count_obs) * 4])
-                };
-                let mut res = unsafe { vec![_mm256_setzero_pd(); self.count_obs] };
-                res.copy_from_slice(obs);
-                Ok(res)
-            }
-        } else {
-            self.prepare_simd();
-            if self.compiled_simd.is_some() {
-                self.call_simd_params(args, params)
-            } else {
-                Err(anyhow!("cannot compile SIMD"))
-            }
-        }
-    }
-
-    #[cfg(not(target_arch = "x86_64"))]
-    pub unsafe fn call_simd_params(
-        &mut self,
-        _args: &[__m256d],
-        _params: &[f64],
-    ) -> Result<Vec<__m256d>> {
-        Err(anyhow!("cannot compile SIMD"))
     }
 
     /// Returns a fast function.
@@ -935,6 +813,13 @@ impl Translator {
         Ok(())
     }
 
+    fn create_static(&mut self) -> Result<Slot> {
+        let s = Slot::Static(self.count_statics);
+        self.counts.insert(self.count_statics, 0);
+        self.count_statics += 1;
+        Ok(s)
+    }
+
     /// Produces a new Static variable if needed.
     /// slot should be an LHS.
     fn produce(&mut self, slot: &Slot) -> Result<Slot> {
@@ -947,9 +832,7 @@ impl Translator {
                     }
                 }
 
-                let s = Slot::Static(self.count_statics);
-                self.counts.insert(self.count_statics, 0);
-                self.count_statics += 1;
+                let s = self.create_static()?;
                 self.temps.insert(*idx, s);
                 Ok(s)
             }
@@ -1176,10 +1059,17 @@ impl Translator {
         } else if self.config.is_intrinsic_binary(op) && n == 2 {
             self.assign(lhs, Expr::binary(op, &args[0], &args[1]))?;
         } else {
+            let temps: Vec<Slot> = (0..n).map(|_| self.create_static().unwrap()).collect();
             let slice: Vec<Slot> = (0..n).map(Slot::Arg).collect();
 
             for i in 0..n {
-                self.assign(&slice[i], args[i].clone())?;
+                self.assign(&temps[i], args[i].clone())?;
+            }
+
+            for i in 0..n {
+                if let Slot::Static(idx) = temps[i] {
+                    self.assign(&slice[i], Expr::var(&format!("__Static{}", idx)))?;
+                }
             }
 
             let op = format!("${}", op);
