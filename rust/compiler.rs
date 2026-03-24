@@ -254,22 +254,38 @@ impl Application {
         }
     }
 
-    /// Generic evaluate function for compiled Symbolica expressions
-    pub fn evaluate<T>(&mut self, args: &[T], outs: &mut [T])
+    pub fn interpret<T>(&mut self, args: &[T], outs: &mut [T])
     where
         T: Element,
     {
         let args = recast_as_f64(args);
         let outs = recast_as_f64_mut(outs);
 
-        if self.prog.config().is_bytecode() {
-            let mut regs = [0.0; 32];
-            self.bytecode
-                .mir
-                .exec_instruction(outs, &mut self.bytecode.stack, &mut regs, args);
+        let mut regs = [0.0; 32];
+        self.bytecode
+            .mir
+            .exec_instruction(outs, &mut self.bytecode.stack, &mut regs, args);
+    }
 
-            return;
+    pub fn interpret_matrix(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
+        let count_params = self.count_params;
+        let count_obs = self.count_obs;
+
+        for i in 0..n {
+            self.interpret(
+                &args[i * count_params..(i + 1) * count_params],
+                &mut outs[i * count_obs..(i + 1) * count_obs],
+            );
         }
+    }
+
+    /// Generic evaluate function for compiled Symbolica expressions
+    pub fn evaluate<T>(&self, args: &[T], outs: &mut [T])
+    where
+        T: Element,
+    {
+        let args = recast_as_f64(args);
+        let outs = recast_as_f64_mut(outs);
 
         let simd = matches!(
             T::get_type(T::default()),
@@ -290,7 +306,7 @@ impl Application {
 
     /// Generic evaluate_single function for compiled Symbolica expressions
     #[inline(always)]
-    pub fn evaluate_single<T>(&mut self, args: &[T]) -> T
+    pub fn evaluate_single<T>(&self, args: &[T]) -> T
     where
         T: Element + Copy,
     {
@@ -453,23 +469,11 @@ impl Application {
         }
     }
 
-    fn evaluate_matrix_bytecode(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
-        let count_params = self.count_params;
-        let count_obs = self.count_obs;
-
-        for i in 0..n {
-            self.evaluate(
-                &args[i * count_params..(i + 1) * count_params],
-                &mut outs[i * count_obs..(i + 1) * count_obs],
-            );
-        }
-    }
-
     /// Generic evaluate function for compiled Symbolica expressions
     /// The main entry point to compute matrices.
     /// The actual dispatched method depends on the configuration and the
     /// type of the arguments.
-    pub fn evaluate_matrix<T>(&mut self, args: &[T], outs: &mut [T], n: usize)
+    pub fn evaluate_matrix<T>(&self, args: &[T], outs: &mut [T], n: usize)
     where
         T: Element,
     {
@@ -484,9 +488,7 @@ impl Application {
                 | ElemType::ComplexF64x4(_)
         );
 
-        if self.prog.config().is_bytecode() {
-            self.evaluate_matrix_bytecode(args, outs, n);
-        } else if self.use_threads && n > 1 {
+        if self.use_threads && n > 1 {
             if self.compiled_simd.is_some() {
                 self.evaluate_matrix_with_threads_simd(args, outs, n, transpose);
             } else {

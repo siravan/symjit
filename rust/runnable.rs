@@ -60,6 +60,9 @@ pub struct Application {
     pub count_diffs: usize,
 }
 
+unsafe impl Send for Application {}
+unsafe impl Sync for Application {}
+
 impl Application {
     pub fn new(mut prog: Program, reals: HashSet<Loc>, df: Defuns) -> Result<Application> {
         let first_state = 0;

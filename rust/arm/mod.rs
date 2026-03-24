@@ -23,6 +23,7 @@ const TEMP: u8 = 1;
 
 pub struct ArmGenerator {
     a: Assembler,
+    config: Config,
 }
 
 fn ϕ(r: Reg) -> u8 {
@@ -45,9 +46,10 @@ fn ϕ(r: Reg) -> u8 {
 }
 
 impl ArmGenerator {
-    pub fn new(_config: Config) -> ArmGenerator {
+    pub fn new(config: Config) -> ArmGenerator {
         ArmGenerator {
             a: Assembler::new(),
+            config,
         }
     }
 
@@ -144,6 +146,35 @@ impl ArmGenerator {
             self.emit(arm! {add sp, sp, #size >> 12, lsl #12});
         }
         self.emit(arm! {add sp, sp, #size & 0x0fff});
+    }
+
+    fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
+        self.load_x_from_label(0, &format!("_env_{}_", op));
+        let ofs = SPILL_AREA as u32 * self.reg_size();
+        self.emit(arm! {add x(1), x(31), #ofs});
+        self.emit(arm! {movz x(2), #num_args});
+        self.emit(arm! {add x(3), x(SP), #0});
+
+        let label = format!("_func_{}_", op);
+
+        self.jump_abs(&label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
+            arm! {adrp x(9), label((offset - pg as i32) as u32)}
+        });
+
+        self.jump_abs(
+            &label,
+            0,
+            |offset, _| arm! {ldr x(9), [x(9), #offset & 0x0fff]},
+        );
+
+        self.emit(arm! {blr x(9)});
+
+        self.load_stack(Reg::Ret, 0);
+        if self.config.is_complex() {
+            self.load_stack(Reg::Temp, 1);
+        }
+
+        Ok(())
     }
 }
 
@@ -433,10 +464,7 @@ impl Generator for ArmGenerator {
 
     fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
         if is_external_func(op) {
-            self.load_x_from_label(0, &format!("_env_{}_", op));
-            let ofs = SPILL_AREA as u32 * self.reg_size();
-            self.emit(arm! {add x(1), x(31), #ofs});
-            self.emit(arm! {movz x(2), #num_args});
+            return self.call_external(op, num_args);
         }
 
         let label = format!("_func_{}_", op);
@@ -749,20 +777,30 @@ impl ArmSimdGenerator {
         let ofs = SPILL_AREA as u32 * self.reg_size();
 
         self.load_x_from_label(0, &format!("_env_{}_", op));
-        self.emit(arm! {add x(1), x(31), #ofs});
+        self.emit(arm! {add x(1), x(SP), #ofs});
         self.emit(arm! {movz x(2), #num_args});
-        self.emit(arm! {movz x(3), #2});
-        self.emit(arm! {blr x(CALL)});
-        self.emit(arm! {str d(0), [sp, #0]});
+        self.emit(arm! {add x(3), x(SP), #0});
 
-        self.load_x_from_label(0, &format!("_env_{}_", op));
-        self.emit(arm! {add x(1), x(31), #ofs+8});
-        self.emit(arm! {movz x(2), #num_args});
-        self.emit(arm! {movz x(3), #2});
         self.emit(arm! {blr x(CALL)});
-        self.emit(arm! {str d(0), [sp, #8]});
 
-        self.emit(arm! {ldr q(0), [sp, #0]});
+        if self.config.is_complex() {
+            let l1 = format!(".P{}", self.a.ip());
+            let l2 = format!(".Q{}", self.a.ip());
+
+            self.emit(arm! {tst x(0), x(31)});
+            self.jump(&l1, 0, |offset, _| arm! {b.eq label(offset)});
+            self.emit(arm! {ldr q(2), [sp, #0]});
+            self.emit(arm! {ldr q(3), [sp, #16]});
+            self.emit(arm! {uzp1 q(0), q(2), q(3)});
+            self.emit(arm! {uzp2 q(1), q(2), q(3)});
+            self.branch(&l2);
+            self.set_label(&l1);
+            self.emit(arm! {ldr q(0), [sp, #0]});
+            self.emit(arm! {ldr q(1), [sp, #16]});
+            self.set_label(&l2);
+        } else {
+            self.emit(arm! {ldr q(0), [sp, #0]});
+        }
 
         Ok(())
     }

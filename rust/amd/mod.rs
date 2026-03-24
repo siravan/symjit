@@ -310,31 +310,34 @@ impl AmdGenerator {
             AmdFamily::AvxVector => {
                 self.amd.call_indirect(&format!("_simd_{}_", op));
 
-                let l1 = format!(".P{}", self.amd.a.ip());
-                let l2 = format!(".Q{}", self.amd.a.ip());
-
-                self.amd.or(Amd::RAX, Amd::RAX);
-                self.amd.jz(&l1);
-
-                self.amd
-                    .vmovpd_ymm_mem(2, STACK, 4 * self.reg_size() as i32);
-                self.amd
-                    .vmovpd_ymm_mem(3, STACK, 5 * self.reg_size() as i32);
-                self.amd.vshufpd(0, 2, 3, 0);
-                self.amd.vshufpd(1, 2, 3, 0x0f);
-
-                self.amd.jmp(&l2);
-                self.set_label(&l1);
-
-                self.load_stack(Reg::Ret, 4);
                 if self.config.is_complex() {
+                    let l1 = format!(".P{}", self.amd.a.ip());
+                    let l2 = format!(".Q{}", self.amd.a.ip());
+
+                    self.amd.or(Amd::RAX, Amd::RAX);
+                    self.amd.jz(&l1);
+
+                    self.amd
+                        .vmovpd_ymm_mem(2, STACK, 4 * self.reg_size() as i32);
+                    self.amd
+                        .vmovpd_ymm_mem(3, STACK, 5 * self.reg_size() as i32);
+                    self.amd.vshufpd(0, 2, 3, 0);
+                    self.amd.vshufpd(1, 2, 3, 0x0f);
+
+                    self.amd.jmp(&l2);
+                    self.set_label(&l1);
+
                     self.amd
                         .vmovpd_ymm_mem(0, STACK, 4 * self.reg_size() as i32);
+
                     self.amd
                         .vmovpd_ymm_mem(1, STACK, 5 * self.reg_size() as i32);
-                }
 
-                self.set_label(&l2);
+                    self.set_label(&l2);
+                } else {
+                    self.amd
+                        .vmovpd_ymm_mem(0, STACK, 4 * self.reg_size() as i32);
+                }
             }
         }
 

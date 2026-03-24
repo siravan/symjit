@@ -430,6 +430,19 @@ macro_rules! arm {
         0x4ee0f800 | rd!($rd) | rn!($rn)
     };
 
+    (zip1 q($rd:expr), q($rn:expr), q($rm:expr)) => {
+        0x4ec03800 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (zip2 q($rd:expr), q($rn:expr), q($rm:expr)) => {
+        0x4ec07800 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (uzp1 q($rd:expr), q($rn:expr), q($rm:expr)) => {
+        0x4ec01800 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (uzp2 q($rd:expr), q($rn:expr), q($rm:expr)) => {
+        0x4ec05800 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
     // FMA instructions are not defined for 2d packed-double
 
     // round double to integral (double-coded integer)
