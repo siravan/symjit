@@ -23,6 +23,12 @@ pub struct RawBox {
 unsafe impl Send for RawBox {}
 unsafe impl Sync for RawBox {}
 
+#[cfg(target_arch = "aarch64")]
+type NativeSimd = f64x2;
+
+#[cfg(target_arch = "x86_64")]
+type NativeSimd = f64x4;
+
 pub unsafe extern "C" fn trampoline_homogenous<T>(
     env: *const c_void,
     slice_ptr: *const T,
@@ -32,6 +38,7 @@ pub unsafe extern "C" fn trampoline_homogenous<T>(
 where
     T: Sized + Copy + Default,
 {
+    println!("homo");
     let closure = &*(env as *const ExternalFunction<T>);
     let slice = from_raw_parts(slice_ptr, slice_len);
     *res = closure(slice);
@@ -62,6 +69,8 @@ where
         }
         res[i] = closure(&buf[..slice_len]);
     }
+
+    dbg!(step);
 
     // a return value of true signals the SIMD kernel to shuffle the result.
     // For example, if T = Complex<f64x2>, at this stage `res` is
@@ -189,8 +198,10 @@ impl Defuns {
         };
 
         let trampoline_simd: *const c_void = match T::get_type(T::default()) {
-            ElemType::RealF64(_) => trampoline_call_scalar::<f64x4, T> as *const c_void,
-            ElemType::ComplexF64(_) => trampoline_call_scalar::<Complex<f64x4>, T> as *const c_void,
+            ElemType::RealF64(_) => trampoline_call_scalar::<NativeSimd, T> as *const c_void,
+            ElemType::ComplexF64(_) => {
+                trampoline_call_scalar::<Complex<NativeSimd>, T> as *const c_void
+            }
             _ => trampoline_homogenous::<T> as *const c_void,
         };
 

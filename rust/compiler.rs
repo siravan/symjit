@@ -154,12 +154,12 @@ impl Compiler {
         let mut app = Application::new(prog, HashSet::new(), std::mem::take(&mut self.df))?;
         // app.prepare_simd();
 
-        #[cfg(target_arch = "aarch64")]
-        if let Ok(app) = &mut app {
-            // this is a hack to give enough delay to prevent a bus error
-            app.dump("dump.bin", "scalar");
-            std::fs::remove_file("dump.bin")?;
-        };
+        // #[cfg(target_arch = "aarch64")]
+        // if let Ok(app) = &app {
+        //     // this is a hack to give enough delay to prevent a bus error
+        //     app.dump("dump.bin", "scalar");
+        //     std::fs::remove_file("dump.bin")?;
+        // };
 
         Ok(app)
     }

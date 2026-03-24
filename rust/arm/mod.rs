@@ -206,8 +206,7 @@ impl Generator for ArmGenerator {
     }
 
     fn branch(&mut self, label: &str) {
-        self.emit(arm! {tst x(0), x(0)});
-        self.jump(label, 0, |offset, _| arm! {b.eq label(offset)});
+        self.jump(label, 0, |offset, _| arm! {b label(offset)});
     }
 
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
@@ -787,7 +786,7 @@ impl ArmSimdGenerator {
             let l1 = format!(".P{}", self.a.ip());
             let l2 = format!(".Q{}", self.a.ip());
 
-            self.emit(arm! {tst x(0), x(31)});
+            self.emit(arm! {tst x(0), x(0)});
             self.jump(&l1, 0, |offset, _| arm! {b.eq label(offset)});
             self.emit(arm! {ldr q(2), [sp, #0]});
             self.emit(arm! {ldr q(3), [sp, #16]});
@@ -848,8 +847,7 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn branch(&mut self, label: &str) {
-        self.emit(arm! {tst x(0), x(0)});
-        self.jump(label, 0, |offset, _| arm! {b.eq label(offset)});
+        self.jump(label, 0, |offset, _| arm! {b label(offset)});
     }
 
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {

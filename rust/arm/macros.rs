@@ -329,6 +329,7 @@ macro_rules! arm {
     };
 
     // misc
+    (b label($ofs:expr)) => { 0x14000000 | ($ofs as u32 >> 2) & 0x00ffffff };
     (b.eq label($ofs:expr)) => { 0x54000000 | ofs_pc!($ofs) };
     (b.ne label($ofs:expr)) => { 0x54000001 | ofs_pc!($ofs) };
     (b.lt label($ofs:expr)) => { 0x5400000B | ofs_pc!($ofs) };

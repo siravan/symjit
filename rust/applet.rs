@@ -37,7 +37,7 @@ impl Applet {
     }
 
     /// Generic evaluate function for compiled Symbolica expressions
-    pub fn evaluate<T>(&mut self, args: &[T], outs: &mut [T])
+    pub fn evaluate<T>(&self, args: &[T], outs: &mut [T])
     where
         T: Element,
     {
@@ -63,7 +63,7 @@ impl Applet {
 
     /// Generic evaluate_single function for compiled Symbolica expressions
     #[inline(always)]
-    pub fn evaluate_single<T>(&mut self, args: &[T]) -> T
+    pub fn evaluate_single<T>(&self, args: &[T]) -> T
     where
         T: Element + Copy,
     {
@@ -226,23 +226,11 @@ impl Applet {
         }
     }
 
-    fn evaluate_matrix_bytecode(&mut self, args: &[f64], outs: &mut [f64], n: usize) {
-        let count_params = self.count_params;
-        let count_obs = self.count_obs;
-
-        for i in 0..n {
-            self.evaluate(
-                &args[i * count_params..(i + 1) * count_params],
-                &mut outs[i * count_obs..(i + 1) * count_obs],
-            );
-        }
-    }
-
     /// Generic evaluate function for compiled Symbolica expressions
     /// The main entry point to compute matrices.
     /// The actual dispatched method depends on the configuration and the
     /// type of the arguments.
-    pub fn evaluate_matrix<T>(&mut self, args: &[T], outs: &mut [T], n: usize)
+    pub fn evaluate_matrix<T>(&self, args: &[T], outs: &mut [T], n: usize)
     where
         T: Element,
     {
