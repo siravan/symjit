@@ -6,6 +6,7 @@ use crate::amd::{AmdFamily, AmdGenerator};
 use crate::applet::Applet;
 use crate::arm::{ArmGenerator, ArmSimdGenerator};
 use crate::complexify::Complexifier;
+use crate::config::Config;
 use crate::generator::Generator;
 use crate::machine::MachineCode;
 use crate::matrix::{combine_matrixes, Matrix};
@@ -38,29 +39,31 @@ pub enum CompilerType {
     Debug,
 }
 
-#[derive(Clone)]
+#[repr(C)] // to ensure binary compatibility with Applet
 pub struct Application {
-    pub prog: Program,
+    // Applet compatibility
+    // Important! The order of these fields is critical and should be
+    // the same as the order of Applet fields.
     pub compiled: Option<MachineCode<f64>>,
     pub compiled_simd: Option<MachineCode<f64>>,
+    pub use_simd: bool,
+    pub use_threads: bool,
+    pub count_states: usize,
+    pub count_params: usize,
+    pub count_obs: usize,
+    pub count_diffs: usize,
+    pub config: Config,
+    // Non-Applet fields
+    pub prog: Program,
     pub compiled_fast: Option<MachineCode<f64>>,
     pub bytecode: CompiledMir,
     pub params: Vec<f64>,
-    pub use_simd: bool,
-    pub use_threads: bool,
     pub can_fast: bool,
     pub first_state: usize,
     pub first_param: usize,
     pub first_obs: usize,
     pub first_diff: usize,
-    pub count_states: usize,
-    pub count_params: usize,
-    pub count_obs: usize,
-    pub count_diffs: usize,
 }
-
-unsafe impl Send for Application {}
-unsafe impl Sync for Application {}
 
 impl Application {
     pub fn new(mut prog: Program, reals: HashSet<Loc>) -> Result<Application> {
@@ -76,14 +79,16 @@ impl Application {
 
         let params = vec![0.0; count_params + 1];
 
+        let config = prog.config().clone();
+
         let mut mir = prog.builder.compile_mir()?;
 
-        if prog.config().is_complex() {
-            mir = Complexifier::new(&reals, prog.config().clone()).complexify(&mir)?;
+        if config.is_complex() {
+            mir = Complexifier::new(&reals, config.clone()).complexify(&mir)?;
         }
 
         // let compiled = Self::compile_ty(prog.config().compiler_type(), &mir, &mut prog)?;
-        let compiled = match prog.config().compiler_type() {
+        let compiled = match config.compiler_type() {
             CompilerType::AmdAVX => Some(Self::compile_avx(&mir, &mut prog)?),
             CompilerType::AmdSSE => Some(Self::compile_sse(&mir, &mut prog)?),
             CompilerType::Arm => Some(Self::compile_arm(&mir, &mut prog)?),
@@ -96,10 +101,10 @@ impl Application {
             _ => return Err(anyhow!("unrecognized `ty`")),
         };
 
-        let use_simd = prog.config().use_simd() && prog.count_loops == 0;
-        let use_threads = prog.config().use_threads() && prog.mem_size() < 128;
+        let use_simd = config.use_simd() && prog.count_loops == 0;
+        let use_threads = config.use_threads() && prog.mem_size() < 128;
 
-        let can_fast = prog.config().may_fast()
+        let can_fast = config.may_fast()
             && count_states <= 8
             && count_params == 0
             && count_obs == 1
@@ -107,10 +112,6 @@ impl Application {
 
         // bytecode takes the ownership of mir
         let bytecode = Self::compile_bytecode(mir, &mut prog)?;
-
-        if prog.config().symbolica() {
-            // prog.clear(); // deletes the expression tree to save space (not needed from this point)
-        }
 
         Ok(Application {
             prog,
@@ -130,11 +131,17 @@ impl Application {
             count_params,
             count_obs,
             count_diffs,
+            config,
         })
     }
 
     pub fn seal(self) -> Result<Applet> {
         Applet::new(self)
+    }
+
+    pub fn as_applet(&self) -> &Applet {
+        let app = unsafe { std::mem::transmute(self) };
+        app
     }
 
     /********************* compile_* functions *************************/
@@ -319,10 +326,10 @@ impl Application {
     pub fn prepare_simd(&mut self) {
         // SIMD compilation is lazy!
         if self.compiled_simd.is_none() && self.use_simd {
-            if self.prog.config().has_avx() {
+            if self.config.has_avx() {
                 self.compiled_simd =
                     Self::compile_avx_simd(&self.bytecode.mir, &mut self.prog).ok();
-            } else if self.prog.config().is_arm64() {
+            } else if self.config.is_arm64() {
                 self.compiled_simd =
                     Self::compile_arm_simd(&self.bytecode.mir, &mut self.prog).ok();
             }
@@ -332,21 +339,21 @@ impl Application {
     fn prepare_fast(&mut self) {
         // fast func compilation is lazy!
         if self.compiled_simd.is_none() && self.can_fast {
-            if self.prog.config().is_amd64() {
+            if self.config.is_amd64() {
                 self.compiled_fast = Self::compile_amd_fast(
                     &self.bytecode.mir,
                     &mut self.prog,
                     self.first_obs as u32,
                 )
                 .ok();
-            } else if self.prog.config().is_arm64() {
+            } else if self.config.is_arm64() {
                 self.compiled_fast = Self::compile_arm_fast(
                     &self.bytecode.mir,
                     &mut self.prog,
                     self.first_obs as u32,
                 )
                 .ok();
-            } else if self.prog.config().is_riscv64() {
+            } else if self.config.is_riscv64() {
                 self.compiled_fast = Self::compile_riscv_fast(
                     &self.bytecode.mir,
                     &mut self.prog,
@@ -625,12 +632,14 @@ impl Storage for Application {
         let count_diffs = prog.count_diffs;
 
         let params = vec![0.0; count_params + 1];
-        let mir = Mir::new(prog.config().clone());
 
-        let use_simd = prog.config().use_simd() && prog.count_loops == 0;
-        let use_threads = prog.config().use_threads() && prog.mem_size() < 128;
+        let config = prog.config().clone();
+        let mir = Mir::new(config.clone());
 
-        let can_fast = prog.config().may_fast()
+        let use_simd = config.use_simd() && prog.count_loops == 0;
+        let use_threads = config.use_threads() && prog.mem_size() < 128;
+
+        let can_fast = config.may_fast()
             && count_states <= 8
             && count_params == 0
             && count_obs == 1
@@ -656,7 +665,7 @@ impl Storage for Application {
             count_params,
             count_obs,
             count_diffs,
-            //v: Vec::new(),
+            config,
         })
     }
 }

@@ -1,16 +1,14 @@
-use std::sync::Arc;
-
 use anyhow::{anyhow, Result};
 use rayon::prelude::*;
 
 use crate::config::Config;
-use crate::defuns::RawBox;
 use crate::machine::MachineCode;
 use crate::runnable::Application;
 use crate::types::{ElemType, Element};
 use crate::utils::*;
 
 #[derive(Clone)]
+#[repr(C)]
 pub struct Applet {
     pub compiled: Option<MachineCode<f64>>,
     pub compiled_simd: Option<MachineCode<f64>>,
@@ -25,7 +23,7 @@ pub struct Applet {
 
 impl Applet {
     pub fn new(app: Application) -> Result<Applet> {
-        if app.prog.config().is_bytecode() {
+        if app.config.is_bytecode() {
             return Err(anyhow!("Bytecode Application cannot be sealed."));
         }
 
@@ -38,7 +36,7 @@ impl Applet {
             count_params: app.count_params,
             count_obs: app.count_obs,
             count_diffs: app.count_diffs,
-            config: app.prog.config().clone(),
+            config: app.config.clone(),
         })
     }
 
@@ -267,7 +265,7 @@ impl Applet {
     }
 }
 
-fn recast_as_f64<T>(v: &[T]) -> &[f64]
+pub fn recast_as_f64<T>(v: &[T]) -> &[f64]
 where
     T: Sized,
 {
@@ -277,7 +275,7 @@ where
     q
 }
 
-fn recast_as_f64_mut<T>(v: &mut [T]) -> &mut [f64]
+pub fn recast_as_f64_mut<T>(v: &mut [T]) -> &mut [f64]
 where
     T: Sized,
 {

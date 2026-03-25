@@ -4,14 +4,13 @@ use std::fs;
 use std::io::Write;
 use std::rc::Rc;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use num_complex::Complex;
 use petgraph::matrix_graph::Zero;
 
 use crate::code::{Func, VirtualTable};
 use crate::config::Config;
 use crate::config::SPILL_AREA;
-use crate::defuns::Defuns;
 use crate::generator::Generator;
 use crate::machine::MachineCode;
 use crate::symbol::Loc;

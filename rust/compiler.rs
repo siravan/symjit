@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use anyhow::{anyhow, Result};
 use num_complex::Complex;
-use rayon::prelude::*;
 
+use crate::applet::{recast_as_f64, recast_as_f64_mut};
 use crate::code::VirtualTable;
 use crate::config::{Config, SLICE_CAP};
 use crate::defuns::Defuns;
@@ -12,8 +12,8 @@ pub use crate::instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
 use crate::model::{CellModel, Equation, Program, Variable};
 use crate::parser::Parser;
 use crate::symbol::Loc;
-use crate::types::{ElemType, Element};
-use crate::utils::{Compiled, CompiledFunc};
+use crate::types::Element;
+use crate::utils::Compiled;
 use crate::Application;
 
 // #[derive(Debug)]
@@ -81,9 +81,9 @@ type __m256d = [f64; 4];
 impl Compiler {
     /// Creates a new `Compiler` object with default settings.
     pub fn new() -> Compiler {
-        let mut config = Config::default();
-        // config.set_defuns(Defuns::new());
-        Compiler { config }
+        Compiler {
+            config: Config::default(),
+        }
     }
 
     pub fn with_config(config: Config) -> Compiler {
@@ -269,24 +269,7 @@ impl Application {
     where
         T: Element,
     {
-        let args = recast_as_f64(args);
-        let outs = recast_as_f64_mut(outs);
-
-        let simd = matches!(
-            T::get_type(T::default()),
-            ElemType::RealF64x2(_)
-                | ElemType::RealF64x4(_)
-                | ElemType::ComplexF64x2(_)
-                | ElemType::ComplexF64x4(_)
-        );
-
-        if let Some(f) = &self.compiled {
-            if !simd {
-                f.func()(outs.as_mut_ptr(), std::ptr::null(), 0, args.as_ptr());
-            } else if let Some(g) = &self.compiled_simd {
-                g.func()(outs.as_mut_ptr(), std::ptr::null(), 0, args.as_ptr());
-            }
-        }
+        self.as_applet().evaluate(args, outs);
     }
 
     /// Generic evaluate_single function for compiled Symbolica expressions
@@ -295,163 +278,7 @@ impl Application {
     where
         T: Element + Copy,
     {
-        let mut outs = [T::default(); 1];
-        self.evaluate(args, &mut outs);
-        outs[0]
-    }
-
-    /// Evaluates a single logical row. It could be a combinatino of multiple
-    /// physical rows because of implicit SIMD.
-    fn evaluate_row(
-        args: &[f64],
-        args_idx: usize,
-        outs: &[f64],
-        outs_idx: usize,
-        f: CompiledFunc<f64>,
-        transpose: bool,
-    ) -> i32 {
-        unsafe {
-            f(
-                outs.as_ptr().add(outs_idx),
-                std::ptr::null(),
-                if transpose { 1 } else { 0 },
-                args.as_ptr().add(args_idx),
-            )
-        }
-    }
-
-    fn evaluate_matrix_with_threads(&self, args: &[f64], outs: &mut [f64], n: usize) {
-        if let Some(f) = &self.compiled {
-            let count_params = self.count_params;
-            let count_obs = self.count_obs;
-            let f_scalar = f.func();
-
-            (0..n).into_par_iter().for_each(|t| {
-                Self::evaluate_row(args, t * count_params, outs, t * count_obs, f_scalar, false);
-            });
-        }
-    }
-
-    fn evaluate_matrix_without_threads(&self, args: &[f64], outs: &mut [f64], n: usize) {
-        if let Some(f) = &self.compiled {
-            let count_params = self.count_params;
-            let count_obs = self.count_obs;
-            let f_scalar = f.func();
-
-            for t in 0..n {
-                Self::evaluate_row(args, t * count_params, outs, t * count_obs, f_scalar, false);
-            }
-        }
-    }
-
-    fn evaluate_matrix_with_threads_simd(
-        &self,
-        args: &[f64],
-        outs: &mut [f64],
-        n: usize,
-        transpose: bool,
-    ) {
-        if let Some(f) = &self.compiled {
-            let count_params = self.count_params;
-            let count_obs = self.count_obs;
-
-            if let Some(compiled) = &self.compiled_simd {
-                let f_simd = compiled.func();
-                let f_scalar = f.func();
-                let lanes = compiled.count_lanes();
-                let step = if transpose { lanes } else { 1 };
-
-                (0..n / step).into_par_iter().for_each(|k| {
-                    let top = k * lanes;
-                    if Self::evaluate_row(
-                        args,
-                        top * count_params,
-                        outs,
-                        top * count_obs,
-                        f_simd,
-                        transpose,
-                    ) != 0
-                    {
-                        for i in 0..lanes {
-                            Self::evaluate_row(
-                                args,
-                                (top + i) * count_params,
-                                outs,
-                                (top + i) * count_obs,
-                                f_scalar,
-                                false,
-                            );
-                        }
-                    }
-                });
-
-                for t in step * (n / step)..n {
-                    Self::evaluate_row(
-                        args,
-                        t * count_params,
-                        outs,
-                        t * count_obs,
-                        f_scalar,
-                        false,
-                    );
-                }
-            }
-        }
-    }
-
-    fn evaluate_matrix_without_threads_simd(
-        &self,
-        args: &[f64],
-        outs: &mut [f64],
-        n: usize,
-        transpose: bool,
-    ) {
-        if let Some(f) = &self.compiled {
-            let count_params = self.count_params;
-            let count_obs = self.count_obs;
-
-            if let Some(compiled) = &self.compiled_simd {
-                let f_simd = compiled.func();
-                let f_scalar = f.func();
-                let lanes = compiled.count_lanes();
-                let step = if transpose { lanes } else { 1 };
-
-                for k in 0..n / step {
-                    let top = k * lanes;
-                    if Self::evaluate_row(
-                        args,
-                        top * count_params,
-                        outs,
-                        top * count_obs,
-                        f_simd,
-                        transpose,
-                    ) != 0
-                    {
-                        for i in 0..lanes {
-                            Self::evaluate_row(
-                                args,
-                                (top + i) * count_params,
-                                outs,
-                                (top + i) * count_obs,
-                                f_scalar,
-                                false,
-                            );
-                        }
-                    }
-                }
-
-                for t in step * (n / step)..n {
-                    Self::evaluate_row(
-                        args,
-                        t * count_params,
-                        outs,
-                        t * count_obs,
-                        f_scalar,
-                        false,
-                    );
-                }
-            }
-        }
+        self.as_applet().evaluate_single(args)
     }
 
     /// Generic evaluate function for compiled Symbolica expressions
@@ -462,30 +289,7 @@ impl Application {
     where
         T: Element,
     {
-        let args = recast_as_f64(args);
-        let outs = recast_as_f64_mut(outs);
-
-        let transpose = !matches!(
-            T::get_type(T::default()),
-            ElemType::RealF64x2(_)
-                | ElemType::RealF64x4(_)
-                | ElemType::ComplexF64x2(_)
-                | ElemType::ComplexF64x4(_)
-        );
-
-        if self.use_threads && n > 1 {
-            if self.compiled_simd.is_some() {
-                self.evaluate_matrix_with_threads_simd(args, outs, n, transpose);
-            } else {
-                self.evaluate_matrix_with_threads(args, outs, n);
-            }
-        } else {
-            if self.compiled_simd.is_some() {
-                self.evaluate_matrix_without_threads_simd(args, outs, n, transpose);
-            } else {
-                self.evaluate_matrix_without_threads(args, outs, n);
-            }
-        }
+        self.as_applet().evaluate_matrix(args, outs, n);
     }
 
     /// Returns a fast function.
@@ -575,40 +379,6 @@ impl Application {
             Err(anyhow!("not a fast function"))
         }
     }
-}
-
-pub fn recast_complex_vec(v: &[Complex<f64>]) -> &[f64] {
-    let n = v.len();
-    let p: *const f64 = unsafe { std::mem::transmute(v.as_ptr()) };
-    let q: &[f64] = unsafe { std::slice::from_raw_parts(p, 2 * n) };
-    q
-}
-
-pub fn recast_complex_vec_mut(v: &mut [Complex<f64>]) -> &mut [f64] {
-    let n = v.len();
-    let p: *mut f64 = unsafe { std::mem::transmute(v.as_mut_ptr()) };
-    let q: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(p, 2 * n) };
-    q
-}
-
-pub fn recast_as_f64<T>(v: &[T]) -> &[f64]
-where
-    T: Sized,
-{
-    let s = std::mem::size_of::<T>() / std::mem::size_of::<f64>();
-    let p: *const f64 = v.as_ptr() as _;
-    let q: &[f64] = unsafe { std::slice::from_raw_parts(p, s * v.len()) };
-    q
-}
-
-pub fn recast_as_f64_mut<T>(v: &mut [T]) -> &mut [f64]
-where
-    T: Sized,
-{
-    let s = std::mem::size_of::<T>() / std::mem::size_of::<f64>();
-    let p: *mut f64 = v.as_ptr() as _;
-    let q: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(p, s * v.len()) };
-    q
 }
 
 /************************* Symbolica *****************************/

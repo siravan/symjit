@@ -124,7 +124,7 @@ where
 #[derive(Clone, Default)]
 pub struct Defuns {
     pub funcs: HashMap<String, Func>,
-    pub boxes: Vec<Arc<RawBox>>,
+    pub boxes: Vec<RawBox>,
 }
 
 impl fmt::Debug for Defuns {
@@ -215,10 +215,10 @@ impl Defuns {
 
         let func_ptr = Box::into_raw(ext);
 
-        self.boxes.push(Arc::new(RawBox {
+        self.boxes.push(RawBox {
             func_ptr: func_ptr as *mut _,
             elem_type: T::get_type(T::default()),
-        }));
+        });
 
         Ok(())
     }
