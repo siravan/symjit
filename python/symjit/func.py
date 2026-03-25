@@ -243,9 +243,6 @@ class SymbolicaFunc:
     def __init__(self, model, dtype="float64", **args):
         self.model = model
         self.args = args
-        self.cache = {}
-        self.cache_mode = False
-        self.cache_complex = False
         self.samples = None
 
         if model is None:
@@ -273,17 +270,8 @@ class SymbolicaFunc:
         if self.compiler is None:
             self.compile_real()
 
-        if len(self.cache) > 0:
-            h = hash(inputs.sum())
-            if h in self.cache:
-                return self.cache[h]
-
         c = self.compiler
         outs = np.zeros((inputs.shape[0], c.count_obs), dtype=np.float64)
-
-        if self.cache_mode and inputs.shape[0] == 1:
-            self.samples.append(inputs)
-            return outs
 
         args = np.ascontiguousarray(inputs[:, : c.count_params].real, dtype=np.float64)
         c.evaluate_matrix(args, outs)
@@ -293,48 +281,13 @@ class SymbolicaFunc:
         if self.complex_compiler is None:
             self.compile_complex()
 
-        if len(self.cache) > 0:
-            h = hash(inputs.sum())
-            if h in self.cache:
-                return self.cache[h]
-
         c = self.complex_compiler
         assert inputs.shape[1] == c.count_params // 2
         outs = np.zeros((inputs.shape[0], c.count_obs // 2), dtype=np.complex128)
 
-        if self.cache_mode and inputs.shape[0] == 1:
-            self.cache_complex = True
-            self.samples.append(inputs)
-            return outs
-
         args = np.ascontiguousarray(inputs, dtype=np.complex128)
         c.evaluate_matrix(args, outs, 2)
         return outs
-
-    def start_caching(self):
-        self.cache = {}
-        self.cache_mode = True
-        self.cache_complex = False
-        self.samples = []
-
-    def stop_caching(self):
-        self.cache_mode = False
-
-        if len(self.samples) == 0:
-            return
-
-        inputs = np.concatenate(self.samples)
-
-        if self.cache_complex:
-            outs = self.evaluate_complex(inputs)
-        else:
-            outs = self.evaluate(inputs)
-
-        for i, s in enumerate(self.samples):
-            h = hash(s.sum())
-            self.cache[h] = outs[i, None]
-
-        self.samples = None
 
     def dump(self, name, what="scalar"):
         self.compiler.dump(name, what=what)
@@ -352,130 +305,3 @@ class SymbolicaFunc:
         else:
             self.compile_real()
             self.compiler.save(file)
-
-
-class Bridge:
-    def __init__(self, evaluator):
-        if isinstance(evaluator, str):
-            s = evaluator.replace("𝑖", "j")
-            a, b, c = eval(s)
-        else:
-            a, b, c = evaluator.get_instructions()
-
-        self.instructions = a
-        self.count_temps = b
-        self.consts = c
-
-    def translate(self):
-        p = []
-
-        for q in self.instructions:
-            op = q[0]
-            args = q[1:]
-
-            if op == "add":
-                p.append(self.add(*args))
-            elif op == "mul":
-                p.append(self.mul(*args))
-            elif op == "pow":
-                p.append(self.pow(*args))
-            elif op == "powf":
-                p.append(self.powf(*args))
-            elif op == "fun":
-                p.append(self.fun(*args))
-            elif op == "external_fun":
-                p.append(self.external_fun(*args))
-            elif op == "assign":
-                p.append(self.assign(*args))
-            elif op == "if_else":
-                p.append(self.if_else(*args))
-            elif op == "goto":
-                p.append(self.goto(*args))
-            elif op == "label":
-                p.append(self.label(*args))
-            elif op == "join":
-                p.append(self.join(*args))
-            else:
-                raise ValueError("undefined instruction")
-
-        consts = [self.num(x) for x in self.consts]
-        return (p, self.count_temps, consts)
-
-    def add(self, dst, args, n):
-        return {"Add": [self.slot(dst), self.slot_list(args), n]}
-
-    def mul(self, dst, args, n):
-        return {"Mul": [self.slot(dst), self.slot_list(args), n]}
-
-    def pow(self, dst, arg, power, is_real):
-        return {"Pow": [self.slot(dst), self.slot(arg), power, is_real]}
-
-    def powf(self, dst, arg, power, is_real):
-        return {"Powf": [self.slot(dst), self.slot(arg), self.slot(power), is_real]}
-
-    def fun(self, dst, f, arg, is_real):
-        name = f.get_name().split("::")[1]
-
-        if name == "exp":
-            f = 2
-        elif name == "ln":
-            f = 3
-        elif name == "sin":
-            f = 4
-        elif name == "cos":
-            f = 5
-        elif name == "sqrt":
-            f = 6
-        elif name == "conjugate":
-            f = 7
-        else:
-            raise ValueError(f"fun {name} is not defined.")
-
-        return {"Fun": [self.slot(dst), f, self.slot(arg), is_real]}
-
-    def external_fun(self, dst, name, args):
-        return {"ExternalFun": [self.slot(dst), name, self.slot_list(args)]}
-
-    def assign(self, dst, arg):
-        return {"Assign": [self.slot(dst), self.slot(arg)]}
-
-    def if_else(self, dst, lbl):
-        return {"IfElse": [self.slot(dst), lbl]}
-
-    def goto(self, lbl):
-        return {"Goto": lbl}
-
-    def label(self, lbl):
-        return {"Label": lbl}
-
-    def join(self, dst, cond, t, f):
-        return {"Join": [self.slot(dst), self.slot(cond), self.slot(t), self.slot(f)]}
-
-    def slot(self, item):
-        name = item[0]
-        idx = item[1]
-
-        if name == "param":
-            return {"Param": idx}
-        elif name == "out":
-            return {"Out": idx}
-        elif name == "temp":
-            return {"Temp": idx}
-        elif name == "const":
-            return {"Const": idx}
-        else:
-            raise ValueError(f"undefined Slot type: {name}")
-
-    def slot_list(self, item):
-        return [self.slot(s) for s in item]
-
-    def num(self, x):
-        if isinstance(x, numbers.Number):
-            val = complex(x, 0)
-        else:
-            val = x.evaluate_complex({}, {})
-
-        return {
-            "re": {"numerator": {"Single": val.real}, "denominator": {"Single": 1}},
-            "im": {"numerator": {"Single": val.imag}, "denominator": {"Single": 1}},
-        }

@@ -19,7 +19,6 @@ use crate::Application;
 // #[derive(Debug)]
 pub struct Compiler {
     config: Config,
-    df: Defuns,
 }
 
 #[cfg(not(target_arch = "x86_64"))]
@@ -82,17 +81,13 @@ type __m256d = [f64; 4];
 impl Compiler {
     /// Creates a new `Compiler` object with default settings.
     pub fn new() -> Compiler {
-        Compiler {
-            config: Config::default(),
-            df: Defuns::new(),
-        }
+        let mut config = Config::default();
+        // config.set_defuns(Defuns::new());
+        Compiler { config }
     }
 
     pub fn with_config(config: Config) -> Compiler {
-        Compiler {
-            config,
-            df: Defuns::new(),
-        }
+        Compiler { config }
     }
 
     /// Compiles a model.
@@ -149,9 +144,9 @@ impl Compiler {
             obs: eqs,
         };
 
-        let prog = Program::new(&ml, self.config)?;
+        let prog = Program::new(&ml, self.config.clone())?;
         // let df = Defuns::new();
-        let mut app = Application::new(prog, HashSet::new(), std::mem::take(&mut self.df))?;
+        let app = Application::new(prog, HashSet::new())?;
         // app.prepare_simd();
 
         // #[cfg(target_arch = "aarch64")]
@@ -162,16 +157,6 @@ impl Compiler {
         // };
 
         Ok(app)
-    }
-
-    /// Registers a user-defined unary function.
-    pub fn def_unary(&mut self, op: &str, f: extern "C" fn(f64) -> f64) {
-        self.df.add_unary(op, f)
-    }
-
-    /// Registers a user-defined binary function.
-    pub fn def_binary(&mut self, op: &str, f: extern "C" fn(f64, f64) -> f64) {
-        self.df.add_binary(op, f)
     }
 }
 
@@ -632,7 +617,6 @@ where
 #[derive(Debug, Clone)]
 pub struct Translator {
     config: Config,
-    df: Defuns,
     ssa: Vec<Instruction>,
     consts: Vec<Complex<f64>>, // constants
     count_params: usize,
@@ -651,10 +635,9 @@ pub struct Translator {
 }
 
 impl Translator {
-    pub fn new(config: Config, df: Defuns) -> Translator {
+    pub fn new(config: Config) -> Translator {
         Translator {
             config,
-            df,
             ssa: Vec::new(),
             consts: Vec::new(),
             count_params: 0,
@@ -1151,8 +1134,8 @@ impl Translator {
 
     pub fn compile(&mut self) -> Result<Application> {
         let (ml, reals) = self.translate()?;
-        let prog = Program::new(&ml, self.config)?;
-        let mut app = Application::new(prog, reals, std::mem::take(&mut self.df))?;
+        let prog = Program::new(&ml, self.config.clone())?;
+        let mut app = Application::new(prog, reals)?;
         app.prepare_simd();
         Ok(app)
     }
@@ -1181,7 +1164,9 @@ impl Compiler {
         df: Defuns,
         num_params: usize,
     ) -> Result<Application> {
-        let mut translator = Translator::new(self.config, df);
+        let mut config = self.config.clone();
+        config.set_defuns(df);
+        let mut translator = Translator::new(config.clone());
 
         let model: SymbolicaModel = if json.starts_with("[[{") {
             serde_json::from_str(json.as_str())?
@@ -1193,19 +1178,10 @@ impl Compiler {
         translator.set_num_params(num_params);
         let (ml, reals) = translator.translate()?;
 
-        let prog = Program::new(&ml, self.config)?;
-        let df = Defuns::new();
-        let mut app = Application::new(prog, reals, df)?;
+        let prog = Program::new(&ml, config)?;
+        let mut app = Application::new(prog, reals)?;
 
         app.prepare_simd();
-
-        // #[cfg(target_arch = "aarch64")]
-        // if let Ok(app) = &mut app {
-        //     // this is a hack to give enough delay to prevent a bus error
-        //     app.dump("dump.bin", "scalar");
-        //     std::fs::remove_file("dump.bin")?;
-        // };
-
         Ok(app)
     }
 }

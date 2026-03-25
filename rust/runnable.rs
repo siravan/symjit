@@ -6,7 +6,6 @@ use crate::amd::{AmdFamily, AmdGenerator};
 use crate::applet::Applet;
 use crate::arm::{ArmGenerator, ArmSimdGenerator};
 use crate::complexify::Complexifier;
-use crate::defuns::Defuns;
 use crate::generator::Generator;
 use crate::machine::MachineCode;
 use crate::matrix::{combine_matrixes, Matrix};
@@ -64,7 +63,7 @@ unsafe impl Send for Application {}
 unsafe impl Sync for Application {}
 
 impl Application {
-    pub fn new(mut prog: Program, reals: HashSet<Loc>, df: Defuns) -> Result<Application> {
+    pub fn new(mut prog: Program, reals: HashSet<Loc>) -> Result<Application> {
         let first_state = 0;
         let first_param = 0;
         let first_obs = first_state + prog.count_states;
@@ -77,11 +76,10 @@ impl Application {
 
         let params = vec![0.0; count_params + 1];
 
-        let mut mir = prog.builder.compile_mir(df)?;
+        let mut mir = prog.builder.compile_mir()?;
 
         if prog.config().is_complex() {
-            let df = std::mem::take(&mut mir.df);
-            mir = Complexifier::new(&reals, *prog.config(), df).complexify(&mir)?;
+            mir = Complexifier::new(&reals, prog.config().clone()).complexify(&mir)?;
         }
 
         // let compiled = Self::compile_ty(prog.config().compiler_type(), &mir, &mut prog)?;
@@ -191,7 +189,7 @@ impl Application {
         Self::compile::<AmdGenerator>(
             mir,
             prog,
-            AmdGenerator::new(AmdFamily::SSEScalar, *prog.config()),
+            AmdGenerator::new(AmdFamily::SSEScalar, prog.config().clone()),
             prog.mem_size(),
             "x86_64",
             1,
@@ -202,7 +200,7 @@ impl Application {
         Self::compile::<AmdGenerator>(
             mir,
             prog,
-            AmdGenerator::new(AmdFamily::AvxScalar, *prog.config()),
+            AmdGenerator::new(AmdFamily::AvxScalar, prog.config().clone()),
             prog.mem_size(),
             "x86_64",
             1,
@@ -213,7 +211,7 @@ impl Application {
         Self::compile::<AmdGenerator>(
             mir,
             prog,
-            AmdGenerator::new(AmdFamily::AvxVector, *prog.config()),
+            AmdGenerator::new(AmdFamily::AvxVector, prog.config().clone()),
             prog.mem_size() * 4,
             "x86_64",
             4,
@@ -224,7 +222,7 @@ impl Application {
         Self::compile::<ArmGenerator>(
             mir,
             prog,
-            ArmGenerator::new(*prog.config()),
+            ArmGenerator::new(prog.config().clone()),
             prog.mem_size(),
             "aarch64",
             1,
@@ -235,7 +233,7 @@ impl Application {
         Self::compile::<ArmSimdGenerator>(
             mir,
             prog,
-            ArmSimdGenerator::new(*prog.config()),
+            ArmSimdGenerator::new(prog.config().clone()),
             prog.mem_size() * 2,
             "aarch64",
             2,
@@ -246,7 +244,7 @@ impl Application {
         Self::compile::<RiscV>(
             mir,
             prog,
-            RiscV::new(*prog.config()),
+            RiscV::new(prog.config().clone()),
             prog.mem_size(),
             "riscv64",
             1,
@@ -258,7 +256,7 @@ impl Application {
             Self::compile_fast(
                 mir,
                 prog,
-                AmdGenerator::new(AmdFamily::AvxScalar, *prog.config()),
+                AmdGenerator::new(AmdFamily::AvxScalar, prog.config().clone()),
                 idx_ret,
                 "x86_64",
             )
@@ -266,7 +264,7 @@ impl Application {
             Self::compile_fast(
                 mir,
                 prog,
-                AmdGenerator::new(AmdFamily::SSEScalar, *prog.config()),
+                AmdGenerator::new(AmdFamily::SSEScalar, prog.config().clone()),
                 idx_ret,
                 "x86_64",
             )
@@ -277,14 +275,20 @@ impl Application {
         Self::compile_fast(
             mir,
             prog,
-            ArmGenerator::new(*prog.config()),
+            ArmGenerator::new(prog.config().clone()),
             idx_ret,
             "aarch64",
         )
     }
 
     fn compile_riscv_fast(mir: &Mir, prog: &mut Program, idx_ret: u32) -> Result<MachineCode<f64>> {
-        Self::compile_fast(mir, prog, RiscV::new(*prog.config()), idx_ret, "riscv64")
+        Self::compile_fast(
+            mir,
+            prog,
+            RiscV::new(prog.config().clone()),
+            idx_ret,
+            "riscv64",
+        )
     }
 
     /**********************************************************/
@@ -621,7 +625,7 @@ impl Storage for Application {
         let count_diffs = prog.count_diffs;
 
         let params = vec![0.0; count_params + 1];
-        let mir = Mir::new(*prog.config(), Defuns::new());
+        let mir = Mir::new(prog.config().clone());
 
         let use_simd = prog.config().use_simd() && prog.count_loops == 0;
         let use_threads = prog.config().use_threads() && prog.mem_size() < 128;

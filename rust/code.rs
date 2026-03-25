@@ -58,6 +58,9 @@ impl Func {
     }
 }
 
+unsafe impl Sync for Func {}
+unsafe impl Send for Func {}
+
 impl fmt::Debug for Func {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "<function pointer>")

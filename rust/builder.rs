@@ -5,7 +5,6 @@ use crate::allocator::{ColoringAllocator, GreedyAllocator};
 use crate::block::Block;
 use crate::compactor::Compactor;
 use crate::config::Config;
-use crate::defuns::Defuns;
 use crate::generator::Generator;
 use crate::mir::Mir;
 use crate::node::Node;
@@ -26,7 +25,7 @@ impl Default for Builder {
         let config = Config::default();
 
         Builder {
-            primary_block: Block::new(config),
+            primary_block: Block::new(config.clone()),
             consts: Vec::new(),
             ft: HashSet::new(),
             count_loops: 0,
@@ -39,7 +38,7 @@ impl Default for Builder {
 impl Builder {
     pub fn new(config: Config) -> Builder {
         Builder {
-            primary_block: Block::new(config),
+            primary_block: Block::new(config.clone()),
             consts: Vec::new(),
             ft: HashSet::new(),
             count_loops: 0,
@@ -268,10 +267,10 @@ impl Builder {
         Ok(node)
     }
 
-    pub fn compile_mir(&mut self, df: Defuns) -> Result<Mir> {
+    pub fn compile_mir(&mut self) -> Result<Mir> {
         let opt_level = self.config.opt_level();
 
-        let mut mir = Mir::new(self.config, df);
+        let mut mir = Mir::new(self.config.clone());
 
         self.block().eliminate();
 
@@ -282,15 +281,15 @@ impl Builder {
         }
 
         if opt_level >= 2 {
-            GreedyAllocator::new(self.config).optimize(&mut mir)?;
+            GreedyAllocator::new(self.config.clone()).optimize(&mut mir)?;
         }
 
         if opt_level >= 3 {
-            ColoringAllocator::new(self.config).optimize(&mut mir)?;
+            ColoringAllocator::new(self.config.clone()).optimize(&mut mir)?;
         }
 
         // let old_stack_size = self.stack_size();
-        self.count_stack = Compactor::new(self.config).compact(&mut mir).ok();
+        self.count_stack = Compactor::new(self.config.clone()).compact(&mut mir).ok();
         // let new_stack_size = self.stack_size();
         // println!("compaction: {:?} => {:?}", old_stack_size, new_stack_size);
 

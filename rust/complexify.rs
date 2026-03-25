@@ -3,7 +3,6 @@ use std::collections::HashSet;
 
 use crate::code::Func;
 use crate::config::Config;
-use crate::defuns::Defuns;
 use crate::generator::Generator;
 use crate::mir::Mir;
 use crate::symbol::Loc;
@@ -56,7 +55,7 @@ pub struct Complexifier {
 }
 
 impl Complexifier {
-    pub fn new(reals: &HashSet<Loc>, config: Config, df: Defuns) -> Complexifier {
+    pub fn new(reals: &HashSet<Loc>, config: Config) -> Complexifier {
         let mut real_locs: HashSet<Loc> = HashSet::new();
         for loc in reals {
             if let Loc::Param(idx) = loc {
@@ -65,7 +64,7 @@ impl Complexifier {
         }
 
         Complexifier {
-            mir: Mir::new(config, df),
+            mir: Mir::new(config),
             real_locs,
             real_regs: [false; 32],
         }

@@ -4,7 +4,7 @@ use std::fs;
 use std::io::Write;
 use std::rc::Rc;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use num_complex::Complex;
 use petgraph::matrix_graph::Zero;
 
@@ -174,7 +174,6 @@ pub struct Mir {
     pub code: Vec<Instruction>,
     pub consts: Vec<f64>,
     pub labels: HashMap<String, usize>,
-    pub df: Defuns,
     pub config: Config,
 }
 
@@ -188,12 +187,11 @@ impl fmt::Debug for Mir {
 }
 
 impl Mir {
-    pub fn new(config: Config, df: Defuns) -> Mir {
+    pub fn new(config: Config) -> Mir {
         Mir {
             code: Vec::new(),
             consts: Vec::new(),
             labels: HashMap::new(),
-            df,
             config,
         }
     }
@@ -738,8 +736,12 @@ impl Mir {
             op
         };
 
-        if let Some(f) = self.df.funcs.get(op) {
-            Ok(f.clone())
+        if let Some(df) = &self.config.df {
+            if let Some(f) = df.funcs.get(op) {
+                Ok(f.clone())
+            } else {
+                VirtualTable::from_str(op)
+            }
         } else {
             VirtualTable::from_str(op)
         }

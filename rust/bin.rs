@@ -132,9 +132,13 @@ mod testing {
         let u = Expr::unary("f_", &x);
         let v = &x * &Expr::binary("g_", &u, &x);
 
-        let mut comp = Compiler::new();
-        comp.def_unary("f_", f);
-        comp.def_binary("g_", g);
+        let mut config = Config::default();
+        let mut df = Defuns::new();
+        df.add_unary("f_", f);
+        df.add_binary("g_", g);
+        config.set_defuns(df);
+        let mut comp = Compiler::with_config(config);
+
         let mut app = comp.compile(&[x], &[v])?;
         let res = app.call(&[p as f64]);
         println!("f({}) = \t{:?}", p, &res); // it should be 5.0 ^ 3

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, Result};
 use rayon::prelude::*;
 
+use crate::config::Config;
 use crate::defuns::RawBox;
 use crate::machine::MachineCode;
 use crate::runnable::Application;
@@ -19,7 +20,7 @@ pub struct Applet {
     pub count_params: usize,
     pub count_obs: usize,
     pub count_diffs: usize,
-    pub boxed_external_functions: Vec<Arc<RawBox>>,
+    pub config: Config,
 }
 
 impl Applet {
@@ -37,7 +38,7 @@ impl Applet {
             count_params: app.count_params,
             count_obs: app.count_obs,
             count_diffs: app.count_diffs,
-            boxed_external_functions: app.bytecode.mir.df.boxes.clone(),
+            config: app.prog.config().clone(),
         })
     }
 

@@ -4,8 +4,6 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-// use super::utils::Eval;
-// use crate::generator::Generator;
 use crate::config::Config;
 use crate::mir::Mir;
 use crate::node::{Node, VarStatus};

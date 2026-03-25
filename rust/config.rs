@@ -1,7 +1,9 @@
 use crate::runnable::CompilerType;
 use anyhow::{anyhow, Result};
 use std::io::{Read, Write};
+use std::sync::Arc;
 
+use crate::defuns::Defuns;
 use crate::utils::Storage;
 
 pub const USE_SIMD: u32 = 0x01;
@@ -19,17 +21,18 @@ pub const OPT_LEVEL_SHIFT: usize = 8;
 pub const SPILL_AREA: usize = 16;
 pub const SLICE_CAP: usize = 64;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Config {
     pub opt: u32,
     pub ty: CompilerType,
+    pub df: Option<Arc<Defuns>>,
 }
 
 impl Config {
     const MAGIC: usize = 0x802c3c77c7422e70;
 
     pub fn new(ty: CompilerType, opt: u32) -> Result<Config> {
-        Ok(Config { opt, ty })
+        Ok(Config { opt, ty, df: None })
     }
 
     pub fn from_name(ty: &str, opt: u32) -> Result<Config> {
@@ -45,6 +48,13 @@ impl Config {
             _ => return Err(anyhow!("invalid ty")),
         };
         Self::new(ty, opt)
+    }
+
+    pub fn set_defuns(&mut self, df: Defuns) {
+        match self.df {
+            None => self.df = Some(Arc::new(df)),
+            Some(_) => panic!("Config defuns can only be set once."),
+        }
     }
 
     fn test(&self, mask: u32) -> bool {
@@ -331,6 +341,6 @@ impl Storage for Config {
             _ => return Err(anyhow!("invalid compiler type value.")),
         };
 
-        Ok(Config { opt, ty })
+        Ok(Config { opt, ty, df: None })
     }
 }

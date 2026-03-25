@@ -49,7 +49,7 @@ impl Program {
             ** => => the first observable is the return value for fast functions
         */
 
-        let mut builder = Builder::new(config);
+        let mut builder = Builder::new(config.clone());
 
         for v in &ml.states {
             builder.symbol_table().add_mem(&v.name);

@@ -524,7 +524,17 @@ pub unsafe extern "C" fn compile(
         }
     };
 
-    if let Ok(config) = Config::from_name(ty, opt) {
+    if let Ok(mut config) = Config::from_name(ty, opt) {
+        let df: Defuns = unsafe {
+            if df.is_null() {
+                Defuns::new()
+            } else {
+                (&*df).clone()
+            }
+        };
+
+        config.set_defuns(df);
+
         let prog = match Program::new(&ml, config) {
             Ok(prog) => prog,
             Err(msg) => {
@@ -534,15 +544,7 @@ pub unsafe extern "C" fn compile(
             }
         };
 
-        let df: Defuns = unsafe {
-            if df.is_null() {
-                Defuns::new()
-            } else {
-                (&*df).clone()
-            }
-        };
-
-        let app = Application::new(prog, HashSet::new(), df);
+        let app = Application::new(prog, HashSet::new());
 
         match app {
             Ok(app) => {
@@ -609,15 +611,15 @@ pub unsafe extern "C" fn translate(
         }
     };
 
-    let df: Defuns = unsafe {
-        if df.is_null() {
-            Defuns::new()
-        } else {
-            (&*df).clone()
-        }
-    };
-
     if let Ok(config) = Config::from_name(ty, opt) {
+        let df: Defuns = unsafe {
+            if df.is_null() {
+                Defuns::new()
+            } else {
+                (&*df).clone()
+            }
+        };
+
         let mut comp = Compiler::with_config(config);
         let app = comp.translate(json.to_string(), df, num_params);
 
