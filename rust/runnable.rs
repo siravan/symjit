@@ -77,8 +77,6 @@ impl Application {
 
         let params = vec![0.0; count_params + 1];
 
-        // let v = std::mem::take(&mut df.boxes);
-
         let mut mir = prog.builder.compile_mir(df)?;
 
         if prog.config().is_complex() {
@@ -113,7 +111,7 @@ impl Application {
         let bytecode = Self::compile_bytecode(mir, &mut prog)?;
 
         if prog.config().symbolica() {
-            prog.clear(); // deletes the expression tree to save space (not needed from this point)
+            // prog.clear(); // deletes the expression tree to save space (not needed from this point)
         }
 
         Ok(Application {

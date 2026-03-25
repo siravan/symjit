@@ -609,10 +609,17 @@ pub unsafe extern "C" fn translate(
         }
     };
 
+    let df: Defuns = unsafe {
+        if df.is_null() {
+            Defuns::new()
+        } else {
+            (&*df).clone()
+        }
+    };
+
     if let Ok(config) = Config::from_name(ty, opt) {
-        let df: Box<Defuns> = Box::from_raw(df);
         let mut comp = Compiler::with_config(config);
-        let app = comp.translate(json.to_string(), *df, num_params);
+        let app = comp.translate(json.to_string(), df, num_params);
 
         match app {
             Ok(app) => {
@@ -1312,9 +1319,9 @@ pub unsafe extern "C" fn create_defuns() -> *const Defuns {
 ///
 #[no_mangle]
 pub unsafe extern "C" fn finalize_defuns(df: *mut Defuns) {
-    if !df.is_null() {
-        let _ = unsafe { Box::from_raw(df) };
-    }
+    // if !df.is_null() {
+    //     let _ = unsafe { Box::from_raw(df) };
+    // }
 }
 
 /// Adds a new function to a `Defun`.
