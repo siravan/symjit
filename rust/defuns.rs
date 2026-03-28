@@ -5,7 +5,6 @@ use std::ffi::c_void;
 use std::fmt;
 use std::mem::size_of;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
-use std::sync::Arc;
 use wide::{f64x2, f64x4};
 
 type ExternalFunction<T> = Box<dyn Fn(&[T]) -> T + Send + Sync>;

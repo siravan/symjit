@@ -154,6 +154,7 @@ pub(crate) struct Memory {
 }
 
 unsafe impl Send for Memory {}
+unsafe impl Sync for Memory {}
 
 impl Memory {
     pub(crate) fn new(branch_protection: BranchProtection) -> Self {

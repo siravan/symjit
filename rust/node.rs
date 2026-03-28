@@ -3,7 +3,6 @@ use anyhow::{anyhow, Result};
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::fmt;
-use std::fmt::Debug;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
 
@@ -11,59 +10,6 @@ use std::rc::Rc;
 use crate::mir::Mir;
 use crate::symbol::{Loc, Symbol};
 use crate::utils::reg;
-
-pub struct Pool {
-    available: u32,
-    returned: u32,
-}
-
-impl Pool {
-    fn new(count_scratch: u8, last: u8) -> Pool {
-        let mut available = 0;
-        for r in last..count_scratch {
-            let n = 1 << r;
-            available |= n;
-        }
-
-        Pool {
-            available,
-            returned: 0,
-        }
-    }
-
-    fn pop(&mut self) -> Option<u8> {
-        if self.available == 0 {
-            None
-        } else {
-            let r = self.available.trailing_zeros();
-            let n = 1 << r;
-            self.available &= !n;
-            Some(r as u8)
-        }
-    }
-
-    fn push(&mut self, r: u8) {
-        let n = 1 << r;
-        self.returned |= n;
-    }
-
-    fn release(&mut self, r: u8) {
-        let n = 1 << r;
-        if self.returned & n != 0 {
-            self.returned &= !n;
-            self.available |= n;
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum VarStatus {
-    Unknown,
-    First,
-    Mid,
-    Last,
-    Singular,
-}
 
 const COMMUTATIVE: &[&str] = &["plus", "times", "eq", "neq", "and", "or", "xor"];
 
@@ -76,7 +22,6 @@ pub enum Node {
     },
     Var {
         sym: Rc<RefCell<Symbol>>,
-        status: VarStatus,
     },
     Unary {
         op: String,
@@ -141,10 +86,7 @@ impl Node {
     }
 
     pub fn create_var(sym: Rc<RefCell<Symbol>>) -> Node {
-        Node::Var {
-            sym,
-            status: VarStatus::Unknown,
-        }
+        Node::Var { sym }
     }
 
     pub fn create_unary(op: &str, arg: Node, power: i32) -> Node {
@@ -250,40 +192,6 @@ impl Node {
         }
     }
 
-    /// postorder_forward does a forward postorder traversal of the
-    /// expression tree and call f at each node.
-    /// Nodes are visited in the same order used to generate code.
-    /// Note the twist in the middle. The decision to traverse left
-    /// or right link depends on ershov number of each link.
-    fn postorder_forward(&mut self, f: fn(&mut Node)) {
-        if let Some(n) = self.first() {
-            n.postorder_forward(f)
-        };
-
-        if let Some(n) = self.second() {
-            n.postorder_forward(f)
-        };
-
-        f(self);
-    }
-
-    /// postorder_backward does a backward postorder traversal of the
-    /// expression tree and call f at each node.
-    /// Nodes are visited in the same reverse order used to generate code.
-    /// Note the twist in the middle. The decision to traverse left
-    /// or right link depends on ershov number of each link.
-    fn postorder_backward(&mut self, f: fn(&mut Node)) {
-        if let Some(n) = self.second() {
-            n.postorder_forward(f)
-        };
-
-        if let Some(n) = self.first() {
-            n.postorder_forward(f)
-        };
-
-        f(self);
-    }
-
     /// Ershov number is the number of temporary registers needed to
     /// compile a given node
     pub fn ershov_number(&self) -> u8 {
@@ -305,76 +213,24 @@ impl Node {
         }
     }
 
-    /// Finds and marks the first usage of each Var
-    fn mark_first(&mut self) {
-        if let Node::Var { sym, status, .. } = self {
-            let mut sym = sym.borrow_mut();
-
-            if !sym.visited {
-                sym.visited = true;
-                *status = VarStatus::First;
-            } else {
-                *status = VarStatus::Mid;
-            }
-        }
-    }
-
-    /// Finds and marks the last usage of each Var
-    fn mark_last(&mut self) {
-        if let Node::Var { sym, status, .. } = self {
-            let mut sym = sym.borrow_mut();
-
-            if sym.visited {
-                sym.visited = false;
-                *status = match status {
-                    VarStatus::First => VarStatus::Singular,
-                    _ => VarStatus::Last,
-                }
-            }
-        }
-    }
-
     /// The main entry point to compile an expression tree
     /// should be called on the root of the expression tree
     pub fn compile_tree(&mut self, mir: &mut Mir) -> Result<u8> {
-        self.postorder_forward(Self::mark_first);
-        self.postorder_backward(Self::mark_last);
-
-        let last = self.ershov_number();
-        let count_scratch = mir.config.count_scratch();
-
-        // we check ir.three_address() because AmdGenerator::shrink may swap
-        // registers when generating code for SSE (two-address code).
-        // This check may not be actually necessary, but we need to prove its
-        // correctness first.
-        // We use the pool registers here if only opt_level is 1, since
-        // GreedyAllocator would take care of this for opt_level >= 2.
-        let mut pool = Pool::new(
-            count_scratch,
-            if mir.config.opt_level() == 1 {
-                last
-            } else {
-                count_scratch
-            },
-        );
-
-        // println!("{:#?}", &self);
-        self.compile(mir, 0, &mut pool)
+        self.compile(mir, 0)
     }
 
-    pub fn compile(&self, mir: &mut Mir, base: u8, pool: &mut Pool) -> Result<u8> {
+    pub fn compile(&self, mir: &mut Mir, base: u8) -> Result<u8> {
         match self {
             Node::Void => Ok(0),
             Node::Const { .. } => self.compile_const(mir, base),
-            Node::Var { .. } => self.compile_var(mir, base, pool),
-            Node::Unary { .. } => self.compile_unary(mir, base, pool),
-            Node::Binary { .. } => self.compile_binary(mir, base, pool),
+            Node::Var { .. } => self.compile_var(mir, base),
+            Node::Unary { .. } => self.compile_unary(mir, base),
+            Node::Binary { .. } => self.compile_binary(mir, base),
         }
     }
 
     fn compile_const(&self, mir: &mut Mir, base: u8) -> Result<u8> {
         if let Node::Const { idx, .. } = &self {
-            // let label = format!("_const_{}_", idx);
             mir.load_const(reg(base), *idx);
             Ok(base)
         } else {
@@ -397,38 +253,10 @@ impl Node {
     ///     1. At the encounter with a variable, load it into a temporary (cache) register
     ///     2. During the subsequent encounters, use the value in the register
     ///     3. After the last encounter, return the register to the pool of available registers
-    fn compile_var(&self, mir: &mut Mir, base: u8, pool: &mut Pool) -> Result<u8> {
-        if let Node::Var { sym, status, .. } = &self {
-            let mut sym = sym.borrow_mut();
-
-            let dst = match status {
-                VarStatus::First => {
-                    sym.reg = pool.pop();
-                    // if no pool register is available, just use the standard designated register (home)
-                    Self::load_var(mir, sym.reg.unwrap_or(base), &sym.loc)
-                }
-                VarStatus::Mid => {
-                    // if no pool register is available, just use the standard designated register (home)
-                    // note that this means reloading the variable at each use
-                    sym.reg
-                        .unwrap_or_else(|| Self::load_var(mir, base, &sym.loc))
-                }
-                VarStatus::Last => {
-                    if let Some(r) = sym.reg {
-                        // ir.fmov(reg(base), reg(r));
-                        pool.push(r);
-                        sym.reg = None;
-                        r
-                    } else {
-                        Self::load_var(mir, base, &sym.loc)
-                    }
-                }
-                VarStatus::Singular | VarStatus::Unknown => {
-                    // if a variable is Singular, i.e., is used only once, don't
-                    // bother with caching
-                    Self::load_var(mir, base, &sym.loc)
-                }
-            };
+    fn compile_var(&self, mir: &mut Mir, base: u8) -> Result<u8> {
+        if let Node::Var { sym, .. } = &self {
+            let sym = sym.borrow();
+            let dst = Self::load_var(mir, base, &sym.loc);
 
             Ok(dst)
         } else {
@@ -436,11 +264,10 @@ impl Node {
         }
     }
 
-    fn compile_unary(&self, mir: &mut Mir, base: u8, pool: &mut Pool) -> Result<u8> {
+    fn compile_unary(&self, mir: &mut Mir, base: u8) -> Result<u8> {
         if let Node::Unary { op, arg, power, .. } = self {
             let dst = base + self.ershov_number() - 1;
-            let r = arg.compile(mir, base, pool)?;
-            pool.release(r);
+            let r = arg.compile(mir, base)?;
 
             match op.as_str() {
                 "neg" => mir.neg(reg(dst), reg(r)),
@@ -470,7 +297,7 @@ impl Node {
         }
     }
 
-    fn compile_binary(&self, mir: &mut Mir, base: u8, pool: &mut Pool) -> Result<u8> {
+    fn compile_binary(&self, mir: &mut Mir, base: u8) -> Result<u8> {
         if let Node::Binary {
             op,
             left,
@@ -480,9 +307,7 @@ impl Node {
             ..
         } = self
         {
-            let (dst, l, r) = self.alloc(mir, base, left, right, pool)?;
-            pool.release(l);
-            pool.release(r);
+            let (dst, l, r) = self.alloc(mir, base, left, right)?;
 
             match op.as_str() {
                 "plus" => mir.plus(reg(dst), reg(l), reg(r)),
@@ -512,14 +337,7 @@ impl Node {
         }
     }
 
-    fn alloc(
-        &self,
-        mir: &mut Mir,
-        base: u8,
-        left: &Node,
-        right: &Node,
-        pool: &mut Pool,
-    ) -> Result<(u8, u8, u8)> {
+    fn alloc(&self, mir: &mut Mir, base: u8, left: &Node, right: &Node) -> Result<(u8, u8, u8)> {
         let el = left.ershov_number();
         let er = right.ershov_number();
         let dst = base + self.ershov_number() - 1;
@@ -529,14 +347,14 @@ impl Node {
 
         if dst < mir.config.count_scratch() {
             if el == er {
-                l = left.compile(mir, base + 1, pool)?;
-                r = right.compile(mir, base, pool)?;
+                l = left.compile(mir, base + 1)?;
+                r = right.compile(mir, base)?;
             } else if el > er {
-                l = left.compile(mir, base, pool)?;
-                r = right.compile(mir, base, pool)?;
+                l = left.compile(mir, base)?;
+                r = right.compile(mir, base)?;
             } else {
-                r = right.compile(mir, base, pool)?;
-                l = left.compile(mir, base, pool)?;
+                r = right.compile(mir, base)?;
+                l = left.compile(mir, base)?;
             }
         } else {
             return Err(anyhow!(

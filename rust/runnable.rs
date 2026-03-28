@@ -140,8 +140,7 @@ impl Application {
     }
 
     pub fn as_applet(&self) -> &Applet {
-        let app = unsafe { std::mem::transmute(self) };
-        app
+        unsafe { std::mem::transmute(self) }
     }
 
     /********************* compile_* functions *************************/

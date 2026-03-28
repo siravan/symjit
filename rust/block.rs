@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use crate::config::Config;
 use crate::mir::Mir;
-use crate::node::{Node, VarStatus};
+use crate::node::Node;
 use crate::statement::Statement;
 use crate::symbol::{Loc, Symbol, SymbolTable};
 
@@ -92,7 +92,7 @@ impl Block {
 
         Node::Var {
             sym,
-            status: VarStatus::Unknown,
+            // status: VarStatus::Unknown,
         }
     }
 
@@ -149,7 +149,7 @@ impl Block {
         match node {
             Node::Void => Node::Void,
             Node::Const { val, idx } => Node::Const { val, idx },
-            Node::Var { sym, status } => Node::Var { sym, status },
+            Node::Var { sym } => Node::Var { sym },
             Node::Unary { op, arg, power, .. } => self.trim_unary(&op, *arg, power),
             Node::Binary {
                 op,
@@ -386,7 +386,7 @@ impl Block {
         match node {
             Node::Void => Node::Void,
             Node::Const { val, idx } => Node::Const { val, idx },
-            Node::Var { sym, status } => Node::Var { sym, status },
+            Node::Var { sym } => Node::Var { sym },
             Node::Unary {
                 op, arg, power, h, ..
             } => self.common_subexpr(cs, ls, h).unwrap_or_else(|| {
