@@ -86,6 +86,7 @@ pub struct AmdGenerator {
     amd: Amd,
     family: AmdFamily,
     config: Config,
+    last_load: usize,
 }
 
 #[cfg(target_family = "windows")]
@@ -121,6 +122,7 @@ impl AmdGenerator {
             amd: Amd::new(DataType::F64),
             family,
             config,
+            last_load: 0,
         }
     }
 
@@ -409,6 +411,57 @@ impl AmdGenerator {
             self.amd.add_rsp(size);
         }
     }
+
+    /*
+     * fuse_load_math tries to fuse the last two instructions if
+     * the last one is a math-op and the one before is a load
+     * instruction. For example,
+     *
+     * vmovsd xmm0, [rbp + 0x1234]
+     * vaddsd xmm2, xmm3, xmm0
+     *
+     * fuses into
+     *
+     * vaddsd xmm2, xmm3, [rbp + 0x1234]
+     *
+     */
+    fn fuse_load_math(&mut self) {
+        let ip0 = self.last_load; // the address of the last load instruction
+        let ip1 = self.amd.a.ip() - 4; // the address of the last math op
+
+        if ip1 - ip0 > 10 {
+            return;
+        }
+
+        let b: &mut [u8] = &mut self.amd.a.buf;
+
+        // Conditions:
+        //
+        // the first bytes are 0xc5, i.e., VEX prefix
+        // 0x10 means a load instruction (vmovsd or vmovpd)
+        // `b[ip0 + 3] & 0x38 == 0` means the destination of the load istruction
+        // is xmm0.
+        // `b[ip1 + 3] & 0x07 == 0` means the second source of the math op
+        // is xmm0.
+        //
+        // Note that `Node.load_math` specifically uses Reg::Ret (i.e., xmm0)
+        // to signal this function it is safe to fuse the operations.
+        if b[ip1] == 0xc5 && b[ip0] == 0xc5 && b[ip0 + 2] == 0x10 {
+            if b[ip0 + 3] & 0x38 == 0 && b[ip1 + 3] & 0x07 == 0 {
+                b[ip0 + 1] = b[ip1 + 1]; // copy VEX prefix
+                b[ip0 + 2] = b[ip1 + 2]; // copy OpCode
+
+                // Fusing ModR/M byte. Destination comes from the math op and
+                // source comes the load instruction.
+                b[ip0 + 3] = b[ip0 + 3] | (b[ip1 + 3] & 0x38);
+
+                for _ in 0..4 {
+                    self.amd.a.buf.pop().unwrap();
+                }
+                return;
+            }
+        }
+    }
 }
 
 impl Generator for AmdGenerator {
@@ -504,6 +557,8 @@ impl Generator for AmdGenerator {
     }
 
     fn load_const(&mut self, dst: Reg, idx: u32) {
+        self.last_load = self.amd.a.ip();
+
         let label = format!("_const_{}_", idx);
 
         select!(
@@ -517,6 +572,8 @@ impl Generator for AmdGenerator {
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
+        self.last_load = self.amd.a.ip();
+
         select!(
             self,
             movsd_xmm_mem,
@@ -545,6 +602,8 @@ impl Generator for AmdGenerator {
     }
 
     fn load_param(&mut self, dst: Reg, idx: u32) {
+        self.last_load = self.amd.a.ip();
+
         if self.config.symbolica() {
             select!(
                 self,
@@ -569,6 +628,8 @@ impl Generator for AmdGenerator {
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
+        self.last_load = self.amd.a.ip();
+
         select!(
             self,
             movsd_xmm_mem,
@@ -642,18 +703,22 @@ impl Generator for AmdGenerator {
 
     fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, addsd, vaddsd, vaddpd, dst, s1, s2, true);
+        self.fuse_load_math();
     }
 
     fn minus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, subsd, vsubsd, vsubpd, dst, s1, s2, false);
+        self.fuse_load_math();
     }
 
     fn times(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, mulsd, vmulsd, vmulpd, dst, s1, s2, true);
+        self.fuse_load_math();
     }
 
     fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, divsd, vdivsd, vdivpd, dst, s1, s2, false);
+        self.fuse_load_math();
     }
 
     fn real(&mut self, dst: Reg, s1: Reg) {

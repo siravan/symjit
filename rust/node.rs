@@ -9,7 +9,7 @@ use std::rc::Rc;
 // use crate::generator::Generator;
 use crate::mir::Mir;
 use crate::symbol::{Loc, Symbol};
-use crate::utils::reg;
+use crate::utils::{reg, Reg};
 
 const COMMUTATIVE: &[&str] = &["plus", "times", "eq", "neq", "and", "or", "xor"];
 
@@ -307,6 +307,10 @@ impl Node {
             ..
         } = self
         {
+            if let Ok(dst) = self.load_math(mir, base, op, left, right) {
+                return Ok(dst);
+            }
+
             let (dst, l, r) = self.alloc(mir, base, left, right)?;
 
             match op.as_str() {
@@ -363,6 +367,67 @@ impl Node {
         }
 
         Ok((dst, l, r))
+    }
+
+    fn is_leaf(&self) -> bool {
+        matches!(self, Node::Const { .. } | Node::Var { .. })
+    }
+
+    fn compile_leaf(&self, mir: &mut Mir) -> bool {
+        match self {
+            Node::Const { idx, .. } => {
+                mir.load_const(Reg::Ret, *idx);
+                true
+            }
+            Node::Var { sym } => {
+                match sym.borrow().loc {
+                    Loc::Stack(idx) => mir.load_stack(Reg::Ret, idx),
+                    Loc::Mem(idx) => mir.load_mem(Reg::Ret, idx),
+                    Loc::Param(idx) => mir.load_param(Reg::Ret, idx),
+                };
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn load_math(
+        &self,
+        mir: &mut Mir,
+        base: u8,
+        op: &str,
+        left: &Node,
+        right: &Node,
+    ) -> Result<u8> {
+        let dst = base + self.ershov_number() - 1;
+
+        if (op == "plus" || op == "times" || op == "minus" || op == "divide") && right.is_leaf() {
+            let l = left.compile(mir, base)?;
+            right.compile_leaf(mir);
+
+            match op {
+                "plus" => mir.plus(reg(dst), reg(l), Reg::Ret),
+                "minus" => mir.minus(reg(dst), reg(l), Reg::Ret),
+                "times" => mir.times(reg(dst), reg(l), Reg::Ret),
+                "divide" => mir.divide(reg(dst), reg(l), Reg::Ret),
+                _ => unreachable!(),
+            }
+            return Ok(dst);
+        }
+
+        if (op == "plus" || op == "times") && left.is_leaf() {
+            let r = right.compile(mir, base)?;
+            left.compile_leaf(mir);
+
+            match op {
+                "plus" => mir.plus(reg(dst), reg(r), Reg::Ret),
+                "times" => mir.times(reg(dst), reg(r), Reg::Ret),
+                _ => unreachable!(),
+            }
+            return Ok(dst);
+        }
+
+        Err(anyhow!("cannot fuse!"))
     }
 
     pub fn address(&self) -> Result<usize> {
