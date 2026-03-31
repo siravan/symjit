@@ -1433,13 +1433,16 @@ impl Mir {
         q2: &Instruction,
     ) -> usize {
         let fastmath = self.config.fastmath();
+        let is_complex = self.config.is_complex(); // TODO: fix the FMA bug for complex noted on `runtests complex`
 
-        if self.fuse_save3(code, q0, q1, q2) || (fastmath && self.fuse_fma3(code, q0, q1, q2)) {
+        if self.fuse_save3(code, q0, q1, q2)
+            || (fastmath && !is_complex && self.fuse_fma3(code, q0, q1, q2))
+        {
             3
         } else if self.fuse_op_mov(code, q0, q1)
             || self.fuse_load(code, q0, q1)
             || self.fuse_save(code, q0, q1)
-            || (fastmath && self.fuse_fma(code, q0, q1))
+            || (fastmath && !is_complex && self.fuse_fma(code, q0, q1))
         {
             2
         } else {

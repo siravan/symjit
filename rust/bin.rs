@@ -475,6 +475,13 @@ mod testing {
         Ok(())
     }
 
+    use numerica::domains::float::Complex;
+    use symbolica::{
+        atom::AtomCore,
+        evaluate::{FunctionMap, OptimizationSettings},
+        parse,
+    };
+
     fn pass(what: &str) {
         println!("**** test {:?} passed. ****", what);
     }

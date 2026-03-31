@@ -377,7 +377,7 @@ impl Node {
         let t = if mir.config.is_complex() {
             Reg::Temp
         } else {
-            Reg::Reg
+            Reg::Ret
         };
 
         match self {
