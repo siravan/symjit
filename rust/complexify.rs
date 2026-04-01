@@ -642,13 +642,13 @@ impl Generator for Complexifier {
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {
         let loc = Loc::Stack(idx);
 
-        // self.ensure_complex(true_val);
-        // self.ensure_complex(false_val);
+        self.ensure_complex(true_val);
+        self.ensure_complex(false_val);
 
         self.mir.ifelse(re(dst), re(true_val), re(false_val), loc);
         self.mir.ifelse(im(dst), im(true_val), im(false_val), loc);
 
-        // self.set_reg_complex(dst);
-        self.promote_real(dst, true_val, false_val);
+        self.set_reg_complex(dst);
+        // self.promote_real(dst, true_val, false_val);
     }
 }

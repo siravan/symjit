@@ -57,7 +57,7 @@ macro_rules! imm16 {
 macro_rules! ofs_pc {
     ($x:expr) => {{
         let x = $x;
-        assert!(x < 1048576);
+        assert!(x.abs() < 1048576);
         ((x << 3) & 0x00ffffe0) as u32
     }};
 }
@@ -329,7 +329,11 @@ macro_rules! arm {
     };
 
     // misc
-    (b label($ofs:expr)) => { 0x14000000 | ($ofs as u32 >> 2) & 0x00ffffff };
+    (b label($ofs:expr)) => {{
+            let ofs = $ofs;
+            assert!(ofs.abs() < 1 << 27);
+            0x14000000 | (ofs as u32 >> 2) & 0x03ffffff
+    }};
     (b.eq label($ofs:expr)) => { 0x54000000 | ofs_pc!($ofs) };
     (b.ne label($ofs:expr)) => { 0x54000001 | ofs_pc!($ofs) };
     (b.lt label($ofs:expr)) => { 0x5400000B | ofs_pc!($ofs) };

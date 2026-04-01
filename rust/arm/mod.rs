@@ -212,11 +212,16 @@ impl Generator for ArmGenerator {
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
         self.emit(arm! {fcmp d(ϕ(cond)), #0.0});
 
+        let l = format!(".J{}", self.a.ip());
+
         if is_else {
-            self.jump(label, 0, |offset, _| arm! {b.eq label(offset)});
+            self.jump(&l, 0, |offset, _| arm! {b.ne label(offset)});
         } else {
-            self.jump(label, 0, |offset, _| arm! {b.ne label(offset)});
+            self.jump(&l, 0, |offset, _| arm! {b.eq label(offset)});
         }
+
+        self.branch(label);
+        self.set_label(&l);
     }
 
     //***********************************
