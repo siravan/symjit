@@ -54,6 +54,14 @@ pub enum BinOp {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+pub enum LoadMathOp {
+    Plus,
+    Minus,
+    Times,
+    Divide,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FusedOp {
     MulAdd,    // + a * b + c
     NegMulAdd, // - a * b + c
@@ -120,6 +128,12 @@ pub enum Instruction {
         label: String,
         is_else: bool,
     },
+    LoadMath {
+        op: LoadMathOp,
+        dst: Reg,
+        s1: Reg,
+        loc: Loc,
+    },
 }
 
 impl fmt::Debug for Instruction {
@@ -163,6 +177,9 @@ impl fmt::Debug for Instruction {
                 } else {
                     write!(f, "if {:?} goto {:?}", &cond, label)
                 }
+            }
+            Self::LoadMath { op, dst, s1, loc } => {
+                write!(f, "{:?} := {:?} {:?} {:?}", &dst, &s1, &op, &loc)
             }
         }
     }
@@ -603,6 +620,42 @@ impl Mir {
         });
     }
 
+    pub fn plus_load(&mut self, dst: Reg, s1: Reg, loc: Loc) {
+        self.push(Instruction::LoadMath {
+            op: LoadMathOp::Plus,
+            dst,
+            s1,
+            loc,
+        });
+    }
+
+    pub fn minus_load(&mut self, dst: Reg, s1: Reg, loc: Loc) {
+        self.push(Instruction::LoadMath {
+            op: LoadMathOp::Minus,
+            dst,
+            s1,
+            loc,
+        });
+    }
+
+    pub fn times_load(&mut self, dst: Reg, s1: Reg, loc: Loc) {
+        self.push(Instruction::LoadMath {
+            op: LoadMathOp::Times,
+            dst,
+            s1,
+            loc,
+        });
+    }
+
+    pub fn divide_load(&mut self, dst: Reg, s1: Reg, loc: Loc) {
+        self.push(Instruction::LoadMath {
+            op: LoadMathOp::Divide,
+            dst,
+            s1,
+            loc,
+        });
+    }
+
     pub fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.push(Instruction::Bi {
             op: BinOp::GreaterThan,
@@ -834,6 +887,34 @@ impl Mir {
         Self::set(regs, dst, val);
     }
 
+    fn exec_load_math(
+        mem: &mut [f64],
+        stack: &mut [f64],
+        regs: &mut [f64],
+        params: &[f64],
+        op: LoadMathOp,
+        dst: Reg,
+        s1: Reg,
+        loc: Loc,
+    ) {
+        let s1 = Self::get(regs, s1);
+
+        let y = match loc {
+            Loc::Mem(idx) => mem[idx as usize],
+            Loc::Stack(idx) => stack[idx as usize],
+            Loc::Param(idx) => params[idx as usize],
+        };
+
+        let val = match op {
+            LoadMathOp::Plus => s1 + y,
+            LoadMathOp::Minus => s1 - y,
+            LoadMathOp::Times => s1 * y,
+            LoadMathOp::Divide => s1 / y,
+        };
+
+        Self::set(regs, dst, val);
+    }
+
     pub fn exec_instruction(
         &self,
         mem: &mut [f64],
@@ -962,6 +1043,9 @@ impl Mir {
                         ip = self.labels.get(label).unwrap() - 1
                     }
                 }
+                Instruction::LoadMath { op, dst, s1, loc } => {
+                    Self::exec_load_math(mem, stack, regs, params, *op, *dst, *s1, *loc);
+                }
             }
 
             ip += 1;
@@ -1072,6 +1156,19 @@ impl Mir {
                     label,
                     is_else,
                 } => ir.branch_if(*cond, label, *is_else),
+                Instruction::LoadMath { op, dst, s1, loc } => {
+                    match loc {
+                        Loc::Mem(idx) => ir.load_mem(Reg::Ret, *idx),
+                        Loc::Stack(idx) => ir.load_stack(Reg::Ret, *idx),
+                        Loc::Param(idx) => ir.load_param(Reg::Ret, *idx),
+                    }
+                    match op {
+                        LoadMathOp::Plus => ir.plus(*dst, *s1, Reg::Ret),
+                        LoadMathOp::Minus => ir.minus(*dst, *s1, Reg::Ret),
+                        LoadMathOp::Times => ir.times(*dst, *s1, Reg::Ret),
+                        LoadMathOp::Divide => ir.divide(*dst, *s1, Reg::Ret),
+                    }
+                }
             }
         }
 

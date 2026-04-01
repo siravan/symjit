@@ -272,10 +272,14 @@ impl ColoringAllocator {
                         });
                     }
                 }
-                _ => {
-                    // Call and Label, both should reset
+                Instruction::Call { .. } | Instruction::Label { .. } => {
                     self.push(ins.clone());
                     self.reset();
+                }
+                Instruction::LoadMath { op, dst, s1, loc } => {
+                    let s1 = self.consume(s1);
+                    let dst = self.produce(dst);
+                    self.push(Instruction::LoadMath { op, dst, s1, loc });
                 }
             }
         }
@@ -383,8 +387,16 @@ impl ColoringAllocator {
                         });
                     }
                 }
-                _ => {
+                Instruction::Call { .. } | Instruction::Label { .. } => {
                     self.push(ins.clone());
+                }
+                Instruction::LoadMath { op, dst, s1, loc } => {
+                    self.push(Instruction::LoadMath {
+                        op,
+                        dst: self.alloc(dst),
+                        s1: self.alloc(s1),
+                        loc,
+                    });
                 }
             }
         }
@@ -467,9 +479,9 @@ impl GreedyAllocator {
         // logical (colored) registers
         self.color()?;
         self.contract()?;
-
         // contract the code by removing unnecessary instructions
         mir.code = std::mem::take(&mut self.code);
+
         Ok(())
     }
 
@@ -619,10 +631,14 @@ impl GreedyAllocator {
                         });
                     }
                 }
-                _ => {
-                    // Call and Label, both should reset
+                Instruction::Call { .. } | Instruction::Label { .. } => {
                     self.push(ins.clone());
                     self.reset_regs();
+                }
+                Instruction::LoadMath { op, dst, s1, loc } => {
+                    let s1 = self.consume(ip, s1);
+                    let dst = self.produce(ip, dst);
+                    self.push(Instruction::LoadMath { op, dst, s1, loc });
                 }
             }
         }
@@ -789,6 +805,12 @@ impl GreedyAllocator {
                     }
                     self.locs.insert(cond, 0);
                 }
+                Instruction::Branch { .. } => {
+                    if let Instruction::Branch { label } = ins.clone() {
+                        self.push(Instruction::Branch { label });
+                    }
+                    self.reset_allocs(); // needed?
+                }
                 Instruction::BranchIf { .. } => {
                     if let Instruction::BranchIf {
                         cond,
@@ -805,9 +827,14 @@ impl GreedyAllocator {
                         self.reset_allocs();
                     }
                 }
-                _ => {
+                Instruction::Call { .. } | Instruction::Label { .. } => {
                     self.push(ins.clone());
                     self.reset_allocs();
+                }
+                Instruction::LoadMath { op, dst, s1, loc } => {
+                    let s1 = self.deallocate(ip, s1);
+                    let (dst, _) = self.allocate(dst, None);
+                    self.push(Instruction::LoadMath { op, dst, s1, loc });
                 }
             }
         }

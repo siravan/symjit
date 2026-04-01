@@ -285,11 +285,11 @@ impl Builder {
         }
 
         if opt_level >= 3 {
-            ColoringAllocator::new(self.config.clone()).optimize(&mut mir)?;
+            // ColoringAllocator::new(self.config.clone()).optimize(&mut mir)?;
         }
 
         // let old_stack_size = self.stack_size();
-        self.count_stack = Compactor::new(self.config.clone()).compact(&mut mir).ok();
+        // self.count_stack = Compactor::new(self.config.clone()).compact(&mut mir).ok();
         // let new_stack_size = self.stack_size();
         // println!("compaction: {:?} => {:?}", old_stack_size, new_stack_size);
 

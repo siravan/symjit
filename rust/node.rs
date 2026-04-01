@@ -370,31 +370,37 @@ impl Node {
     }
 
     fn is_leaf(&self) -> bool {
-        matches!(self, Node::Const { .. } | Node::Var { .. })
+        // matches!(self, Node::Const { .. } | Node::Var { .. })
+        matches!(self, Node::Var { .. })
     }
 
-    fn compile_leaf(&self, mir: &mut Mir) -> Option<Reg> {
-        let t = if mir.config.is_complex() {
-            Reg::Temp
+    fn compile_leaf(&self /*, mir: &mut Mir*/) -> Option<Loc> {
+        if let Node::Var { sym } = self {
+            Some(sym.borrow().loc)
         } else {
-            Reg::Ret
-        };
-
-        match self {
-            Node::Const { idx, .. } => {
-                mir.load_const(t, *idx);
-                Some(t)
-            }
-            Node::Var { sym } => {
-                match sym.borrow().loc {
-                    Loc::Stack(idx) => mir.load_stack(t, idx),
-                    Loc::Mem(idx) => mir.load_mem(t, idx),
-                    Loc::Param(idx) => mir.load_param(t, idx),
-                };
-                Some(t)
-            }
-            _ => None,
+            None
         }
+        // let t = if mir.config.is_complex() {
+        //     Reg::Temp
+        // } else {
+        //     Reg::Ret
+        // };
+
+        // match self {
+        //     Node::Const { idx, .. } => {
+        //         mir.load_const(t, *idx);
+        //         Some(t)
+        //     }
+        //     Node::Var { sym } => {
+        //         match sym.borrow().loc {
+        //             Loc::Stack(idx) => mir.load_stack(t, idx),
+        //             Loc::Mem(idx) => mir.load_mem(t, idx),
+        //             Loc::Param(idx) => mir.load_param(t, idx),
+        //         };
+        //         Some(t)
+        //     }
+        //     _ => None,
+        // }
     }
 
     fn load_math(
@@ -409,13 +415,17 @@ impl Node {
 
         if (op == "plus" || op == "times" || op == "minus") && right.is_leaf() {
             let l = left.compile(mir, base)?;
-            let t = right.compile_leaf(mir).unwrap();
+            let t = right.compile_leaf().unwrap();
 
             match op {
-                "plus" => mir.plus(reg(dst), reg(l), t),
-                "minus" => mir.minus(reg(dst), reg(l), t),
-                "times" => mir.times(reg(dst), reg(l), t),
-                "divide" => mir.divide(reg(dst), reg(l), t),
+                // "plus" => mir.plus(reg(dst), reg(l), t),
+                // "minus" => mir.minus(reg(dst), reg(l), t),
+                // "times" => mir.times(reg(dst), reg(l), t),
+                // "divide" => mir.divide(reg(dst), reg(l), t),
+                "plus" => mir.plus_load(reg(dst), reg(l), t),
+                "minus" => mir.minus_load(reg(dst), reg(l), t),
+                "times" => mir.times_load(reg(dst), reg(l), t),
+                "divide" => mir.divide_load(reg(dst), reg(l), t),
                 _ => unreachable!(),
             }
             return Ok(dst);
@@ -423,11 +433,13 @@ impl Node {
 
         if (op == "plus" || op == "times") && left.is_leaf() {
             let r = right.compile(mir, base)?;
-            let t = left.compile_leaf(mir).unwrap();
+            let t = left.compile_leaf().unwrap();
 
             match op {
-                "plus" => mir.plus(reg(dst), reg(r), t),
-                "times" => mir.times(reg(dst), reg(r), t),
+                // "plus" => mir.plus(reg(dst), reg(r), t),
+                // "times" => mir.times(reg(dst), reg(r), t),
+                "plus" => mir.plus_load(reg(dst), reg(r), t),
+                "times" => mir.times_load(reg(dst), reg(r), t),
                 _ => unreachable!(),
             }
             return Ok(dst);
