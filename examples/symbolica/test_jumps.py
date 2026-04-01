@@ -18,8 +18,7 @@ count_params = f_without_simd.complex_compiler.count_params // 2
 N = 10000
 
 X = np.random.rand(N, count_params) + np.random.rand(N, count_params) * 1j
-
-# X[:, 48:67] = X[:, 48:67] > 0.99
+X[:, 48:67] = X[:, 48:67] > 0.75
 
 Y_without_simd = f_without_simd.evaluate_complex(X)
 

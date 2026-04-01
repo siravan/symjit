@@ -1112,7 +1112,6 @@ impl Translator {
             // a bug in some programs. The effects are not local and likely related
             // to instruction movements.
 
-            /*
             let cond = self.conds.pop().unwrap();
             self.conds.push(cond);
             let if_clause = Expr::binary("eq", &self.expr(&cond, false), &Expr::from(0.0));
@@ -1121,7 +1120,6 @@ impl Translator {
                 id,
                 is_else: true,
             }));
-            */
         } else {
             self.eqs.push(Expr::special(&Expr::Branch { id }));
         }
