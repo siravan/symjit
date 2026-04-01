@@ -212,11 +212,16 @@ impl Generator for ArmGenerator {
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
         self.emit(arm! {fcmp d(ϕ(cond)), #0.0});
 
+        let l = format!(".J{}", self.a.ip());
+
         if is_else {
-            self.jump(label, 0, |offset, _| arm! {b.eq label(offset)});
+            self.jump(&l, 0, |offset, _| arm! {b.ne label(offset)});
         } else {
-            self.jump(label, 0, |offset, _| arm! {b.ne label(offset)});
+            self.jump(&l, 0, |offset, _| arm! {b.eq label(offset)});
         }
+
+        self.branch(label);
+        self.set_label(&l);
     }
 
     //***********************************
@@ -853,19 +858,32 @@ impl Generator for ArmSimdGenerator {
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
         self.emit(arm! {umov x(0), v(ϕ(cond)).d[0]});
         self.emit(arm! {umov x(1), v(ϕ(cond)).d[1]});
-        // self.emit(arm! {fcmp d(ϕ(cond)), #0.0});
         self.emit(arm! {tst x(0), x(1)});
 
+        let l1 = format!(".J{}", self.a.ip());
+        let l2 = format!(".K{}", self.a.ip());
+
         if is_else {
-            self.jump(label, 0, |offset, _| arm! {b.eq label(offset)});
+            self.jump(&l1, 0, |offset, _| arm! {b.ne label(offset)});
         } else {
-            self.jump(label, 0, |offset, _| arm! {b.ne label(offset)});
+            self.jump(&l2, 0, |offset, _| arm! {b.eq label(offset)});
         }
+
+        self.branch(label);
+        self.set_label(&l1);
 
         if !self.config.simd_branch() {
             self.emit(arm! {orr x(0), x(0), x(1)});
             self.emit(arm! {tst x(0), x(0)});
-            self.jump("@epilogue", 0, |offset, _| arm! {b.ne label(offset)});
+
+            if is_else {
+                self.jump(&l2, 0, |offset, _| arm! {b.eq label(offset)});
+            } else {
+                self.jump(&l2, 0, |offset, _| arm! {b.ne label(offset)});
+            }
+
+            self.branch("@epilogue");
+            self.set_label(&l2);
         }
     }
 
