@@ -866,7 +866,7 @@ impl Generator for ArmSimdGenerator {
         if is_else {
             self.jump(&l1, 0, |offset, _| arm! {b.ne label(offset)});
         } else {
-            self.jump(&l2, 0, |offset, _| arm! {b.eq label(offset)});
+            self.jump(&l1, 0, |offset, _| arm! {b.eq label(offset)});
         }
 
         self.branch(label);
@@ -876,12 +876,7 @@ impl Generator for ArmSimdGenerator {
             self.emit(arm! {orr x(0), x(0), x(1)});
             self.emit(arm! {tst x(0), x(0)});
 
-            if is_else {
-                self.jump(&l2, 0, |offset, _| arm! {b.eq label(offset)});
-            } else {
-                self.jump(&l2, 0, |offset, _| arm! {b.ne label(offset)});
-            }
-
+            self.jump(&l2, 0, |offset, _| arm! {b.eq label(offset)});
             self.branch("@epilogue");
             self.set_label(&l2);
         }
