@@ -511,6 +511,10 @@ impl Application {
                     false
                 }
             }
+            "bytecode" => {
+                self.bytecode.dump(name);
+                true
+            }
             _ => false,
         }
     }
