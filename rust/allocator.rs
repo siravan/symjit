@@ -282,6 +282,11 @@ impl ColoringAllocator {
                     self.push(Instruction::LoadMath { op, dst, s1, loc });
                     self.loads.insert(loc);
                 }
+                Instruction::LoadConstMath { op, dst, s1, idx } => {
+                    let s1 = self.consume(s1);
+                    let dst = self.produce(dst);
+                    self.push(Instruction::LoadConstMath { op, dst, s1, idx });
+                }
             }
         }
     }
@@ -397,6 +402,14 @@ impl ColoringAllocator {
                         dst: self.alloc(dst),
                         s1: self.alloc(s1),
                         loc,
+                    });
+                }
+                Instruction::LoadConstMath { op, dst, s1, idx } => {
+                    self.push(Instruction::LoadConstMath {
+                        op,
+                        dst: self.alloc(dst),
+                        s1: self.alloc(s1),
+                        idx,
                     });
                 }
             }
@@ -641,6 +654,11 @@ impl GreedyAllocator {
                     let dst = self.produce(ip, dst);
                     self.push(Instruction::LoadMath { op, dst, s1, loc });
                 }
+                Instruction::LoadConstMath { op, dst, s1, idx } => {
+                    let s1 = self.consume(ip, s1);
+                    let dst = self.produce(ip, dst);
+                    self.push(Instruction::LoadConstMath { op, dst, s1, idx });
+                }
             }
         }
     }
@@ -836,6 +854,11 @@ impl GreedyAllocator {
                     let s1 = self.deallocate(ip, s1);
                     let (dst, _) = self.allocate(dst, None);
                     self.push(Instruction::LoadMath { op, dst, s1, loc });
+                }
+                Instruction::LoadConstMath { op, dst, s1, idx } => {
+                    let s1 = self.deallocate(ip, s1);
+                    let (dst, _) = self.allocate(dst, None);
+                    self.push(Instruction::LoadConstMath { op, dst, s1, idx });
                 }
             }
         }

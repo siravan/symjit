@@ -134,6 +134,12 @@ pub enum Instruction {
         s1: Reg,
         loc: Loc,
     },
+    LoadConstMath {
+        op: LoadMathOp,
+        dst: Reg,
+        s1: Reg,
+        idx: u32,
+    },
 }
 
 impl fmt::Debug for Instruction {
@@ -180,6 +186,9 @@ impl fmt::Debug for Instruction {
             }
             Self::LoadMath { op, dst, s1, loc } => {
                 write!(f, "{:?} := {:?} {:?} {:?}", &dst, &s1, &op, &loc)
+            }
+            Self::LoadConstMath { op, dst, s1, idx } => {
+                write!(f, "{:?} := {:?} {:?} consts[{:?}]", &dst, &s1, &op, &idx)
             }
         }
     }
@@ -915,6 +924,19 @@ impl Mir {
         Self::set(regs, dst, val);
     }
 
+    fn exec_load_const_math(regs: &mut [f64], op: LoadMathOp, dst: Reg, s1: Reg, y: f64) {
+        let s1 = Self::get(regs, s1);
+
+        let val = match op {
+            LoadMathOp::Plus => s1 + y,
+            LoadMathOp::Minus => s1 - y,
+            LoadMathOp::Times => s1 * y,
+            LoadMathOp::Divide => s1 / y,
+        };
+
+        Self::set(regs, dst, val);
+    }
+
     pub fn exec_instruction(
         &self,
         mem: &mut [f64],
@@ -1046,6 +1068,9 @@ impl Mir {
                 Instruction::LoadMath { op, dst, s1, loc } => {
                     Self::exec_load_math(mem, stack, regs, params, *op, *dst, *s1, *loc);
                 }
+                Instruction::LoadConstMath { op, dst, s1, idx } => {
+                    Self::exec_load_const_math(regs, *op, *dst, *s1, self.consts[*idx as usize]);
+                }
             }
 
             ip += 1;
@@ -1167,6 +1192,23 @@ impl Mir {
                         Loc::Stack(idx) => ir.load_stack(t, *idx),
                         Loc::Param(idx) => ir.load_param(t, *idx),
                     }
+                    match op {
+                        LoadMathOp::Plus => ir.plus(*dst, *s1, t),
+                        LoadMathOp::Minus => ir.minus(*dst, *s1, t),
+                        LoadMathOp::Times => ir.times(*dst, *s1, t),
+                        LoadMathOp::Divide => ir.divide(*dst, *s1, t),
+                    }
+                    ir.fuse_load_math();
+                }
+                Instruction::LoadConstMath { op, dst, s1, idx } => {
+                    let t = if self.config.is_complex() {
+                        Reg::Temp
+                    } else {
+                        Reg::Ret
+                    };
+
+                    ir.load_const(*dst, *idx);
+
                     match op {
                         LoadMathOp::Plus => ir.plus(*dst, *s1, t),
                         LoadMathOp::Minus => ir.minus(*dst, *s1, t),
