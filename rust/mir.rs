@@ -1091,7 +1091,7 @@ impl Mir {
                     )
                 }
                 Instruction::Label { .. } => {}
-                Instruction::Branch { label } => ip = self.labels.get(label).unwrap() - 1,
+                Instruction::Branch { label } => ip = *self.labels.get(label).unwrap(),
                 Instruction::BranchIf {
                     cond,
                     label,
@@ -1234,7 +1234,7 @@ impl Mir {
                         LoadMathOp::Times => ir.times(*dst, *s1, t),
                         LoadMathOp::Divide => ir.divide(*dst, *s1, t),
                     }
-                    ir.fuse_load_math();
+                    //ir.fuse_load_math();
                 }
                 Instruction::LoadConstMath { op, dst, s1, idx } => {
                     let t = if self.config.is_complex() {
