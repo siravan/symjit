@@ -72,10 +72,9 @@ impl Complexifier {
 
     pub fn complexify(&mut self, mir: &Mir) -> Result<Mir> {
         self.mir.consts = mir.consts.clone();
-        self.mir.labels = mir.labels.clone();
-
+        // self.mir.labels = mir.labels.clone();
         mir.rerun(self)?;
-
+        self.mir.populate_labels();
         Ok(std::mem::take(&mut self.mir))
     }
 

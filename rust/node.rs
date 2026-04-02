@@ -374,7 +374,7 @@ impl Node {
     }
 
     fn is_leaf_var(&self) -> bool {
-        matches!(self, Node::Var { .. })
+        false && matches!(self, Node::Var { .. })
     }
 
     fn compile_leaf_var(&self /*, mir: &mut Mir*/) -> Option<Loc> {

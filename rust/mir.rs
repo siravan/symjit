@@ -1091,14 +1091,14 @@ impl Mir {
                     )
                 }
                 Instruction::Label { .. } => {}
-                Instruction::Branch { label } => ip = *self.labels.get(label).unwrap(),
+                Instruction::Branch { label } => ip = *self.labels.get(label).unwrap() - 1,
                 Instruction::BranchIf {
                     cond,
                     label,
                     is_else,
                 } => {
                     if (Self::get(regs, *cond) != 0.0) ^ is_else {
-                        ip = self.labels.get(label).unwrap() - 1
+                        ip = *self.labels.get(label).unwrap() - 1
                     }
                 }
                 Instruction::LoadMath { op, dst, s1, loc } => {

@@ -517,8 +517,8 @@ impl Generator for AmdGenerator {
         // Note that `Node.load_math` specifically uses Reg::Ret (i.e., xmm0)
         // to signal this function it is safe to fuse the operations.
         if b[ip1] == 0xc5 && b[ip0] == 0xc5 && b[ip0 + 2] == 0x10 {
-            //if b[ip0 + 3] & 0x38 == 0 && b[ip1 + 3] & 0x07 == 0 {
-            if (b[ip0 + 3] & 0x38) >> 3 == b[ip1 + 3] & 0x07 {
+            if b[ip0 + 3] & 0x38 == 0 && b[ip1 + 3] & 0x07 == 0 {
+                // if (b[ip0 + 3] & 0x38) >> 3 == b[ip1 + 3] & 0x07 {
                 b[ip0 + 1] = b[ip1 + 1]; // copy VEX prefix
                 b[ip0 + 2] = b[ip1 + 2]; // copy OpCode
 
