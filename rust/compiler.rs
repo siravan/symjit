@@ -405,7 +405,9 @@ pub struct Translator {
 }
 
 impl Translator {
-    pub fn new(config: Config) -> Translator {
+    pub fn new(mut config: Config, df: Defuns) -> Translator {
+        config.set_defuns(df);
+
         Translator {
             config,
             ssa: Vec::new(),
@@ -932,9 +934,7 @@ impl Compiler {
         df: Defuns,
         num_params: usize,
     ) -> Result<Application> {
-        let mut config = self.config.clone();
-        config.set_defuns(df);
-        let mut translator = Translator::new(config.clone());
+        let mut translator = Translator::new(self.config.clone(), df);
 
         let model: SymbolicaModel = if json.starts_with("[[{") {
             serde_json::from_str(json.as_str())?
@@ -946,7 +946,7 @@ impl Compiler {
         translator.set_num_params(num_params);
         let (ml, reals) = translator.translate()?;
 
-        let prog = Program::new(&ml, config)?;
+        let prog = Program::new(&ml, translator.config)?;
         let mut app = Application::new(prog, reals)?;
 
         app.prepare_simd();
