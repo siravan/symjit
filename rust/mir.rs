@@ -665,6 +665,42 @@ impl Mir {
         });
     }
 
+    pub fn plus_load_const(&mut self, dst: Reg, s1: Reg, idx: u32) {
+        self.push(Instruction::LoadConstMath {
+            op: LoadMathOp::Plus,
+            dst,
+            s1,
+            idx,
+        });
+    }
+
+    pub fn minus_load_const(&mut self, dst: Reg, s1: Reg, idx: u32) {
+        self.push(Instruction::LoadConstMath {
+            op: LoadMathOp::Minus,
+            dst,
+            s1,
+            idx,
+        });
+    }
+
+    pub fn times_load_const(&mut self, dst: Reg, s1: Reg, idx: u32) {
+        self.push(Instruction::LoadConstMath {
+            op: LoadMathOp::Times,
+            dst,
+            s1,
+            idx,
+        });
+    }
+
+    pub fn divide_load_const(&mut self, dst: Reg, s1: Reg, idx: u32) {
+        self.push(Instruction::LoadConstMath {
+            op: LoadMathOp::Divide,
+            dst,
+            s1,
+            idx,
+        });
+    }
+
     pub fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.push(Instruction::Bi {
             op: BinOp::GreaterThan,
@@ -1207,7 +1243,7 @@ impl Mir {
                         Reg::Ret
                     };
 
-                    ir.load_const(*dst, *idx);
+                    ir.load_const(t, *idx);
 
                     match op {
                         LoadMathOp::Plus => ir.plus(*dst, *s1, t),

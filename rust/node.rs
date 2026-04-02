@@ -311,6 +311,10 @@ impl Node {
                 return Ok(dst);
             }
 
+            if let Ok(dst) = self.load_const_math(mir, base, op, left, right) {
+                return Ok(dst);
+            }
+
             let (dst, l, r) = self.alloc(mir, base, left, right)?;
 
             match op.as_str() {
@@ -369,12 +373,11 @@ impl Node {
         Ok((dst, l, r))
     }
 
-    fn is_leaf(&self) -> bool {
-        // matches!(self, Node::Const { .. } | Node::Var { .. })
+    fn is_leaf_var(&self) -> bool {
         matches!(self, Node::Var { .. })
     }
 
-    fn compile_leaf(&self /*, mir: &mut Mir*/) -> Option<Loc> {
+    fn compile_leaf_var(&self /*, mir: &mut Mir*/) -> Option<Loc> {
         if let Node::Var { sym } = self {
             Some(sym.borrow().loc)
         } else {
@@ -392,9 +395,10 @@ impl Node {
     ) -> Result<u8> {
         let dst = base + self.ershov_number() - 1;
 
-        if (op == "plus" || op == "times" || op == "minus" || op == "divide") && right.is_leaf() {
+        if (op == "plus" || op == "times" || op == "minus" || op == "divide") && right.is_leaf_var()
+        {
             let l = left.compile(mir, base)?;
-            let t = right.compile_leaf().unwrap();
+            let t = right.compile_leaf_var().unwrap();
 
             match op {
                 "plus" => mir.plus_load(reg(dst), reg(l), t),
@@ -406,13 +410,66 @@ impl Node {
             return Ok(dst);
         }
 
-        if (op == "plus" || op == "times") && left.is_leaf() {
+        if (op == "plus" || op == "times") && left.is_leaf_var() {
             let r = right.compile(mir, base)?;
-            let t = left.compile_leaf().unwrap();
+            let t = left.compile_leaf_var().unwrap();
 
             match op {
                 "plus" => mir.plus_load(reg(dst), reg(r), t),
                 "times" => mir.times_load(reg(dst), reg(r), t),
+                _ => unreachable!(),
+            }
+            return Ok(dst);
+        }
+
+        Err(anyhow!("cannot fuse!"))
+    }
+
+    fn is_leaf_const(&self) -> bool {
+        matches!(self, Node::Const { .. })
+    }
+
+    fn compile_leaf_const(&self) -> Option<u32> {
+        if let Node::Const { idx, .. } = self {
+            Some(*idx)
+        } else {
+            None
+        }
+    }
+
+    fn load_const_math(
+        &self,
+        mir: &mut Mir,
+        base: u8,
+        op: &str,
+        left: &Node,
+        right: &Node,
+    ) -> Result<u8> {
+        let dst = base + self.ershov_number() - 1;
+
+        if (op == "plus" || op == "times" || op == "minus" || op == "divide")
+            && right.is_leaf_const()
+        {
+            let l = left.compile(mir, base)?;
+            let idx = right.compile_leaf_const().unwrap();
+
+            match op {
+                "plus" => mir.plus_load_const(reg(dst), reg(l), idx),
+                "minus" => mir.minus_load_const(reg(dst), reg(l), idx),
+                "times" => mir.times_load_const(reg(dst), reg(l), idx),
+                "divide" => mir.divide_load_const(reg(dst), reg(l), idx),
+                _ => unreachable!(),
+            }
+            return Ok(dst);
+        }
+
+        if (op == "plus" || op == "times") && left.is_leaf_const() {
+            let r = right.compile(mir, base)?;
+            let idx = left.compile_leaf_const().unwrap();
+
+            match op {
+                "plus" => mir.plus_load_const(reg(dst), reg(r), idx),
+                "times" => mir.times_load_const(reg(dst), reg(r), idx),
                 _ => unreachable!(),
             }
             return Ok(dst);
