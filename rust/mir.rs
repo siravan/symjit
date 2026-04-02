@@ -185,10 +185,18 @@ impl fmt::Debug for Instruction {
                 }
             }
             Self::LoadMath { op, dst, s1, loc } => {
-                write!(f, "{:?} := {:?} {:?} {:?}", &dst, &s1, &op, &loc)
+                write!(
+                    f,
+                    "{:?} := {:?} {:?} {:?} # load/math",
+                    &dst, &s1, &op, &loc
+                )
             }
             Self::LoadConstMath { op, dst, s1, idx } => {
-                write!(f, "{:?} := {:?} {:?} consts[{:?}]", &dst, &s1, &op, &idx)
+                write!(
+                    f,
+                    "{:?} := {:?} {:?} consts[{:?}] # load const/math",
+                    &dst, &s1, &op, &idx
+                )
             }
         }
     }
@@ -1234,7 +1242,7 @@ impl Mir {
                         LoadMathOp::Times => ir.times(*dst, *s1, t),
                         LoadMathOp::Divide => ir.divide(*dst, *s1, t),
                     }
-                    //ir.fuse_load_math();
+                    ir.fuse_load_math();
                 }
                 Instruction::LoadConstMath { op, dst, s1, idx } => {
                     let t = if self.config.is_complex() {

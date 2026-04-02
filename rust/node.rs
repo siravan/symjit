@@ -374,10 +374,10 @@ impl Node {
     }
 
     fn is_leaf_var(&self) -> bool {
-        false && matches!(self, Node::Var { .. })
+        matches!(self, Node::Var { .. })
     }
 
-    fn compile_leaf_var(&self /*, mir: &mut Mir*/) -> Option<Loc> {
+    fn compile_leaf_var(&self) -> Option<Loc> {
         if let Node::Var { sym } = self {
             Some(sym.borrow().loc)
         } else {
@@ -395,7 +395,11 @@ impl Node {
     ) -> Result<u8> {
         let dst = base + self.ershov_number() - 1;
 
-        if (op == "plus" || op == "times" || op == "minus" || op == "divide") && right.is_leaf_var()
+        if (op == "plus"
+            || op == "times"
+            || op == "minus"
+            || (op == "divide" && !mir.config.is_complex()))    // because complex division uses re(Reg::Temp)
+            && right.is_leaf_var()
         {
             let l = left.compile(mir, base)?;
             let t = right.compile_leaf_var().unwrap();

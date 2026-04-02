@@ -1,3 +1,7 @@
+> [!NOTE]
+> *SymJit* is now a backend for *Symbolica*. Therefore, using `jit_compile` method of `ExpressionEvaluator`s is the preferable
+> way to generate jit code for Symbolica. 
+
 # Symbolica
 
 In addition to Sympy, *SymJit* can generate code from [Symbolica](https://symbolica.io/)'s expressions. Symbolica is a modern computer algebra written in Rust with a Python binding. Considering that both *SymJit* and Symbolica are written in Rust, they can interact at multiple levels. However, here we limit the discussion to high-level interaction using Python. 

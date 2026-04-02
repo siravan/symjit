@@ -1,3 +1,18 @@
+# Version 2.15.1
+
+* Fused load/math operations (both constant and memory access) are implemented.
+* Debugging complex codegen.
+
+# Version 2.15.0
+
+* Code refactoring to better support multi-threading through `Applet`.
+* `Pool` is removed as `opt_level = 2` is the default.
+
+# Version 2.14.*
+
+* Improved inter-operability with Symbolica, especially adding external functions.
+* Addition of `Applet`.
+
 # Version 2.13.5
 
 * `symjit-crate` Symbolica dependency is removed.

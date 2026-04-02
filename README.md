@@ -382,10 +382,9 @@ All `compile_*` functions accept an optional parameter `ty`, which defines the t
 * `amd-sse`: generates 64-bit AMD64/x86-64 SSE code. It requires a minimum SSE2.1 specification, which should be easily fulfilled by all except the most ancient processors.
 * `arm` generates 64-bit ARM64/aarch64 code. This option is mainly tested on Apple Silicon.
 * `riscv` generates 64-bit RISC-V code. This option is tested on a computer running XuanTie C910 RISC-V with an RV64GC architecture.
-* `bytecode`: this option uses a generic and simple bytecode evaluator as a fallback option in case of unsupported instruction sets. The utility is to test correctness (see option `debug` below), not speed.
+* `bytecode`: this option uses a generic and simple bytecode evaluator as a fallback option in case of unsupported instruction sets. The utility is to test correctness, not speed.
 * `native` (**default**): selects the correct instruction set based on the current processor.
-* `debug`: is useful for debugging the generated code. It runs both `native` and `bytecode` versions, compares the results,
-and panics if they are different.
+* `debug`: deprecated.
 
 Note that `ty='wasm'` is no longer supported in version 2. Also, as discussed above, `compile_*` functions accept a `backend` argument with possible values of `rust` and `python`.
 

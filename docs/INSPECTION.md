@@ -11,7 +11,7 @@ f = compile_func([x, y], [x+y, x*y])
 f.dump('test.bin', what='scalar')
 ```
 
-Passing `what='simd'` dumps the vectorized version of the function and `what='fast'` to dump the fast function.
+Passing `what='simd'` dumps the vectorized version of the function and `what='fast'` to dump the fast function. 
 
 On a Linux system, we can invoke `objdump` to disassemble the output as below:
 
@@ -44,24 +44,22 @@ The output (assuming a Linux x86-64 machine) is
 
 Note that this is the output from an older version, and the more recent versions have a more complex prologue and epilogue.
 
-When `ty` is set to `bytecode` or `debug`, `dump` and `dumps` return the generated intermediate representation in a pseudo-LLVM textual format. For example:
+To see the intermediate representation in a pseudo-LLVM textual format (useful for debugging), pass `what='bytecode'`. For example:
 
 ```python
 x, y = symbols('x y')
 f = compile_func([x, y], [x+y, x*y])
-print(f.dumps())
+print(f.dumps('bytecode'))
 ```
 
 The output is
 
 ```
 #!
-00000   %1 := Mem[0]
-00001   %0 := Mem[1]
-00002   %1 := %1 Plus %0
-00003   Mem[3] := %1
-00004   %1 := Mem[0]
-00005   %0 := Mem[1]
-00006   %1 := %1 Times %0
-00007   Mem[4] := %1
+00000	%0 := Mem[0]
+00001	%1 := Mem[1]
+00002	%2 := %0 Plus %1
+00003	Mem[2] := %2
+00004	%3 := %0 Times %1
+00005	Mem[3] := %3
 ```

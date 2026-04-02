@@ -2,12 +2,12 @@ import util
 
 args = util.process_argv()
 
-import time
 import os
-import scipy.integrate
+import time
+
 import matplotlib.pyplot as plt
 import numpy as np
-
+import scipy.integrate
 import symjit
 
 path = os.path.join(os.path.dirname(__file__), "cellml", "beeler.json")
@@ -21,7 +21,7 @@ f = symjit.compile_json(model, **args)
 u0 = f.get_u0()
 p = f.get_p()
 
-# print(f.dumps())
+# print(f.dumps("bytecode"))
 
 t1 = time.perf_counter_ns()
 
