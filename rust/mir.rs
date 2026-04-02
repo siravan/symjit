@@ -1173,6 +1173,7 @@ impl Mir {
                         LoadMathOp::Times => ir.times(*dst, *s1, t),
                         LoadMathOp::Divide => ir.divide(*dst, *s1, t),
                     }
+                    ir.fuse_load_math();
                 }
             }
         }

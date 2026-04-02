@@ -639,6 +639,8 @@ impl Generator for Complexifier {
     fn save_used_registers(&mut self, _used: &[u8]) {}
     fn load_used_registers(&mut self, _used: &[u8]) {}
 
+    fn fuse_load_math(&mut self) {}
+
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {
         let loc = Loc::Stack(idx);
 

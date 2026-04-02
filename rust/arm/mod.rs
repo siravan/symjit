@@ -224,6 +224,8 @@ impl Generator for ArmGenerator {
         self.set_label(&l);
     }
 
+    fn fuse_load_math(&mut self) {}
+
     //***********************************
 
     fn fmov(&mut self, dst: Reg, s1: Reg) {
@@ -873,6 +875,8 @@ impl Generator for ArmSimdGenerator {
             self.jump("@epilogue", 0, |offset, _| arm! {b.ne label(offset)});
         }
     }
+
+    fn fuse_load_math(&mut self) {}
 
     //***********************************
 

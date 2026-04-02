@@ -44,6 +44,8 @@ pub trait Generator {
     fn times(&mut self, dst: Reg, s1: Reg, s2: Reg);
     fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg);
 
+    fn fuse_load_math(&mut self);
+
     fn real(&mut self, dst: Reg, s1: Reg);
     fn imaginary(&mut self, dst: Reg, s1: Reg);
     fn conjugate(&mut self, dst: Reg, s1: Reg);

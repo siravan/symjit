@@ -263,6 +263,8 @@ impl Generator for RiscV {
         self.jump(label, 0, |offset, _| rvv! {j offset});
     }
 
+    fn fuse_load_math(&mut self) {}
+
     //***********************************/
     fn fmov(&mut self, dst: Reg, s1: Reg) {
         if dst == s1 {
