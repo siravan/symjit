@@ -280,6 +280,7 @@ impl ColoringAllocator {
                     let s1 = self.consume(s1);
                     let dst = self.produce(dst);
                     self.push(Instruction::LoadMath { op, dst, s1, loc });
+                    self.loads.insert(loc);
                 }
             }
         }

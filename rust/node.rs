@@ -371,7 +371,7 @@ impl Node {
 
     fn is_leaf(&self) -> bool {
         // matches!(self, Node::Const { .. } | Node::Var { .. })
-        false && matches!(self, Node::Var { .. })
+        matches!(self, Node::Var { .. })
     }
 
     fn compile_leaf(&self /*, mir: &mut Mir*/) -> Option<Loc> {
@@ -380,27 +380,6 @@ impl Node {
         } else {
             None
         }
-        // let t = if mir.config.is_complex() {
-        //     Reg::Temp
-        // } else {
-        //     Reg::Ret
-        // };
-
-        // match self {
-        //     Node::Const { idx, .. } => {
-        //         mir.load_const(t, *idx);
-        //         Some(t)
-        //     }
-        //     Node::Var { sym } => {
-        //         match sym.borrow().loc {
-        //             Loc::Stack(idx) => mir.load_stack(t, idx),
-        //             Loc::Mem(idx) => mir.load_mem(t, idx),
-        //             Loc::Param(idx) => mir.load_param(t, idx),
-        //         };
-        //         Some(t)
-        //     }
-        //     _ => None,
-        // }
     }
 
     fn load_math(
@@ -413,15 +392,11 @@ impl Node {
     ) -> Result<u8> {
         let dst = base + self.ershov_number() - 1;
 
-        if (op == "plus" || op == "times" || op == "minus") && right.is_leaf() {
+        if (op == "plus" || op == "times" || op == "minus" || op == "divide") && right.is_leaf() {
             let l = left.compile(mir, base)?;
             let t = right.compile_leaf().unwrap();
 
             match op {
-                // "plus" => mir.plus(reg(dst), reg(l), t),
-                // "minus" => mir.minus(reg(dst), reg(l), t),
-                // "times" => mir.times(reg(dst), reg(l), t),
-                // "divide" => mir.divide(reg(dst), reg(l), t),
                 "plus" => mir.plus_load(reg(dst), reg(l), t),
                 "minus" => mir.minus_load(reg(dst), reg(l), t),
                 "times" => mir.times_load(reg(dst), reg(l), t),
@@ -436,8 +411,6 @@ impl Node {
             let t = left.compile_leaf().unwrap();
 
             match op {
-                // "plus" => mir.plus(reg(dst), reg(r), t),
-                // "times" => mir.times(reg(dst), reg(r), t),
                 "plus" => mir.plus_load(reg(dst), reg(r), t),
                 "times" => mir.times_load(reg(dst), reg(r), t),
                 _ => unreachable!(),

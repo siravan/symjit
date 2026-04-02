@@ -43,7 +43,9 @@ impl Compactor {
     fn collect_last(&mut self, mir: &Mir) {
         for (ip, ins) in mir.code.iter().enumerate() {
             match *ins {
-                Instruction::Load { loc, .. } | Instruction::IfElse { cond: loc, .. } => {
+                Instruction::Load { loc, .. }
+                | Instruction::IfElse { cond: loc, .. }
+                | Instruction::LoadMath { loc, .. } => {
                     if let Loc::Stack(_) = loc {
                         if let Some(x) = self.live.get_mut(&loc) {
                             *x = ip;
@@ -105,6 +107,15 @@ impl Compactor {
                 Instruction::Load { dst, loc } => {
                     let l = self.load(*loc, ip);
                     self.push(Instruction::Load { dst: *dst, loc: l });
+                }
+                Instruction::LoadMath { op, dst, s1, loc } => {
+                    let l = self.load(*loc, ip);
+                    self.push(Instruction::LoadMath {
+                        op: *op,
+                        dst: *dst,
+                        s1: *s1,
+                        loc: l,
+                    })
                 }
                 Instruction::IfElse {
                     dst,

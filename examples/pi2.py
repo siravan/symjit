@@ -9,7 +9,7 @@ from sympy import sqrt, symbols
 
 # calculating pi using Viète's formula (https://en.wikipedia.org/wiki/Vi%C3%A8te%27s_formula)
 
-N = 21
+N = 1
 
 x = symbols("x")
 
@@ -41,7 +41,7 @@ def lemniscate(x):
 # f = compile_func([x], [2 / viete(x), 2 / lemniscate(x)], **args)
 f = compile_func([x], [2 / viete(x), 2 / lemniscate(x)], **args)
 
-# print(f.dumps())
+print(f.dumps("bytecode"))
 
 p, q = f(1 / 2)
 print(p, "?= ", math.pi, "(pi)")
