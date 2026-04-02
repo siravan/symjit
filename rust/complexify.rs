@@ -288,7 +288,7 @@ impl Generator for Complexifier {
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
         if self.is_real_reg(s1) {
-            self.mir.recip(dst, s1);
+            self.mir.recip(re(dst), re(s1));
             self.set_reg_real(dst);
         } else {
             self.mir.times(Self::T0, re(s1), re(s1));

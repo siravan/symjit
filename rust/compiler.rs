@@ -1108,10 +1108,6 @@ impl Translator {
 
     fn translate_goto(&mut self, id: usize) -> Result<()> {
         if self.config.simd_branch() {
-            // TODO: the commented out area should be uncommented, except it causes
-            // a bug in some programs. The effects are not local and likely related
-            // to instruction movements.
-
             let cond = self.conds.pop().unwrap();
             self.conds.push(cond);
             let if_clause = Expr::binary("eq", &self.expr(&cond, false), &Expr::from(0.0));
