@@ -1157,16 +1157,21 @@ impl Mir {
                     is_else,
                 } => ir.branch_if(*cond, label, *is_else),
                 Instruction::LoadMath { op, dst, s1, loc } => {
+                    let t = if self.config.is_complex() {
+                        Reg::Temp
+                    } else {
+                        Reg::Ret
+                    };
                     match loc {
-                        Loc::Mem(idx) => ir.load_mem(Reg::Ret, *idx),
-                        Loc::Stack(idx) => ir.load_stack(Reg::Ret, *idx),
-                        Loc::Param(idx) => ir.load_param(Reg::Ret, *idx),
+                        Loc::Mem(idx) => ir.load_mem(t, *idx),
+                        Loc::Stack(idx) => ir.load_stack(t, *idx),
+                        Loc::Param(idx) => ir.load_param(t, *idx),
                     }
                     match op {
-                        LoadMathOp::Plus => ir.plus(*dst, *s1, Reg::Ret),
-                        LoadMathOp::Minus => ir.minus(*dst, *s1, Reg::Ret),
-                        LoadMathOp::Times => ir.times(*dst, *s1, Reg::Ret),
-                        LoadMathOp::Divide => ir.divide(*dst, *s1, Reg::Ret),
+                        LoadMathOp::Plus => ir.plus(*dst, *s1, t),
+                        LoadMathOp::Minus => ir.minus(*dst, *s1, t),
+                        LoadMathOp::Times => ir.times(*dst, *s1, t),
+                        LoadMathOp::Divide => ir.divide(*dst, *s1, t),
                     }
                 }
             }
