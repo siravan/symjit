@@ -413,6 +413,7 @@ mod code;
 mod compactor;
 pub mod compiler;
 mod complexify;
+mod composer;
 mod config;
 mod defuns;
 pub mod expr;
@@ -439,6 +440,7 @@ use model::{CellModel, Program};
 
 pub use applet::Applet;
 pub use compiler::{Compiler, FastFunc, Translator};
+pub use composer::{Composer, Transliterator};
 pub use config::Config;
 pub use defuns::Defuns;
 pub use expr::{double, int, var, Expr};

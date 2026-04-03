@@ -8,13 +8,14 @@ use crate::code::VirtualTable;
 use crate::config::{Config, SLICE_CAP};
 use crate::defuns::Defuns;
 use crate::expr::Expr;
-pub use crate::instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
+use crate::instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
 use crate::model::{CellModel, Equation, Program, Variable};
 use crate::parser::Parser;
 use crate::symbol::Loc;
 use crate::types::Element;
 use crate::utils::Compiled;
 use crate::Application;
+use crate::composer::Composer;
 
 // #[derive(Debug)]
 pub struct Compiler {
@@ -404,6 +405,116 @@ pub struct Translator {
     conds: Vec<Slot>,
 }
 
+impl Composer for Translator {
+    fn append_constant(&mut self, z: Complex<f64>) -> Result<usize> {
+        self.consts.push(z);
+        Ok(self.consts.len() - 1)
+    }
+
+    fn append_add(&mut self, lhs: &Slot, args: &[Slot], num_reals: usize) -> Result<()> {
+        let args = self.consume_list(args)?;
+        let lhs = self.produce(lhs)?;
+        self.ssa.push(Instruction::Add(lhs, args, num_reals));
+        Ok(())
+    }
+
+    fn append_mul(&mut self, lhs: &Slot, args: &[Slot], num_reals: usize) -> Result<()> {
+        let args = self.consume_list(args)?;
+        let lhs = self.produce(lhs)?;
+        self.ssa.push(Instruction::Mul(lhs, args, num_reals));
+        Ok(())
+    }
+
+    fn append_pow(&mut self, lhs: &Slot, arg: &Slot, p: i64, is_real: bool) -> Result<()> {
+        let arg = self.consume(arg)?;
+        let lhs = self.produce(lhs)?;
+        self.ssa.push(Instruction::Pow(lhs, arg, p, is_real));
+        Ok(())
+    }
+
+    fn append_powf(&mut self, lhs: &Slot, arg: &Slot, p: &Slot, is_real: bool) -> Result<()> {
+        let arg = self.consume(arg)?;
+        let p = self.consume(p)?;
+        let lhs = self.produce(lhs)?;
+        self.ssa.push(Instruction::Powf(lhs, arg, p, is_real));
+        Ok(())
+    }
+
+    fn append_assign(&mut self, lhs: &Slot, rhs: &Slot) -> Result<()> {
+        let rhs = self.consume(rhs)?;
+        let lhs = self.produce(lhs)?;
+        self.ssa.push(Instruction::Assign(lhs, rhs));
+        Ok(())
+    }
+
+    fn append_label(&mut self, id: usize) -> Result<()> {
+        self.ssa.push(Instruction::Label(id));
+        Ok(())
+    }
+
+    fn append_if_else(&mut self, cond: &Slot, id: usize) -> Result<()> {
+        self.has_jump = true;
+        let cond = self.consume(cond)?;
+        self.ssa.push(Instruction::IfElse(cond, id));
+        Ok(())
+    }
+
+    fn append_goto(&mut self, id: usize) -> Result<()> {
+        self.last_label = self.last_label.max(id);
+        self.ssa.push(Instruction::Goto(id));
+        Ok(())
+    }
+
+    fn append_external_fun(&mut self, lhs: &Slot, op: &str, args: &[Slot]) -> Result<()> {
+        let args = self.consume_list(args)?;
+        let lhs = self.produce(lhs)?;
+        self.ssa
+            .push(Instruction::ExternalFun(lhs, op.to_string(), args));
+        Ok(())
+    }
+
+    fn append_fun(
+        &mut self,
+        lhs: &Slot,
+        fun: &BuiltinSymbol,
+        arg: &Slot,
+        is_real: bool,
+    ) -> Result<()> {
+        let arg = self.consume(arg)?;
+        let lhs = self.produce(lhs)?;
+        self.ssa.push(Instruction::Fun(lhs, *fun, arg, is_real));
+        Ok(())
+    }
+
+    fn append_join(
+        &mut self,
+        lhs: &Slot,
+        cond: &Slot,
+        true_val: &Slot,
+        false_val: &Slot,
+    ) -> Result<()> {
+        let cond = self.consume(cond)?;
+        let true_val = self.consume(true_val)?;
+        let false_val = self.consume(false_val)?;
+        let lhs = self.produce(lhs)?;
+        self.ssa
+            .push(Instruction::Join(lhs, cond, true_val, false_val));
+        Ok(())
+    }
+
+    fn set_num_params(&mut self, num_params: usize) {
+        self.num_params = num_params
+    }
+
+    fn compile(&mut self) -> Result<Application> {
+        let (ml, reals) = self.translate()?;
+        let prog = Program::new(&ml, self.config.clone())?;
+        let mut app = Application::new(prog, reals)?;
+        app.prepare_simd();
+        Ok(app)
+    }
+}
+
 impl Translator {
     pub fn new(mut config: Config, df: Defuns) -> Translator {
         config.set_defuns(df);
@@ -471,102 +582,6 @@ impl Translator {
             }
         }
 
-        Ok(())
-    }
-
-    pub fn append_constant(&mut self, z: Complex<f64>) -> Result<usize> {
-        self.consts.push(z);
-        Ok(self.consts.len() - 1)
-    }
-
-    pub fn append_add(&mut self, lhs: &Slot, args: &[Slot], num_reals: usize) -> Result<()> {
-        let args = self.consume_list(args)?;
-        let lhs = self.produce(lhs)?;
-        self.ssa.push(Instruction::Add(lhs, args, num_reals));
-        Ok(())
-    }
-
-    pub fn append_mul(&mut self, lhs: &Slot, args: &[Slot], num_reals: usize) -> Result<()> {
-        let args = self.consume_list(args)?;
-        let lhs = self.produce(lhs)?;
-        self.ssa.push(Instruction::Mul(lhs, args, num_reals));
-        Ok(())
-    }
-
-    pub fn append_pow(&mut self, lhs: &Slot, arg: &Slot, p: i64, is_real: bool) -> Result<()> {
-        let arg = self.consume(arg)?;
-        let lhs = self.produce(lhs)?;
-        self.ssa.push(Instruction::Pow(lhs, arg, p, is_real));
-        Ok(())
-    }
-
-    pub fn append_powf(&mut self, lhs: &Slot, arg: &Slot, p: &Slot, is_real: bool) -> Result<()> {
-        let arg = self.consume(arg)?;
-        let p = self.consume(p)?;
-        let lhs = self.produce(lhs)?;
-        self.ssa.push(Instruction::Powf(lhs, arg, p, is_real));
-        Ok(())
-    }
-
-    pub fn append_assign(&mut self, lhs: &Slot, rhs: &Slot) -> Result<()> {
-        let rhs = self.consume(rhs)?;
-        let lhs = self.produce(lhs)?;
-        self.ssa.push(Instruction::Assign(lhs, rhs));
-        Ok(())
-    }
-
-    pub fn append_label(&mut self, id: usize) -> Result<()> {
-        self.ssa.push(Instruction::Label(id));
-        Ok(())
-    }
-
-    pub fn append_if_else(&mut self, cond: &Slot, id: usize) -> Result<()> {
-        self.has_jump = true;
-        let cond = self.consume(cond)?;
-        self.ssa.push(Instruction::IfElse(cond, id));
-        Ok(())
-    }
-
-    pub fn append_goto(&mut self, id: usize) -> Result<()> {
-        self.last_label = self.last_label.max(id);
-        self.ssa.push(Instruction::Goto(id));
-        Ok(())
-    }
-
-    pub fn append_external_fun(&mut self, lhs: &Slot, op: &str, args: &[Slot]) -> Result<()> {
-        let args = self.consume_list(args)?;
-        let lhs = self.produce(lhs)?;
-        self.ssa
-            .push(Instruction::ExternalFun(lhs, op.to_string(), args));
-        Ok(())
-    }
-
-    pub fn append_fun(
-        &mut self,
-        lhs: &Slot,
-        fun: &BuiltinSymbol,
-        arg: &Slot,
-        is_real: bool,
-    ) -> Result<()> {
-        let arg = self.consume(arg)?;
-        let lhs = self.produce(lhs)?;
-        self.ssa.push(Instruction::Fun(lhs, *fun, arg, is_real));
-        Ok(())
-    }
-
-    pub fn append_join(
-        &mut self,
-        lhs: &Slot,
-        cond: &Slot,
-        true_val: &Slot,
-        false_val: &Slot,
-    ) -> Result<()> {
-        let cond = self.consume(cond)?;
-        let true_val = self.consume(true_val)?;
-        let false_val = self.consume(false_val)?;
-        let lhs = self.produce(lhs)?;
-        self.ssa
-            .push(Instruction::Join(lhs, cond, true_val, false_val));
         Ok(())
     }
 
@@ -896,18 +911,6 @@ impl Translator {
         let mask = Expr::binary("eq", &self.expr(&cond, false), &Expr::from(0.0));
         self.assign(lhs, mask.ifelse(&f, &t))?;
         Ok(())
-    }
-
-    pub fn set_num_params(&mut self, num_params: usize) {
-        self.num_params = num_params
-    }
-
-    pub fn compile(&mut self) -> Result<Application> {
-        let (ml, reals) = self.translate()?;
-        let prog = Program::new(&ml, self.config.clone())?;
-        let mut app = Application::new(prog, reals)?;
-        app.prepare_simd();
-        Ok(app)
     }
 }
 

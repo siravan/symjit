@@ -1,5 +1,5 @@
 > [!NOTE]
-> *SymJit* is now a backend for *Symbolica*. Therefore, using `jit_compile` method of `ExpressionEvaluator`s is the preferable
+> *SymJit* support is now added to *Symbolica*. Therefore, using `jit_compile` method of `ExpressionEvaluator` is the preferable
 > way to generate jit code for Symbolica. 
 
 # Symbolica

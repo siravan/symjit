@@ -267,33 +267,31 @@ impl Builder {
         Ok(node)
     }
 
-    pub fn compile_mir(&mut self) -> Result<Mir> {
+    pub fn compile_mir(&mut self, mir: &mut Mir) -> Result<()> {
         let opt_level = self.config.opt_level();
-
-        let mut mir = Mir::new(self.config.clone());
 
         self.block().eliminate();
 
-        self.block().compile(&mut mir)?;
+        self.block().compile(mir)?;
 
         if opt_level >= 1 {
             mir.optimize_peephole();
         }
 
         if opt_level >= 2 {
-            GreedyAllocator::new(self.config.clone()).optimize(&mut mir)?;
+            GreedyAllocator::new(self.config.clone()).optimize(mir)?;
         }
 
         if opt_level >= 3 {
-            ColoringAllocator::new(self.config.clone()).optimize(&mut mir)?;
+            ColoringAllocator::new(self.config.clone()).optimize(mir)?;
         }
 
-        self.count_stack = Compactor::new(self.config.clone()).compact(&mut mir).ok();
+        self.count_stack = Compactor::new(self.config.clone()).compact(mir).ok();
 
         mir.add_consts(&self.consts);
         mir.populate_labels();
 
-        Ok(mir)
+        Ok(())
     }
 
     fn save_registers(mir: &Mir, ir: &mut impl Generator) {

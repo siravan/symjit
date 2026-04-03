@@ -66,7 +66,12 @@ pub struct Application {
 }
 
 impl Application {
-    pub fn new(mut prog: Program, reals: HashSet<Loc>) -> Result<Application> {
+    pub fn new(prog: Program, reals: HashSet<Loc>) -> Result<Application> {
+        let mir = Mir::new(prog.config().clone());
+        Self::with_mir(prog, reals, mir)
+    }
+
+    pub fn with_mir(mut prog: Program, reals: HashSet<Loc>, mut mir: Mir) -> Result<Application> {
         let first_state = 0;
         let first_param = 0;
         let first_obs = first_state + prog.count_states;
@@ -79,9 +84,9 @@ impl Application {
 
         let params = vec![0.0; count_params + 1];
 
-        let config = prog.config().clone();
+        prog.builder.compile_mir(&mut mir)?;
 
-        let mut mir = prog.builder.compile_mir()?;
+        let config = prog.config().clone();
 
         if config.is_complex() {
             mir = Complexifier::new(&reals, config.clone()).complexify(&mir)?;
