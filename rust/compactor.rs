@@ -1,9 +1,11 @@
 use anyhow::Result;
 use std::collections::HashMap;
 
-use crate::config::Config;
+use crate::config::{Config, SLICE_CAP, SPILL_AREA};
 use crate::mir::{Instruction, Mir};
 use crate::symbol::Loc;
+
+const FIXED: u32 = (SLICE_CAP + SPILL_AREA) as u32;
 
 #[derive(Clone, Debug)]
 pub struct Compactor {
@@ -33,7 +35,7 @@ impl Compactor {
         self.collect_last(mir); // first pass, collect live info
         self.compact_stack(mir); // second pass, rename stack slots
         mir.code = std::mem::take(&mut self.code);
-        Ok(self.count_stack as usize)
+        Ok((FIXED + self.count_stack) as usize)
     }
 
     fn push(&mut self, ins: Instruction) {
@@ -46,15 +48,19 @@ impl Compactor {
                 Instruction::Load { loc, .. }
                 | Instruction::IfElse { cond: loc, .. }
                 | Instruction::LoadMath { loc, .. } => {
-                    if let Loc::Stack(_) = loc {
-                        if let Some(x) = self.live.get_mut(&loc) {
-                            *x = ip;
+                    if let Loc::Stack(idx) = loc {
+                        if idx >= FIXED {
+                            if let Some(x) = self.live.get_mut(&loc) {
+                                *x = ip;
+                            }
                         }
                     }
                 }
                 Instruction::Save { loc, .. } => {
-                    if let Loc::Stack(_) = loc {
-                        self.live.insert(loc, ip);
+                    if let Loc::Stack(idx) = loc {
+                        if idx >= FIXED {
+                            self.live.insert(loc, ip);
+                        }
                     }
                 }
                 _ => {}
@@ -63,9 +69,11 @@ impl Compactor {
     }
 
     fn save(&mut self, loc: Loc) -> Loc {
-        if let Loc::Stack(_) = loc {
-            // A stack slot can be assigned more than once in loops (ϕ-constructs)
-            if let Some(Loc::Stack(s)) = self.stack.get(&loc) {
+        if let Loc::Stack(idx) = loc {
+            if idx < FIXED {
+                loc
+            } else if let Some(Loc::Stack(s)) = self.stack.get(&loc) {
+                // A stack slot can be assigned more than once in loops (ϕ-constructs)
                 Loc::Stack(*s)
             } else {
                 let l = match self.pool.pop() {
@@ -85,17 +93,21 @@ impl Compactor {
     }
 
     fn load(&mut self, loc: Loc, ip: usize) -> Loc {
-        if let Loc::Stack(_) = loc {
-            let l = self.stack.get(&loc).unwrap();
-            let last = self.live.get(&loc).unwrap();
+        if let Loc::Stack(idx) = loc {
+            if idx < FIXED {
+                loc
+            } else {
+                let l = self.stack.get(&loc).unwrap();
+                let last = self.live.get(&loc).unwrap();
 
-            // stack slots are not returned to the pool inside loops.
-            // We can do better by delaying return to the branch at
-            // the end of the loop, but this would add complexity.
-            if *last == ip && self.depth == 0 {
-                self.pool.push(*l);
+                // stack slots are not returned to the pool inside loops.
+                // We can do better by delaying return to the branch at
+                // the end of the loop, but this would add complexity.
+                if *last == ip && self.depth == 0 {
+                    self.pool.push(*l);
+                }
+                *l
             }
-            *l
         } else {
             loc
         }
