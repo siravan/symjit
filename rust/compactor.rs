@@ -5,8 +5,6 @@ use crate::config::{Config, SLICE_CAP, SPILL_AREA};
 use crate::mir::{Instruction, Mir};
 use crate::symbol::Loc;
 
-const FIXED: u32 = (SLICE_CAP + SPILL_AREA) as u32;
-
 #[derive(Clone, Debug)]
 pub struct Compactor {
     config: Config,
@@ -16,18 +14,26 @@ pub struct Compactor {
     pool: Vec<Loc>,            // the pool of Stack slots available to reuse
     count_stack: u32,          // next stack id to use if the pool is empty
     depth: isize,              // loop depth
+    fixed: u32,
 }
 
 impl Compactor {
     pub fn new(config: Config) -> Compactor {
+        let fixed = if config.is_complex() {
+            (2 * SLICE_CAP + SPILL_AREA) as u32
+        } else {
+            (SLICE_CAP + SPILL_AREA) as u32
+        };
+
         Compactor {
             config,
             code: Vec::new(),
             live: HashMap::new(),
             stack: HashMap::new(),
             pool: Vec::new(),
-            count_stack: 16,
+            count_stack: fixed,
             depth: 0,
+            fixed,
         }
     }
 
@@ -35,7 +41,7 @@ impl Compactor {
         self.collect_last(mir); // first pass, collect live info
         self.compact_stack(mir); // second pass, rename stack slots
         mir.code = std::mem::take(&mut self.code);
-        Ok((FIXED + self.count_stack) as usize)
+        Ok((self.fixed + self.count_stack) as usize)
     }
 
     fn push(&mut self, ins: Instruction) {
@@ -49,7 +55,7 @@ impl Compactor {
                 | Instruction::IfElse { cond: loc, .. }
                 | Instruction::LoadMath { loc, .. } => {
                     if let Loc::Stack(idx) = loc {
-                        if idx >= FIXED {
+                        if idx >= self.fixed {
                             if let Some(x) = self.live.get_mut(&loc) {
                                 *x = ip;
                             }
@@ -58,7 +64,7 @@ impl Compactor {
                 }
                 Instruction::Save { loc, .. } => {
                     if let Loc::Stack(idx) = loc {
-                        if idx >= FIXED {
+                        if idx >= self.fixed {
                             self.live.insert(loc, ip);
                         }
                     }
@@ -70,7 +76,7 @@ impl Compactor {
 
     fn save(&mut self, loc: Loc) -> Loc {
         if let Loc::Stack(idx) = loc {
-            if idx < FIXED {
+            if idx < self.fixed {
                 loc
             } else if let Some(Loc::Stack(s)) = self.stack.get(&loc) {
                 // A stack slot can be assigned more than once in loops (ϕ-constructs)
@@ -94,10 +100,13 @@ impl Compactor {
 
     fn load(&mut self, loc: Loc, ip: usize) -> Loc {
         if let Loc::Stack(idx) = loc {
-            if idx < FIXED {
+            if idx < self.fixed {
                 loc
             } else {
-                let l = self.stack.get(&loc).unwrap();
+                let l = self
+                    .stack
+                    .get(&loc)
+                    .expect(&format!("cannot find {:?}", loc));
                 let last = self.live.get(&loc).unwrap();
 
                 // stack slots are not returned to the pool inside loops.

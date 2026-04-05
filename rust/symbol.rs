@@ -73,16 +73,17 @@ impl SymbolTable {
                passed in registers (up to 4 in Windows and 8 otherwise).
            2. To preserve registers XMM6-XMM15 in Windows (if needed).
         */
+
         for i in 0..SPILL_AREA {
             s.add_stack(&format!("μ{}", i));
         }
 
-        for i in 0..SLICE_CAP {
-            s.add_stack(&format!("__Arg{}", i));
-        }
-
         if is_complex {
             s.slot_size = 2;
+        }
+
+        for i in 0..SLICE_CAP {
+            s.add_stack(&format!("__Arg{}", i));
         }
 
         s

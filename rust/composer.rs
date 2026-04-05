@@ -3,12 +3,12 @@ use num_complex::Complex;
 use std::collections::HashSet;
 
 use crate::code::VirtualTable;
-use crate::config::{Config, SLICE_CAP, SPILL_AREA};
+use crate::config::{Config, SLICE_CAP};
 use crate::defuns::Defuns;
 use crate::expr::Expr;
-use crate::instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
+use crate::instruction::{BuiltinSymbol, Slot};
 use crate::mir::Mir;
-use crate::model::{CellModel, Equation, Program, Variable};
+use crate::model::{CellModel, Program};
 use crate::runnable::Application;
 use crate::symbol::Loc;
 use crate::utils::*;
@@ -52,27 +52,47 @@ pub struct Transliterator {
     pub count_temps: usize,
     pub count_outs: usize,
     pub ft: HashSet<String>,
+    pub prog: Program,
 }
 
 impl Transliterator {
-    pub fn new(mut config: Config, df: Defuns) -> Transliterator {
+    pub fn new(count_temps: usize, mut config: Config, df: Defuns) -> Transliterator {
         config.set_defuns(df);
 
+        let ml = CellModel {
+            iv: Expr::var("$_").to_variable().unwrap(),
+            params: Vec::new(),
+            states: Vec::new(),
+            algs: Vec::new(),
+            odes: Vec::new(),
+            obs: Vec::new(),
+        };
+
+        let mir = Mir::new(config.clone());
+        let prog = Program::new(&ml, config).unwrap();
+
         Transliterator {
-            mir: Mir::new(config),
+            mir,
             consts: Vec::new(),
             reals: HashSet::new(),
             num_params: 0,
             count_params: 0,
-            count_temps: 0,
+            count_temps,
             count_outs: 0,
             ft: HashSet::new(),
+            prog,
         }
     }
 
-    fn load(&mut self, dst: Reg, slot: &Slot) -> Result<()> {
-        let k = if self.mir.config.is_complex() { 2 } else { 1 };
+    fn find_sym(&mut self, name: &str) -> Option<Loc> {
+        self.prog
+            .builder
+            .symbol_table()
+            .find_sym(&name)
+            .map(|s| s.borrow().loc)
+    }
 
+    fn load(&mut self, dst: Reg, slot: &Slot) -> Result<()> {
         match slot {
             Slot::Const(idx) => {
                 let n = 2 * *idx as u32;
@@ -90,33 +110,47 @@ impl Transliterator {
                 }
             }
             Slot::Param(idx) => {
-                self.count_params = self.count_params.max(*idx);
-                self.mir.load_param(dst, (*idx * k) as u32);
+                for i in self.count_params..=*idx {
+                    let name = format!("Param{}", i);
+                    self.prog.builder.symbol_table().add_param(&name);
+                }
+                self.count_params = self.count_params.max(*idx + 1);
+                let name = format!("Param{}", idx);
+                if let Some(Loc::Param(i)) = self.find_sym(&name) {
+                    self.mir.load_param(dst, i);
+                } else {
+                    return Err(anyhow!("error adding {:?}.", &name));
+                }
             }
             Slot::Out(idx) => {
-                self.count_outs = self.count_outs.max(*idx);
-                self.mir.load_mem(dst, (*idx * k) as u32);
+                let name = format!("Out{}", idx);
+                if let Some(Loc::Stack(i)) = self.find_sym(&name) {
+                    self.mir.load_stack(dst, i);
+                } else {
+                    return Err(anyhow!("{:?} not found.", &name));
+                }
             }
             Slot::Temp(idx) => {
-                self.count_temps = self.count_temps.max(*idx);
-                self.mir
-                    .load_stack(dst, ((*idx + SPILL_AREA + SLICE_CAP) * k) as u32);
+                let name = format!("Temp{}", idx);
+                if let Some(Loc::Stack(i)) = self.find_sym(&name) {
+                    self.mir.load_stack(dst, i);
+                } else {
+                    return Err(anyhow!("{:?} not found.", &name));
+                }
             }
-            _ => return Err(anyhow!("slot not defined")),
+            _ => return Err(anyhow!("{:?} is not defined.", &slot)),
         }
 
         Ok(())
     }
 
-    fn as_loc(&self, slot: &Slot) -> Result<Loc> {
-        let k = if self.mir.config.is_complex() { 2 } else { 1 };
-
+    fn as_loc(&mut self, slot: &Slot) -> Option<Loc> {
         match slot {
-            Slot::Param(idx) => Ok(Loc::Param((*idx * k) as u32)),
-            Slot::Out(idx) => Ok(Loc::Mem((*idx * k) as u32)),
-            Slot::Temp(idx) => Ok(Loc::Stack(((*idx + SPILL_AREA + SLICE_CAP) * k) as u32)),
-            Slot::Arg(idx) => Ok(Loc::Stack(((*idx + SPILL_AREA) * k) as u32)),
-            _ => return Err(anyhow!("slot not defined")),
+            Slot::Param(idx) => self.find_sym(&format!("Param{}", idx)),
+            Slot::Arg(idx) => self.find_sym(&format!("__Arg{}", idx)),
+            Slot::Out(idx) => self.find_sym(&format!("Out{}", idx)),
+            Slot::Temp(idx) => self.find_sym(&format!("Temp{}", idx)),
+            _ => None,
         }
     }
 
@@ -129,17 +163,42 @@ impl Transliterator {
         }
     }
 
-    fn save(&mut self, src: Reg, slot: &Slot) {
-        let k = if self.mir.config.is_complex() { 2 } else { 1 };
-
-        match slot {
-            Slot::Out(idx) => self.mir.save_mem(src, *idx as u32),
-            Slot::Temp(idx) => self
-                .mir
-                .save_stack(src, ((*idx + SPILL_AREA + SLICE_CAP) * k) as u32),
-            Slot::Arg(idx) => self.mir.save_stack(src, ((*idx + SPILL_AREA) * k) as u32),
-            _ => unreachable!(),
+    fn add_stack(&mut self, name: &str) -> Result<u32> {
+        if let Some(Loc::Stack(i)) = self.find_sym(&name) {
+            Ok(i)
+        } else {
+            self.prog.builder.symbol_table().add_stack(&name);
+            if let Some(Loc::Stack(i)) = self.find_sym(&name) {
+                Ok(i)
+            } else {
+                Err(anyhow!("error adding {:?}", &name))
+            }
         }
+    }
+
+    fn save(&mut self, src: Reg, slot: &Slot) -> Result<()> {
+        match slot {
+            Slot::Out(idx) => {
+                self.count_outs = self.count_outs.max(*idx + 1);
+                let name = format!("Out{}", idx);
+                let i = self.add_stack(&name)?;
+                self.mir.save_stack(src, i);
+            }
+            Slot::Temp(idx) => {
+                assert!(*idx < self.count_temps);
+                let name = format!("Temp{}", idx);
+                let i = self.add_stack(&name)?;
+                self.mir.save_stack(src, i);
+            }
+            Slot::Arg(_) => {
+                if let Some(Loc::Stack(i)) = self.as_loc(slot) {
+                    self.mir.save_stack(src, i);
+                }
+            }
+            _ => unreachable!(),
+        };
+
+        Ok(())
     }
 
     fn mark_real(&mut self, slot: &Slot, is_real: bool) {
@@ -214,7 +273,7 @@ impl Composer for Transliterator {
             self.mark_real(&args[i], i < num_reals);
             self.mir.plus(reg(0), reg(0), reg(1));
         }
-        self.save(reg(0), lhs);
+        self.save(reg(0), lhs)?;
 
         Ok(())
     }
@@ -239,7 +298,7 @@ impl Composer for Transliterator {
             self.mir.neg(reg(0), reg(0));
         }
 
-        self.save(reg(0), lhs);
+        self.save(reg(0), lhs)?;
 
         Ok(())
     }
@@ -262,7 +321,7 @@ impl Composer for Transliterator {
             }
             _ => self.mir.powi(reg(0), reg(0), p as i32),
         }
-        self.save(reg(0), lhs);
+        self.save(reg(0), lhs)?;
 
         Ok(())
     }
@@ -274,13 +333,13 @@ impl Composer for Transliterator {
         self.load(reg(1), p)?;
         self.mir.setup_call_binary(reg(0), reg(1));
         self.mir.call("power", 2)?;
-        self.save(Reg::Ret, lhs);
+        self.save(Reg::Ret, lhs)?;
         Ok(())
     }
 
     fn append_assign(&mut self, lhs: &Slot, rhs: &Slot) -> Result<()> {
         self.load(reg(0), rhs)?;
-        self.save(reg(0), lhs);
+        self.save(reg(0), lhs)?;
         Ok(())
     }
 
@@ -305,6 +364,26 @@ impl Composer for Transliterator {
         Ok(())
     }
 
+    fn append_join(
+        &mut self,
+        lhs: &Slot,
+        cond: &Slot,
+        true_val: &Slot,
+        false_val: &Slot,
+    ) -> Result<()> {
+        self.load(reg(0), cond)?;
+        self.mir.xor(reg(1), reg(0), reg(0));
+        self.mir.eq(reg(2), reg(0), reg(1));
+        self.save(reg(2), &Slot::Arg(0))?;
+        self.load(reg(0), true_val)?;
+        self.load(reg(1), false_val)?;
+        let loc = self.as_loc(&Slot::Arg(0)).unwrap();
+        self.mir.ifelse(reg(2), reg(1), reg(0), loc);
+        self.save(reg(2), lhs)?;
+
+        Ok(())
+    }
+
     fn append_external_fun(&mut self, lhs: &Slot, op: &str, args: &[Slot]) -> Result<()> {
         let n = args.len();
         assert!(n <= SLICE_CAP);
@@ -316,14 +395,14 @@ impl Composer for Transliterator {
                 self.load(reg(0), &args[0])?;
                 self.mir.setup_call_unary(reg(0));
                 self.mir.call(op, 1)?;
-                self.save(Reg::Ret, lhs);
+                self.save(Reg::Ret, lhs)?;
                 self.ft.insert(op.to_string());
             } else if n == 2 {
                 self.load(reg(0), &args[0])?;
                 self.load(reg(1), &args[1])?;
                 self.mir.setup_call_binary(reg(0), reg(1));
                 self.mir.call(op, 2)?;
-                self.save(Reg::Ret, lhs);
+                self.save(Reg::Ret, lhs)?;
                 self.ft.insert(op.to_string());
             } else {
                 return Err(anyhow!("wrong number of arguments to {:?}", op));
@@ -331,23 +410,23 @@ impl Composer for Transliterator {
         } else if self.mir.config.is_intrinsic_unary(op) && n == 1 {
             self.load(reg(0), &args[0])?;
             self.compile_unary(op, reg(1), reg(0))?;
-            self.save(reg(1), lhs);
+            self.save(reg(1), lhs)?;
         } else if self.mir.config.is_intrinsic_binary(op) && n == 2 {
             self.load(reg(0), &args[0])?;
             self.load(reg(1), &args[1])?;
             self.compile_binary(op, reg(2), reg(0), reg(1))?;
-            self.save(reg(2), lhs);
+            self.save(reg(2), lhs)?;
         } else {
             println!("{:?}", &args);
 
             for i in 0..args.len() {
                 self.load(reg(0), &args[i])?;
-                self.save(reg(0), &Slot::Arg(i));
+                self.save(reg(0), &Slot::Arg(i))?;
             }
 
             let op = format!("${}", op);
             self.mir.call(&op, n)?;
-            self.save(Reg::Ret, lhs);
+            self.save(Reg::Ret, lhs)?;
             self.ft.insert(op.to_string());
         }
 
@@ -383,28 +462,8 @@ impl Composer for Transliterator {
         };
 
         self.mir.call(op, 1)?;
-        self.save(Reg::Ret, lhs);
+        self.save(Reg::Ret, lhs)?;
         self.ft.insert(op.to_string());
-
-        Ok(())
-    }
-
-    fn append_join(
-        &mut self,
-        lhs: &Slot,
-        cond: &Slot,
-        true_val: &Slot,
-        false_val: &Slot,
-    ) -> Result<()> {
-        self.load(reg(0), cond)?;
-        self.mir.xor(reg(1), reg(0), reg(0));
-        self.mir.eq(reg(2), reg(0), reg(1));
-        self.save(reg(2), &Slot::Arg(0));
-        self.load(reg(0), true_val)?;
-        self.load(reg(1), false_val)?;
-        self.mir
-            .ifelse(reg(2), reg(0), reg(1), self.as_loc(&Slot::Arg(0))?);
-        self.save(reg(2), lhs);
 
         Ok(())
     }
@@ -414,41 +473,17 @@ impl Composer for Transliterator {
     }
 
     fn compile(&mut self) -> Result<Application> {
-        let params: Vec<Variable> = (0..=self.count_params.max(self.num_params.max(1) - 1))
-            .map(|idx| Variable {
-                name: format!("Param{}", idx),
-            })
-            .collect();
+        let k = if self.mir.config.is_complex() { 2 } else { 1 };
 
-        let outs: Vec<Expr> = (0..=self.count_outs)
-            .map(|idx| Expr::var(&format!("Out{}", idx)))
-            .collect();
-
-        let obs: Vec<Equation> = outs
-            .iter()
-            .map(|v| Equation {
-                lhs: v.clone(),
-                rhs: v.clone(),
-            })
-            .collect();
-
-        let ml = CellModel {
-            iv: Expr::var("$_").to_variable().unwrap(),
-            params,
-            states: Vec::new(),
-            algs: Vec::new(),
-            odes: Vec::new(),
-            obs,
-        };
-
-        let mut prog = Program::new(&ml, self.mir.config.clone())?;
-
-        for i in 0..self.count_temps {
-            prog.builder
-                .block()
-                .create_tmp_named(&format!("__Temp{}", i));
+        for i in 0..self.count_outs {
+            self.load(reg(0), &Slot::Out(i))?;
+            self.mir.save_mem(reg(0), (k * i) as u32);
         }
 
+        let mut prog: Program = self.prog.clone();
+
+        prog.count_params = k * self.count_params;
+        prog.count_obs = k * self.count_outs;
         prog.builder.consts = self.consts.clone();
         prog.builder.ft = self.ft.clone();
 
@@ -456,8 +491,6 @@ impl Composer for Transliterator {
 
         let mut app = Application::with_mir(prog, self.reals.clone(), mir)?;
         app.prepare_simd();
-
-        app.dump("test.bin", "simd");
 
         Ok(app)
     }

@@ -52,7 +52,11 @@ impl Program {
         let mut builder = Builder::new(config.clone());
 
         for v in &ml.states {
-            builder.symbol_table().add_mem(&v.name);
+            if v.name.starts_with("__") {
+                builder.block().create_tmp_named(&v.name);
+            } else {
+                builder.block().create_mem(&v.name);
+            }
         }
 
         // builder.symbol_table().add_mem(&ml.iv.name);
