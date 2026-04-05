@@ -6,14 +6,16 @@ use std::sync::Arc;
 use crate::defuns::Defuns;
 use crate::utils::Storage;
 
-pub const USE_SIMD: u32 = 0x01;
-pub const USE_THREADS: u32 = 0x02;
+pub const USE_SIMD: u32 = 0x0001;
+pub const USE_THREADS: u32 = 0x0002;
 pub const CSE: u32 = 0x04;
-pub const FASTMATH: u32 = 0x08;
+pub const FASTMATH: u32 = 0x0008;
 // pub const SANITIZE: u32 = 0x10;
-pub const COMPLEX: u32 = 0x20;
-pub const SYMBOLICA: u32 = 0x40;
-pub const SIMD_BRANCH: u32 = 0x80;
+pub const COMPLEX: u32 = 0x0020;
+pub const SYMBOLICA: u32 = 0x0040;
+pub const SIMD_BRANCH: u32 = 0x0080;
+
+pub const COMPACT: u32 = 0x1000;
 
 pub const OPT_LEVEL_MASK: u32 = 0x0f00;
 pub const OPT_LEVEL_SHIFT: usize = 8;
@@ -131,6 +133,10 @@ impl Config {
         self.test(FASTMATH) && (self.has_avx() || self.is_arm64() || self.is_riscv64())
     }
 
+    pub fn compact(&self) -> bool {
+        self.test(COMPACT)
+    }
+
     pub fn opt_level(&self) -> u8 {
         let level = ((self.opt & OPT_LEVEL_MASK) >> OPT_LEVEL_SHIFT) as u8;
 
@@ -224,13 +230,18 @@ impl Config {
     pub fn set_symbolica(&mut self, enabled: bool) {
         self.opt = (self.opt & !SYMBOLICA) | if enabled { SYMBOLICA } else { 0 };
     }
+
+    /// Compact stack frame.
+    pub fn set_compact(&mut self, enabled: bool) {
+        self.opt = (self.opt & !COMPACT) | if enabled { COMPACT } else { 0 };
+    }
 }
 
 impl Default for Config {
     fn default() -> Config {
         Config::new(
             CompilerType::Native,
-            USE_SIMD | SYMBOLICA | (2 << OPT_LEVEL_SHIFT),
+            USE_SIMD | SYMBOLICA | COMPACT | (2 << OPT_LEVEL_SHIFT),
         )
         .unwrap()
     }

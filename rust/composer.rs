@@ -49,15 +49,22 @@ pub struct Transliterator {
     pub reals: HashSet<Loc>,
     pub num_params: usize,
     pub count_params: usize,
-    pub count_temps: usize,
     pub count_outs: usize,
     pub ft: HashSet<String>,
     pub prog: Program,
 }
 
 impl Transliterator {
-    pub fn new(count_temps: usize, mut config: Config, df: Defuns) -> Transliterator {
+    pub fn new(mut config: Config, df: Defuns) -> Transliterator {
         config.set_defuns(df);
+
+        // Stack frame compactification is off because of a subtle
+        // bug. In addition, it is likely not even needed as
+        // Symbolica does this already.
+        config.set_compact(false);
+
+        // opt_level should be 2 for proper register allocation.
+        config.set_opt_level(2);
 
         let ml = CellModel {
             iv: Expr::var("$_").to_variable().unwrap(),
@@ -77,7 +84,6 @@ impl Transliterator {
             reals: HashSet::new(),
             num_params: 0,
             count_params: 0,
-            count_temps,
             count_outs: 0,
             ft: HashSet::new(),
             prog,
@@ -185,7 +191,6 @@ impl Transliterator {
                 self.mir.save_stack(src, i);
             }
             Slot::Temp(idx) => {
-                assert!(*idx < self.count_temps);
                 let name = format!("Temp{}", idx);
                 let i = self.add_stack(&name)?;
                 self.mir.save_stack(src, i);

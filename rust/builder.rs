@@ -286,7 +286,9 @@ impl Builder {
             ColoringAllocator::new(self.config.clone()).optimize(mir)?;
         }
 
-        self.count_stack = Compactor::new(self.config.clone()).compact(mir).ok();
+        if self.config.compact() {
+            self.count_stack = Compactor::new(self.config.clone()).compact(mir).ok();
+        }
 
         mir.add_consts(&self.consts);
         mir.populate_labels();

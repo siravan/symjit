@@ -6,7 +6,7 @@ use anyhow::{anyhow, Result};
 use petgraph::algo::coloring::dsatur_coloring;
 use petgraph::graph::{NodeIndex, UnGraph};
 
-use crate::config::Config;
+use crate::config::{Config, SLICE_CAP, SPILL_AREA};
 use crate::mir::{Instruction, Mir};
 use crate::symbol::Loc;
 use crate::utils::Reg;
@@ -854,6 +854,7 @@ impl GreedyAllocator {
                     let s1 = self.deallocate(ip, s1);
                     let (dst, _) = self.allocate(dst, None);
                     self.push(Instruction::LoadMath { op, dst, s1, loc });
+                    self.locs.insert(loc, 0);
                 }
                 Instruction::LoadConstMath { op, dst, s1, idx } => {
                     let s1 = self.deallocate(ip, s1);
@@ -870,19 +871,30 @@ impl GreedyAllocator {
     // Removes unnessasary instructions.
     fn contract(&mut self) -> Result<()> {
         let code = std::mem::take(&mut self.code);
+        let fixed = if self.config.is_complex() {
+            (2 * SLICE_CAP + SPILL_AREA) as u32
+        } else {
+            (SLICE_CAP + SPILL_AREA) as u32
+        };
 
         for ins in code {
             match ins {
                 // This rule is commented out to prevent eliding Args during
                 // external calls. If needed, we can restore this rule as long
                 // as Args are added to self.locs.
-                /*
                 Instruction::Save { src, loc } => {
-                    if !matches!(loc, Loc::Stack(_)) || self.locs.contains_key(&loc) {
+                    let keep = if let Loc::Stack(idx) = loc {
+                        idx < fixed || self.locs.contains_key(&loc)
+                    } else {
+                        true
+                    };
+
+                    if keep {
                         self.push(Instruction::Save { src, loc })
+                    } else {
+                        // println!("eliding {:?}", loc);
                     }
                 }
-                */
                 Instruction::Mov { dst, s1 } => {
                     if dst != s1 {
                         self.push(Instruction::Mov { dst, s1 });
