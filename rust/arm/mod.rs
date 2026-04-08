@@ -342,37 +342,25 @@ impl Generator for ArmGenerator {
     }
 
     #[cfg(target_arch = "aarch64")]
-    #[target_feature(enable = "fcma")]
     fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
-        let xt = 4;
-        let yt = 5;
+        if self.config.permissive() {
+            let xt = Reg::Gen(2);
 
-        self.emit(arm! {zip1 q(ϕ(x1)), q(ϕ(x1)), q(ϕ(y1))});
-        self.emit(arm! {zip1 q(ϕ(x2)), q(ϕ(x2)), q(ϕ(y2))});
-        self.xor(xt, xt, xt);
-        self.emit(arm! {fcmla q(xt), q(ϕ(x1)), q(ϕ(x2)), #0});
-        self.emit(arm! {fcmla q(xt), q(ϕ(x1)), q(ϕ(x2)), #90});
-        self.emit(arm! {dup q(ϕ(yd)), q(xt)[1]});
-        self.emit(arm! {dup q(ϕ(xd)), q(xt)[0]});
+            self.emit(arm! {zip1 q(ϕ(x1)), q(ϕ(x1)), q(ϕ(y1))});
+            self.emit(arm! {zip1 q(ϕ(x2)), q(ϕ(x2)), q(ϕ(y2))});
+            self.xor(xt, xt, xt);
+            self.emit(arm! {fcmla q(ϕ(xt)), q(ϕ(x1)), q(ϕ(x2)), #0});
+            self.emit(arm! {fcmla q(ϕ(xt)), q(ϕ(x1)), q(ϕ(x2)), #90});
+            self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xt))[1]});
+            self.emit(arm! {dup q(ϕ(xd)), q(ϕ(xt))[0]});
 
-        true
+            true
+        } else {
+            false
+        }
     }
 
     #[cfg(not(target_arch = "aarch64"))]
-    fn times_complex(
-        &mut self,
-        _xd: Reg,
-        _yd: Reg,
-        _x1: Reg,
-        _y1: Reg,
-        _x2: Reg,
-        _y2: Reg,
-    ) -> bool {
-        false
-    }
-
-    #[cfg(target_arch = "aarch64")]
-    #[target_feature(not(enable = "fcma"))]
     fn times_complex(
         &mut self,
         _xd: Reg,

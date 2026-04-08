@@ -456,7 +456,7 @@ macro_rules! arm {
         0x6ec0c400 | rd!($rd) | rn!($rn) | rm!($rm)
     };
     (fcmla q($rd:expr), q($rn:expr), q($rm:expr), #90) => {
-        0x6ec0dc00 | rd!($rd) | rn!($rn) | rm!($rm)
+        0x6ec0cc00 | rd!($rd) | rn!($rn) | rm!($rm)
     };
 
     // FMA instructions are not defined for 2d packed-double

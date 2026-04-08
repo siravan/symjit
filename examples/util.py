@@ -32,6 +32,12 @@ def process_argv():
         action="store_true",
         dest="fastmath",
     )
+    parser.add_argument(
+        "--permissive",
+        help="permit using SIMD instructions for scalar ops",
+        action="store_true",
+        dest="permissive",
+    )
     parser.add_argument("--dtype", help="data type", default="float64")
     parser.add_argument(
         "--opt_level",

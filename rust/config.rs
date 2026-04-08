@@ -17,6 +17,7 @@ pub const SIMD_BRANCH: u32 = 0x0080;
 
 pub const COMPACT: u32 = 0x1000;
 pub const MEM_SAVER: u32 = 0x2000;
+pub const PERMISSIVE: u32 = 0x4000;
 
 pub const OPT_LEVEL_MASK: u32 = 0x0f00;
 pub const OPT_LEVEL_SHIFT: usize = 8;
@@ -142,6 +143,10 @@ impl Config {
         self.test(MEM_SAVER)
     }
 
+    pub fn permissive(&self) -> bool {
+        self.test(PERMISSIVE)
+    }
+
     pub fn opt_level(&self) -> u8 {
         let level = ((self.opt & OPT_LEVEL_MASK) >> OPT_LEVEL_SHIFT) as u8;
 
@@ -244,6 +249,11 @@ impl Config {
     /// Memory-saver mode for very large inputs.
     pub fn set_mem_saver(&mut self, enabled: bool) {
         self.opt = (self.opt & !MEM_SAVER) | if enabled { MEM_SAVER } else { 0 };
+    }
+
+    /// Permits using SIMD instruction in scalar mode (e.g., for complex multiplication).
+    pub fn set_permissive(&mut self, enabled: bool) {
+        self.opt = (self.opt & !PERMISSIVE) | if enabled { PERMISSIVE } else { 0 };
     }
 }
 

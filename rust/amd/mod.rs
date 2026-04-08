@@ -718,7 +718,7 @@ impl Generator for AmdGenerator {
     }
 
     fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
-        if matches!(self.family, AmdFamily::AvxScalar) {
+        if self.config.permissive() && matches!(self.family, AmdFamily::AvxScalar) {
             let xt = 4;
             let yt = 5;
             self.amd.vunpckldd(ϕ(x1), ϕ(x1), ϕ(x1));
