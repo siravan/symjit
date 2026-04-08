@@ -1622,13 +1622,16 @@ impl Mir {
     }
 
     fn fuse_save(&self, code: &mut Vec<Instruction>, q0: &Instruction, q1: &Instruction) -> bool {
+        // Important: this rule is commented out because of a potential bug,
+        // where %0 is needed afterward.
         /*
-         * example
-         *      %0 := %1
-         *      Mem[4] = %0
-         * becomes
-         *      Mem[4] := %1
-         */
+        /*
+        * example
+        *      %0 := %1
+        *      Mem[4] = %0
+        * becomes
+        *      Mem[4] := %1
+        */
         if let Instruction::Mov { dst, s1 } = *q0 {
             if let Instruction::Save {
                 src: dst_q1,
@@ -1644,6 +1647,7 @@ impl Mir {
                 }
             }
         }
+        */
 
         /*
          * example
@@ -1663,6 +1667,8 @@ impl Mir {
             } = *q1
             {
                 if loc == loc_q1 {
+                    println!("{:?}", q0);
+                    println!("{:?}", q1);
                     code.push(q0.clone());
                     code.push(Instruction::Mov {
                         dst: dst_q1,

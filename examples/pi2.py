@@ -9,7 +9,7 @@ from sympy import sqrt, symbols
 
 # calculating pi using Viète's formula (https://en.wikipedia.org/wiki/Vi%C3%A8te%27s_formula)
 
-N = 1
+N = 21
 
 x = symbols("x")
 
