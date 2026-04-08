@@ -229,6 +229,14 @@ impl ColoringAllocator {
                 Instruction::Save { src, loc } => {
                     self.save(src, loc);
                 }
+                Instruction::LoadComplex { xd, yd, loc } => {
+                    self.load(xd, loc);
+                    self.load(yd, loc.imag());
+                }
+                Instruction::SaveComplex { xs, ys, loc } => {
+                    self.save(xs, loc);
+                    self.save(ys, loc.imag());
+                }
                 Instruction::Mov { dst, s1 } => {
                     let (dst, s1) = self.unary_op(dst, s1);
                     self.push(Instruction::Mov { dst, s1 });
@@ -370,6 +378,20 @@ impl ColoringAllocator {
                     if !matches!(loc, Loc::Stack(..)) || self.loads.contains(&loc) {
                         self.push(Instruction::Save {
                             src: self.alloc(src),
+                            loc,
+                        })
+                    }
+                }
+                Instruction::LoadComplex { xd, yd, loc } => self.push(Instruction::LoadComplex {
+                    xd: self.alloc(xd),
+                    yd: self.alloc(yd),
+                    loc,
+                }),
+                Instruction::SaveComplex { xs, ys, loc } => {
+                    if !matches!(loc, Loc::Stack(..)) || self.loads.contains(&loc) {
+                        self.push(Instruction::SaveComplex {
+                            xs: self.alloc(xs),
+                            ys: self.alloc(ys),
                             loc,
                         })
                     }
@@ -647,6 +669,16 @@ impl GreedyAllocator {
                     let src = self.consume(ip, src);
                     self.push(Instruction::Save { src, loc });
                 }
+                Instruction::LoadComplex { xd, yd, loc } => {
+                    let xd = self.produce(ip, xd);
+                    let yd = self.produce(ip, yd);
+                    self.push(Instruction::LoadComplex { xd, yd, loc });
+                }
+                Instruction::SaveComplex { xs, ys, loc } => {
+                    let xs = self.consume(ip, xs);
+                    let ys = self.consume(ip, ys);
+                    self.push(Instruction::SaveComplex { xs, ys, loc });
+                }
                 Instruction::Mov { dst, s1 } => {
                     let (dst, s1) = self.unary_op(ip, dst, s1);
                     self.push(Instruction::Mov { dst, s1 });
@@ -845,6 +877,41 @@ impl GreedyAllocator {
                         self.allocs[r as usize].loc = Some(loc);
                     }
                 }
+                Instruction::LoadComplex { xd, yd, loc } => {
+                    let (xd, moved) = self.allocate(xd, Some(loc));
+                    let (yd, _) = self.allocate(yd, Some(loc.imag()));
+                    if !moved {
+                        self.push(Instruction::LoadComplex { xd, yd, loc });
+                        self.locs.insert(loc, 0);
+                        self.locs.insert(loc.imag(), 0);
+                    }
+                }
+                Instruction::SaveComplex { xs, ys, loc } => {
+                    let xs = self.deallocate(ip, xs);
+                    let ys = self.deallocate(ip, ys);
+                    self.push(Instruction::SaveComplex { xs, ys, loc });
+
+                    // this for loop is added due to a bug discovered while
+                    // compiling Symbolica expressions (e.g., x^3 + y^3).
+                    // A loc should be in only one register (the wrong registers
+                    // were used). Therefore, a save invalidates all previous
+                    // assignments to that loc.
+                    for a in self.allocs.iter_mut() {
+                        if Some(loc) == a.loc {
+                            a.loc = None;
+                        }
+                        if Some(loc.imag()) == a.loc {
+                            a.loc = None;
+                        }
+                    }
+
+                    if let Reg::Gen(r) = xs {
+                        self.allocs[r as usize].loc = Some(loc);
+                    }
+                    if let Reg::Gen(r) = ys {
+                        self.allocs[r as usize].loc = Some(loc.imag());
+                    }
+                }
                 Instruction::Mov { dst, s1 } => {
                     let s1 = self.deallocate(ip, s1);
 
@@ -1003,8 +1070,18 @@ impl GreedyAllocator {
 
                     if keep {
                         self.push(Instruction::Save { src, loc })
+                    }
+                }
+                Instruction::SaveComplex { xs, ys, loc } => {
+                    let keep = if let Loc::Stack(idx) = loc {
+                        idx < fixed
+                            || (self.locs.contains_key(&loc) && self.locs.contains_key(&loc.imag()))
                     } else {
-                        // println!("eliding {:?}", loc);
+                        true
+                    };
+
+                    if keep {
+                        self.push(Instruction::SaveComplex { xs, ys, loc })
                     }
                 }
                 Instruction::Mov { dst, s1 } => {

@@ -189,46 +189,51 @@ impl Generator for Complexifier {
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
-        self.mir.load_mem(re(dst), idx);
-        self.mir.load_mem(im(dst), idx + 1);
+        // self.mir.load_mem(re(dst), idx);
+        // self.mir.load_mem(im(dst), idx + 1);
+        self.mir.load_mem_complex(re(dst), im(dst), idx);
         self.set_reg_complex(dst);
     }
 
     fn save_mem(&mut self, s1: Reg, idx: u32) {
         self.ensure_complex(s1);
-        self.mir.save_mem(re(s1), idx);
-        self.mir.save_mem(im(s1), idx + 1);
+        // self.mir.save_mem(re(s1), idx);
+        // self.mir.save_mem(im(s1), idx + 1);
+        self.mir.save_mem_complex(re(s1), im(s1), idx);
     }
 
     fn load_param(&mut self, dst: Reg, idx: u32) {
-        self.mir.load_param(re(dst), idx);
-
         if self.is_real_loc(Loc::Param(idx)) {
+            self.mir.load_param(re(dst), idx);
             self.set_reg_real(dst);
         } else {
-            self.mir.load_param(im(dst), idx + 1);
+            // self.mir.load_param(re(dst), idx);
+            // self.mir.load_param(im(dst), idx + 1);
+            self.mir.load_param_complex(re(dst), im(dst), idx);
             self.set_reg_complex(dst);
         }
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
-        self.mir.load_stack(re(dst), idx);
-
         if self.is_real_loc(Loc::Stack(idx)) {
+            self.mir.load_stack(re(dst), idx);
             self.set_reg_real(dst);
         } else {
-            self.mir.load_stack(im(dst), idx + 1);
+            // self.mir.load_stack(re(dst), idx);
+            // self.mir.load_stack(im(dst), idx + 1);
+            self.mir.load_stack_complex(re(dst), im(dst), idx);
             self.set_reg_complex(dst);
         }
     }
 
     fn save_stack(&mut self, s1: Reg, idx: u32) {
-        self.mir.save_stack(re(s1), idx);
-
         if self.is_real_reg(s1) {
+            self.mir.save_stack(re(s1), idx);
             self.set_loc_real(Loc::Stack(idx));
         } else {
-            self.mir.save_stack(im(s1), idx + 1);
+            // self.mir.save_stack(re(s1), idx);
+            // self.mir.save_stack(im(s1), idx + 1);
+            self.mir.save_stack_complex(re(s1), im(s1), idx);
             self.set_loc_complex(Loc::Stack(idx));
         }
     }

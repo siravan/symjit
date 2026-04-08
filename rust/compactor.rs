@@ -53,7 +53,8 @@ impl Compactor {
             match *ins {
                 Instruction::Load { loc, .. }
                 | Instruction::IfElse { cond: loc, .. }
-                | Instruction::LoadMath { loc, .. } => {
+                | Instruction::LoadMath { loc, .. }
+                | Instruction::LoadComplex { loc, .. } => {
                     if let Loc::Stack(idx) = loc {
                         if idx >= self.fixed {
                             if let Some(x) = self.live.get_mut(&loc) {
@@ -62,7 +63,7 @@ impl Compactor {
                         }
                     }
                 }
-                Instruction::Save { loc, .. } => {
+                Instruction::Save { loc, .. } | Instruction::SaveComplex { loc, .. } => {
                     if let Loc::Stack(idx) = loc {
                         if idx >= self.fixed {
                             self.live.insert(loc, ip);
@@ -129,6 +130,14 @@ impl Compactor {
                     let l = self.load(*loc, ip);
                     self.push(Instruction::Load { dst: *dst, loc: l });
                 }
+                Instruction::LoadComplex { xd, yd, loc } => {
+                    let l = self.load(*loc, ip);
+                    self.push(Instruction::LoadComplex {
+                        xd: *xd,
+                        yd: *yd,
+                        loc: l,
+                    });
+                }
                 Instruction::LoadMath { op, dst, s1, loc } => {
                     let l = self.load(*loc, ip);
                     self.push(Instruction::LoadMath {
@@ -155,6 +164,14 @@ impl Compactor {
                 Instruction::Save { src, loc } => {
                     let l = self.save(*loc);
                     self.push(Instruction::Save { src: *src, loc: l });
+                }
+                Instruction::SaveComplex { xs, ys, loc } => {
+                    let l = self.save(*loc);
+                    self.push(Instruction::SaveComplex {
+                        xs: *xs,
+                        ys: *ys,
+                        loc: l,
+                    });
                 }
                 Instruction::Label { label } => {
                     self.depth += 1;

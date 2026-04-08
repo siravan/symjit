@@ -23,6 +23,16 @@ impl fmt::Debug for Loc {
     }
 }
 
+impl Loc {
+    pub fn imag(&self) -> Loc {
+        match self {
+            Loc::Mem(idx) => Loc::Mem(1 + idx),
+            Loc::Stack(idx) => Loc::Stack(1 + idx),
+            Loc::Param(idx) => Loc::Param(1 + idx),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Symbol {
     pub _name: String,

@@ -96,6 +96,16 @@ pub enum Instruction {
         src: Reg,
         loc: Loc,
     },
+    LoadComplex {
+        xd: Reg,
+        yd: Reg,
+        loc: Loc,
+    },
+    SaveComplex {
+        xs: Reg,
+        ys: Reg,
+        loc: Loc,
+    },
     LoadConst {
         dst: Reg,
         idx: u32,
@@ -164,6 +174,12 @@ impl fmt::Debug for Instruction {
             Instruction::Mov { dst, s1 } => write!(f, "{:?} := {:?}", &dst, &s1),
             Instruction::Load { dst, loc } => write!(f, "{:?} := {:?}", &dst, &loc),
             Instruction::Save { src, loc } => write!(f, "{:?} := {:?}", &loc, &src),
+            Instruction::LoadComplex { xd, yd, loc } => {
+                write!(f, "({:?} + {:?}*im) := {:?}", &xd, &yd, &loc)
+            }
+            Instruction::SaveComplex { xs, ys, loc } => {
+                write!(f, "{:?} := ({:?} + {:?}*im)", &loc, &xs, &ys)
+            }
             Instruction::LoadConst { dst, idx } => write!(f, "{:?} := consts[{:?}]", &dst, idx),
             Instruction::Fused { op, dst, a, b, c } => match op {
                 FusedOp::MulAdd => write!(f, "{:?} := {:?} * {:?} + {:?}", &dst, &a, &b, &c),
@@ -409,6 +425,46 @@ impl Mir {
 
     pub fn save_stack_result(&mut self, idx: u32) {
         self.save_stack(Reg::Ret, idx);
+    }
+
+    pub fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
+        self.push(Instruction::LoadComplex {
+            xd,
+            yd,
+            loc: Loc::Mem(idx),
+        });
+    }
+
+    pub fn save_mem_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
+        self.push(Instruction::SaveComplex {
+            xs,
+            ys,
+            loc: Loc::Mem(idx),
+        });
+    }
+
+    pub fn load_param_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
+        self.push(Instruction::LoadComplex {
+            xd,
+            yd,
+            loc: Loc::Param(idx),
+        });
+    }
+
+    pub fn load_stack_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
+        self.push(Instruction::LoadComplex {
+            xd,
+            yd,
+            loc: Loc::Stack(idx),
+        });
+    }
+
+    pub fn save_stack_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
+        self.push(Instruction::SaveComplex {
+            xs,
+            ys,
+            loc: Loc::Stack(idx),
+        });
     }
 
     pub fn neg(&mut self, dst: Reg, s1: Reg) {
@@ -1125,6 +1181,32 @@ impl Mir {
                         }
                     };
                 }
+                Instruction::LoadComplex { xd, yd, loc } => {
+                    let (x, y) = match loc {
+                        Loc::Mem(idx) => (mem[*idx as usize], mem[1 + *idx as usize]),
+                        Loc::Stack(idx) => (stack[*idx as usize], stack[1 + *idx as usize]),
+                        Loc::Param(idx) => (params[*idx as usize], params[1 + *idx as usize]),
+                    };
+                    Self::set(regs, *xd, x);
+                    Self::set(regs, *yd, y);
+                }
+                Instruction::SaveComplex { xs, ys, loc } => {
+                    let x = Self::get(regs, *xs);
+                    let y = Self::get(regs, *ys);
+                    match loc {
+                        Loc::Mem(idx) => {
+                            mem[*idx as usize] = x;
+                            mem[1 + *idx as usize] = y;
+                        }
+                        Loc::Stack(idx) => {
+                            stack[*idx as usize] = x;
+                            stack[1 + *idx as usize] = y;
+                        }
+                        Loc::Param(_) => {
+                            unreachable!()
+                        }
+                    };
+                }
                 Instruction::LoadConst { dst, idx } => {
                     Self::set(regs, *dst, self.consts[*idx as usize]);
                 }
@@ -1293,6 +1375,35 @@ impl Mir {
                     match loc {
                         Loc::Mem(idx) => ir.save_mem(*src, *idx),
                         Loc::Stack(idx) => ir.save_stack(*src, *idx),
+                        Loc::Param(_) => unreachable!(),
+                    };
+                }
+                Instruction::LoadComplex { xd, yd, loc } => {
+                    match loc {
+                        Loc::Mem(idx) => {
+                            ir.load_mem(*xd, *idx);
+                            ir.load_mem(*yd, 1 + *idx);
+                        }
+                        Loc::Stack(idx) => {
+                            ir.load_stack(*xd, *idx);
+                            ir.load_stack(*yd, 1 + *idx);
+                        }
+                        Loc::Param(idx) => {
+                            ir.load_param(*xd, *idx);
+                            ir.load_param(*yd, 1 + *idx);
+                        }
+                    };
+                }
+                Instruction::SaveComplex { xs, ys, loc } => {
+                    match loc {
+                        Loc::Mem(idx) => {
+                            ir.save_mem(*xs, *idx);
+                            ir.save_mem(*ys, 1 + *idx);
+                        }
+                        Loc::Stack(idx) => {
+                            ir.save_stack(*xs, *idx);
+                            ir.save_stack(*ys, 1 + *idx);
+                        }
                         Loc::Param(_) => unreachable!(),
                     };
                 }
