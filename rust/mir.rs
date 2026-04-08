@@ -9,6 +9,7 @@ use num_complex::Complex;
 use petgraph::matrix_graph::Zero;
 
 use crate::code::{Func, VirtualTable};
+use crate::complexify::Complexifier;
 use crate::config::Config;
 use crate::config::SPILL_AREA;
 use crate::generator::Generator;
@@ -54,7 +55,7 @@ pub enum BinOp {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum LoadMathOp {
+pub enum ArithOp {
     Plus,
     Minus,
     Times,
@@ -129,16 +130,25 @@ pub enum Instruction {
         is_else: bool,
     },
     LoadMath {
-        op: LoadMathOp,
+        op: ArithOp,
         dst: Reg,
         s1: Reg,
         loc: Loc,
     },
     LoadConstMath {
-        op: LoadMathOp,
+        op: ArithOp,
         dst: Reg,
         s1: Reg,
         idx: u32,
+    },
+    ComplexBi {
+        op: ArithOp,
+        xd: Reg,
+        yd: Reg,
+        x1: Reg,
+        y1: Reg,
+        x2: Reg,
+        y2: Reg,
     },
 }
 
@@ -196,6 +206,21 @@ impl fmt::Debug for Instruction {
                     f,
                     "{:?} := {:?} {:?} consts[{:?}] # load const/math",
                     &dst, &s1, &op, &idx
+                )
+            }
+            Self::ComplexBi {
+                op,
+                xd,
+                yd,
+                x1,
+                y1,
+                x2,
+                y2,
+            } => {
+                write!(
+                    f,
+                    "({:?} + {:?}*im) := ({:?} + {:?}*im {:?} ({:?} + {:?}*im",
+                    &xd, &yd, &op, &x1, &y1, &x2, &y2
                 )
             }
         }
@@ -639,7 +664,7 @@ impl Mir {
 
     pub fn plus_load(&mut self, dst: Reg, s1: Reg, loc: Loc) {
         self.push(Instruction::LoadMath {
-            op: LoadMathOp::Plus,
+            op: ArithOp::Plus,
             dst,
             s1,
             loc,
@@ -648,7 +673,7 @@ impl Mir {
 
     pub fn minus_load(&mut self, dst: Reg, s1: Reg, loc: Loc) {
         self.push(Instruction::LoadMath {
-            op: LoadMathOp::Minus,
+            op: ArithOp::Minus,
             dst,
             s1,
             loc,
@@ -657,7 +682,7 @@ impl Mir {
 
     pub fn times_load(&mut self, dst: Reg, s1: Reg, loc: Loc) {
         self.push(Instruction::LoadMath {
-            op: LoadMathOp::Times,
+            op: ArithOp::Times,
             dst,
             s1,
             loc,
@@ -666,7 +691,7 @@ impl Mir {
 
     pub fn divide_load(&mut self, dst: Reg, s1: Reg, loc: Loc) {
         self.push(Instruction::LoadMath {
-            op: LoadMathOp::Divide,
+            op: ArithOp::Divide,
             dst,
             s1,
             loc,
@@ -675,7 +700,7 @@ impl Mir {
 
     pub fn plus_load_const(&mut self, dst: Reg, s1: Reg, idx: u32) {
         self.push(Instruction::LoadConstMath {
-            op: LoadMathOp::Plus,
+            op: ArithOp::Plus,
             dst,
             s1,
             idx,
@@ -684,7 +709,7 @@ impl Mir {
 
     pub fn minus_load_const(&mut self, dst: Reg, s1: Reg, idx: u32) {
         self.push(Instruction::LoadConstMath {
-            op: LoadMathOp::Minus,
+            op: ArithOp::Minus,
             dst,
             s1,
             idx,
@@ -693,7 +718,7 @@ impl Mir {
 
     pub fn times_load_const(&mut self, dst: Reg, s1: Reg, idx: u32) {
         self.push(Instruction::LoadConstMath {
-            op: LoadMathOp::Times,
+            op: ArithOp::Times,
             dst,
             s1,
             idx,
@@ -702,10 +727,58 @@ impl Mir {
 
     pub fn divide_load_const(&mut self, dst: Reg, s1: Reg, idx: u32) {
         self.push(Instruction::LoadConstMath {
-            op: LoadMathOp::Divide,
+            op: ArithOp::Divide,
             dst,
             s1,
             idx,
+        });
+    }
+
+    pub fn plus_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) {
+        self.push(Instruction::ComplexBi {
+            op: ArithOp::Plus,
+            xd,
+            yd,
+            x1,
+            y1,
+            x2,
+            y2,
+        });
+    }
+
+    pub fn minus_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) {
+        self.push(Instruction::ComplexBi {
+            op: ArithOp::Minus,
+            xd,
+            yd,
+            x1,
+            y1,
+            x2,
+            y2,
+        });
+    }
+
+    pub fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) {
+        self.push(Instruction::ComplexBi {
+            op: ArithOp::Times,
+            xd,
+            yd,
+            x1,
+            y1,
+            x2,
+            y2,
+        });
+    }
+
+    pub fn divide_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) {
+        self.push(Instruction::ComplexBi {
+            op: ArithOp::Divide,
+            xd,
+            yd,
+            x1,
+            y1,
+            x2,
+            y2,
         });
     }
 
@@ -945,7 +1018,7 @@ impl Mir {
         stack: &mut [f64],
         regs: &mut [f64],
         params: &[f64],
-        op: LoadMathOp,
+        op: ArithOp,
         dst: Reg,
         s1: Reg,
         loc: Loc,
@@ -959,26 +1032,50 @@ impl Mir {
         };
 
         let val = match op {
-            LoadMathOp::Plus => s1 + y,
-            LoadMathOp::Minus => s1 - y,
-            LoadMathOp::Times => s1 * y,
-            LoadMathOp::Divide => s1 / y,
+            ArithOp::Plus => s1 + y,
+            ArithOp::Minus => s1 - y,
+            ArithOp::Times => s1 * y,
+            ArithOp::Divide => s1 / y,
         };
 
         Self::set(regs, dst, val);
     }
 
-    fn exec_load_const_math(regs: &mut [f64], op: LoadMathOp, dst: Reg, s1: Reg, y: f64) {
+    fn exec_load_const_math(regs: &mut [f64], op: ArithOp, dst: Reg, s1: Reg, y: f64) {
         let s1 = Self::get(regs, s1);
 
         let val = match op {
-            LoadMathOp::Plus => s1 + y,
-            LoadMathOp::Minus => s1 - y,
-            LoadMathOp::Times => s1 * y,
-            LoadMathOp::Divide => s1 / y,
+            ArithOp::Plus => s1 + y,
+            ArithOp::Minus => s1 - y,
+            ArithOp::Times => s1 * y,
+            ArithOp::Divide => s1 / y,
         };
 
         Self::set(regs, dst, val);
+    }
+
+    fn exec_complex(
+        regs: &mut [f64],
+        op: ArithOp,
+        xd: Reg,
+        yd: Reg,
+        x1: Reg,
+        y1: Reg,
+        x2: Reg,
+        y2: Reg,
+    ) {
+        let z1 = Complex::new(Self::get(regs, x1), Self::get(regs, y1));
+        let z2 = Complex::new(Self::get(regs, x2), Self::get(regs, y2));
+
+        let val = match op {
+            ArithOp::Plus => z1 + z2,
+            ArithOp::Minus => z1 - z2,
+            ArithOp::Times => z1 * z2,
+            ArithOp::Divide => z1 / z2,
+        };
+
+        Self::set(regs, xd, val.re);
+        Self::set(regs, yd, val.im);
     }
 
     pub fn exec_instruction(
@@ -1115,6 +1212,15 @@ impl Mir {
                 Instruction::LoadConstMath { op, dst, s1, idx } => {
                     Self::exec_load_const_math(regs, *op, *dst, *s1, self.consts[*idx as usize]);
                 }
+                Instruction::ComplexBi {
+                    op,
+                    xd,
+                    yd,
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                } => Self::exec_complex(regs, *op, *xd, *yd, *x1, *y1, *x2, *y2),
             }
 
             ip += 1;
@@ -1237,10 +1343,10 @@ impl Mir {
                         Loc::Param(idx) => ir.load_param(t, *idx),
                     }
                     match op {
-                        LoadMathOp::Plus => ir.plus(*dst, *s1, t),
-                        LoadMathOp::Minus => ir.minus(*dst, *s1, t),
-                        LoadMathOp::Times => ir.times(*dst, *s1, t),
-                        LoadMathOp::Divide => ir.divide(*dst, *s1, t),
+                        ArithOp::Plus => ir.plus(*dst, *s1, t),
+                        ArithOp::Minus => ir.minus(*dst, *s1, t),
+                        ArithOp::Times => ir.times(*dst, *s1, t),
+                        ArithOp::Divide => ir.divide(*dst, *s1, t),
                     }
                     ir.fuse_load_math();
                 }
@@ -1254,13 +1360,37 @@ impl Mir {
                     ir.load_const(t, *idx);
 
                     match op {
-                        LoadMathOp::Plus => ir.plus(*dst, *s1, t),
-                        LoadMathOp::Minus => ir.minus(*dst, *s1, t),
-                        LoadMathOp::Times => ir.times(*dst, *s1, t),
-                        LoadMathOp::Divide => ir.divide(*dst, *s1, t),
+                        ArithOp::Plus => ir.plus(*dst, *s1, t),
+                        ArithOp::Minus => ir.minus(*dst, *s1, t),
+                        ArithOp::Times => ir.times(*dst, *s1, t),
+                        ArithOp::Divide => ir.divide(*dst, *s1, t),
                     }
                     ir.fuse_load_math();
                 }
+                Instruction::ComplexBi {
+                    op,
+                    xd,
+                    yd,
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                } => match op {
+                    ArithOp::Plus => {
+                        Complexifier::generic_complex_plus(ir, *xd, *yd, *x1, *y1, *x2, *y2)
+                    }
+                    ArithOp::Minus => {
+                        Complexifier::generic_complex_minus(ir, *xd, *yd, *x1, *y1, *x2, *y2)
+                    }
+                    ArithOp::Times => {
+                        if !ir.times_complex(*xd, *yd, *x1, *y1, *x2, *y2) {
+                            Complexifier::generic_complex_times(ir, *xd, *yd, *x1, *y1, *x2, *y2)
+                        }
+                    }
+                    ArithOp::Divide => {
+                        Complexifier::generic_complex_divide(ir, *xd, *yd, *x1, *y1, *x2, *y2)
+                    }
+                },
             }
         }
 
@@ -1640,12 +1770,13 @@ impl Mir {
         }
     }
 
-    pub fn optimize_peephole(&mut self) {
+    pub fn optimize_peephole(&mut self) -> bool {
         self.push(Instruction::Nop);
         self.push(Instruction::Nop);
         let mut code: Vec<Instruction> = Vec::new();
 
         let mut i = 0;
+        let mut success = false;
 
         while i < self.code.len() - 2 {
             let d = self.fuse(
@@ -1655,9 +1786,11 @@ impl Mir {
                 &self.code[i + 2],
             );
             i += d;
+            success |= d > 1;
         }
 
         self.code = code;
+        success
     }
 }
 

@@ -717,6 +717,24 @@ impl Generator for AmdGenerator {
         binop!(self, divsd, vdivsd, vdivpd, dst, s1, s2, false);
     }
 
+    fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
+        if matches!(self.family, AmdFamily::AvxScalar) {
+            let xt = 4;
+            let yt = 5;
+            self.amd.vunpckldd(ϕ(x1), ϕ(x1), ϕ(x1));
+            self.amd.vunpckldd(ϕ(y1), ϕ(y1), ϕ(y1));
+            self.amd.vunpckldd(yt, ϕ(x2), ϕ(y2));
+            self.amd.vmuldd(xt, ϕ(x1), yt);
+            self.amd.vmuldd(yt, ϕ(y1), yt);
+            self.amd.vshufdd(ϕ(xd), yt, yt, 1);
+            self.amd.vaddsubdd(ϕ(xd), xt, ϕ(xd));
+            self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
+            true
+        } else {
+            false
+        }
+    }
+
     fn real(&mut self, dst: Reg, s1: Reg) {
         self.fmov(dst, s1);
     }

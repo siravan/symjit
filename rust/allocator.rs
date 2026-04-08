@@ -287,6 +287,31 @@ impl ColoringAllocator {
                     let dst = self.produce(dst);
                     self.push(Instruction::LoadConstMath { op, dst, s1, idx });
                 }
+                Instruction::ComplexBi {
+                    op,
+                    xd,
+                    yd,
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                } => {
+                    let x1 = self.consume(x1);
+                    let y1 = self.consume(y1);
+                    let x2 = self.consume(x2);
+                    let y2 = self.consume(y2);
+                    let xd = self.produce(xd);
+                    let yd = self.produce(yd);
+                    self.push(Instruction::ComplexBi {
+                        op,
+                        xd,
+                        yd,
+                        x1,
+                        y1,
+                        x2,
+                        y2,
+                    });
+                }
             }
         }
     }
@@ -410,6 +435,25 @@ impl ColoringAllocator {
                         dst: self.alloc(dst),
                         s1: self.alloc(s1),
                         idx,
+                    });
+                }
+                Instruction::ComplexBi {
+                    op,
+                    xd,
+                    yd,
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                } => {
+                    self.push(Instruction::ComplexBi {
+                        op,
+                        xd: self.alloc(xd),
+                        yd: self.alloc(yd),
+                        x1: self.alloc(x1),
+                        y1: self.alloc(y1),
+                        x2: self.alloc(x2),
+                        y2: self.alloc(y2),
                     });
                 }
             }
@@ -659,6 +703,31 @@ impl GreedyAllocator {
                     let dst = self.produce(ip, dst);
                     self.push(Instruction::LoadConstMath { op, dst, s1, idx });
                 }
+                Instruction::ComplexBi {
+                    op,
+                    xd,
+                    yd,
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                } => {
+                    let x1 = self.consume(ip, x1);
+                    let y1 = self.consume(ip, y1);
+                    let x2 = self.consume(ip, x2);
+                    let y2 = self.consume(ip, y2);
+                    let xd = self.produce(ip, xd);
+                    let yd = self.produce(ip, yd);
+                    self.push(Instruction::ComplexBi {
+                        op,
+                        xd,
+                        yd,
+                        x1,
+                        y1,
+                        x2,
+                        y2,
+                    });
+                }
             }
         }
     }
@@ -860,6 +929,49 @@ impl GreedyAllocator {
                     let s1 = self.deallocate(ip, s1);
                     let (dst, _) = self.allocate(dst, None);
                     self.push(Instruction::LoadConstMath { op, dst, s1, idx });
+                }
+                Instruction::ComplexBi {
+                    op,
+                    xd,
+                    yd,
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                } => {
+                    if self.config.is_sse() {
+                        let (xd, _) = self.allocate(xd, None);
+                        let (yd, _) = self.allocate(yd, None);
+                        let x1 = self.deallocate(ip, x1);
+                        let y1 = self.deallocate(ip, y1);
+                        let x2 = self.deallocate(ip, x2);
+                        let y2 = self.deallocate(ip, y2);
+                        self.push(Instruction::ComplexBi {
+                            op,
+                            xd,
+                            yd,
+                            x1,
+                            y1,
+                            x2,
+                            y2,
+                        })
+                    } else {
+                        let x1 = self.deallocate(ip, x1);
+                        let y1 = self.deallocate(ip, y1);
+                        let x2 = self.deallocate(ip, x2);
+                        let y2 = self.deallocate(ip, y2);
+                        let (xd, _) = self.allocate(xd, None);
+                        let (yd, _) = self.allocate(yd, None);
+                        self.push(Instruction::ComplexBi {
+                            op,
+                            xd,
+                            yd,
+                            x1,
+                            y1,
+                            x2,
+                            y2,
+                        })
+                    }
                 }
             }
         }

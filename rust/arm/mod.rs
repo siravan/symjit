@@ -341,6 +341,50 @@ impl Generator for ArmGenerator {
         self.emit(arm! {fdiv d(ϕ(dst)), d(ϕ(s1)), d(ϕ(s2))});
     }
 
+    #[cfg(target_arch = "aarch64")]
+    #[target_feature(enable = "fcma")]
+    fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
+        let xt = 4;
+        let yt = 5;
+
+        self.emit(arm! {zip1 q(ϕ(x1)), q(ϕ(x1)), q(ϕ(y1))});
+        self.emit(arm! {zip1 q(ϕ(x2)), q(ϕ(x2)), q(ϕ(y2))});
+        self.xor(xt, xt, xt);
+        self.emit(arm! {fcmla q(xt), q(ϕ(x1)), q(ϕ(x2)), #0});
+        self.emit(arm! {fcmla q(xt), q(ϕ(x1)), q(ϕ(x2)), #90});
+        self.emit(arm! {dup q(ϕ(yd)), q(xt)[1]});
+        self.emit(arm! {dup q(ϕ(xd)), q(xt)[0]});
+
+        true
+    }
+
+    #[cfg(not(target_arch = "aarch64"))]
+    fn times_complex(
+        &mut self,
+        _xd: Reg,
+        _yd: Reg,
+        _x1: Reg,
+        _y1: Reg,
+        _x2: Reg,
+        _y2: Reg,
+    ) -> bool {
+        false
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    #[target_feature(not(enable = "fcma"))]
+    fn times_complex(
+        &mut self,
+        _xd: Reg,
+        _yd: Reg,
+        _x1: Reg,
+        _y1: Reg,
+        _x2: Reg,
+        _y2: Reg,
+    ) -> bool {
+        false
+    }
+
     fn real(&mut self, dst: Reg, s1: Reg) {
         self.fmov(dst, s1);
     }
@@ -1000,6 +1044,18 @@ impl Generator for ArmSimdGenerator {
 
     fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.emit(arm! {fdiv q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
+    }
+
+    fn times_complex(
+        &mut self,
+        _xd: Reg,
+        _yd: Reg,
+        _x1: Reg,
+        _y1: Reg,
+        _x2: Reg,
+        _y2: Reg,
+    ) -> bool {
+        false
     }
 
     fn real(&mut self, dst: Reg, s1: Reg) {

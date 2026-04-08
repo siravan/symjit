@@ -350,26 +350,46 @@ impl Generator for Complexifier {
     }
 
     fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.mir.plus(re(dst), re(s1), re(s2));
-
         match self.types(s1, s2) {
-            Types::RC => self.mir.fmov(im(dst), im(s2)),
-            Types::CR => self.mir.fmov(im(dst), im(s1)),
-            Types::CC => self.mir.plus(im(dst), im(s1), im(s2)),
-            Types::RR => {}
+            Types::RC => {
+                self.mir.plus(re(dst), re(s1), re(s2));
+                self.mir.fmov(im(dst), im(s2));
+            }
+            Types::CR => {
+                self.mir.plus(re(dst), re(s1), re(s2));
+                self.mir.fmov(im(dst), im(s1));
+            }
+            Types::CC => {
+                //self.mir.plus(im(dst), im(s1), im(s2)),
+                self.mir
+                    .plus_complex(re(dst), im(dst), re(s1), im(s1), re(s2), im(s2));
+            }
+            Types::RR => {
+                self.mir.plus(re(dst), re(s1), re(s2));
+            }
         }
 
         self.promote_real(dst, s1, s2);
     }
 
     fn minus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.mir.minus(re(dst), re(s1), re(s2));
-
         match self.types(s1, s2) {
-            Types::RC => self.mir.neg(im(dst), im(s2)),
-            Types::CR => self.mir.fmov(im(dst), im(s1)),
-            Types::CC => self.mir.minus(im(dst), im(s1), im(s2)),
-            Types::RR => {}
+            Types::RC => {
+                self.mir.minus(re(dst), re(s1), re(s2));
+                self.mir.neg(im(dst), im(s2));
+            }
+            Types::CR => {
+                self.mir.minus(re(dst), re(s1), re(s2));
+                self.mir.fmov(im(dst), im(s1));
+            }
+            Types::CC => {
+                //self.mir.minus(im(dst), im(s1), im(s2)),
+                self.mir
+                    .minus_complex(re(dst), im(dst), re(s1), im(s1), re(s2), im(s2));
+            }
+            Types::RR => {
+                self.mir.minus(re(dst), re(s1), re(s2));
+            }
         }
 
         self.promote_real(dst, s1, s2);
@@ -387,6 +407,7 @@ impl Generator for Complexifier {
                 self.mir.times(re(dst), re(s1), re(s2));
             }
             Types::CC => {
+                /*
                 self.mir.times(Self::T0, re(s1), re(s2));
                 self.mir.times(Self::T1, im(s1), im(s2));
                 self.mir.minus(Self::T0, Self::T0, Self::T1);
@@ -396,6 +417,9 @@ impl Generator for Complexifier {
                 self.mir.plus(im(dst), im(dst), Self::T1);
 
                 self.mir.fmov(re(dst), Self::T0);
+                */
+                self.mir
+                    .times_complex(re(dst), im(dst), re(s1), im(s1), re(s2), im(s2));
             }
         }
 
@@ -427,6 +451,7 @@ impl Generator for Complexifier {
                 self.mir.divide(re(dst), Self::T0, t);
             }
             Types::CC => {
+                /*
                 self.mir.times(Self::T0, re(s2), re(s2));
                 self.mir.times(Self::T1, im(s2), im(s2));
                 self.mir.plus(t, Self::T0, Self::T1);
@@ -441,10 +466,17 @@ impl Generator for Complexifier {
 
                 self.mir.divide(im(dst), im(dst), t);
                 self.mir.divide(re(dst), Self::T0, t);
+                */
+                self.mir
+                    .divide_complex(re(dst), im(dst), re(s1), im(s1), re(s2), im(s2));
             }
         }
 
         self.promote_real(dst, s1, s2);
+    }
+
+    fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
+        unreachable!()
     }
 
     fn real(&mut self, dst: Reg, s1: Reg) {
@@ -651,5 +683,82 @@ impl Generator for Complexifier {
 
         self.set_reg_complex(dst);
         // self.promote_real(dst, true_val, false_val);
+    }
+}
+
+/*  Complex Genetic Functions */
+
+impl Complexifier {
+    pub fn generic_complex_plus(
+        ir: &mut dyn Generator,
+        xd: Reg,
+        yd: Reg,
+        x1: Reg,
+        y1: Reg,
+        x2: Reg,
+        y2: Reg,
+    ) {
+        ir.plus(xd, x1, x2);
+        ir.plus(yd, y1, y2);
+    }
+
+    pub fn generic_complex_minus(
+        ir: &mut dyn Generator,
+        xd: Reg,
+        yd: Reg,
+        x1: Reg,
+        y1: Reg,
+        x2: Reg,
+        y2: Reg,
+    ) {
+        ir.minus(xd, x1, x2);
+        ir.minus(yd, y1, y2);
+    }
+
+    pub fn generic_complex_times(
+        ir: &mut dyn Generator,
+        xd: Reg,
+        yd: Reg,
+        x1: Reg,
+        y1: Reg,
+        x2: Reg,
+        y2: Reg,
+    ) {
+        ir.times(Self::T0, x1, x2);
+        ir.times(Self::T1, y1, y2);
+        ir.minus(Self::T0, Self::T0, Self::T1);
+
+        ir.times(Self::T1, x1, y2);
+        ir.times(yd, y1, x2);
+        ir.plus(yd, yd, Self::T1);
+
+        ir.fmov(xd, Self::T0);
+    }
+
+    pub fn generic_complex_divide(
+        ir: &mut dyn Generator,
+        xd: Reg,
+        yd: Reg,
+        x1: Reg,
+        y1: Reg,
+        x2: Reg,
+        y2: Reg,
+    ) {
+        let t = re(Reg::Temp);
+
+        ir.times(Self::T0, x2, x2);
+        ir.times(Self::T1, y2, y2);
+        ir.plus(t, Self::T0, Self::T1);
+
+        ir.times(Self::T0, x1, x2);
+        ir.times(Self::T1, y1, y2);
+        ir.plus(Self::T0, Self::T0, Self::T1);
+
+        ir.times(Self::T1, x1, y2);
+        ir.times(yd, y1, x2);
+        ir.minus(yd, yd, Self::T1);
+
+        ir.divide(yd, yd, t);
+        ir.divide(xd, Self::T0, t);
     }
 }

@@ -44,6 +44,8 @@ pub trait Generator {
     fn times(&mut self, dst: Reg, s1: Reg, s2: Reg);
     fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg);
 
+    fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool;
+
     fn fuse_load_math(&mut self);
 
     fn real(&mut self, dst: Reg, s1: Reg);

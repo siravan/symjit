@@ -15,7 +15,7 @@ pub struct MachineCode<T: Default> {
     _mem: Vec<T>,
     leaky: bool,
     lanes: usize,
-    size: usize,
+    pub size: usize,
     pages: *const u8,
 }
 

@@ -397,6 +397,10 @@ macro_rules! arm {
         0x4e080400 | rd!($rd) | rn!($rn)
     };
 
+    (dup q($rd:expr), q($rn:expr)[1]) => {
+        0x4e180400 | rd!($rd) | rn!($rn)
+    };
+
     (umov x($rd:expr), v($rn:expr).d[0]) => {
         0x4e083c00 | rd!($rd) | rn!($rn)
     };
@@ -446,6 +450,13 @@ macro_rules! arm {
     };
     (uzp2 q($rd:expr), q($rn:expr), q($rm:expr)) => {
         0x4ec05800 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
+    (fcmla q($rd:expr), q($rn:expr), q($rm:expr), #0) => {
+        0x6ec0c400 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (fcmla q($rd:expr), q($rn:expr), q($rm:expr), #90) => {
+        0x6ec0dc00 | rd!($rd) | rn!($rn) | rm!($rm)
     };
 
     // FMA instructions are not defined for 2d packed-double

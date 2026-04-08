@@ -195,6 +195,48 @@ impl Amd {
         }
     }
 
+    pub fn vex2dd(&mut self, reg: u8, vreg: u8) {
+        // This is the two-byte VEX prefix (VEX2) for packed-double (pd)
+        // and 128-bit xmm registers
+        let r = (!reg & 8) << 4;
+        let vvvv = (!vreg & 0x0f) << 3;
+
+        let pp = match self.dtype {
+            DataType::F32 => 0, // ps
+            DataType::F64 => 1, // pd
+        };
+
+        self.append_byte(0xc5);
+        self.append_byte(r | vvvv | pp);
+    }
+
+    pub fn vex3dd(&mut self, reg: u8, vreg: u8, rm: u8, index: u8, encoding: u8) {
+        // This is the three-byte VEX prefix (VEX3) for packed-double (pd)
+        // and 128-bit xmm registers
+        // default encoding is 1
+        let r = (!reg & 8) << 4;
+        let x = (!index & 8) << 3;
+        let b = (!rm & 8) << 2;
+        let vvvv = (!vreg & 0x0f) << 3;
+
+        let pp = match self.dtype {
+            DataType::F32 => 0, // ps
+            DataType::F64 => 1, // pd
+        };
+
+        self.append_byte(0xc4);
+        self.append_byte(r | x | b | encoding);
+        self.append_byte(vvvv | pp);
+    }
+
+    pub fn vex_dd(&mut self, reg: u8, vreg: u8, rm: u8, index: u8) {
+        if rm < 8 && index < 8 {
+            self.vex2dd(reg, vreg);
+        } else {
+            self.vex3dd(reg, vreg, rm, index, 1);
+        }
+    }
+
     pub fn sse_sd(&mut self, reg: u8, rm: u8) {
         match self.dtype {
             DataType::F32 => self.append_byte(0xf3), // ss
@@ -543,6 +585,201 @@ impl Amd {
         self.append_byte(0xc6);
         self.modrm_reg(reg, rm);
         self.append_byte(imm8);
+    }
+
+    /******************* packed double xmm *******************/
+
+    pub fn vbroadcastdd(&mut self, reg: u8, rm: u8, offset: i32) {
+        self.vex3dd(reg, 0, rm, 0, 2);
+        self.append_byte(0x19);
+        self.modrm_mem(reg, rm, offset);
+    }
+
+    pub fn vbroadcastdd_label(&mut self, reg: u8, label: &str) {
+        self.vex3dd(reg, 0, 0, 0, 2);
+        self.append_byte(0x19);
+        // modr/m byte with MOD=00 and R/M=101 (RIP-relative address)
+        self.append_byte(5 | ((reg & 7) << 3));
+        self.jump(label);
+    }
+
+    pub fn vmovdd_xmm_mem(&mut self, reg: u8, rm: u8, offset: i32) {
+        self.vex_dd(reg, 0, rm, 0);
+        self.append_byte(0x10);
+        self.modrm_mem(reg, rm, offset);
+    }
+
+    pub fn vmovdd_xmm_indexed(&mut self, reg: u8, base: u8, index: u8, scale: u8) {
+        self.vex_dd(reg, 0, base, index);
+        self.append_byte(0x10);
+        self.modrm_sib(reg, base, index, scale);
+    }
+
+    pub fn vmovdd_xmm_label(&mut self, reg: u8, label: &str) {
+        self.vex_dd(reg, 0, 0, 0);
+        self.append_byte(0x10);
+        // modr/m byte with MOD=00 and R/M=101 (RIP-relative address)
+        self.append_byte(5 | ((reg & 7) << 3));
+        self.jump(label);
+    }
+
+    pub fn vmovdd_mem_xmm(&mut self, rm: u8, offset: i32, reg: u8) {
+        self.vex_dd(reg, 0, rm, 0);
+        self.append_byte(0x11);
+        self.modrm_mem(reg, rm, offset);
+    }
+
+    pub fn vmovdd_indexed_xmm(&mut self, base: u8, index: u8, scale: u8, reg: u8) {
+        self.vex_dd(reg, 0, base, index);
+        self.append_byte(0x11);
+        self.modrm_sib(reg, base, index, scale);
+    }
+
+    pub fn vadddd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0x58);
+        self.modrm_reg(reg, rm);
+    }
+
+    pub fn vsubdd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0x5c);
+        self.modrm_reg(reg, rm);
+    }
+
+    pub fn vmuldd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0x59);
+        self.modrm_reg(reg, rm);
+    }
+
+    pub fn vdivdd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0x5e);
+        self.modrm_reg(reg, rm);
+    }
+
+    pub fn vsqrtdd(&mut self, reg: u8, rm: u8) {
+        self.vex_dd(reg, 0, rm, 0);
+        self.append_byte(0x51);
+        self.modrm_reg(reg, rm);
+    }
+
+    pub fn vrounddd(&mut self, reg: u8, rm: u8, mode: RoundingMode) {
+        self.vex3dd(reg, 0, rm, 0, 3);
+        self.append_byte(0x09);
+        self.modrm_reg(reg, rm);
+        self.append_byte(match mode {
+            RoundingMode::Round => 0,
+            RoundingMode::Floor => 1,
+            RoundingMode::Ceiling => 2,
+            RoundingMode::Trunc => 3,
+        });
+    }
+
+    pub fn vanddd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0x54);
+        self.modrm_reg(reg, rm);
+    }
+
+    pub fn vandndd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0x55);
+        self.modrm_reg(reg, rm);
+    }
+
+    pub fn vordd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0x56);
+        self.modrm_reg(reg, rm);
+    }
+
+    pub fn vxordd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0x57);
+        self.modrm_reg(reg, rm);
+    }
+
+    pub fn vcmpeqdd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0xc2);
+        self.modrm_reg(reg, rm);
+        self.append_byte(0)
+    }
+
+    pub fn vcmpltdd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0xc2);
+        self.modrm_reg(reg, rm);
+        self.append_byte(1);
+    }
+
+    pub fn vcmpledd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0xc2);
+        self.modrm_reg(reg, rm);
+        self.append_byte(2);
+    }
+
+    pub fn vcmpunorddd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0xc2);
+        self.modrm_reg(reg, rm);
+        self.append_byte(3);
+    }
+
+    pub fn vcmpneqdd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0xc2);
+        self.modrm_reg(reg, rm);
+        self.append_byte(4);
+    }
+
+    pub fn vcmpnltdd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0xc2);
+        self.modrm_reg(reg, rm);
+        self.append_byte(5);
+    }
+
+    pub fn vcmpnledd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0xc2);
+        self.modrm_reg(reg, rm);
+        self.append_byte(6);
+    }
+
+    pub fn vcmporddd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0xc2);
+        self.modrm_reg(reg, rm);
+        self.append_byte(7);
+    }
+
+    pub fn vshufdd(&mut self, reg: u8, vreg: u8, rm: u8, imm8: u8) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0xc6);
+        self.modrm_reg(reg, rm);
+        self.append_byte(imm8);
+    }
+
+    pub fn vunpckhdd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0x15);
+        self.modrm_reg(reg, rm);
+    }
+
+    pub fn vunpckldd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0x14);
+        self.modrm_reg(reg, rm);
+    }
+
+    pub fn vaddsubdd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0xd0);
+        self.modrm_reg(reg, rm);
     }
 
     /******************* SSE scalar double ******************/
