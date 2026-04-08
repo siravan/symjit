@@ -107,6 +107,32 @@ impl ArmGenerator {
         }
     }
 
+    fn load_q_from_mem(&mut self, d: u8, base: u8, idx: u32) {
+        if idx < 4096 {
+            self.emit(arm! {ldr q(d), [x(base), #self.reg_size()*idx]});
+        } else if idx < 65536 {
+            self.emit(arm! {movz x(SCRATCH1), #idx});
+            self.emit(arm! {ldr q(d), [x(base), x(SCRATCH1), lsl #4]});
+        } else {
+            self.emit(arm! {movz x(SCRATCH1), #idx & 0xffff});
+            self.emit(arm! {movk_lsl16 x(SCRATCH1), #idx >> 16});
+            self.emit(arm! {ldr q(d), [x(base), x(SCRATCH1), lsl #4]});
+        }
+    }
+
+    fn save_q_to_mem(&mut self, d: u8, base: u8, idx: u32) {
+        if idx < 4096 {
+            self.emit(arm! {str q(d), [x(base), #self.reg_size()*idx]});
+        } else if idx < 65536 {
+            self.emit(arm! {movz x(SCRATCH1), #idx});
+            self.emit(arm! {str q(d), [x(base), x(SCRATCH1), lsl #4]});
+        } else {
+            self.emit(arm! {movz x(SCRATCH1), #idx & 0xffff});
+            self.emit(arm! {movk_lsl16 x(SCRATCH1), #idx >> 16});
+            self.emit(arm! {str q(d), [x(base), x(SCRATCH1), lsl #4]});
+        }
+    }
+
     fn load_x_from_mem(&mut self, r: u8, base: u8, idx: u32) {
         assert!(r != 9);
 
@@ -277,6 +303,56 @@ impl Generator for ArmGenerator {
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
         self.save_d_to_mem(ϕ(dst), SP, idx);
+    }
+
+    fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
+        if self.config.permissive() {
+            self.load_q_from_mem(ϕ(xd), MEM, idx);
+            self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xd))[1]});
+        } else {
+            self.load_mem(xd, idx);
+            self.load_mem(yd, idx + 1);
+        }
+    }
+
+    fn save_mem_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
+        if self.config.permissive() {
+            self.emit(arm! {zip1 q(ϕ(xs)), q(ϕ(xs)), q(ϕ(ys))});
+            self.save_q_to_mem(ϕ(xs), MEM, idx);
+        } else {
+            self.save_mem(xs, idx);
+            self.save_mem(ys, idx + 1);
+        }
+    }
+
+    fn load_param_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
+        if self.config.permissive() {
+            self.load_q_from_mem(ϕ(xd), PARAMS, idx);
+            self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xd))[1]});
+        } else {
+            self.load_param(xd, idx);
+            self.load_param(yd, idx + 1);
+        }
+    }
+
+    fn load_stack_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
+        if self.config.permissive() {
+            self.load_q_from_mem(ϕ(xd), SP, idx);
+            self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xd))[1]});
+        } else {
+            self.load_stack(xd, idx);
+            self.load_stack(yd, idx + 1);
+        }
+    }
+
+    fn save_stack_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
+        if self.config.permissive() {
+            self.emit(arm! {zip1 q(ϕ(xs)), q(ϕ(xs)), q(ϕ(ys))});
+            self.save_q_to_mem(ϕ(xs), SP, idx);
+        } else {
+            self.save_stack(xs, idx);
+            self.save_stack(ys, idx + 1);
+        }
     }
 
     fn save_stack_result(&mut self, idx: u32) {
@@ -969,6 +1045,31 @@ impl Generator for ArmSimdGenerator {
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
         self.save_q_to_mem(ϕ(dst), SP, idx);
+    }
+
+    fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
+        self.load_mem(xd, idx);
+        self.load_mem(yd, idx + 1);
+    }
+
+    fn save_mem_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
+        self.save_mem(xs, idx);
+        self.save_mem(ys, idx + 1);
+    }
+
+    fn load_param_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
+        self.load_param(xd, idx);
+        self.load_param(yd, idx + 1);
+    }
+
+    fn load_stack_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
+        self.load_stack(xd, idx);
+        self.load_stack(yd, idx + 1);
+    }
+
+    fn save_stack_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
+        self.save_stack(xs, idx);
+        self.save_stack(ys, idx + 1);
     }
 
     fn save_stack_result(&mut self, idx: u32) {

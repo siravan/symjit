@@ -1381,28 +1381,33 @@ impl Mir {
                 Instruction::LoadComplex { xd, yd, loc } => {
                     match loc {
                         Loc::Mem(idx) => {
-                            ir.load_mem(*xd, *idx);
-                            ir.load_mem(*yd, 1 + *idx);
+                            // ir.load_mem(*xd, *idx);
+                            // ir.load_mem(*yd, 1 + *idx);
+                            ir.load_mem_complex(*xd, *yd, *idx);
                         }
                         Loc::Stack(idx) => {
-                            ir.load_stack(*xd, *idx);
-                            ir.load_stack(*yd, 1 + *idx);
+                            // ir.load_stack(*xd, *idx);
+                            // ir.load_stack(*yd, 1 + *idx);
+                            ir.load_stack_complex(*xd, *yd, *idx);
                         }
                         Loc::Param(idx) => {
-                            ir.load_param(*xd, *idx);
-                            ir.load_param(*yd, 1 + *idx);
+                            // ir.load_param(*xd, *idx);
+                            // ir.load_param(*yd, 1 + *idx);
+                            ir.load_param_complex(*xd, *yd, *idx);
                         }
                     };
                 }
                 Instruction::SaveComplex { xs, ys, loc } => {
                     match loc {
                         Loc::Mem(idx) => {
-                            ir.save_mem(*xs, *idx);
-                            ir.save_mem(*ys, 1 + *idx);
+                            // ir.save_mem(*xs, *idx);
+                            // ir.save_mem(*ys, 1 + *idx);
+                            ir.save_mem_complex(*xs, *ys, *idx);
                         }
                         Loc::Stack(idx) => {
-                            ir.save_stack(*xs, *idx);
-                            ir.save_stack(*ys, 1 + *idx);
+                            // ir.save_stack(*xs, *idx);
+                            // ir.save_stack(*ys, 1 + *idx);
+                            ir.save_stack_complex(*xs, *ys, *idx);
                         }
                         Loc::Param(_) => unreachable!(),
                     };
@@ -1667,8 +1672,6 @@ impl Mir {
             } = *q1
             {
                 if loc == loc_q1 {
-                    println!("{:?}", q0);
-                    println!("{:?}", q1);
                     code.push(q0.clone());
                     code.push(Instruction::Mov {
                         dst: dst_q1,

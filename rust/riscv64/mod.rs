@@ -317,6 +317,31 @@ impl Generator for RiscV {
         self.save_float(ϕ(dst), Self::sp, 8 * idx);
     }
 
+    fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
+        self.load_mem(xd, idx);
+        self.load_mem(yd, idx + 1);
+    }
+
+    fn save_mem_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
+        self.save_mem(xs, idx);
+        self.save_mem(ys, idx + 1);
+    }
+
+    fn load_param_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
+        self.load_param(xd, idx);
+        self.load_param(yd, idx + 1);
+    }
+
+    fn load_stack_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
+        self.load_stack(xd, idx);
+        self.load_stack(yd, idx + 1);
+    }
+
+    fn save_stack_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
+        self.save_stack(xs, idx);
+        self.save_stack(ys, idx + 1);
+    }
+
     fn save_stack_result(&mut self, idx: u32) {
         self.save_float(Self::fa0, Self::sp, 8 * idx);
     }

@@ -24,6 +24,12 @@ pub trait Generator {
     fn load_stack(&mut self, dst: Reg, idx: u32);
     fn save_stack(&mut self, dst: Reg, idx: u32);
 
+    fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32);
+    fn save_mem_complex(&mut self, xs: Reg, ys: Reg, idx: u32);
+    fn load_param_complex(&mut self, xd: Reg, yd: Reg, idx: u32);
+    fn load_stack_complex(&mut self, xd: Reg, yd: Reg, idx: u32);
+    fn save_stack_complex(&mut self, xs: Reg, ys: Reg, idx: u32);
+
     fn save_mem_result(&mut self, idx: u32);
     fn save_stack_result(&mut self, idx: u32);
 

@@ -238,6 +238,26 @@ impl Generator for Complexifier {
         }
     }
 
+    fn load_mem_complex(&mut self, _xd: Reg, _yd: Reg, _idx: u32) {
+        unreachable!()
+    }
+
+    fn save_mem_complex(&mut self, _xs: Reg, _ys: Reg, _idx: u32) {
+        unreachable!()
+    }
+
+    fn load_param_complex(&mut self, _xd: Reg, _yd: Reg, _idx: u32) {
+        unreachable!()
+    }
+
+    fn load_stack_complex(&mut self, _xd: Reg, _yd: Reg, _idx: u32) {
+        unreachable!()
+    }
+
+    fn save_stack_complex(&mut self, _xs: Reg, _ys: Reg, _idx: u32) {
+        unreachable!()
+    }
+
     fn save_mem_result(&mut self, idx: u32) {
         self.save_mem(Reg::Ret, idx);
     }
