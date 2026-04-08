@@ -107,9 +107,10 @@ impl ArmGenerator {
         }
     }
 
-    fn load_q_from_mem(&mut self, d: u8, base: u8, idx: u32) {
+    fn load_q_from_mem(&mut self, d: u8, base: u8, mut idx: u32) {
+        idx /= 2;
         if idx < 4096 {
-            self.emit(arm! {ldr q(d), [x(base), #self.reg_size()*idx]});
+            self.emit(arm! {ldr q(d), [x(base), #16*idx]});
         } else if idx < 65536 {
             self.emit(arm! {movz x(SCRATCH1), #idx});
             self.emit(arm! {ldr q(d), [x(base), x(SCRATCH1), lsl #4]});
@@ -120,9 +121,10 @@ impl ArmGenerator {
         }
     }
 
-    fn save_q_to_mem(&mut self, d: u8, base: u8, idx: u32) {
+    fn save_q_to_mem(&mut self, d: u8, base: u8, mut idx: u32) {
+        idx /= 2;
         if idx < 4096 {
-            self.emit(arm! {str q(d), [x(base), #self.reg_size()*idx]});
+            self.emit(arm! {str q(d), [x(base), #16*idx]});
         } else if idx < 65536 {
             self.emit(arm! {movz x(SCRATCH1), #idx});
             self.emit(arm! {str q(d), [x(base), x(SCRATCH1), lsl #4]});

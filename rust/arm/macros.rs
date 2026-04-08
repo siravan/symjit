@@ -357,6 +357,10 @@ macro_rules! arm {
         0xca000000 | rd!($rd) | rn!($rn) | rm!($rm)
     };
 
+    (lsr x($rd:expr), x($rn:expr), #1) => {
+        0xd341fc00 | rd!($rd) | rn!($rn)
+    };
+
     (blr x($rn:expr)) => { 0xd63f0000 | rn!($rn) };
     (ret) => { 0xd65f03c0 };
     (nop) => { 0x91000000 };
