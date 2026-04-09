@@ -1,3 +1,12 @@
+# Version 2.15.3
+
+* Vectorized complex load/save.
+* Optimized complex multiplication (permissive mode).
+
+# Version 2.15.2
+
+* Direct translation from Symbolica.
+
 # Version 2.15.1
 
 * Fused load/math operations (both constant and memory access) are implemented.

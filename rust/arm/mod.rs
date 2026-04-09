@@ -423,7 +423,15 @@ impl Generator for ArmGenerator {
     fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
         if self.config.permissive() {
             let xt = Reg::Gen(2);
+            let yt = Reg::Gen(3);
 
+            self.times(xt, y1, y2);
+            self.fused_mul_sub(xt, x1, x2, xt);
+            self.times(yt, x1, y2);
+            self.fused_mul_add(yd, x2, y1, yt);
+            self.fmov(xd, xt);
+
+            /*
             self.emit(arm! {zip1 q(ϕ(x1)), q(ϕ(x1)), q(ϕ(y1))});
             self.emit(arm! {zip1 q(ϕ(x2)), q(ϕ(x2)), q(ϕ(y2))});
             self.xor(xt, xt, xt);
@@ -431,6 +439,7 @@ impl Generator for ArmGenerator {
             self.emit(arm! {fcmla q(ϕ(xt)), q(ϕ(x1)), q(ϕ(x2)), #90});
             self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xt))[1]});
             self.emit(arm! {dup q(ϕ(xd)), q(ϕ(xt))[0]});
+            */
 
             true
         } else {
@@ -1137,16 +1146,22 @@ impl Generator for ArmSimdGenerator {
         self.emit(arm! {fdiv q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
     }
 
-    fn times_complex(
-        &mut self,
-        _xd: Reg,
-        _yd: Reg,
-        _x1: Reg,
-        _y1: Reg,
-        _x2: Reg,
-        _y2: Reg,
-    ) -> bool {
-        false
+    fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
+        if self.config.permissive() {
+            let xt = Reg::Gen(2);
+            let yt = Reg::Gen(3);
+
+            self.times(xt, x1, x2); // xt := x1 * x2
+            self.emit(arm! {fmls q(ϕ(xt)), q(ϕ(y1)), q(ϕ(y2))}); // xt := x1 * x2 - y1 * y2
+            self.times(yt, x1, y2); // yt := x1 * y2
+            self.emit(arm! {fmla q(ϕ(yt)), q(ϕ(x2)), q(ϕ(y1))}); // xt := x1 * y2 + x2 * y1
+            self.fmov(xd, xt);
+            self.fmov(yd, yt);
+
+            true
+        } else {
+            false
+        }
     }
 
     fn real(&mut self, dst: Reg, s1: Reg) {

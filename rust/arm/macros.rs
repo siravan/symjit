@@ -258,6 +258,16 @@ macro_rules! arm {
         0x1f608000 | rd!($rd) | rn!($rn) | rm!($rm) | ra!($ra)
     };
 
+    // rd += rn * rm (vector)
+    (fmla q($rd:expr), q($rn:expr), q($rm:expr)) => {
+        0x4e60cc00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
+    // rd -= rn * rm (vector)
+    (fmls q($rd:expr), q($rn:expr), q($rm:expr)) => {
+        0x4ee0cc00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
     // round double to integral (double-coded integer)
     (frinti d($rd:expr), d($rn:expr)) => {
         0x1e67c000 | rd!($rd) | rn!($rn)

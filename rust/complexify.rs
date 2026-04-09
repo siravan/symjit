@@ -500,7 +500,15 @@ impl Generator for Complexifier {
         self.promote_real(dst, s1, s2);
     }
 
-    fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
+    fn times_complex(
+        &mut self,
+        _xd: Reg,
+        _yd: Reg,
+        _x1: Reg,
+        _y1: Reg,
+        _x2: Reg,
+        _y2: Reg,
+    ) -> bool {
         unreachable!()
     }
 

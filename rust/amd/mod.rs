@@ -773,17 +773,24 @@ impl Generator for AmdGenerator {
     }
 
     fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
-        if self.config.permissive() && matches!(self.family, AmdFamily::AvxScalar) {
-            let xt = 4;
-            let yt = 5;
-            self.amd.vunpckldd(ϕ(x1), ϕ(x1), ϕ(x1));
-            self.amd.vunpckldd(ϕ(y1), ϕ(y1), ϕ(y1));
-            self.amd.vunpckldd(yt, ϕ(x2), ϕ(y2));
-            self.amd.vmuldd(xt, ϕ(x1), yt);
-            self.amd.vmuldd(yt, ϕ(y1), yt);
-            self.amd.vshufdd(ϕ(xd), yt, yt, 1);
-            self.amd.vaddsubdd(ϕ(xd), xt, ϕ(xd));
-            self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
+        if self.config.permissive() {
+            let xt = Reg::Gen(2);
+            let yt = Reg::Gen(3);
+            /*
+                self.amd.vunpckldd(ϕ(x1), ϕ(x1), ϕ(x1));
+                self.amd.vunpckldd(ϕ(y1), ϕ(y1), ϕ(y1));
+                self.amd.vunpckldd(ϕ(yt), ϕ(x2), ϕ(y2));
+                self.amd.vmuldd(ϕ(xt), ϕ(x1), ϕ(yt));
+                self.amd.vmuldd(ϕ(yt), ϕ(y1), ϕ(yt));
+                self.amd.vshufdd(ϕ(xd), ϕ(yt), ϕ(yt), 1);
+                self.amd.vaddsubdd(ϕ(xd), ϕ(xt), ϕ(xd));
+                self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
+            */
+            self.times(xt, y1, y2);
+            self.fused_mul_sub(xt, x1, x2, xt);
+            self.times(yt, x1, y2);
+            self.fused_mul_add(yd, x2, y1, yt);
+            self.fmov(xd, xt);
             true
         } else {
             false
