@@ -94,7 +94,7 @@ impl Transliterator {
         self.prog
             .builder
             .symbol_table()
-            .find_sym(name)
+            .find_sym(&name)
             .map(|s| s.borrow().loc)
     }
 
@@ -170,14 +170,14 @@ impl Transliterator {
     }
 
     fn add_stack(&mut self, name: &str) -> Result<u32> {
-        if let Some(Loc::Stack(i)) = self.find_sym(name) {
+        if let Some(Loc::Stack(i)) = self.find_sym(&name) {
             Ok(i)
         } else {
-            self.prog.builder.symbol_table().add_stack(name);
-            if let Some(Loc::Stack(i)) = self.find_sym(name) {
+            self.prog.builder.symbol_table().add_stack(&name);
+            if let Some(Loc::Stack(i)) = self.find_sym(&name) {
                 Ok(i)
             } else {
-                Err(anyhow!("error adding {:?}", name))
+                Err(anyhow!("error adding {:?}", &name))
             }
         }
     }
@@ -273,9 +273,9 @@ impl Composer for Transliterator {
         self.load(reg(0), &args[0])?;
         self.mark_real(&args[0], 0 < num_reals);
 
-        for (i, arg) in args.iter().enumerate() {
-            self.load(reg(1), arg)?;
-            self.mark_real(arg, i < num_reals);
+        for i in 1..args.len() {
+            self.load(reg(1), &args[i])?;
+            self.mark_real(&args[i], i < num_reals);
             self.mir.plus(reg(0), reg(0), reg(1));
         }
         self.save(reg(0), lhs)?;
@@ -289,12 +289,12 @@ impl Composer for Transliterator {
 
         let mut negate = false;
 
-        for (i, arg) in args.iter().enumerate() {
-            if self.is_minus_one(arg) {
+        for i in 1..args.len() {
+            if self.is_minus_one(&args[i]) {
                 negate = !negate;
             } else {
-                self.load(reg(1), arg)?;
-                self.mark_real(arg, i < num_reals);
+                self.load(reg(1), &args[i])?;
+                self.mark_real(&args[i], i < num_reals);
                 self.mir.times(reg(0), reg(0), reg(1));
             }
         }
@@ -310,7 +310,7 @@ impl Composer for Transliterator {
 
     fn append_pow(&mut self, lhs: &Slot, arg: &Slot, p: i64, is_real: bool) -> Result<()> {
         self.load(reg(0), arg)?;
-        self.mark_real(arg, is_real);
+        self.mark_real(&arg, is_real);
 
         match p {
             2 => self.mir.square(reg(0), reg(0)),
@@ -333,7 +333,7 @@ impl Composer for Transliterator {
 
     fn append_powf(&mut self, lhs: &Slot, arg: &Slot, p: &Slot, is_real: bool) -> Result<()> {
         self.load(reg(0), arg)?;
-        self.mark_real(arg, is_real);
+        self.mark_real(&arg, is_real);
 
         self.load(reg(1), p)?;
         self.mir.setup_call_binary(reg(0), reg(1));
@@ -424,8 +424,8 @@ impl Composer for Transliterator {
         } else {
             println!("{:?}", &args);
 
-            for (i, arg) in args.iter().enumerate() {
-                self.load(reg(0), arg)?;
+            for i in 0..args.len() {
+                self.load(reg(0), &args[i])?;
                 self.save(reg(0), &Slot::Arg(i))?;
             }
 
