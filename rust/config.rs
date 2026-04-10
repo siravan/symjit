@@ -261,7 +261,7 @@ impl Default for Config {
     fn default() -> Config {
         Config::new(
             CompilerType::Native,
-            USE_SIMD | SYMBOLICA | COMPACT | (2 << OPT_LEVEL_SHIFT),
+            USE_SIMD | SYMBOLICA | COMPACT | PERMISSIVE | (2 << OPT_LEVEL_SHIFT),
         )
         .unwrap()
     }
