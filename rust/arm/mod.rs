@@ -419,7 +419,6 @@ impl Generator for ArmGenerator {
         self.emit(arm! {fdiv d(ϕ(dst)), d(ϕ(s1)), d(ϕ(s2))});
     }
 
-    #[cfg(target_arch = "aarch64")]
     fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
         if self.config.permissive() {
             let xt = Reg::Gen(2);
@@ -447,17 +446,24 @@ impl Generator for ArmGenerator {
         }
     }
 
-    #[cfg(not(target_arch = "aarch64"))]
-    fn times_complex(
-        &mut self,
-        _xd: Reg,
-        _yd: Reg,
-        _x1: Reg,
-        _y1: Reg,
-        _x2: Reg,
-        _y2: Reg,
-    ) -> bool {
-        false
+    fn divide_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
+        if self.config.permissive() {
+            let xt = Reg::Gen(2);
+            let yt = Reg::Gen(3);
+            let t = Reg::Temp;
+
+            self.times(xt, y1, y2);
+            self.fused_mul_add(xt, x1, x2, xt);
+            self.times(yt, x1, y2);
+            self.fused_mul_sub(yt, x2, y1, yt);
+            self.times(t, x2, x2);
+            self.fused_mul_add(t, y2, y2, t);
+            self.divide(xd, xt, t);
+            self.divide(yd, yt, t);
+            true
+        } else {
+            false
+        }
     }
 
     fn real(&mut self, dst: Reg, s1: Reg) {
@@ -1158,6 +1164,26 @@ impl Generator for ArmSimdGenerator {
             self.fmov(xd, xt);
             self.fmov(yd, yt);
 
+            true
+        } else {
+            false
+        }
+    }
+
+    fn divide_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
+        if self.config.permissive() {
+            let xt = Reg::Gen(2);
+            let yt = Reg::Gen(3);
+            let t = Reg::Temp;
+
+            self.times(xt, x1, x2);
+            self.emit(arm! {fmla q(ϕ(xt)), q(ϕ(y1)), q(ϕ(y2))}); // xt := x1 * x2 + y1 * y2
+            self.times(yt, x2, y1);
+            self.emit(arm! {fmls q(ϕ(yt)), q(ϕ(x1)), q(ϕ(y2))}); // yt := x2 * y1 - x1 * y2
+            self.times(t, x2, x2);
+            self.emit(arm! {fmla q(ϕ(t)), q(ϕ(y2)), q(ϕ(y2))}); // t := x2 * x2 + y2 * y2
+            self.divide(xd, xt, t);
+            self.divide(yd, yt, t);
             true
         } else {
             false

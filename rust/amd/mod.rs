@@ -797,6 +797,26 @@ impl Generator for AmdGenerator {
         }
     }
 
+    fn divide_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
+        if self.config.permissive() {
+            let xt = Reg::Gen(2);
+            let yt = Reg::Gen(3);
+            let t = Reg::Temp;
+
+            self.times(xt, y1, y2);
+            self.fused_mul_add(xt, x1, x2, xt);
+            self.times(yt, x1, y2);
+            self.fused_mul_sub(yt, x2, y1, yt);
+            self.times(t, x2, x2);
+            self.fused_mul_add(t, y2, y2, t);
+            self.divide(xd, xt, t);
+            self.divide(yd, yt, t);
+            true
+        } else {
+            false
+        }
+    }
+
     fn real(&mut self, dst: Reg, s1: Reg) {
         self.fmov(dst, s1);
     }

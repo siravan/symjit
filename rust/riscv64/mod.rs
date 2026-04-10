@@ -421,6 +421,18 @@ impl Generator for RiscV {
         false
     }
 
+    fn divide_complex(
+        &mut self,
+        _xd: Reg,
+        _yd: Reg,
+        _x1: Reg,
+        _y1: Reg,
+        _x2: Reg,
+        _y2: Reg,
+    ) -> bool {
+        false
+    }
+
     fn real(&mut self, dst: Reg, s1: Reg) {
         self.fmov(dst, s1);
     }

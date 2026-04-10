@@ -1504,7 +1504,9 @@ impl Mir {
                         }
                     }
                     ArithOp::Divide => {
-                        Complexifier::generic_complex_divide(ir, *xd, *yd, *x1, *y1, *x2, *y2)
+                        if !ir.divide_complex(*xd, *yd, *x1, *y1, *x2, *y2) {
+                            Complexifier::generic_complex_divide(ir, *xd, *yd, *x1, *y1, *x2, *y2)
+                        }
                     }
                 },
             }

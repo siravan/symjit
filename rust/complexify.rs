@@ -512,6 +512,18 @@ impl Generator for Complexifier {
         unreachable!()
     }
 
+    fn divide_complex(
+        &mut self,
+        _xd: Reg,
+        _yd: Reg,
+        _x1: Reg,
+        _y1: Reg,
+        _x2: Reg,
+        _y2: Reg,
+    ) -> bool {
+        unreachable!()
+    }
+
     fn real(&mut self, dst: Reg, s1: Reg) {
         self.mir.fmov(re(dst), re(s1));
         self.set_reg_real(dst);
