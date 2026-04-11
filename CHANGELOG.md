@@ -1,7 +1,11 @@
+# Version 2.16.0
+
+* Code cleanup and infra-structure for MIR save/load.
+
 # Version 2.15.3
 
 * Vectorized complex load/save.
-* Optimized complex multiplication (permissive mode).
+* Optimized complex multiplication and division (permissive mode).
 
 # Version 2.15.2
 
