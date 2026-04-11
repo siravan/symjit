@@ -42,12 +42,6 @@ pub fn align_stack(n: u32) -> u32 {
 
 /*****************************************/
 
-#[derive(PartialEq)]
-pub enum DataType {
-    F32,
-    F64,
-}
-
 #[derive(Copy, Clone, PartialEq)]
 pub enum Reg {
     Ret,
