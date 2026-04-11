@@ -1899,7 +1899,6 @@ impl Mir {
         let mut q0 = iter.next();
         let mut q1 = iter.next();
         let mut q2 = iter.next();
-        let mut p: Instruction;
 
         while q0.is_some() {
             let (mut v, d) = self.fuse(
@@ -1917,14 +1916,12 @@ impl Mir {
                     q2 = iter.next();
                 }
                 2 => {
-                    p = code.pop().unwrap();
-                    q0 = Some(&p);
-                    q1 = q2;
+                    q0 = q2;
+                    q1 = iter.next();
                     q2 = iter.next();
                 }
                 3 => {
-                    p = code.pop().unwrap();
-                    q0 = Some(&p);
+                    q0 = iter.next();
                     q1 = iter.next();
                     q2 = iter.next();
                 }

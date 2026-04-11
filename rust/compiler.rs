@@ -5,7 +5,6 @@ use num_complex::Complex;
 
 use crate::applet::{recast_as_f64, recast_as_f64_mut};
 use crate::code::VirtualTable;
-use crate::composer::Composer;
 use crate::config::{Config, SLICE_CAP};
 use crate::defuns::Defuns;
 use crate::expr::Expr;
@@ -16,6 +15,7 @@ use crate::symbol::Loc;
 use crate::types::Element;
 use crate::utils::Compiled;
 use crate::Application;
+use crate::composer::Composer;
 
 // #[derive(Debug)]
 pub struct Compiler {

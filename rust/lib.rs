@@ -1322,7 +1322,7 @@ pub unsafe extern "C" fn create_defuns() -> *const Defuns {
 ///     2. After finalize_defun is called, df is invalid.
 ///
 #[no_mangle]
-pub unsafe extern "C" fn finalize_defuns(_df: *mut Defuns) {
+pub unsafe extern "C" fn finalize_defuns(df: *mut Defuns) {
     // if !df.is_null() {
     //     let _ = unsafe { Box::from_raw(df) };
     // }
