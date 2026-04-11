@@ -211,6 +211,7 @@ impl ColoringAllocator {
         for ins in mir.code.iter() {
             match *ins {
                 Instruction::Nop => self.push(Instruction::Nop),
+                Instruction::End => self.push(Instruction::End),
                 Instruction::Uni { op, dst, s1 } => {
                     let (dst, s1) = self.unary_op(dst, s1);
                     self.push(Instruction::Uni { op, dst, s1 });
@@ -355,6 +356,7 @@ impl ColoringAllocator {
         for ins in code.iter() {
             match *ins {
                 Instruction::Nop => self.push(Instruction::Nop),
+                Instruction::End => self.push(Instruction::End),
                 Instruction::Uni { op, dst, s1 } => self.push(Instruction::Uni {
                     op,
                     dst: self.alloc(dst),
@@ -649,6 +651,7 @@ impl GreedyAllocator {
         for (ip, ins) in mir.code.iter().enumerate() {
             match *ins {
                 Instruction::Nop => self.push(Instruction::Nop),
+                Instruction::End => self.push(Instruction::End),
                 Instruction::Uni { op, dst, s1 } => {
                     let (dst, s1) = self.unary_op(ip, dst, s1);
                     self.push(Instruction::Uni { op, dst, s1 });
@@ -829,6 +832,7 @@ impl GreedyAllocator {
         for (ip, ins) in code.iter().enumerate() {
             match *ins {
                 Instruction::Nop => self.push(Instruction::Nop),
+                Instruction::End => self.push(Instruction::End),
                 Instruction::Uni { op, dst, s1 } => {
                     let s1 = self.deallocate(ip, s1);
                     let (dst, _) = self.allocate(dst, None);
