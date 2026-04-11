@@ -2,7 +2,7 @@ use crate::code::Func;
 use crate::config::{Config, SPILL_AREA};
 use crate::generator::Generator;
 use crate::utils::align_stack;
-use crate::utils::{is_external_func, reg, Reg};
+use crate::utils::{is_external_func, reg, DataType, Reg};
 use anyhow::{anyhow, Result};
 
 mod asm;
@@ -119,7 +119,7 @@ fn ϕ(r: Reg) -> u8 {
 impl AmdGenerator {
     pub fn new(family: AmdFamily, config: Config) -> AmdGenerator {
         AmdGenerator {
-            amd: Amd::new(),
+            amd: Amd::new(DataType::F64),
             family,
             config,
             last_load: 0,

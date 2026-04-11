@@ -73,6 +73,7 @@ pub enum FusedOp {
 #[derive(Clone)]
 pub enum Instruction {
     Nop,
+    End,
     Uni {
         op: UniOp,
         dst: Reg,
@@ -166,6 +167,7 @@ impl fmt::Debug for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Instruction::Nop => write!(f, "nop"),
+            Instruction::End => write!(f, "end"),
             Instruction::Uni { op, dst, s1 } => write!(f, "{:?} := {:?}({:?})", &dst, &op, &s1),
             Instruction::Bi { op, dst, s1, s2 } => {
                 write!(f, "{:?} := {:?} {:?} {:?}", &dst, &s1, &op, &s2)
@@ -1148,7 +1150,7 @@ impl Mir {
             let ins = &self.code[ip];
 
             match ins {
-                Instruction::Nop => {}
+                Instruction::Nop | Instruction::End => {}
                 Instruction::Uni { op, dst, s1 } => {
                     Self::exec_uniop(regs, *op, *dst, *s1);
                 }
@@ -1352,7 +1354,7 @@ impl Mir {
     pub fn rerun(&self, ir: &mut dyn Generator) -> Result<()> {
         for ins in self.code.iter() {
             match ins {
-                Instruction::Nop => {}
+                Instruction::Nop | Instruction::End => {}
                 Instruction::Uni { op, dst, s1 } => {
                     Self::rerun_uniop(ir, *op, *dst, *s1);
                 }
@@ -1517,7 +1519,12 @@ impl Mir {
 }
 
 impl Mir {
-    fn fuse_op_mov(&self, q0: &Instruction, q1: &Instruction) -> Vec<Instruction> {
+    fn fuse_op_mov(
+        &self,
+        _code: &mut Vec<Instruction>,
+        q0: &Instruction,
+        q1: &Instruction,
+    ) -> Option<Instruction> {
         /*
          * example:
          *      %0 = Root(%2)
@@ -1534,11 +1541,11 @@ impl Mir {
             } = *q1
             {
                 if dst == s1_q1 {
-                    return vec![Instruction::Uni {
+                    return Some(Instruction::Uni {
                         op,
                         dst: dst_q1,
                         s1,
-                    }];
+                    });
                 }
             }
         };
@@ -1559,20 +1566,25 @@ impl Mir {
             } = *q1
             {
                 if dst == s1_q1 {
-                    return vec![Instruction::Bi {
+                    return Some(Instruction::Bi {
                         op,
                         dst: dst_q1,
                         s1,
                         s2,
-                    }];
+                    });
                 }
             }
         };
 
-        Vec::new()
+        None
     }
 
-    fn fuse_load(&self, q0: &Instruction, q1: &Instruction) -> Vec<Instruction> {
+    fn fuse_load(
+        &self,
+        _code: &mut Vec<Instruction>,
+        q0: &Instruction,
+        q1: &Instruction,
+    ) -> Option<Instruction> {
         /*
          * example
          *      %0 := Stack[2]
@@ -1591,7 +1603,7 @@ impl Mir {
             } = *q1
             {
                 if dst == s1_q1 {
-                    return vec![Instruction::Load { dst: dst_q1, loc }];
+                    return Some(Instruction::Load { dst: dst_q1, loc });
                 }
             }
         };
@@ -1603,7 +1615,7 @@ impl Mir {
             } = *q1
             {
                 if dst == s1_q1 {
-                    return vec![Instruction::LoadConst { dst: dst_q1, idx }];
+                    return Some(Instruction::LoadConst { dst: dst_q1, idx });
                 }
             }
         };
@@ -1615,15 +1627,20 @@ impl Mir {
             } = *q1
             {
                 if loc == loc_q1 && dst == src_q1 {
-                    return vec![Instruction::Nop];
+                    return Some(Instruction::Nop);
                 }
             }
         };
 
-        Vec::new()
+        None
     }
 
-    fn fuse_save(&self, q0: &Instruction, q1: &Instruction) -> Vec<Instruction> {
+    fn fuse_save(
+        &self,
+        code: &mut Vec<Instruction>,
+        q0: &Instruction,
+        q1: &Instruction,
+    ) -> Option<Instruction> {
         // Important: this rule is commented out because of a potential bug,
         // where %0 is needed afterward.
         /*
@@ -1669,21 +1686,25 @@ impl Mir {
             } = *q1
             {
                 if loc == loc_q1 {
-                    return vec![
-                        q0.clone(),
-                        Instruction::Mov {
-                            dst: dst_q1,
-                            s1: src,
-                        },
-                    ];
+                    code.push(q0.clone());
+                    return Some(Instruction::Mov {
+                        dst: dst_q1,
+                        s1: src,
+                    });
                 }
             }
         };
 
-        Vec::new()
+        None
     }
 
-    fn fuse_save3(&self, q0: &Instruction, q1: &Instruction, q2: &Instruction) -> Vec<Instruction> {
+    fn fuse_save3(
+        &self,
+        _code: &mut Vec<Instruction>,
+        q0: &Instruction,
+        q1: &Instruction,
+        q2: &Instruction,
+    ) -> Option<Instruction> {
         /*
          * this combination happens in return from remote function calls
          * examples:
@@ -1707,19 +1728,29 @@ impl Mir {
                 } = *q2
                 {
                     if src == Reg::Ret && loc == loc_q1 && dst_q1 == dst_q2 {
-                        return vec![Instruction::Save {
+                        return Some(Instruction::Save {
                             src: Reg::Ret,
                             loc: loc_q2,
-                        }];
+                        });
                     }
                 }
             }
         };
 
-        Vec::new()
+        None
     }
 
-    fn fuse_fma(&self, q0: &Instruction, q1: &Instruction) -> Vec<Instruction> {
+    fn fuse_fma(
+        &self,
+        _code: &mut Vec<Instruction>,
+        q0: &Instruction,
+        q1: &Instruction,
+    ) -> Option<Instruction> {
+        // TODO: fix the FMA bug for complex noted on `runtests complex`
+        if !self.config.fastmath() || self.config.is_complex() {
+            return None;
+        }
+
         if let Instruction::Bi { op, dst, s1, s2 } = *q0 {
             if let Instruction::Bi {
                 op: op_q1,
@@ -1729,51 +1760,62 @@ impl Mir {
             } = *q1
             {
                 if op == BinOp::Times && op_q1 == BinOp::Plus && s1_q1 == dst {
-                    return vec![Instruction::Fused {
+                    return Some(Instruction::Fused {
                         op: FusedOp::MulAdd,
                         dst: dst_q1,
                         a: s1,
                         b: s2,
                         c: s2_q1,
-                    }];
+                    });
                 }
 
                 if op == BinOp::Times && op_q1 == BinOp::Plus && s2_q1 == dst {
-                    return vec![Instruction::Fused {
+                    return Some(Instruction::Fused {
                         op: FusedOp::MulAdd,
                         dst: dst_q1,
                         a: s1,
                         b: s2,
                         c: s1_q1,
-                    }];
+                    });
                 }
 
                 if op == BinOp::Times && op_q1 == BinOp::Minus && s1_q1 == dst {
-                    return vec![Instruction::Fused {
+                    return Some(Instruction::Fused {
                         op: FusedOp::MulSub,
                         dst: dst_q1,
                         a: s1,
                         b: s2,
                         c: s2_q1,
-                    }];
+                    });
                 }
 
                 if op == BinOp::Times && op_q1 == BinOp::Minus && s2_q1 == dst {
-                    return vec![Instruction::Fused {
+                    return Some(Instruction::Fused {
                         op: FusedOp::NegMulAdd,
                         dst: dst_q1,
                         a: s1,
                         b: s2,
                         c: s1_q1,
-                    }];
+                    });
                 }
             }
         }
 
-        Vec::new()
+        None
     }
 
-    fn fuse_fma3(&self, q0: &Instruction, q1: &Instruction, q2: &Instruction) -> Vec<Instruction> {
+    fn fuse_fma3(
+        &self,
+        code: &mut Vec<Instruction>,
+        q0: &Instruction,
+        q1: &Instruction,
+        q2: &Instruction,
+    ) -> Option<Instruction> {
+        // TODO: fix the FMA bug for complex noted on `runtests complex`
+        if !self.config.fastmath() || self.config.is_complex() {
+            return None;
+        }
+
         if let Instruction::Bi { op, dst, s1, s2 } = *q0 {
             if let Instruction::LoadConst {
                 dst: dst_q1,
@@ -1791,19 +1833,17 @@ impl Mir {
                         && op_q2 == BinOp::Plus
                         && ((s1_q2 == dst && s2_q2 == dst_q1) || (s1_q2 == dst_q1 && s2_q2 == dst))
                     {
-                        return vec![
-                            Instruction::LoadConst {
-                                dst: Reg::Temp,
-                                idx: idx_q1,
-                            },
-                            Instruction::Fused {
-                                op: FusedOp::MulAdd,
-                                dst: dst_q2,
-                                a: s1,
-                                b: s2,
-                                c: Reg::Temp,
-                            },
-                        ];
+                        code.push(Instruction::LoadConst {
+                            dst: Reg::Temp,
+                            idx: idx_q1,
+                        });
+                        return Some(Instruction::Fused {
+                            op: FusedOp::MulAdd,
+                            dst: dst_q2,
+                            a: s1,
+                            b: s2,
+                            c: Reg::Temp,
+                        });
                     }
                 }
             }
@@ -1826,69 +1866,47 @@ impl Mir {
                         && op_q2 == BinOp::Plus
                         && ((s1_q2 == dst && s2_q2 == dst_q1) || (s1_q2 == dst_q1 && s2_q2 == dst))
                     {
-                        return vec![
-                            Instruction::Load {
-                                dst: Reg::Temp,
-                                loc: loc_q1,
-                            },
-                            Instruction::Fused {
-                                op: FusedOp::MulAdd,
-                                dst: dst_q2,
-                                a: s1,
-                                b: s2,
-                                c: Reg::Temp,
-                            },
-                        ];
+                        code.push(Instruction::Load {
+                            dst: Reg::Temp,
+                            loc: loc_q1,
+                        });
+                        return Some(Instruction::Fused {
+                            op: FusedOp::MulAdd,
+                            dst: dst_q2,
+                            a: s1,
+                            b: s2,
+                            c: Reg::Temp,
+                        });
                     }
                 }
             }
         }
 
-        Vec::new()
+        None
     }
 
     fn fuse(
         &self,
+        code: &mut Vec<Instruction>,
         q0: &Instruction,
         q1: &Instruction,
         q2: &Instruction,
-    ) -> (Vec<Instruction>, usize) {
-        let fastmath = self.config.fastmath();
-        let is_complex = self.config.is_complex(); // TODO: fix the FMA bug for complex noted on `runtests complex`
-
-        let v = self.fuse_save3(q0, q1, q2);
-        if !v.is_empty() {
-            return (v, 3);
+    ) -> (Instruction, usize) {
+        if let Some(v) = self.fuse_save3(code, q0, q1, q2) {
+            (v, 3)
+        } else if let Some(v) = self.fuse_fma3(code, q0, q1, q2) {
+            (v, 3)
+        } else if let Some(v) = self.fuse_fma(code, q0, q1) {
+            (v, 2)
+        } else if let Some(v) = self.fuse_op_mov(code, q0, q1) {
+            (v, 2)
+        } else if let Some(v) = self.fuse_load(code, q0, q1) {
+            (v, 2)
+        } else if let Some(v) = self.fuse_save(code, q0, q1) {
+            (v, 2)
+        } else {
+            (Instruction::Nop, 0)
         }
-
-        if fastmath && !is_complex {
-            let v = self.fuse_fma3(q0, q1, q2);
-            if !v.is_empty() {
-                return (v, 3);
-            }
-
-            let v = self.fuse_fma(q0, q1);
-            if !v.is_empty() {
-                return (v, 2);
-            }
-        }
-
-        let v = self.fuse_op_mov(q0, q1);
-        if !v.is_empty() {
-            return (v, 2);
-        }
-
-        let v = self.fuse_load(q0, q1);
-        if !v.is_empty() {
-            return (v, 2);
-        }
-
-        let v = self.fuse_save(q0, q1);
-        if !v.is_empty() {
-            return (v, 2);
-        }
-
-        (vec![q0.clone()], 1)
     }
 
     pub fn optimize_peephole(&mut self) -> bool {
@@ -1896,37 +1914,34 @@ impl Mir {
         let mut success = false;
 
         let mut iter = self.code.iter();
-        let mut q0 = iter.next();
-        let mut q1 = iter.next();
-        let mut q2 = iter.next();
-        let mut p: Instruction;
+        let mut q0: Instruction = iter.next().unwrap_or(&Instruction::End).clone();
+        let mut q1: Instruction = iter.next().unwrap_or(&Instruction::End).clone();
+        let mut q2: Instruction = iter.next().unwrap_or(&Instruction::End).clone();
 
-        while q0.is_some() {
-            let (mut v, d) = self.fuse(
-                q0.unwrap_or(&Instruction::Nop),
-                q1.unwrap_or(&Instruction::Nop),
-                q2.unwrap_or(&Instruction::Nop),
-            );
-            code.append(&mut v);
-            success |= d > 1;
+        while !matches!(q0, Instruction::End) {
+            let (top, num_consumed) = self.fuse(&mut code, &q0, &q1, &q2);
 
-            match d {
-                1 => {
+            success |= num_consumed > 1;
+
+            match num_consumed {
+                // no matches. move to the next item.
+                0 => {
+                    code.push(q0);
                     q0 = q1;
                     q1 = q2;
-                    q2 = iter.next();
+                    q2 = iter.next().unwrap_or(&Instruction::End).clone();
                 }
+                // q0 and q1 match.
                 2 => {
-                    p = code.pop().unwrap();
-                    q0 = Some(&p);
+                    q0 = top;
                     q1 = q2;
-                    q2 = iter.next();
+                    q2 = iter.next().unwrap_or(&Instruction::End).clone();
                 }
+                // q0, q1, and q2 match.
                 3 => {
-                    p = code.pop().unwrap();
-                    q0 = Some(&p);
-                    q1 = iter.next();
-                    q2 = iter.next();
+                    q0 = top;
+                    q1 = iter.next().unwrap_or(&Instruction::End).clone();
+                    q2 = iter.next().unwrap_or(&Instruction::End).clone();
                 }
                 _ => unreachable!(),
             }
