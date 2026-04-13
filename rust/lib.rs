@@ -427,6 +427,7 @@ mod model;
 mod node;
 mod parser;
 mod runnable;
+mod serializer;
 mod statement;
 mod symbol;
 mod types;
@@ -447,6 +448,7 @@ pub use expr::{double, int, var, Expr};
 pub use instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
 pub use num_complex::{Complex, ComplexFloat};
 pub use runnable::{Application, CompilerType};
+pub use serializer::MirWriter;
 pub use types::{ElemType, Element};
 pub use utils::{Compiled, Storage};
 
@@ -712,7 +714,7 @@ pub unsafe extern "C" fn load(file: *const c_char) -> *const CompilerResult {
     let fs = std::fs::File::open(file);
 
     match fs {
-        Ok(mut fs) => match Application::load(&mut fs) {
+        Ok(mut fs) => match Application::load(&mut fs, &Config::default()) {
             Ok(app) => {
                 res.app = Some(app);
                 res.status = CompilerStatus::Ok;

@@ -133,19 +133,20 @@ impl Storage for Program {
         stream.write_all(&self.count_obs.to_le_bytes())?;
         stream.write_all(&self.count_diffs.to_le_bytes())?;
         stream.write_all(&self.count_loops.to_le_bytes())?;
+        self.builder.save(stream)?;
         Ok(())
     }
 
-    fn load(stream: &mut impl Read) -> Result<Self> {
+    fn load(stream: &mut impl Read, config: &Config) -> Result<Self> {
         let mut bytes: [u8; 8] = [0; 8];
 
         stream.read_exact(&mut bytes)?;
 
         if usize::from_le_bytes(bytes) != Self::MAGIC {
-            return Err(anyhow!("invalid magic number"));
+            return Err(anyhow!("invalid magic number (Program)"));
         }
 
-        let config = Config::load(stream)?;
+        let config = Config::load(stream, config)?;
 
         stream.read_exact(&mut bytes)?;
         let count_states = usize::from_le_bytes(bytes);
@@ -162,7 +163,7 @@ impl Storage for Program {
         stream.read_exact(&mut bytes)?;
         let count_loops = usize::from_le_bytes(bytes);
 
-        let builder = Builder::new(config);
+        let builder = Builder::load(stream, &config)?;
 
         Ok(Program {
             builder,
@@ -375,6 +376,17 @@ pub struct CellModel {
 }
 
 impl CellModel {
+    pub fn new() -> CellModel {
+        CellModel {
+            iv: Expr::var("$_").to_variable().unwrap(),
+            params: Vec::new(),
+            states: Vec::new(),
+            algs: Vec::new(),
+            odes: Vec::new(),
+            obs: Vec::new(),
+        }
+    }
+
     pub fn load(text: &str) -> Result<CellModel> {
         Ok(serde_json::from_str(text)?)
     }

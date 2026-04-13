@@ -66,15 +66,7 @@ impl Transliterator {
         // opt_level should be 2 for proper register allocation.
         config.set_opt_level(2);
 
-        let ml = CellModel {
-            iv: Expr::var("$_").to_variable().unwrap(),
-            params: Vec::new(),
-            states: Vec::new(),
-            algs: Vec::new(),
-            odes: Vec::new(),
-            obs: Vec::new(),
-        };
-
+        let ml = CellModel::new();
         let mir = Mir::new(config.clone());
         let prog = Program::new(&ml, config).unwrap();
 

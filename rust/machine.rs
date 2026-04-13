@@ -3,6 +3,8 @@ use std::fs;
 use std::io::{Read, Write};
 use std::sync::Arc;
 
+use crate::Config;
+
 use super::memory::*;
 use super::utils::*;
 
@@ -88,13 +90,13 @@ impl<T: Clone + Default> MachineCode<T> {
 }
 
 impl<T: Clone + Default> Storage for MachineCode<T> {
-    fn load(stream: &mut impl Read) -> Result<MachineCode<T>> {
+    fn load(stream: &mut impl Read, _config: &Config) -> Result<MachineCode<T>> {
         let mut bytes: [u8; 8] = [0; 8];
 
         stream.read_exact(&mut bytes)?;
 
         if usize::from_le_bytes(bytes) != Self::MAGIC {
-            return Err(anyhow!("invalid magic number"));
+            return Err(anyhow!("invalid magic number (MachineCode)"));
         }
 
         stream.read_exact(&mut bytes)?;

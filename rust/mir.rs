@@ -19,13 +19,14 @@ use crate::utils::is_external_func;
 use crate::utils::{bool_to_f64, Compiled, CompiledFunc, Reg};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[repr(u8)]
 pub enum UniOp {
-    Abs,
-    Not,
     Neg,
-    Recip,
+    Not,
+    Abs,
     Root,
     RealRoot,
+    Recip,
     Round,
     Floor,
     Ceiling,
@@ -36,6 +37,7 @@ pub enum UniOp {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[repr(u8)]
 pub enum BinOp {
     Plus,
     Minus,
@@ -55,19 +57,21 @@ pub enum BinOp {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[repr(u8)]
 pub enum ArithOp {
-    Plus,
-    Minus,
-    Times,
-    Divide,
+    Plus = 0,
+    Minus = 1,
+    Times = 2,
+    Divide = 3,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[repr(u8)]
 pub enum FusedOp {
-    MulAdd,    // + a * b + c
-    NegMulAdd, // - a * b + c
-    MulSub,    // a * b - c
-    NegMulSub, // -a * b - c
+    MulAdd = 0,    // + a * b + c
+    MulSub = 1,    // a * b - c
+    NegMulAdd = 2, // - a * b + c
+    NegMulSub = 3, // -a * b - c
 }
 
 #[derive(Clone)]
@@ -258,11 +262,18 @@ impl fmt::Debug for Mir {
         for (i, ins) in self.code.iter().enumerate() {
             writeln!(f, "{:05}\t{:?}", i, ins)?;
         }
+
+        for (i, x) in self.consts.iter().enumerate() {
+            writeln!(f, "const[{}] = {:?}", i, x)?;
+        }
+
         Ok(())
     }
 }
 
 impl Mir {
+    pub const MAGIC: usize = 0x876a9b6323b00c9e;
+
     pub fn new(config: Config) -> Mir {
         Mir {
             code: Vec::new(),
@@ -838,6 +849,45 @@ impl Mir {
             x2,
             y2,
         });
+    }
+
+    pub fn fused_mul_add(&mut self, dst: Reg, a: Reg, b: Reg, c: Reg) {
+        self.push(Instruction::Fused {
+            op: FusedOp::MulAdd,
+            dst,
+            a,
+            b,
+            c,
+        })
+    }
+
+    pub fn fused_mul_sub(&mut self, dst: Reg, a: Reg, b: Reg, c: Reg) {
+        self.push(Instruction::Fused {
+            op: FusedOp::MulSub,
+            dst,
+            a,
+            b,
+            c,
+        })
+    }
+
+    pub fn fused_neg_mul_add(&mut self, dst: Reg, a: Reg, b: Reg, c: Reg) {
+        self.push(Instruction::Fused {
+            op: FusedOp::NegMulAdd,
+            dst,
+            a,
+            b,
+            c,
+        })
+    }
+    pub fn fused_neg_mul_sub(&mut self, dst: Reg, a: Reg, b: Reg, c: Reg) {
+        self.push(Instruction::Fused {
+            op: FusedOp::NegMulSub,
+            dst,
+            a,
+            b,
+            c,
+        })
     }
 
     pub fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {

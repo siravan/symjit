@@ -2,6 +2,7 @@ use anyhow::Result;
 use std::fmt;
 use std::io::{Read, Write};
 
+use crate::config::Config;
 use crate::machine::MachineCode;
 
 pub type CompiledFunc<T> = fn(*const T, *const &mut [T], usize, *const T) -> i32;
@@ -22,7 +23,7 @@ pub trait Compiled<T: Sized + Copy + Default> {
 
 pub trait Storage: Sized {
     fn save(&self, stream: &mut impl Write) -> Result<()>;
-    fn load(stream: &mut impl Read) -> Result<Self>;
+    fn load(stream: &mut impl Read, config: &Config) -> Result<Self>;
 }
 
 pub fn bool_to_f64(b: bool) -> f64 {

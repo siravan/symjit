@@ -346,13 +346,13 @@ impl Storage for Config {
         Ok(())
     }
 
-    fn load(stream: &mut impl Read) -> Result<Self> {
+    fn load(stream: &mut impl Read, config: &Self) -> Result<Self> {
         let mut bytes: [u8; 8] = [0; 8];
 
         stream.read_exact(&mut bytes)?;
 
         if usize::from_le_bytes(bytes) != Self::MAGIC {
-            return Err(anyhow!("invalid magic number"));
+            return Err(anyhow!("invalid magic number (Config)"));
         }
 
         stream.read_exact(&mut bytes)?;
@@ -372,6 +372,10 @@ impl Storage for Config {
             _ => return Err(anyhow!("invalid compiler type value.")),
         };
 
-        Ok(Config { opt, ty, df: None })
+        Ok(Config {
+            opt,
+            ty,
+            df: config.df.clone(),
+        })
     }
 }

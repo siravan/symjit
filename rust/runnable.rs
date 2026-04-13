@@ -140,6 +140,71 @@ impl Application {
         })
     }
 
+    pub fn with_loaded_mir(mut prog: Program, mir: Mir) -> Result<Application> {
+        let first_state = 0;
+        let first_param = 0;
+        let first_obs = first_state + prog.count_states;
+        let first_diff = first_obs + prog.count_obs;
+
+        let count_states = prog.count_states;
+        let count_params = prog.count_params;
+        let count_obs = prog.count_obs;
+        let count_diffs = prog.count_diffs;
+
+        let params = vec![0.0; count_params + 1];
+
+        // prog.builder.compile_mir(&mut mir)?;
+
+        let config = prog.config().clone();
+
+        // let compiled = Self::compile_ty(prog.config().compiler_type(), &mir, &mut prog)?;
+        let compiled = match config.compiler_type() {
+            CompilerType::AmdAVX => Some(Self::compile_avx(&mir, &mut prog)?),
+            CompilerType::AmdSSE => Some(Self::compile_sse(&mir, &mut prog)?),
+            CompilerType::Arm => Some(Self::compile_arm(&mir, &mut prog)?),
+            CompilerType::RiscV => Some(Self::compile_riscv(&mir, &mut prog)?),
+            CompilerType::ByteCode => None,
+            CompilerType::Debug => {
+                println!("`ty = debug` is deprecated");
+                None
+            }
+            _ => return Err(anyhow!("unrecognized `ty`")),
+        };
+
+        let use_simd = config.use_simd() && prog.count_loops == 0;
+        let use_threads = config.use_threads() && prog.mem_size() < 128;
+
+        let can_fast = config.may_fast()
+            && count_states <= 8
+            && count_params == 0
+            && count_obs == 1
+            && count_diffs == 0;
+
+        // bytecode takes the ownership of mir
+        let bytecode = Self::compile_bytecode(mir, &mut prog)?;
+
+        Ok(Application {
+            prog,
+            compiled,
+            compiled_simd: None,
+            compiled_fast: None,
+            bytecode,
+            params,
+            use_simd,
+            use_threads,
+            can_fast,
+            first_state,
+            first_param,
+            first_obs,
+            first_diff,
+            count_states,
+            count_params,
+            count_obs,
+            count_diffs,
+            config,
+        })
+    }
+
     pub fn seal(self) -> Result<Applet> {
         Applet::new(self)
     }
@@ -191,7 +256,7 @@ impl Application {
 
     fn compile_bytecode(mir: Mir, prog: &mut Program) -> Result<CompiledMir> {
         let mem: Vec<f64> = vec![0.0; prog.mem_size()];
-        let stack: Vec<f64> = vec![0.0; prog.builder.block().sym_table.num_stack];
+        let stack: Vec<f64> = vec![0.0; prog.builder.stack_size()];
 
         Ok(CompiledMir::new(mir, mem, stack))
     }
@@ -551,7 +616,7 @@ impl Storage for Application {
     fn save(&self, stream: &mut impl Write) -> Result<()> {
         stream.write_all(&Self::MAGIC.to_le_bytes())?;
 
-        let version: usize = 1;
+        let version: usize = 2;
         stream.write_all(&version.to_le_bytes())?;
 
         self.prog.save(stream)?;
@@ -576,6 +641,7 @@ impl Storage for Application {
 
         stream.write_all(&mask.to_le_bytes())?;
 
+        /*
         if let Some(compiled) = &self.compiled {
             compiled.as_machine().unwrap().save(stream)?;
         }
@@ -587,93 +653,45 @@ impl Storage for Application {
         if let Some(compiled) = &self.compiled_simd {
             compiled.as_machine().unwrap().save(stream)?;
         }
+        */
+
+        self.bytecode.mir.save(stream)?;
 
         Ok(())
     }
 
-    fn load(stream: &mut impl Read) -> Result<Self> {
+    fn load(stream: &mut impl Read, config: &Config) -> Result<Self> {
         let mut bytes: [u8; 8] = [0; 8];
 
         stream.read_exact(&mut bytes)?;
 
         if usize::from_le_bytes(bytes) != Self::MAGIC {
-            return Err(anyhow!("invalid magic number"));
+            return Err(anyhow!("invalid magic number (Application)"));
         }
 
         stream.read_exact(&mut bytes)?;
 
-        if usize::from_le_bytes(bytes) != 1 {
+        if usize::from_le_bytes(bytes) != 2 {
             return Err(anyhow!("invalid sjb version"));
         }
 
-        let mut prog = Program::load(stream)?;
+        let prog = Program::load(stream, config)?;
 
         stream.read_exact(&mut bytes)?;
         let mask = usize::from_le_bytes(bytes);
 
-        let compiled: Option<MachineCode<f64>> = if mask & 1 != 0 {
-            Some(MachineCode::load(stream)?)
-        } else {
-            None
-        };
+        let mir = Mir::load(stream, config)?;
 
-        let compiled_fast: Option<MachineCode<f64>> = if mask & 2 != 0 {
-            Some(MachineCode::load(stream)?)
-        } else {
-            None
-        };
+        let mut app = Application::with_loaded_mir(prog, mir)?;
 
-        let compiled_simd: Option<MachineCode<f64>> = if mask & 4 != 0 {
-            Some(MachineCode::load(stream)?)
-        } else {
-            None
-        };
+        if mask & 2 != 0 {
+            app.prepare_fast();
+        }
 
-        let first_state = 0;
-        let first_param = 0;
-        let first_obs = first_state + prog.count_states;
-        let first_diff = first_obs + prog.count_obs;
+        if mask & 4 != 0 {
+            app.prepare_simd();
+        }
 
-        let count_states = prog.count_states;
-        let count_params = prog.count_params;
-        let count_obs = prog.count_obs;
-        let count_diffs = prog.count_diffs;
-
-        let params = vec![0.0; count_params + 1];
-
-        let config = prog.config().clone();
-        let mir = Mir::new(config.clone());
-
-        let use_simd = config.use_simd() && prog.count_loops == 0;
-        let use_threads = config.use_threads() && prog.mem_size() < 128;
-
-        let can_fast = config.may_fast()
-            && count_states <= 8
-            && count_params == 0
-            && count_obs == 1
-            && count_diffs == 0;
-
-        let bytecode = Self::compile_bytecode(mir, &mut prog)?;
-
-        Ok(Application {
-            prog,
-            compiled,
-            compiled_simd,
-            compiled_fast,
-            bytecode,
-            params,
-            use_simd,
-            use_threads,
-            can_fast,
-            first_state,
-            first_param,
-            first_obs,
-            first_diff,
-            count_states,
-            count_params,
-            count_obs,
-            count_diffs,
-            config,
-        })
+        Ok(app)
     }
 }

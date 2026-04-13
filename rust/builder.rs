@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use std::collections::HashSet;
+use std::io::{Read, Write};
 
 use crate::allocator::{ColoringAllocator, GreedyAllocator};
 use crate::block::Block;
@@ -9,6 +10,7 @@ use crate::generator::Generator;
 use crate::mir::Mir;
 use crate::node::Node;
 use crate::symbol::SymbolTable;
+use crate::utils::Storage;
 
 #[derive(Debug, Clone)]
 pub struct Builder {
@@ -36,6 +38,8 @@ impl Default for Builder {
 }
 
 impl Builder {
+    const MAGIC: usize = 0x12f21e25abe627bc;
+
     pub fn new(config: Config) -> Builder {
         Builder {
             primary_block: Block::new(config.clone()),
@@ -51,7 +55,7 @@ impl Builder {
         &mut self.block().sym_table
     }
 
-    fn stack_size(&mut self) -> usize {
+    pub fn stack_size(&mut self) -> usize {
         match self.count_stack {
             Some(size) => size,
             None => self.symbol_table().num_stack,
@@ -371,5 +375,76 @@ impl Builder {
             let p = mir.find_op(op).expect("func not found");
             ir.add_func(op, p);
         }
+    }
+}
+
+impl Storage for Builder {
+    fn save(&self, stream: &mut impl Write) -> Result<()> {
+        stream.write_all(&Self::MAGIC.to_le_bytes())?;
+        stream.write_all(&self.count_loops.to_le_bytes())?;
+
+        let stack_size = match self.count_stack {
+            Some(size) => size,
+            None => self.block_shared().sym_table.num_stack,
+        };
+        stream.write_all(&stack_size.to_le_bytes())?;
+
+        stream.write_all(&self.consts.len().to_le_bytes())?;
+
+        for x in self.consts.iter() {
+            stream.write_all(&x.to_le_bytes())?;
+        }
+
+        stream.write_all(&self.ft.len().to_le_bytes())?;
+
+        for s in self.ft.iter() {
+            let bytes = s.as_bytes();
+            let len = bytes.len();
+            assert!(len < 256);
+
+            stream.write(&[len as u8])?;
+            stream.write_all(&bytes)?;
+        }
+
+        Ok(())
+    }
+
+    fn load(stream: &mut impl Read, config: &Config) -> Result<Self> {
+        let mut bytes: [u8; 8] = [0; 8];
+
+        stream.read_exact(&mut bytes)?;
+
+        if usize::from_le_bytes(bytes) != Self::MAGIC {
+            return Err(anyhow!("invalid magic number (Program)"));
+        }
+
+        let mut builder = Builder::new(config.clone());
+
+        stream.read_exact(&mut bytes)?;
+        builder.count_loops = usize::from_le_bytes(bytes);
+
+        stream.read_exact(&mut bytes)?;
+        builder.count_stack = Some(usize::from_le_bytes(bytes));
+
+        stream.read_exact(&mut bytes)?;
+        let num_consts = usize::from_le_bytes(bytes);
+
+        for _ in 0..num_consts {
+            stream.read_exact(&mut bytes)?;
+            builder.consts.push(f64::from_le_bytes(bytes));
+        }
+
+        stream.read_exact(&mut bytes)?;
+        let num_ft = usize::from_le_bytes(bytes);
+
+        for _ in 0..num_ft {
+            stream.read(&mut bytes[0..1])?;
+            let n = bytes[0] as usize;
+            let mut buf: Vec<u8> = vec![0; n];
+            stream.read_exact(&mut buf)?;
+            builder.ft.insert(String::from_utf8(buf)?);
+        }
+
+        Ok(builder)
     }
 }
