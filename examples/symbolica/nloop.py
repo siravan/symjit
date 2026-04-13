@@ -44,7 +44,7 @@ t_start = time.time()
 evaluator.compile("test", "./test.cpp", "./test.so", "complex", inline_asm="default")
 print(f"completed in {time.time() - t_start:.1f} s.")
 
-symjit_f.save(f"{n}loop.sjb")
+symjit_f.save(f"loop.sjb")
 
 N_SAMPLES = 1000
 
@@ -66,7 +66,7 @@ for _ in range(N_SAMPLES):
 print(f"Symjit evaluation: {((time.time() - t_start) * 1000.0 / N_SAMPLES):.3f} ms")
 print(symjit_f.evaluate_complex(samples[None, :]).sum())
 
-g = load_func(f"{n}loop.sjb")
+g = load_func(f"loop.sjb")
 
 print(g.evaluate_complex(samples[None, :]).sum())
-os.remove(f"{n}loop.sjb")
+# os.remove(f"loop.sjb")
