@@ -123,12 +123,14 @@ def compile_func(
     else:
         f = Func(compiler, eqs)
 
+    # return f
+
     if isinstance(compiler, engine.RustyCompiler) and action != "load":
-        print(f.dumps("bytecode"))
-        print("save/load")
+        # print(f.dumps("bytecode"))
+        print("save/load", end="\t")
         f.save("tmp.sjb")
         g = load_func("tmp.sjb", defuns=defuns)
-        print(g.dumps("bytecode"))
+        # print(g.dumps("bytecode"))
         return g
     else:
         return f

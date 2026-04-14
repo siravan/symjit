@@ -773,7 +773,7 @@ impl Generator for AmdGenerator {
     }
 
     fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
-        if self.config.permissive() {
+        if !matches!(self.family, AmdFamily::SSEScalar) && self.config.permissive() {
             let xt = Reg::Gen(2);
             let yt = Reg::Gen(3);
             /*
@@ -798,7 +798,7 @@ impl Generator for AmdGenerator {
     }
 
     fn divide_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
-        if self.config.permissive() {
+        if !matches!(self.family, AmdFamily::SSEScalar) && self.config.permissive() {
             let xt = Reg::Gen(2);
             let yt = Reg::Gen(3);
             let t = Reg::Temp;
