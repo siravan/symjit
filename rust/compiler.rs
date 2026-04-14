@@ -5,6 +5,7 @@ use num_complex::Complex;
 
 use crate::applet::{recast_as_f64, recast_as_f64_mut};
 use crate::code::VirtualTable;
+use crate::composer::Composer;
 use crate::config::{Config, SLICE_CAP};
 use crate::defuns::Defuns;
 use crate::expr::Expr;
@@ -15,7 +16,6 @@ use crate::symbol::Loc;
 use crate::types::Element;
 use crate::utils::Compiled;
 use crate::Application;
-use crate::composer::Composer;
 
 // #[derive(Debug)]
 pub struct Compiler {
@@ -516,9 +516,7 @@ impl Composer for Translator {
 }
 
 impl Translator {
-    pub fn new(mut config: Config, df: Defuns) -> Translator {
-        config.set_defuns(df);
-
+    pub fn new(config: Config) -> Translator {
         Translator {
             config,
             ssa: Vec::new(),
@@ -931,13 +929,8 @@ impl Compiler {
     /// let mut app = comp.translate(&json)?;
     /// assert!(app.evaluate_single(&[2.0, 3.0]) == 11.0);
     /// ```
-    pub fn translate(
-        &mut self,
-        json: String,
-        df: Defuns,
-        num_params: usize,
-    ) -> Result<Application> {
-        let mut translator = Translator::new(self.config.clone(), df);
+    pub fn translate(&mut self, json: String, num_params: usize) -> Result<Application> {
+        let mut translator = Translator::new(self.config.clone());
 
         let model: SymbolicaModel = if json.starts_with("[[{") {
             serde_json::from_str(json.as_str())?

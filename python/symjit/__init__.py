@@ -41,6 +41,7 @@ def compile_func(
     sanitize=True,
     dtype="float64",
     permissive=True,
+    action="compile",
 ):
     """Compile a list of symbolic expression into an executable form.
     compile_func tries to mimic sympy lambdify, but instead of generating
@@ -109,6 +110,7 @@ def compile_func(
             sanitize=sanitize,
             dtype=dtype,
             permissive=permissive,
+            action=action,
         )
     elif can_use_python(backend):
         model = pyengine.tree.model(states, eqs, params, obs)
@@ -117,9 +119,19 @@ def compile_func(
         raise ValueError("unsupported platform")
 
     if dtype == "complex128":
-        return FuncComplex(compiler, eqs)
+        f = FuncComplex(compiler, eqs)
     else:
-        return Func(compiler, eqs)
+        f = Func(compiler, eqs)
+
+    if isinstance(compiler, engine.RustyCompiler) and action != "load":
+        print(f.dumps("bytecode"))
+        print("save/load")
+        f.save("tmp.sjb")
+        g = load_func("tmp.sjb", defuns=defuns)
+        print(g.dumps("bytecode"))
+        return g
+    else:
+        return f
 
 
 def compile_ode(
@@ -463,12 +475,19 @@ def compile_evaluator(
         )
 
         if dtype == "complex128":
-            return FuncComplex(compiler, [])
+            f = FuncComplex(compiler, [])
         else:
-            return Func(compiler, [])
+            f = Func(compiler, [])
+
+        if isinstance(compiler, engine.RustyCompiler) and action != "load":
+            print("save/load")
+            f.save("tmp.sjb")
+            return load_func("tmp.sjb", defuns=defuns)
+        else:
+            return f
 
 
-def load_func(file, eqs=[]):
+def load_func(file, eqs=[], defuns=None):
     if can_use_rust("rust"):
         """Loads a previously compiled function.
         The function should have been saving using various `Func` objects' `save` method.
@@ -482,7 +501,7 @@ def load_func(file, eqs=[]):
             of the `Func` function. The valid options are `[]` (a list), `()` (a tuple), or `None`,
             meaning a fast-function.
         """
-        compiler = engine.RustyCompiler("", action="load", file=file)
+        compiler = engine.RustyCompiler("", action="load", file=file, defuns=defuns)
         if compiler.symbolica:
             f = SymbolicaFunc(None)
             if compiler.dtype == "complex128":

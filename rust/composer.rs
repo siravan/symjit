@@ -4,8 +4,6 @@ use std::collections::HashSet;
 
 use crate::code::VirtualTable;
 use crate::config::{Config, SLICE_CAP};
-use crate::defuns::Defuns;
-use crate::expr::Expr;
 use crate::instruction::{BuiltinSymbol, Slot};
 use crate::mir::Mir;
 use crate::model::{CellModel, Program};
@@ -55,9 +53,7 @@ pub struct Transliterator {
 }
 
 impl Transliterator {
-    pub fn new(mut config: Config, df: Defuns) -> Transliterator {
-        config.set_defuns(df);
-
+    pub fn new(mut config: Config) -> Transliterator {
         // Stack frame compactification is off because of a subtle
         // bug. In addition, it is likely not even needed as
         // Symbolica does this already.

@@ -54,6 +54,12 @@ impl Config {
         Self::new(ty, opt)
     }
 
+    pub fn from_defuns(df: Defuns) -> Result<Config> {
+        let mut config = Config::default();
+        config.set_defuns(df);
+        Ok(config)
+    }
+
     pub fn set_defuns(&mut self, df: Defuns) {
         match self.df {
             None => self.df = Some(Arc::new(df)),

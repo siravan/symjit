@@ -130,7 +130,7 @@ class Engine:
         self._save.restype = ctypes.c_bool
 
         self._load = self.dll.load
-        self._load.argtypes = [ctypes.c_char_p]
+        self._load.argtypes = [ctypes.c_char_p, ctypes.c_void_p]
         self._load.restype = ctypes.c_void_p
 
         self._get_config = self.dll.get_config
@@ -395,7 +395,8 @@ class RustyCompiler:
         lib._save(self.p, file.encode("utf-8"))
 
     def load(self, file):
-        self.p = lib._load(file.encode("utf-8"))
+        df = self.defuns.p if self.defuns is not None else None
+        self.p = lib._load(file.encode("utf-8"), df)
 
         opt = lib._get_config(self.p)
         self.symbolica = opt & 0x40 != 0

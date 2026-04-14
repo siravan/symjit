@@ -615,7 +615,7 @@ pub unsafe extern "C" fn translate(
         }
     };
 
-    if let Ok(config) = Config::from_name(ty, opt) {
+    if let Ok(mut config) = Config::from_name(ty, opt) {
         let df: Defuns = unsafe {
             if df.is_null() {
                 Defuns::new()
@@ -624,8 +624,9 @@ pub unsafe extern "C" fn translate(
             }
         };
 
+        config.set_defuns(df);
         let mut comp = Compiler::with_config(config);
-        let app = comp.translate(json.to_string(), df, num_params);
+        let app = comp.translate(json.to_string(), num_params);
 
         match app {
             Ok(app) => {
