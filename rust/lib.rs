@@ -23,115 +23,9 @@
 //! # Symbolica
 //!
 //! Symbolica (<https://symbolica.io/>) is a fast Rust-based Computer Algebra System.
-//! Symbolica usually generate fast code using external compilers (e.g., using gcc to
-//! compiler generated c++ code). Symjit accepts Symbolica expressions and can act as
-//! an optional code-generator for Symbolica. The link between the two is through
-//! Symbolica's `export_instructions` function that exports an optimized intermediate
-//! representation. Using serde, it is possible to convert the output of `export_instructions`
-//! into JSON, which is then passed to the `translate` function of Symjit `Compiler`
-//! structure. If successful, `translate` returns an `Application` object, which wraps
-//! the compiled code and can be run using one of the six `evaluate` functions:
-//!
-//! * `evaluate(&mut self, args: &[T], outs: &mut [T])`.
-//! * `evaluate_single(&mut self, args: &[T]) -> T`.
-//! * `evaluate_matrix(&mut self, args: &[T], outs: &mut [T], nrows: usize)`.
-//! * `evaluate_simd(&mut self, args: &[S], outs: &mut [S])`.
-//! * `evaluate_simd_single(&mut self, args: &[S]) -> S`.
-//! * `evaluate_simd_matrix(&mut self, args: &[S], outs: &mut [S], nrows: usize)`.
-//!
-//! where `T` is either `f64` or `Complex<f64>` and `S` is `f64x64` on x86-64 or `f64x2`
-//! on aarch64, or the complex version of them.
-//!
-//! /// Examples:
-//!
-//! ```rust
-//! use anyhow::Result;
-//! use symjit::{Compiler, Config};
-//! use symbolica::{atom::AtomCore, parse, symbol};
-//! use symbolica::evaluate::{FunctionMap, OptimizationSettings};
-//!
-//! fn test1() -> Result<()> {
-//!     let params = vec![parse!("x"), parse!("y")];
-//!     let eval = parse!("x + y^2")
-//!         .evaluator(
-//!             &FunctionMap::new(),
-//!             &params,
-//!             OptimizationSettings::default(),
-//!         )
-//!         .unwrap();
-//!
-//!     let json = serde_json::to_string(&eval.export_instructions())?;
-//!     let mut comp = Compiler::new();
-//!     let mut app = comp.translate(&json)?;
-//!     assert!(app.evaluate_single(&[2.0, 3.0]) == 11.0);
-//!     Ok(())
-//! }
-//! ```
-//!
-//! Note that Symbolica needs to be imported by `features = ["serde"]` to allow for
-//! applying `serde_json::to_string` to the output of `export_instructions`.
-//!
-//! To change compilation options, one passes a `Config` struct to the `Compiler`
-//! constructor. The following example shows how to compile for complex number.
-//!
-//! ```rust
-//! use anyhow::Result;
-//! use num_complex::Complex;
-//! use symjit::{Compiler, Config};
-//! use symbolica::{atom::AtomCore, parse, symbol};
-//! use symbolica::evaluate::{FunctionMap, OptimizationSettings};
-//!
-//! fn test2() -> Result<()> {
-//!     let params = vec![parse!("x"), parse!("y")];
-//!     let eval = parse!("x + y^2")
-//!         .evaluator(
-//!             &FunctionMap::new(),
-//!             &params,
-//!             OptimizationSettings::default(),
-//!         )
-//!         .unwrap();
-//!
-//!     let json = serde_json::to_string(&eval.export_instructions())?;
-//!     let mut config = Config::default();
-//!     config.set_complex(true);
-//!     let mut comp = Compiler::with_config(config);
-//!     let mut app = comp.translate(&json)?;
-//!     let v = vec![Complex::new(2.0, 1.0), Complex::new(-1.0, 3.0)];
-//!     assert!(app.evaluate_single(&v) == Complex::new(-6.0, -5.0));
-//!     Ok(())
-//! }
-//! ```
-//!
-//! Currently, Symjit supports most of Symbolica's expressions with the exception of
-//! external user-defined functions. However, it is possible to link to Symjit
-//! numerical functions (see below) by defining their name using `add_external_function`.
-//! The following example shows how to link to `sinh` function:
-//!
-//!
-//! ```rust
-//! use anyhow::Result;
-//! use symjit::{Compiler, Config};
-//! use symbolica::{atom::AtomCore, parse, symbol};
-//! use symbolica::evaluate::{FunctionMap, OptimizationSettings};
-//!
-//! fn test3() -> Result<()> {
-//!     let params = vec![parse!("x")];
-//!
-//!     let mut f = FunctionMap::new();
-//!     f.add_external_function(symbol!("sinh"), "sinh".to_string())
-//!         .unwrap();
-//!
-//!     let eval = parse!("sinh(x)")
-//!         .evaluator(&f, &params, OptimizationSettings::default())
-//!         .unwrap();
-//!
-//!     let json = serde_json::to_string(&eval.export_instructions())?;
-//!     let mut comp = Compiler::new();
-//!     let mut app = comp.translate(&json)?;
-//!     assert!(app.evaluate_single(&[1.5]) == f64::sinh(1.5));
-//!     Ok(())
-//! }
-//! ```
+//! As of version 1.5 of Symbolica, Symjit is an optional backend for Symbolica. Therefore,
+//! the previous interface through `Compiler` object is considered obsolete and should not
+//! be used for new projects.
 //!
 //! # Standalone Expression Builder
 //!
@@ -698,11 +592,19 @@ pub unsafe extern "C" fn save(q: *const CompilerResult, file: *const c_char) -> 
 ///     that q points to a valid CompilerResult.
 ///
 #[no_mangle]
-pub unsafe extern "C" fn load(file: *const c_char) -> *const CompilerResult {
+pub unsafe extern "C" fn load(file: *const c_char, df: *mut Defuns) -> *const CompilerResult {
     let mut res = CompilerResult {
         app: None,
         status: CompilerStatus::Incomplete,
         msg: CString::from_str("Success").unwrap(),
+    };
+
+    let df: Defuns = unsafe {
+        if df.is_null() {
+            Defuns::new()
+        } else {
+            (&*df).clone()
+        }
     };
 
     let file = unsafe {
@@ -715,7 +617,7 @@ pub unsafe extern "C" fn load(file: *const c_char) -> *const CompilerResult {
     let fs = std::fs::File::open(file);
 
     match fs {
-        Ok(mut fs) => match Application::load(&mut fs, &Config::default()) {
+        Ok(mut fs) => match Application::load(&mut fs, &Config::from_defuns(df).unwrap()) {
             Ok(app) => {
                 res.app = Some(app);
                 res.status = CompilerStatus::Ok;

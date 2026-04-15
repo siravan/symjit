@@ -361,7 +361,7 @@ class RustyCompiler:
         )
 
         self.dtype = dtype
-        self.defuns = defuns
+        self.defuns = Defuns(defuns)
         self.ty = ty
 
         if action == "compile":
@@ -395,8 +395,7 @@ class RustyCompiler:
         lib._save(self.p, file.encode("utf-8"))
 
     def load(self, file):
-        df = self.defuns.p if self.defuns is not None else None
-        self.p = lib._load(file.encode("utf-8"), df)
+        self.p = lib._load(file.encode("utf-8"), self.defuns.p)
 
         opt = lib._get_config(self.p)
         self.symbolica = opt & 0x40 != 0

@@ -97,7 +97,6 @@ def compile_func(
 
     if can_use_rust(backend):
         model = structure.model(states, eqs, params=params, obs=obs)
-        defuns = engine.Defuns(defuns)
         compiler = engine.RustyCompiler(
             model,
             ty=ty,
@@ -203,7 +202,6 @@ def compile_ode(
     """
     if can_use_rust(backend):
         model = structure.model_ode(iv, states, odes, params)
-        defuns = engine.Defuns(defuns)
         compiler = engine.RustyCompiler(
             model,
             ty=ty,
@@ -277,7 +275,6 @@ def compile_jac(
     """
     if can_use_rust(backend):
         model = structure.model_jac(iv, states, odes, params)
-        defuns = engine.Defuns(defuns)
         compiler = engine.RustyCompiler(
             model,
             ty=ty,
@@ -341,7 +338,6 @@ def compile_json(
     model = update_json_model(model)
 
     if can_use_rust("rust"):
-        defuns = engine.Defuns(None)
         compiler = engine.RustyCompiler(
             model,
             ty=ty,
@@ -350,7 +346,7 @@ def compile_json(
             cse=cse,
             fastmath=fastmath,
             opt_level=opt_level,
-            defuns=defuns,
+            defuns=None,
             sanitize=sanitize,
             dtype=dtype,
             permissive=permissive,
@@ -429,8 +425,6 @@ def compile_evaluator(
     """
     if not can_use_rust(backend):
         raise ValueError("unsupported platform")
-
-    defuns = engine.Defuns(defuns)
 
     if isinstance(evaluator, str):
         model = evaluator
