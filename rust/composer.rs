@@ -410,8 +410,6 @@ impl Composer for Transliterator {
             self.compile_binary(op, reg(2), reg(0), reg(1))?;
             self.save(reg(2), lhs)?;
         } else {
-            println!("{:?}", &args);
-
             for i in 0..args.len() {
                 self.load(reg(0), &args[i])?;
                 self.save(reg(0), &Slot::Arg(i))?;
