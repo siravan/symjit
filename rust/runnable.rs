@@ -680,7 +680,7 @@ impl Storage for Application {
         stream.read_exact(&mut bytes)?;
         let mask = usize::from_le_bytes(bytes);
 
-        let mir = Mir::load(stream, &prog.config())?;
+        let mir = Mir::load(stream, prog.config())?;
 
         let mut app = Application::with_loaded_mir(prog, mir)?;
 

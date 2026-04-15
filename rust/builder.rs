@@ -402,8 +402,8 @@ impl Storage for Builder {
             let len = bytes.len();
             assert!(len < 256);
 
-            stream.write(&[len as u8])?;
-            stream.write_all(&bytes)?;
+            stream.write_all(&[len as u8])?;
+            stream.write_all(bytes)?;
         }
 
         Ok(())
@@ -438,7 +438,7 @@ impl Storage for Builder {
         let num_ft = usize::from_le_bytes(bytes);
 
         for _ in 0..num_ft {
-            stream.read(&mut bytes[0..1])?;
+            stream.read_exact(&mut bytes[0..1])?;
             let n = bytes[0] as usize;
             let mut buf: Vec<u8> = vec![0; n];
             stream.read_exact(&mut buf)?;

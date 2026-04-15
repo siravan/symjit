@@ -7,7 +7,6 @@ use crate::applet::{recast_as_f64, recast_as_f64_mut};
 use crate::code::VirtualTable;
 use crate::composer::Composer;
 use crate::config::{Config, SLICE_CAP};
-use crate::defuns::Defuns;
 use crate::expr::Expr;
 use crate::instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
 use crate::model::{CellModel, Equation, Program, Variable};
@@ -20,6 +19,12 @@ use crate::Application;
 // #[derive(Debug)]
 pub struct Compiler {
     config: Config,
+}
+
+impl Default for Compiler {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(not(target_arch = "x86_64"))]
@@ -805,7 +810,8 @@ impl Translator {
                 }
             }
             7 => "conjugate",
-            _ => return Err(anyhow!("function is not defined.")),
+            8 => "abs",
+            _ => return Err(anyhow!("Builtin function {} is not defined.", fun.0)),
         };
 
         self.assign(lhs, Expr::unary(op, &arg))

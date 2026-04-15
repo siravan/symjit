@@ -98,6 +98,12 @@ pub struct MirWriter {
     buf: Vec<u8>,
 }
 
+impl Default for MirWriter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MirWriter {
     pub fn new() -> MirWriter {
         MirWriter { buf: Vec::new() }
@@ -253,7 +259,7 @@ impl MirWriter {
         self.push(prefix | num_bytes);
         for _ in 0..num_bytes {
             self.push((n & 0xff) as u8);
-            n = n >> 8;
+            n >>= 8;
         }
     }
 
