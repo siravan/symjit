@@ -4,6 +4,8 @@ use crate::generator::Generator;
 use crate::utils::align_stack;
 use crate::utils::{is_external_func, reg, DataType, Reg};
 use anyhow::{anyhow, Result};
+use std::collections::HashSet;
+use std::hash::{Hash, Hasher};
 
 mod asm;
 mod fused;
@@ -82,11 +84,46 @@ pub enum AmdFamily {
     SSEScalar,
 }
 
+#[derive(Clone, PartialEq, Eq, Debug)]
+struct RegPack {
+    xd: Reg,
+    yd: Reg,
+    x1: Reg,
+    y1: Reg,
+    x2: Reg,
+    y2: Reg,
+}
+
+impl RegPack {
+    fn new(xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> RegPack {
+        RegPack {
+            xd,
+            yd,
+            x1,
+            y1,
+            x2,
+            y2,
+        }
+    }
+}
+
+impl Hash for RegPack {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        ϕ(self.xd).hash(state);
+        ϕ(self.yd).hash(state);
+        ϕ(self.x1).hash(state);
+        ϕ(self.y1).hash(state);
+        ϕ(self.x2).hash(state);
+        ϕ(self.y2).hash(state);
+    }
+}
+
 pub struct AmdGenerator {
     amd: Amd,
     family: AmdFamily,
     config: Config,
     last_load: usize,
+    funclets: HashSet<RegPack>,
 }
 
 #[cfg(target_family = "windows")]
@@ -123,6 +160,7 @@ impl AmdGenerator {
             family,
             config,
             last_load: 0,
+            funclets: HashSet::new(),
         }
     }
 
@@ -344,6 +382,40 @@ impl AmdGenerator {
         }
 
         Ok(())
+    }
+
+    fn funclet_name(f: &RegPack) -> String {
+        format!(
+            "times_complex_{}_{}_{}_{}_{}_{}",
+            ϕ(f.xd),
+            ϕ(f.yd),
+            ϕ(f.x1),
+            ϕ(f.y1),
+            ϕ(f.x2),
+            ϕ(f.y2)
+        )
+    }
+
+    fn generate_funclets(&mut self) {
+        let funclets = self.funclets.clone();
+
+        for f in funclets {
+            // println!("{:?}", &f);
+
+            let label = Self::funclet_name(&f);
+            self.set_label(&label);
+
+            let xt = Reg::Gen(2);
+            let yt = Reg::Gen(3);
+
+            self.times(xt, f.y1, f.y2);
+            self.fused_mul_sub(xt, f.x1, f.x2, xt);
+            self.times(yt, f.x1, f.y2);
+            self.fused_mul_add(f.yd, f.x2, f.y1, yt);
+            self.fmov(f.xd, xt);
+
+            self.amd.ret();
+        }
     }
 
     fn predefined_consts(&mut self) {
@@ -786,11 +858,20 @@ impl Generator for AmdGenerator {
                 self.amd.vaddsubdd(ϕ(xd), ϕ(xt), ϕ(xd));
                 self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
             */
+
+            /*
             self.times(xt, y1, y2);
             self.fused_mul_sub(xt, x1, x2, xt);
             self.times(yt, x1, y2);
             self.fused_mul_add(yd, x2, y1, yt);
             self.fmov(xd, xt);
+            */
+
+            let p = RegPack::new(xd, yd, x1, y1, x2, y2);
+            let label = Self::funclet_name(&p);
+            self.funclets.insert(p);
+            self.amd.call_relative(&label);
+
             true
         } else {
             false
@@ -1283,6 +1364,8 @@ impl Generator for AmdGenerator {
         self.load_nonvolatile_regs();
         self.amd.pop(Amd::RBP);
         self.amd.ret();
+
+        self.generate_funclets();
     }
 
     fn save_used_registers(&mut self, used: &[u8]) {
@@ -1367,5 +1450,7 @@ impl AmdGenerator {
         self.load_nonvolatile_regs();
         self.amd.pop(Amd::RBP);
         self.amd.ret();
+
+        self.generate_funclets();
     }
 }

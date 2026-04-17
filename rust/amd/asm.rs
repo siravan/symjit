@@ -1019,6 +1019,11 @@ impl Amd {
         self.jump(label);
     }
 
+    pub fn call_relative(&mut self, label: &str) {
+        self.append_byte(0xe8);
+        self.jump(label);
+    }
+
     pub fn push(&mut self, reg: u8) {
         if reg < 8 {
             self.append_byte(0x50 | reg);

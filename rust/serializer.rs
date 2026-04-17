@@ -9,6 +9,8 @@ use crate::utils::*;
 const REG_GENERAL: u8 = 0x40;
 const REG_STATIC: u8 = 0x80;
 const REG_SPECIAL: u8 = 0xc0;
+const REG_COMPLEX: u8 = 0x00;
+
 const REG_RET: u8 = REG_SPECIAL;
 const REG_TEMP: u8 = REG_SPECIAL | 0x01;
 const REG_LEFT: u8 = REG_SPECIAL | 0x02;
@@ -94,6 +96,15 @@ const BINOP_OR: u8 = BinOp::Or as u8;
 const BINOP_XOR: u8 = BinOp::Xor as u8;
 const BINOP_COMPLEX: u8 = BinOp::Complex as u8;
 
+fn ϕ(r: Reg) -> Option<u8> {
+    match r {
+        Reg::Ret => Some(0),
+        Reg::Temp => Some(1),
+        Reg::Gen(dst) => Some(dst + 2),
+        _ => None,
+    }
+}
+
 pub struct MirWriter {
     buf: Vec<u8>,
 }
@@ -163,14 +174,12 @@ impl MirWriter {
                 }
                 Instruction::LoadComplex { xd, yd, loc } => {
                     self.push(LOAD_COMPLEX);
-                    self.reg(*xd);
-                    self.reg(*yd);
+                    self.reg_complex(*xd, *yd);
                     self.loc(*loc);
                 }
                 Instruction::SaveComplex { xs, ys, loc } => {
                     self.push(SAVE_COMPLEX);
-                    self.reg(*xs);
-                    self.reg(*ys);
+                    self.reg_complex(*xs, *ys);
                     self.loc(*loc);
                 }
                 Instruction::LoadConstMath { op, dst, s1, idx } => {
@@ -243,12 +252,9 @@ impl MirWriter {
                     let op = *op as u8;
                     assert!(op < 8);
                     self.push(COMPLEX_BI_PLUS + op);
-                    self.reg(*xd);
-                    self.reg(*yd);
-                    self.reg(*x1);
-                    self.reg(*y1);
-                    self.reg(*x2);
-                    self.reg(*y2);
+                    self.reg_complex(*xd, *yd);
+                    self.reg_complex(*x1, *y1);
+                    self.reg_complex(*x2, *y2);
                 }
             }
         }
@@ -271,6 +277,18 @@ impl MirWriter {
             Reg::Right => self.push(REG_RIGHT),
             Reg::Gen(r) => self.push(REG_GENERAL | r),
             Reg::Static(s) => self.num(REG_STATIC, s),
+        }
+    }
+
+    fn reg_complex(&mut self, x: Reg, y: Reg) {
+        let xx = ϕ(x);
+        let yy = ϕ(y);
+
+        if xx.is_some() && yy.is_some() && yy.unwrap() == xx.unwrap() + 1 {
+            self.push(REG_COMPLEX | xx.unwrap());
+        } else {
+            self.reg(x);
+            self.reg(y)
         }
     }
 
@@ -311,6 +329,15 @@ impl MirReader {
             Ok(c)
         } else {
             Err(anyhow!("unexpected EOF"))
+        }
+    }
+
+    fn undo(&mut self) -> Result<()> {
+        if self.pos > 0 {
+            self.pos -= 1;
+            Ok(())
+        } else {
+            Err(anyhow!("cannot undo"))
         }
     }
 
@@ -417,8 +444,7 @@ impl MirReader {
                 mir.load_const(dst, idx);
             }
             LOAD_COMPLEX => {
-                let xd = self.reg()?;
-                let yd = self.reg()?;
+                let (xd, yd) = self.reg_complex()?;
                 let loc = self.loc()?;
                 match loc {
                     Loc::Mem(idx) => mir.load_mem_complex(xd, yd, idx),
@@ -427,8 +453,7 @@ impl MirReader {
                 }
             }
             SAVE_COMPLEX => {
-                let xs = self.reg()?;
-                let ys = self.reg()?;
+                let (xs, ys) = self.reg_complex()?;
                 let loc = self.loc()?;
                 match loc {
                     Loc::Mem(idx) => mir.save_mem_complex(xs, ys, idx),
@@ -548,39 +573,27 @@ impl MirReader {
                 mir.divide_load_const(dst, s1, idx);
             }
             COMPLEX_BI_PLUS => {
-                let xd = self.reg()?;
-                let yd = self.reg()?;
-                let x1 = self.reg()?;
-                let y1 = self.reg()?;
-                let x2 = self.reg()?;
-                let y2 = self.reg()?;
+                let (xd, yd) = self.reg_complex()?;
+                let (x1, y1) = self.reg_complex()?;
+                let (x2, y2) = self.reg_complex()?;
                 mir.plus_complex(xd, yd, x1, y1, x2, y2);
             }
             COMPLEX_BI_MINUS => {
-                let xd = self.reg()?;
-                let yd = self.reg()?;
-                let x1 = self.reg()?;
-                let y1 = self.reg()?;
-                let x2 = self.reg()?;
-                let y2 = self.reg()?;
+                let (xd, yd) = self.reg_complex()?;
+                let (x1, y1) = self.reg_complex()?;
+                let (x2, y2) = self.reg_complex()?;
                 mir.minus_complex(xd, yd, x1, y1, x2, y2);
             }
             COMPLEX_BI_TIMES => {
-                let xd = self.reg()?;
-                let yd = self.reg()?;
-                let x1 = self.reg()?;
-                let y1 = self.reg()?;
-                let x2 = self.reg()?;
-                let y2 = self.reg()?;
+                let (xd, yd) = self.reg_complex()?;
+                let (x1, y1) = self.reg_complex()?;
+                let (x2, y2) = self.reg_complex()?;
                 mir.times_complex(xd, yd, x1, y1, x2, y2);
             }
             COMPLEX_BI_DIVIDE => {
-                let xd = self.reg()?;
-                let yd = self.reg()?;
-                let x1 = self.reg()?;
-                let y1 = self.reg()?;
-                let x2 = self.reg()?;
-                let y2 = self.reg()?;
+                let (xd, yd) = self.reg_complex()?;
+                let (x1, y1) = self.reg_complex()?;
+                let (x2, y2) = self.reg_complex()?;
                 mir.divide_complex(xd, yd, x1, y1, x2, y2);
             }
             _ => return Err(anyhow!("undefined header {:x}", header)),
@@ -615,6 +628,23 @@ impl MirReader {
         };
 
         Ok(r)
+    }
+
+    fn reg_complex(&mut self) -> Result<(Reg, Reg)> {
+        let b = self.pop()?;
+
+        if b & 0xc0 != REG_COMPLEX {
+            self.undo()?;
+            let r1 = self.reg()?;
+            let r2 = self.reg()?;
+            Ok((r1, r2))
+        } else {
+            match b & 0x1f {
+                0 => Ok((Reg::Ret, Reg::Temp)),
+                1 => Ok((Reg::Temp, Reg::Gen(0))),
+                r => Ok((Reg::Gen(r - 2), Reg::Gen(r - 1))),
+            }
+        }
     }
 
     fn loc(&mut self) -> Result<Loc> {
