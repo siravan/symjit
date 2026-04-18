@@ -402,6 +402,8 @@ impl AmdGenerator {
         for f in funclets {
             // println!("{:?}", &f);
 
+            self.align();
+
             let label = Self::funclet_name(&f);
             self.set_label(&label);
 
@@ -409,10 +411,16 @@ impl AmdGenerator {
             let yt = Reg::Gen(3);
 
             self.times(xt, f.y1, f.y2);
-            self.fused_mul_sub(xt, f.x1, f.x2, xt);
             self.times(yt, f.x1, f.y2);
-            self.fused_mul_add(f.yd, f.x2, f.y1, yt);
-            self.fmov(f.xd, xt);
+
+            if f.xd != f.x2 && f.y1 != f.x2 {
+                self.fused_mul_sub(f.xd, f.x1, f.x2, xt);
+                self.fused_mul_add(f.yd, f.x2, f.y1, yt);
+            } else {
+                self.fused_mul_sub(xt, f.x1, f.x2, xt);
+                self.fused_mul_add(f.yd, f.x2, f.y1, yt);
+                self.fmov(f.xd, xt);
+            }
 
             self.amd.ret();
         }
