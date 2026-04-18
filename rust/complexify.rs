@@ -389,15 +389,24 @@ impl Generator for Complexifier {
                 self.mir.times(re(dst), re(s1), re(s2));
             }
             Types::CC => {
-                self.mir.times(Self::T0, re(s1), re(s2));
-                self.mir.times(Self::T1, im(s1), im(s2));
-                self.mir.minus(Self::T0, Self::T0, Self::T1);
+                if self.mir.config.is_sse() {
+                    self.mir.times(Self::T0, re(s1), re(s2));
+                    self.mir.times(Self::T1, im(s1), im(s2));
+                    self.mir.minus(Self::T0, Self::T0, Self::T1);
 
-                self.mir.times(Self::T1, re(s1), im(s2));
-                self.mir.times(im(dst), im(s1), re(s2));
-                self.mir.plus(im(dst), im(dst), Self::T1);
+                    self.mir.times(Self::T1, re(s1), im(s2));
+                    self.mir.times(im(dst), im(s1), re(s2));
+                    self.mir.plus(im(dst), im(dst), Self::T1);
 
-                self.mir.fmov(re(dst), Self::T0);
+                    self.mir.fmov(re(dst), Self::T0);
+                } else {
+                    self.mir.times(Self::T0, im(s1), im(s2));
+                    self.mir.times(Self::T1, re(s1), im(s2));
+
+                    self.mir.fused_mul_sub(Self::T0, re(s1), re(s2), Self::T0);
+                    self.mir.fused_mul_add(im(dst), re(s2), im(s1), Self::T1);
+                    self.mir.fmov(re(dst), Self::T0);
+                }
             }
         }
 
@@ -417,32 +426,45 @@ impl Generator for Complexifier {
                 self.mir.divide(re(dst), re(s1), re(s2));
             }
             Types::RC => {
-                self.mir.times(Self::T0, re(s2), re(s2));
-                self.mir.times(Self::T1, im(s2), im(s2));
-                self.mir.plus(t, Self::T0, Self::T1);
+                self.mir.times(t, re(s2), re(s2));
+                // self.mir.times(Self::T1, im(s2), im(s2));
+                // self.mir.plus(t, Self::T0, Self::T1);
 
                 self.mir.times(Self::T0, re(s1), re(s2));
                 self.mir.times(Self::T1, re(s1), im(s2));
                 self.mir.neg(im(dst), Self::T1);
 
+                self.mir.fused_mul_add(t, im(s2), im(s2), t);
+
                 self.mir.divide(im(dst), im(dst), t);
                 self.mir.divide(re(dst), Self::T0, t);
             }
             Types::CC => {
-                self.mir.times(Self::T0, re(s2), re(s2));
-                self.mir.times(Self::T1, im(s2), im(s2));
-                self.mir.plus(t, Self::T0, Self::T1);
+                if self.mir.config.is_sse() {
+                    self.mir.times(Self::T0, re(s2), re(s2));
+                    self.mir.times(Self::T1, im(s2), im(s2));
+                    self.mir.plus(t, Self::T0, Self::T1);
 
-                self.mir.times(Self::T0, re(s1), re(s2));
-                self.mir.times(Self::T1, im(s1), im(s2));
-                self.mir.plus(Self::T0, Self::T0, Self::T1);
+                    self.mir.times(Self::T0, re(s1), re(s2));
+                    self.mir.times(Self::T1, im(s1), im(s2));
+                    self.mir.plus(Self::T0, Self::T0, Self::T1);
 
-                self.mir.times(Self::T1, re(s1), im(s2));
-                self.mir.times(im(dst), im(s1), re(s2));
-                self.mir.minus(im(dst), im(dst), Self::T1);
+                    self.mir.times(Self::T1, re(s1), im(s2));
+                    self.mir.times(im(dst), im(s1), re(s2));
+                    self.mir.minus(im(dst), im(dst), Self::T1);
 
-                self.mir.divide(im(dst), im(dst), t);
-                self.mir.divide(re(dst), Self::T0, t);
+                    self.mir.divide(im(dst), im(dst), t);
+                    self.mir.divide(re(dst), Self::T0, t);
+                } else {
+                    self.times(Self::T0, im(s1), im(s2));
+                    self.times(Self::T1, re(s1), im(s2));
+                    self.times(t, re(s2), re(s2));
+                    self.fused_mul_add(Self::T0, re(s1), re(s2), Self::T0);
+                    self.fused_mul_sub(Self::T1, re(s2), im(s1), Self::T1);
+                    self.fused_mul_add(t, im(s2), im(s2), t);
+                    self.divide(re(dst), Self::T0, t);
+                    self.divide(im(dst), Self::T1, t);
+                }
             }
         }
 

@@ -1037,6 +1037,7 @@ impl Translator {
                 }
             }
             7 => "conjugate",
+            8 => "abs",
             _ => return Err(anyhow!("function is not defined.")),
         };
 

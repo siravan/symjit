@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "symjit"
-version = "2.14.8"
+version = "2.14.9"
 
 [tool.setuptools.packages]
 # Pure Python packages/modules

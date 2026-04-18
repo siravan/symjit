@@ -606,6 +606,45 @@ impl Mir {
         });
     }
 
+    pub fn fused_mul_add(&mut self, dst: Reg, a: Reg, b: Reg, c: Reg) {
+        self.push(Instruction::Fused {
+            op: FusedOp::MulAdd,
+            dst,
+            a,
+            b,
+            c,
+        })
+    }
+
+    pub fn fused_mul_sub(&mut self, dst: Reg, a: Reg, b: Reg, c: Reg) {
+        self.push(Instruction::Fused {
+            op: FusedOp::MulSub,
+            dst,
+            a,
+            b,
+            c,
+        })
+    }
+
+    pub fn fused_neg_mul_add(&mut self, dst: Reg, a: Reg, b: Reg, c: Reg) {
+        self.push(Instruction::Fused {
+            op: FusedOp::NegMulAdd,
+            dst,
+            a,
+            b,
+            c,
+        })
+    }
+    pub fn fused_neg_mul_sub(&mut self, dst: Reg, a: Reg, b: Reg, c: Reg) {
+        self.push(Instruction::Fused {
+            op: FusedOp::NegMulSub,
+            dst,
+            a,
+            b,
+            c,
+        })
+    }
+
     pub fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.push(Instruction::Bi {
             op: BinOp::GreaterThan,
