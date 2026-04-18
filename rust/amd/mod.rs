@@ -786,11 +786,19 @@ impl Generator for AmdGenerator {
                 self.amd.vaddsubdd(ϕ(xd), ϕ(xt), ϕ(xd));
                 self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
             */
+
             self.times(xt, y1, y2);
-            self.fused_mul_sub(xt, x1, x2, xt);
             self.times(yt, x1, y2);
-            self.fused_mul_add(yd, x2, y1, yt);
-            self.fmov(xd, xt);
+
+            if xd != x2 && xd != y1 {
+                self.fused_mul_sub(xd, x1, x2, xt);
+                self.fused_mul_add(yd, x2, y1, yt);
+            } else {
+                self.fused_mul_sub(xt, x1, x2, xt);
+                self.fused_mul_add(yd, x2, y1, yt);
+                self.fmov(xd, xt);
+            }
+
             true
         } else {
             false
