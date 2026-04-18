@@ -427,17 +427,11 @@ impl Generator for Complexifier {
             }
             Types::RC => {
                 self.mir.times(t, re(s2), re(s2));
-                // self.mir.times(Self::T1, im(s2), im(s2));
-                // self.mir.plus(t, Self::T0, Self::T1);
-
                 self.mir.times(Self::T0, re(s1), re(s2));
-                self.mir.times(Self::T1, re(s1), im(s2));
-                self.mir.neg(im(dst), Self::T1);
-
                 self.mir.fused_mul_add(t, im(s2), im(s2), t);
-
-                self.mir.divide(im(dst), im(dst), t);
+                self.mir.times(Self::T1, re(s1), im(s2));
                 self.mir.divide(re(dst), Self::T0, t);
+                self.mir.divide(im(dst), Self::T1, t);
             }
             Types::CC => {
                 if self.mir.config.is_sse() {
@@ -456,14 +450,14 @@ impl Generator for Complexifier {
                     self.mir.divide(im(dst), im(dst), t);
                     self.mir.divide(re(dst), Self::T0, t);
                 } else {
-                    self.times(Self::T0, im(s1), im(s2));
-                    self.times(Self::T1, re(s1), im(s2));
-                    self.times(t, re(s2), re(s2));
-                    self.fused_mul_add(Self::T0, re(s1), re(s2), Self::T0);
-                    self.fused_mul_sub(Self::T1, re(s2), im(s1), Self::T1);
-                    self.fused_mul_add(t, im(s2), im(s2), t);
-                    self.divide(re(dst), Self::T0, t);
-                    self.divide(im(dst), Self::T1, t);
+                    self.mir.times(Self::T0, im(s1), im(s2));
+                    self.mir.times(Self::T1, re(s1), im(s2));
+                    self.mir.times(t, re(s2), re(s2));
+                    self.mir.fused_mul_add(Self::T0, re(s1), re(s2), Self::T0);
+                    self.mir.fused_mul_sub(Self::T1, re(s2), im(s1), Self::T1);
+                    self.mir.fused_mul_add(t, im(s2), im(s2), t);
+                    self.mir.divide(re(dst), Self::T0, t);
+                    self.mir.divide(im(dst), Self::T1, t);
                 }
             }
         }
