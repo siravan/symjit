@@ -292,11 +292,17 @@ impl Generator for Complexifier {
 
     fn root(&mut self, dst: Reg, s1: Reg) {
         self.ensure_complex(s1);
-        self.mir.fmov(re(Reg::Ret), re(s1));
-        self.mir.fmov(im(Reg::Ret), im(s1));
-        self.mir.call("root", 1).unwrap();
-        self.mir.fmov(re(dst), re(Reg::Ret));
-        self.mir.fmov(im(dst), im(Reg::Ret));
+
+        self.mir.times(Self::T0, re(s1), re(s1));
+        self.mir.fused_mul_add(Self::T0, im(s1), im(s1), Self::T0);
+
+        self.mir.root(Self::T0, Self::T0);
+        self.mir.plus(Self::T0, Self::T0, re(s1));
+        self.mir.half(Self::T0, Self::T0);
+        self.mir.root(re(dst), Self::T0);
+        self.mir.divide(im(dst), im(s1), re(dst));
+        self.mir.half(im(dst), im(dst));
+
         self.set_reg_complex(dst);
     }
 
@@ -313,15 +319,27 @@ impl Generator for Complexifier {
         if self.is_real_reg(s1) {
             self.mir.recip(re(dst), re(s1));
             self.set_reg_real(dst);
-        } else {
-            self.mir.times(Self::T0, re(s1), re(s1));
-            self.mir.times(Self::T1, im(s1), im(s1));
+        } else if self.mir.config.is_sse() {
+            self.mir.times(Self::T0, im(s1), im(s1));
+            self.mir.times(Self::T1, re(s1), re(s1));
             self.mir.plus(Self::T0, Self::T0, Self::T1);
             self.mir.divide(re(dst), re(s1), Self::T0);
             self.mir.divide(im(dst), im(s1), Self::T0);
             self.mir.neg(im(dst), im(dst));
             self.set_reg_complex(dst);
+        } else {
+            self.mir.times(Self::T1, re(s1), re(s1));
+            self.mir.fused_mul_add(Self::T0, im(s1), im(s1), Self::T1);
+            self.mir.divide(re(dst), re(s1), Self::T0);
+            self.mir.divide(im(dst), im(s1), Self::T0);
+            self.mir.neg(im(dst), im(dst));
+            self.set_reg_complex(dst);
         }
+    }
+
+    fn half(&mut self, dst: Reg, s1: Reg) {
+        self.mir.half(im(dst), im(s1));
+        self.mir.half(re(dst), re(s1));
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {
@@ -464,16 +482,25 @@ impl Generator for Complexifier {
                 self.mir.divide(re(dst), re(s1), re(s2));
             }
             Types::RC => {
-                self.mir.times(Self::T0, re(s2), re(s2));
-                self.mir.times(Self::T1, im(s2), im(s2));
-                self.mir.plus(t, Self::T0, Self::T1);
+                if self.mir.config.is_sse() {
+                    self.mir.times(Self::T0, re(s2), re(s2));
+                    self.mir.times(Self::T1, im(s2), im(s2));
+                    self.mir.plus(t, Self::T0, Self::T1);
 
-                self.mir.times(Self::T0, re(s1), re(s2));
-                self.mir.times(Self::T1, re(s1), im(s2));
-                self.mir.neg(im(dst), Self::T1);
+                    self.mir.times(Self::T0, re(s1), re(s2));
+                    self.mir.times(Self::T1, re(s1), im(s2));
+                    self.mir.neg(im(dst), Self::T1);
 
-                self.mir.divide(im(dst), im(dst), t);
-                self.mir.divide(re(dst), Self::T0, t);
+                    self.mir.divide(im(dst), im(dst), t);
+                    self.mir.divide(re(dst), Self::T0, t);
+                } else {
+                    self.mir.times(t, re(s2), re(s2));
+                    self.mir.times(Self::T0, re(s1), re(s2));
+                    self.mir.fused_mul_add(t, im(s2), im(s2), t);
+                    self.mir.times(Self::T1, re(s1), im(s2));
+                    self.mir.divide(re(dst), Self::T0, t);
+                    self.mir.divide(im(dst), Self::T1, t);
+                }
             }
             Types::CC => {
                 /*

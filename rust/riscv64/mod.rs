@@ -368,6 +368,12 @@ impl Generator for RiscV {
         self.emit(rvv! {fdiv.d f(ϕ(dst)), f(Self::fa0), f(ϕ(s1))});
     }
 
+    fn half(&mut self, dst: Reg, s1: Reg) {
+        self.emit(rvv! {addi x(Self::t0), x(Self::zero), 2});
+        self.emit(rvv! {fcvt.d.w f(Self::fa0), x(Self::t0)});
+        self.emit(rvv! {fdiv.d f(ϕ(dst)), f(ϕ(s1)), f(Self::fa0)});
+    }
+
     fn round(&mut self, dst: Reg, s1: Reg) {
         self.emit(rvv! {fcvt.l.d x(Self::t0), f(ϕ(s1)), 0});
         self.emit(rvv! {fcvt.d.l f(ϕ(dst)), x(Self::t0)});

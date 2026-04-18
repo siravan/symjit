@@ -376,6 +376,7 @@ macro_rules! arm {
     (nop) => { 0x91000000 };
     (fmov d($rd:expr), #0.0) => { 0x9e6703e0 | rd!($rd) };
     (fmov d($rd:expr), #1.0) => { 0x1e6e1000 | rd!($rd) };
+    (fmov d($rd:expr), #2.0) => { 0x1e601000 | rd!($rd) };
     (fmov d($rd:expr), #-1.0) => { 0x1e7e1000 | rd!($rd) };
 
     // *********************** SIMD (2D) *************************/

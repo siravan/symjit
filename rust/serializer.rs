@@ -77,6 +77,7 @@ const UNIOP_TRUNC: u8 = UniOp::Trunc as u8;
 const UNIOP_REAL: u8 = UniOp::Real as u8;
 const UNIOP_IMAGINARY: u8 = UniOp::Imaginary as u8;
 const UNIOP_CONJUGATE: u8 = UniOp::Conjugate as u8;
+const UNIOP_HALF: u8 = UniOp::Half as u8;
 
 const BINOP_PLUS: u8 = BinOp::Plus as u8;
 const BINOP_MINUS: u8 = BinOp::Minus as u8;
@@ -350,6 +351,7 @@ impl MirReader {
             UNIOP_REAL => mir.real(dst, s1),
             UNIOP_IMAGINARY => mir.imaginary(dst, s1),
             UNIOP_CONJUGATE => mir.conjugate(dst, s1),
+            UNIOP_HALF => mir.half(dst, s1),
             _ => return Err(anyhow!("undefined UniOp {:x}", header)),
         }
 
