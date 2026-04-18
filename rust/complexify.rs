@@ -290,10 +290,17 @@ impl Generator for Complexifier {
         if self.is_real_reg(s1) {
             self.mir.recip(re(dst), re(s1));
             self.set_reg_real(dst);
-        } else {
-            self.mir.times(Self::T0, re(s1), re(s1));
-            self.mir.times(Self::T1, im(s1), im(s1));
+        } else if self.mir.config.is_sse() {
+            self.mir.times(Self::T0, im(s1), im(s1));
+            self.mir.times(Self::T1, re(s1), re(s1));
             self.mir.plus(Self::T0, Self::T0, Self::T1);
+            self.mir.divide(re(dst), re(s1), Self::T0);
+            self.mir.divide(im(dst), im(s1), Self::T0);
+            self.mir.neg(im(dst), im(dst));
+            self.set_reg_complex(dst);
+        } else {
+            self.mir.times(Self::T1, re(s1), re(s1));
+            self.mir.fused_mul_add(Self::T0, im(s1), im(s1), Self::T1);
             self.mir.divide(re(dst), re(s1), Self::T0);
             self.mir.divide(im(dst), im(s1), Self::T0);
             self.mir.neg(im(dst), im(dst));
