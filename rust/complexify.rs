@@ -268,12 +268,39 @@ impl Generator for Complexifier {
     }
 
     fn root(&mut self, dst: Reg, s1: Reg) {
+        /*
         self.ensure_complex(s1);
         self.mir.fmov(re(Reg::Ret), re(s1));
         self.mir.fmov(im(Reg::Ret), im(s1));
         self.mir.call("root", 1).unwrap();
         self.mir.fmov(re(dst), re(Reg::Ret));
         self.mir.fmov(im(dst), im(Reg::Ret));
+        self.set_reg_complex(dst);
+        */
+
+        let x = Self::T0;
+        let y = Self::T1;
+
+        self.ensure_complex(s1);
+
+        self.mir.xor(x, x, x);
+        self.mir.geq(x, re(s1), x);
+        self.mir.save_stack(x, 1);
+
+        self.mir.times(x, re(s1), re(s1));
+        self.mir.fused_mul_add(x, im(s1), im(s1), x);
+
+        self.mir.root(x, x);
+        self.mir.abs(y, re(s1));
+        self.mir.plus(x, x, y);
+        self.mir.half(x, x);
+        self.mir.root(x, x);
+        self.mir.divide(y, im(s1), x);
+        self.mir.half(y, y);
+
+        self.mir.ifelse(re(dst), x, y, Loc::Stack(1));
+        self.mir.ifelse(im(dst), y, x, Loc::Stack(1));
+
         self.set_reg_complex(dst);
     }
 
@@ -306,6 +333,11 @@ impl Generator for Complexifier {
             self.mir.neg(im(dst), im(dst));
             self.set_reg_complex(dst);
         }
+    }
+
+    fn half(&mut self, dst: Reg, s1: Reg) {
+        self.mir.half(im(dst), im(s1));
+        self.mir.half(re(dst), re(s1));
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {

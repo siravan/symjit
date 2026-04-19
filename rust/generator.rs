@@ -32,6 +32,7 @@ pub trait Generator {
     fn root(&mut self, dst: Reg, s1: Reg);
     fn real_root(&mut self, dst: Reg, s1: Reg);
     fn recip(&mut self, dst: Reg, s1: Reg);
+    fn half(&mut self, dst: Reg, s1: Reg);
 
     fn round(&mut self, dst: Reg, s1: Reg);
     fn floor(&mut self, dst: Reg, s1: Reg);

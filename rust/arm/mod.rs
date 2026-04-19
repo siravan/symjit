@@ -302,6 +302,11 @@ impl Generator for ArmGenerator {
         self.emit(arm! {fdiv d(ϕ(dst)), d(TEMP), d(ϕ(s1))});
     }
 
+    fn half(&mut self, dst: Reg, s1: Reg) {
+        self.emit(arm! {fmov d(TEMP), #2.0});
+        self.emit(arm! {fdiv d(ϕ(dst)), d(ϕ(s1)), d(TEMP)});
+    }
+
     fn round(&mut self, dst: Reg, s1: Reg) {
         self.emit(arm! {frinti d(ϕ(dst)), d(ϕ(s1))});
     }
@@ -967,6 +972,12 @@ impl Generator for ArmSimdGenerator {
         self.emit(arm! {fmov d(TEMP), #1.0});
         self.emit(arm! {dup q(TEMP), q(TEMP)[0]});
         self.emit(arm! {fdiv q(ϕ(dst)), q(TEMP), q(ϕ(s1))});
+    }
+
+    fn half(&mut self, dst: Reg, s1: Reg) {
+        self.emit(arm! {fmov d(TEMP), #2.0});
+        self.emit(arm! {dup q(TEMP), q(TEMP)[0]});
+        self.emit(arm! {fdiv q(ϕ(dst)), q(ϕ(s1)), q(TEMP)});
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {

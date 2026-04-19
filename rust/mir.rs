@@ -33,6 +33,7 @@ pub enum UniOp {
     Real,
     Imaginary,
     Conjugate,
+    Half,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -374,6 +375,14 @@ impl Mir {
     pub fn root(&mut self, dst: Reg, s1: Reg) {
         self.push(Instruction::Uni {
             op: UniOp::Root,
+            dst,
+            s1,
+        });
+    }
+
+    pub fn half(&mut self, dst: Reg, s1: Reg) {
+        self.push(Instruction::Uni {
+            op: UniOp::Half,
             dst,
             s1,
         });
@@ -827,6 +836,7 @@ impl Mir {
             UniOp::Real => s1,
             UniOp::Imaginary => 0.0,
             UniOp::Conjugate => s1,
+            UniOp::Half => s1 / 2.0,
         };
 
         Self::set(regs, dst, val);
@@ -1023,6 +1033,7 @@ impl Mir {
             UniOp::Real => ir.real(dst, s1),
             UniOp::Imaginary => ir.imaginary(dst, s1),
             UniOp::Conjugate => ir.conjugate(dst, s1),
+            UniOp::Half => ir.half(dst, s1),
         };
     }
 

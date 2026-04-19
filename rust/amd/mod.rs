@@ -353,6 +353,9 @@ impl AmdGenerator {
         self.set_label("_one_");
         self.append_quad(1.0f64.to_bits());
 
+        self.set_label("_two_");
+        self.append_quad(2.0f64.to_bits());
+
         self.set_label("_all_ones_");
         self.append_quad(0xffffffffffffffff);
     }
@@ -617,6 +620,11 @@ impl Generator for AmdGenerator {
     fn recip(&mut self, dst: Reg, s1: Reg) {
         self.load_const_by_name(Reg::Temp, "_one_");
         self.divide(dst, Reg::Temp, s1);
+    }
+
+    fn half(&mut self, dst: Reg, s1: Reg) {
+        self.load_const_by_name(Reg::Temp, "_two_");
+        self.divide(dst, s1, Reg::Temp);
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {
