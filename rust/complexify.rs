@@ -291,17 +291,28 @@ impl Generator for Complexifier {
     }
 
     fn root(&mut self, dst: Reg, s1: Reg) {
+        let x = Self::T0;
+        let y = Self::T1;
+
         self.ensure_complex(s1);
 
-        self.mir.times(Self::T0, re(s1), re(s1));
-        self.mir.fused_mul_add(Self::T0, im(s1), im(s1), Self::T0);
+        self.mir.xor(x, x, x);
+        self.mir.geq(x, re(s1), x);
+        self.mir.save_stack(x, 1);
 
-        self.mir.root(Self::T0, Self::T0);
-        self.mir.plus(Self::T0, Self::T0, re(s1));
-        self.mir.half(Self::T0, Self::T0);
-        self.mir.root(re(dst), Self::T0);
-        self.mir.divide(im(dst), im(s1), re(dst));
-        self.mir.half(im(dst), im(dst));
+        self.mir.times(x, re(s1), re(s1));
+        self.mir.fused_mul_add(x, im(s1), im(s1), x);
+
+        self.mir.root(x, x);
+        self.mir.abs(y, re(s1));
+        self.mir.plus(x, x, y);
+        self.mir.half(x, x);
+        self.mir.root(x, x);
+        self.mir.divide(y, im(s1), x);
+        self.mir.half(y, y);
+
+        self.mir.ifelse(re(dst), x, y, Loc::Stack(1));
+        self.mir.ifelse(im(dst), y, x, Loc::Stack(1));
 
         self.set_reg_complex(dst);
     }
