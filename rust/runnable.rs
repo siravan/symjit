@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 use std::io::{Read, Write};
 
-use crate::amd::{AmdFamily, AmdGenerator};
+use crate::amd::{AmdScalarGenerator, AmdSSEGenerator, AmdVectorGenerator};
 use crate::applet::Applet;
 use crate::arm::{ArmGenerator, ArmSimdGenerator};
 use crate::complexify::Complexifier;
@@ -262,10 +262,10 @@ impl Application {
     }
 
     fn compile_sse(mir: &Mir, prog: &mut Program) -> Result<MachineCode<f64>> {
-        Self::compile::<AmdGenerator>(
+        Self::compile::<AmdSSEGenerator>(
             mir,
             prog,
-            AmdGenerator::new(AmdFamily::SSEScalar, prog.config().clone()),
+            AmdSSEGenerator::new(prog.config().clone()),
             prog.mem_size(),
             "x86_64",
             1,
@@ -273,10 +273,11 @@ impl Application {
     }
 
     fn compile_avx(mir: &Mir, prog: &mut Program) -> Result<MachineCode<f64>> {
-        Self::compile::<AmdGenerator>(
+        Self::compile::<AmdScalarGenerator>(
             mir,
             prog,
-            AmdGenerator::new(AmdFamily::AvxScalar, prog.config().clone()),
+            // AmdGenerator::new(AmdFamily::AvxScalar, prog.config().clone()),
+            AmdScalarGenerator::new(prog.config().clone()),
             prog.mem_size(),
             "x86_64",
             1,
@@ -284,10 +285,10 @@ impl Application {
     }
 
     fn compile_avx_simd(mir: &Mir, prog: &mut Program) -> Result<MachineCode<f64>> {
-        Self::compile::<AmdGenerator>(
+        Self::compile::<AmdVectorGenerator>(
             mir,
             prog,
-            AmdGenerator::new(AmdFamily::AvxVector, prog.config().clone()),
+            AmdVectorGenerator::new(prog.config().clone()),
             prog.mem_size() * 4,
             "x86_64",
             4,
