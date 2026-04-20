@@ -239,9 +239,8 @@ impl Generator for AmdScalarGenerator {
 
         if is_else {
             self.amd.jpo(label);
-            } else {
-                self.amd.jpe(label);
-            }
+        } else {
+            self.amd.jpe(label);
         }
     }
 
@@ -313,7 +312,7 @@ impl Generator for AmdScalarGenerator {
     fn load_const(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
         let label = format!("_const_{}_", idx);
-        self.amd.vmovsd_xmm_label, ϕ(dst), label.as_str());
+        self.amd.vmovsd_xmm_label(ϕ(dst), label.as_str());
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
@@ -822,7 +821,7 @@ impl Generator for AmdScalarGenerator {
         }
 
         for i in 0..count_states {
-            self.amd.vmov_reg_mem(Amd::RAX, STATES, 2 * 8 * i as i32);
+            self.amd.mov_reg_mem(Amd::RAX, STATES, 2 * 8 * i as i32);
             let k = i as u32 * self.reg_size();
             self.amd.vmovsd_xmm_indexed(RET, Amd::RAX, IDX, 8);
             self.amd.vmovsd_mem_xmm(MEM, k as i32, RET);
@@ -893,7 +892,7 @@ impl Generator for AmdScalarGenerator {
     }
 }
 
-impl AmdGenerator {
+impl AmdScalarGenerator {
     fn prologue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
         self.amd.push(Amd::RBP);
         self.save_nonvolatile_regs();

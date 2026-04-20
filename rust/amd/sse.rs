@@ -5,10 +5,7 @@ use crate::utils::align_stack;
 use crate::utils::{is_external_func, reg, DataType, Reg};
 use anyhow::{anyhow, Result};
 
-mod asm;
-mod fused;
-
-use asm::{Amd, RoundingMode};
+use super::asm::{Amd, RoundingMode};
 
 const RET: u8 = 0;
 
@@ -831,7 +828,7 @@ impl Generator for AmdSSEGenerator {
     }
 }
 
-impl AmdGenerator {
+impl AmdSSEGenerator {
     fn prologue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
         self.amd.push(Amd::RBP);
         self.save_nonvolatile_regs();

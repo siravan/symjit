@@ -5,10 +5,7 @@ use crate::utils::align_stack;
 use crate::utils::{is_external_func, reg, DataType, Reg};
 use anyhow::{anyhow, Result};
 
-mod asm;
-mod fused;
-
-use asm::{Amd, RoundingMode};
+use super::asm::{Amd, RoundingMode};
 
 const RET: u8 = 0;
 
@@ -79,7 +76,7 @@ fn ϕ(r: Reg) -> u8 {
 }
 
 impl AmdVectorGenerator {
-    pub fn new(family: AmdFamily, config: Config) -> AmdVectorGenerator {
+    pub fn new(config: Config) -> AmdVectorGenerator {
         AmdVectorGenerator {
             amd: Amd::new(DataType::F64),
             config,
@@ -100,7 +97,7 @@ impl AmdVectorGenerator {
     }
 
     fn load_const_by_name(&mut self, dst: Reg, label: &str) {
-        self.amd.vbroadcastsd_label, ϕ(dst), label);
+        self.amd.vbroadcastsd_label(ϕ(dst), label);
     }
 
     fn vzeroupper(&mut self) {
@@ -600,7 +597,7 @@ impl Generator for AmdVectorGenerator {
 
     fn times(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, vmulpd, dst, s1, s2);
-
+    }
 
     fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, vdivpd, dst, s1, s2);
@@ -953,7 +950,7 @@ impl Generator for AmdVectorGenerator {
         }
 
         for i in 0..count_states {
-            self.amd.vmov_reg_mem(Amd::RAX, STATES, 2 * 8 * i as i32);
+            self.amd.mov_reg_mem(Amd::RAX, STATES, 2 * 8 * i as i32);
             let k = i as u32 * self.reg_size();
             self.amd.vmovpd_ymm_indexed(RET, Amd::RAX, IDX, 8);
             self.amd.vmovpd_mem_ymm(MEM, k as i32, RET);
@@ -1024,7 +1021,7 @@ impl Generator for AmdVectorGenerator {
     }
 }
 
-impl AmdGenerator {
+impl AmdVectorGenerator {
     fn prologue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
         self.amd.push(Amd::RBP);
         self.save_nonvolatile_regs();
