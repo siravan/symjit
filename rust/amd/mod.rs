@@ -10,6 +10,14 @@ mod fused;
 
 use asm::{Amd, RoundingMode};
 
+mod scalar;
+mod sse;
+mod vector;
+
+pub use scalar::AmdScalarGenerator;
+pub use sse::AmdSSEGenerator;
+pub use vector::AmdVectorGenerator;
+
 const RET: u8 = 0;
 
 macro_rules! binop {
