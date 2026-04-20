@@ -611,6 +611,8 @@ impl Generator for AmdSSEGenerator {
             self.save_stack(Reg::Gen(1), 5);
         }
 
+        self.vzeroupper();
+
         if cfg!(target_family = "windows") {
             self.amd.lea_mem(Amd::R8, STACK, 32);
         } else {

@@ -333,7 +333,7 @@ impl Application {
             Self::compile_fast(
                 mir,
                 prog,
-                AmdGenerator::new(AmdFamily::AvxScalar, prog.config().clone()),
+                AmdScalarGenerator::new(AmdFamily::AvxScalar, prog.config().clone()),
                 idx_ret,
                 "x86_64",
             )
@@ -341,7 +341,7 @@ impl Application {
             Self::compile_fast(
                 mir,
                 prog,
-                AmdGenerator::new(AmdFamily::SSEScalar, prog.config().clone()),
+                AmdSSEGenerator::new(AmdFamily::SSEScalar, prog.config().clone()),
                 idx_ret,
                 "x86_64",
             )
