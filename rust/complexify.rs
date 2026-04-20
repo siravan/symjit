@@ -297,7 +297,7 @@ impl Generator for Complexifier {
         self.ensure_complex(s1);
 
         self.mir.xor(x, x, x);
-        self.mir.geq(x, re(s1), x);
+        self.mir.lt(x, x, re(s1));
         self.mir.save_stack(x, 1);
 
         self.mir.times(x, re(s1), re(s1));

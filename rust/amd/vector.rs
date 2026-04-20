@@ -480,58 +480,28 @@ impl Generator for AmdVectorGenerator {
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        if self.config.permissive() {
-            self.amd
-                .vmovdd_xmm_mem(ϕ(xd), MEM, (idx * self.reg_size()) as i32);
-            self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
-        } else {
-            self.load_mem(xd, idx);
-            self.load_mem(yd, idx + 1);
-        }
+        self.load_mem(xd, idx);
+        self.load_mem(yd, idx + 1);
     }
 
     fn save_mem_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
-        if self.config.permissive() {
-            self.amd.vunpckldd(ϕ(xs), ϕ(xs), ϕ(ys));
-            self.amd
-                .vmovdd_mem_xmm(MEM, (idx * self.reg_size()) as i32, ϕ(xs));
-        } else {
-            self.save_mem(xs, idx);
-            self.save_mem(ys, idx + 1);
-        }
+        self.save_mem(xs, idx);
+        self.save_mem(ys, idx + 1);
     }
 
     fn load_param_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        if self.config.permissive() {
-            self.amd
-                .vmovdd_xmm_mem(ϕ(xd), PARAMS, (idx * self.reg_size()) as i32);
-            self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
-        } else {
-            self.load_param(xd, idx);
-            self.load_param(yd, idx + 1);
-        }
+        self.load_param(xd, idx);
+        self.load_param(yd, idx + 1);
     }
 
     fn load_stack_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        if self.config.permissive() {
-            self.amd
-                .vmovdd_xmm_mem(ϕ(xd), STACK, (idx * self.reg_size()) as i32);
-            self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
-        } else {
-            self.load_stack(xd, idx);
-            self.load_stack(yd, idx + 1);
-        }
+        self.load_stack(xd, idx);
+        self.load_stack(yd, idx + 1);
     }
 
     fn save_stack_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
-        if self.config.permissive() {
-            self.amd.vunpckldd(ϕ(xs), ϕ(xs), ϕ(ys));
-            self.amd
-                .vmovdd_mem_xmm(STACK, (idx * self.reg_size()) as i32, ϕ(xs));
-        } else {
-            self.save_stack(xs, idx);
-            self.save_stack(ys, idx + 1);
-        }
+        self.save_stack(xs, idx);
+        self.save_stack(ys, idx + 1);
     }
 
     fn save_stack_result(&mut self, idx: u32) {
