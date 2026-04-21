@@ -8,7 +8,6 @@ use anyhow::{anyhow, Result};
 use super::asm::{Amd, RoundingMode};
 use super::*;
 
-const RET: u8 = 0;
 const REG_SIZE: u32 = 32;
 
 macro_rules! binop {

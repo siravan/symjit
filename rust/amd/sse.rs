@@ -1,9 +1,7 @@
 use crate::code::Func;
-use crate::config::{Config, SPILL_AREA};
 use crate::generator::Generator;
 use crate::utils::align_stack;
-use crate::utils::{is_external_func, reg, DataType, Reg};
-use anyhow::{anyhow, Result};
+use crate::utils::Reg;
 
 use super::asm::{Amd, RoundingMode};
 use super::*;
@@ -60,10 +58,6 @@ impl AmdSSEGenerator {
             config,
             last_load: 0,
         }
-    }
-
-    fn reg_size(&self) -> u32 {
-        REG_SIZE
     }
 
     fn append_quad(&mut self, u: u64) {
@@ -331,11 +325,11 @@ impl Generator for AmdSSEGenerator {
         binop!(self, divsd, dst, s1, s2, false);
     }
 
-    fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
+    fn times_complex(&mut self, _xd: Reg, _yd: Reg, _x1: Reg, _y1: Reg, _x2: Reg, _y2: Reg) -> bool {
         false
     }
 
-    fn divide_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
+    fn divide_complex(&mut self, _xd: Reg, _yd: Reg, _x1: Reg, _y1: Reg, _x2: Reg, _y2: Reg) -> bool {
         false
     }
 
@@ -664,7 +658,7 @@ impl Generator for AmdSSEGenerator {
 }
 
 impl AmdSSEGenerator {
-    fn prologue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
+    fn prologue_symbolica(&mut self, cap: usize, _count_params: usize, _count_obs: usize) {
         self.amd.push(Amd::RBP);
         save_nonvolatile_regs(&mut self.amd);
 
@@ -676,7 +670,7 @@ impl AmdSSEGenerator {
         sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
     }
 
-    fn epilogue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
+    fn epilogue_symbolica(&mut self, cap: usize, _count_params: usize, _count_obs: usize) {
         add_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
         load_nonvolatile_regs(&mut self.amd);
         self.amd.pop(Amd::RBP);
