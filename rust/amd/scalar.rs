@@ -736,8 +736,6 @@ impl Generator for AmdScalarGenerator {
             return self.prologue_symbolica(cap, count_params, count_obs);
         }
 
-        let = REG_SIZE;
-
         self.amd.push(Amd::RBP);
         save_nonvolatile_regs(&mut self.amd);
 
