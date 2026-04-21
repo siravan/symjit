@@ -1,7 +1,9 @@
 use crate::code::Func;
+use crate::config::{Config, SPILL_AREA};
 use crate::generator::Generator;
 use crate::utils::align_stack;
-use crate::utils::Reg;
+use crate::utils::{is_external_func, reg, DataType, Reg};
+use anyhow::{anyhow, Result};
 
 use super::asm::{Amd, RoundingMode};
 use super::*;

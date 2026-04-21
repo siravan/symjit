@@ -1,7 +1,6 @@
 use crate::code::Func;
 use crate::generator::Generator;
-use crate::utils::{is_external_func, reg, DataType, Reg};
-use anyhow::{anyhow, Result};
+use crate::utils::Reg;
 
 mod asm;
 mod fused;
