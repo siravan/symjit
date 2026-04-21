@@ -18,90 +18,13 @@ pub use scalar::AmdScalarGenerator;
 pub use sse::AmdSSEGenerator;
 pub use vector::AmdVectorGenerator;
 
-const RET: u8 = 0;
-
-macro_rules! binop {
-    ($self:ident, $sse:ident, $avx:ident, $simd:ident, $dst:expr, $s1: expr, $s2: expr, $com:ident) => {
-        match $self.family {
-            AmdFamily::AvxScalar => $self.amd.$avx(ϕ($dst), ϕ($s1), ϕ($s2)),
-            AmdFamily::AvxVector => $self.amd.$simd(ϕ($dst), ϕ($s1), ϕ($s2)),
-            AmdFamily::SSEScalar => {
-                let (x, y) = $self.shrink($dst, $s1, $s2, $com);
-                $self.amd.$sse(ϕ(x), ϕ(y));
-            }
-        }
-    };
-}
-
-macro_rules! select {
-    ($self:ident, $sse:ident, $avx:ident, $simd:ident, $x:expr, $y: expr, $z: expr, $w: expr) => {
-        match $self.family {
-            AmdFamily::AvxScalar => $self.amd.$avx($x, $y, $z, $w),
-            AmdFamily::AvxVector => $self.amd.$simd($x, $y, $z, $w),
-            AmdFamily::SSEScalar => $self.amd.$sse($x, $y, $z, $w),
-        }
-    };
-    ($self:ident, $sse:ident, $avx:ident, $simd:ident, $x:expr, $y: expr, $z: expr) => {
-        match $self.family {
-            AmdFamily::AvxScalar => $self.amd.$avx($x, $y, $z),
-            AmdFamily::AvxVector => $self.amd.$simd($x, $y, $z),
-            AmdFamily::SSEScalar => $self.amd.$sse($x, $y, $z),
-        }
-    };
-    ($self:ident, $sse:ident, $avx:ident, $simd:ident, $x:expr, $y: expr) => {
-        match $self.family {
-            AmdFamily::AvxScalar => $self.amd.$avx($x, $y),
-            AmdFamily::AvxVector => $self.amd.$simd($x, $y),
-            AmdFamily::SSEScalar => $self.amd.$sse($x, $y),
-        }
-    };
-}
-
-macro_rules! uniop {
-    ($self:ident, $sse:ident, $avx:ident, $simd:ident, $dst:expr, $s1: expr) => {
-        select!($self, $sse, $avx, $simd, ϕ($dst), ϕ($s1));
-    };
-}
-
-macro_rules! roundop {
-    ($self:ident, $dst:expr, $s1: expr, $mode: expr) => {
-        select!($self, roundsd, vroundsd, vroundpd, ϕ($dst), ϕ($s1), $mode);
-    };
-}
-
-macro_rules! fuseop {
-    ($self:ident, $f132:ident, $f213:ident, $f231:ident, $dst: expr, $a: expr, $b: expr, $c:ident) => {{
-        if $dst == $a {
-            $self.amd.$f132(ϕ($a), ϕ($c), ϕ($b));
-        } else if $dst == $b {
-            $self.amd.$f213(ϕ($b), ϕ($a), ϕ($c));
-        } else if $dst == $c {
-            $self.amd.$f231(ϕ($c), ϕ($a), ϕ($b));
-        } else {
-            $self.fmov($dst, $a);
-            $self.amd.$f132(ϕ($dst), ϕ($c), ϕ($b));
-        }
-    }};
-}
-
-pub enum AmdFamily {
-    AvxScalar,
-    AvxVector,
-    SSEScalar,
-}
-
-pub struct AmdGenerator {
-    amd: Amd,
-    family: AmdFamily,
-    config: Config,
-    last_load: usize,
-}
-
 #[cfg(target_family = "windows")]
 const ARGS: [u8; 4] = [Amd::RCX, Amd::RDX, Amd::R8, Amd::R9];
 
 #[cfg(target_family = "unix")]
 const ARGS: [u8; 4] = [Amd::RDI, Amd::RSI, Amd::RDX, Amd::RCX];
+
+const RET: u8 = 0;
 
 const MEM: u8 = Amd::RBP;
 const STATES: u8 = Amd::R13;
@@ -239,5 +162,33 @@ fn fuse_load_math(amd: &mut Amd, last_load: usize) {
                 amd.a.buf.pop().unwrap();
             }
         }
+    }
+}
+
+fn add_func(amd: &mut Amd, op: &str, f: Func) {
+    if let Func::Slice {
+        f_scalar,
+        f_simd,
+        env,
+        ..
+    } = f
+    {
+        let label = format!("_func_{}_", op);
+        amd.a.set_label(label.as_str());
+        // let f_scalar = trampoline_homogenous::<f64> as *const c_void;
+        amd.a.append_quad(f_scalar as u64);
+
+        let label = format!("_simd_{}_", op);
+        amd.a.set_label(label.as_str());
+        // let f_simd = trampoline_heterogenous::<f64x4, f64> as *const c_void;
+        amd.a.append_quad(f_simd as u64);
+
+        let label = format!("_env_{}_", op);
+        amd.a.set_label(label.as_str());
+        amd.a.append_quad(env as u64);
+    } else {
+        let label = format!("_func_{}_", op);
+        amd.a.set_label(label.as_str());
+        amd.a.append_quad(f.func_ptr());
     }
 }

@@ -594,31 +594,7 @@ impl Generator for AmdVectorGenerator {
     }
 
     fn add_func(&mut self, op: &str, f: Func) {
-        if let Func::Slice {
-            f_scalar,
-            f_simd,
-            env,
-            ..
-        } = f
-        {
-            let label = format!("_func_{}_", op);
-            self.set_label(label.as_str());
-            // let f_scalar = trampoline_homogenous::<f64> as *const c_void;
-            self.append_quad(f_scalar as u64);
-
-            let label = format!("_simd_{}_", op);
-            self.set_label(label.as_str());
-            // let f_simd = trampoline_heterogenous::<f64x4, f64> as *const c_void;
-            self.append_quad(f_simd as u64);
-
-            let label = format!("_env_{}_", op);
-            self.set_label(label.as_str());
-            self.append_quad(env as u64);
-        } else {
-            let label = format!("_func_{}_", op);
-            self.set_label(label.as_str());
-            self.append_quad(f.func_ptr());
-        }
+        add_func(&mut self.amd, op, f);
     }
 
     fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
