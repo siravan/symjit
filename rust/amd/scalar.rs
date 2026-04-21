@@ -202,58 +202,28 @@ impl Generator for AmdScalarGenerator {
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        if self.config.permissive() {
-            self.amd
-                .vmovdd_xmm_mem(ϕ(xd), MEM, (idx * REG_SIZE) as i32);
-            self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
-        } else {
-            self.load_mem(xd, idx);
-            self.load_mem(yd, idx + 1);
-        }
+        self.amd.vmovdd_xmm_mem(ϕ(xd), MEM, (idx * REG_SIZE) as i32);
+        self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
     }
 
     fn save_mem_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
-        if self.config.permissive() {
-            self.amd.vunpckldd(ϕ(xs), ϕ(xs), ϕ(ys));
-            self.amd
-                .vmovdd_mem_xmm(MEM, (idx * REG_SIZE) as i32, ϕ(xs));
-        } else {
-            self.save_mem(xs, idx);
-            self.save_mem(ys, idx + 1);
-        }
+        self.amd.vunpckldd(ϕ(xs), ϕ(xs), ϕ(ys));
+        self.amd.vmovdd_mem_xmm(MEM, (idx * REG_SIZE) as i32, ϕ(xs));
     }
 
     fn load_param_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        if self.config.permissive() {
-            self.amd
-                .vmovdd_xmm_mem(ϕ(xd), PARAMS, (idx * REG_SIZE) as i32);
-            self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
-        } else {
-            self.load_param(xd, idx);
-            self.load_param(yd, idx + 1);
-        }
+        self.amd.vmovdd_xmm_mem(ϕ(xd), PARAMS, (idx * REG_SIZE) as i32);
+        self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
     }
 
     fn load_stack_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        if self.config.permissive() {
-            self.amd
-                .vmovdd_xmm_mem(ϕ(xd), STACK, (idx * REG_SIZE) as i32);
-            self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
-        } else {
-            self.load_stack(xd, idx);
-            self.load_stack(yd, idx + 1);
-        }
+        self.amd.vmovdd_xmm_mem(ϕ(xd), STACK, (idx * REG_SIZE) as i32);
+        self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
     }
 
     fn save_stack_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
-        if self.config.permissive() {
-            self.amd.vunpckldd(ϕ(xs), ϕ(xs), ϕ(ys));
-            self.amd
-                .vmovdd_mem_xmm(STACK, (idx * REG_SIZE) as i32, ϕ(xs));
-        } else {
-            self.save_stack(xs, idx);
-            self.save_stack(ys, idx + 1);
-        }
+        self.amd.vunpckldd(ϕ(xs), ϕ(xs), ϕ(ys));
+        self.amd.vmovdd_mem_xmm(STACK, (idx * REG_SIZE) as i32, ϕ(xs));
     }
 
     fn save_stack_result(&mut self, idx: u32) {
@@ -326,56 +296,50 @@ impl Generator for AmdScalarGenerator {
     }
 
     fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
-        if self.config.permissive() {
-            let xt = Reg::Gen(2);
-            let yt = Reg::Gen(3);
-            /*
-                self.amd.vunpckldd(ϕ(x1), ϕ(x1), ϕ(x1));
-                self.amd.vunpckldd(ϕ(y1), ϕ(y1), ϕ(y1));
-                self.amd.vunpckldd(ϕ(yt), ϕ(x2), ϕ(y2));
-                self.amd.vmuldd(ϕ(xt), ϕ(x1), ϕ(yt));
-                self.amd.vmuldd(ϕ(yt), ϕ(y1), ϕ(yt));
-                self.amd.vshufdd(ϕ(xd), ϕ(yt), ϕ(yt), 1);
-                self.amd.vaddsubdd(ϕ(xd), ϕ(xt), ϕ(xd));
-                self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
-            */
+        let xt = Reg::Gen(2);
+        let yt = Reg::Gen(3);
 
-            self.times(xt, y1, y2);
-            self.times(yt, x1, y2);
+        /*
+            self.amd.vunpckldd(ϕ(x1), ϕ(x1), ϕ(x1));
+            self.amd.vunpckldd(ϕ(y1), ϕ(y1), ϕ(y1));
+            self.amd.vunpckldd(ϕ(yt), ϕ(x2), ϕ(y2));
+            self.amd.vmuldd(ϕ(xt), ϕ(x1), ϕ(yt));
+            self.amd.vmuldd(ϕ(yt), ϕ(y1), ϕ(yt));
+            self.amd.vshufdd(ϕ(xd), ϕ(yt), ϕ(yt), 1);
+            self.amd.vaddsubdd(ϕ(xd), ϕ(xt), ϕ(xd));
+            self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
+        */
 
-            if xd != x2 && xd != y1 {
-                self.fused_mul_sub(xd, x1, x2, xt);
-                self.fused_mul_add(yd, x2, y1, yt);
-            } else {
-                self.fused_mul_sub(xt, x1, x2, xt);
-                self.fused_mul_add(yd, x2, y1, yt);
-                self.fmov(xd, xt);
-            }
+        self.times(xt, y1, y2);
+        self.times(yt, x1, y2);
 
-            true
+        if xd != x2 && xd != y1 {
+            self.fused_mul_sub(xd, x1, x2, xt);
+            self.fused_mul_add(yd, x2, y1, yt);
         } else {
-            false
+            self.fused_mul_sub(xt, x1, x2, xt);
+            self.fused_mul_add(yd, x2, y1, yt);
+            self.fmov(xd, xt);
         }
+
+        true
     }
 
     fn divide_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
-        if self.config.permissive() {
-            let xt = Reg::Gen(2);
-            let yt = Reg::Gen(3);
-            let t = Reg::Temp;
+        let xt = Reg::Gen(2);
+        let yt = Reg::Gen(3);
+        let t = Reg::Temp;
 
-            self.times(xt, y1, y2);
-            self.fused_mul_add(xt, x1, x2, xt);
-            self.times(yt, x1, y2);
-            self.fused_mul_sub(yt, x2, y1, yt);
-            self.times(t, x2, x2);
-            self.fused_mul_add(t, y2, y2, t);
-            self.divide(xd, xt, t);
-            self.divide(yd, yt, t);
-            true
-        } else {
-            false
-        }
+        self.times(xt, y1, y2);
+        self.fused_mul_add(xt, x1, x2, xt);
+        self.times(yt, x1, y2);
+        self.fused_mul_sub(yt, x2, y1, yt);
+        self.times(t, x2, x2);
+        self.fused_mul_add(t, y2, y2, t);
+        self.divide(xd, xt, t);
+        self.divide(yd, yt, t);
+
+        true
     }
 
     fn real(&mut self, dst: Reg, s1: Reg) {

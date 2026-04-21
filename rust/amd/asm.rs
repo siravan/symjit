@@ -757,6 +757,23 @@ impl Amd {
         self.append_byte(7);
     }
 
+    /*
+     * let xmm1 = y1:x1 and xmm2 = y2:x2,
+     *
+     * vshufdd(0, 1, 2, 0) = vshufpd xmm0, xmm1, xmm2, 0 => xmm0 = x2:x1 = vunpcklpd
+     * vshufdd(0, 1, 2, 1) = vshufpd xmm0, xmm1, xmm2, 1 => xmm0 = x2:y1
+     * vshufdd(0, 1, 2, 2) = vshufpd xmm0, xmm1, xmm2, 2 => xmm0 = y2:x1
+     * vshufdd(0, 1, 2, 3) = vshufpd xmm0, xmm1, xmm2, 1 => xmm0 = y2:y1 = vunpckhpd
+     *
+     * Specifically,
+     *
+     * vshufdd(0, 1, 1, 0) = vshufpd xmm0, xmm1, xmm1, 0 => xmm0 = x1:x1 = dup low
+     * vshufdd(0, 1, 1, 1) = vshufpd xmm0, xmm1, xmm1, 1 => xmm0 = x1:y1 = flip
+     * vshufdd(0, 1, 1, 2) = vshufpd xmm0, xmm1, xmm1, 2 => xmm0 = y1:x1 = ident
+     * vshufdd(0, 1, 1, 3) = vshufpd xmm0, xmm1, xmm1, 3 => xmm0 = y1:y1 = dup high
+     *
+     */
+
     pub fn vshufdd(&mut self, reg: u8, vreg: u8, rm: u8, imm8: u8) {
         self.vex_dd(reg, vreg, rm, 0);
         self.append_byte(0xc6);

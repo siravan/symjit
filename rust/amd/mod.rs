@@ -1,5 +1,4 @@
 use crate::code::Func;
-use crate::generator::Generator;
 use crate::utils::Reg;
 
 mod asm;

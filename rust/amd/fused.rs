@@ -16,6 +16,13 @@ impl Amd {
         self.modrm_reg(reg, rm);
     }
 
+    fn vfma_dd(&mut self, reg: u8, vreg: u8, rm: u8, code: u8) {
+        self.vex3dd(reg, vreg, rm, 0, 2);
+        self.set_w1();
+        self.append_byte(code);
+        self.modrm_reg(reg, rm);
+    }
+
     // reg = reg * rm + vreg
     pub fn vfmadd132sd(&mut self, reg: u8, vreg: u8, rm: u8) {
         self.vfma(reg, vreg, rm, 0x99);
@@ -134,5 +141,65 @@ impl Amd {
     // reg = - vreg * rm - reg
     pub fn vfnmsub231pd(&mut self, reg: u8, vreg: u8, rm: u8) {
         self.vfma(reg, vreg, rm, 0xbe);
+    }
+
+    // reg = reg * rm + vreg
+    pub fn vfmadd132dd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_dd(reg, vreg, rm, 0x98);
+    }
+
+    // reg = vreg * reg + rm
+    pub fn vfmadd213dd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_dd(reg, vreg, rm, 0xa8);
+    }
+
+    // reg = vreg * rm + reg
+    pub fn vfmadd231dd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_dd(reg, vreg, rm, 0xb8);
+    }
+
+    // reg = reg * rm - vreg
+    pub fn vfmsub132dd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_dd(reg, vreg, rm, 0x9a);
+    }
+
+    // reg = vreg * reg - rm
+    pub fn vfmsub213dd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_dd(reg, vreg, rm, 0xaa);
+    }
+
+    // reg = vreg * rm - reg
+    pub fn vfmsub231dd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_dd(reg, vreg, rm, 0xba);
+    }
+
+    // reg = - reg * rm - vreg
+    pub fn vfnmadd132dd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_dd(reg, vreg, rm, 0x9c);
+    }
+
+    // reg = - vreg * reg + rm
+    pub fn vfnmadd213dd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_dd(reg, vreg, rm, 0xac);
+    }
+
+    // reg = - vreg * rm + reg
+    pub fn vfnmadd231dd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_dd(reg, vreg, rm, 0xbc);
+    }
+
+    // reg = - reg * rm - vreg
+    pub fn vfnmsub132dd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_dd(reg, vreg, rm, 0x9e);
+    }
+
+    // reg = - vreg * reg - rm
+    pub fn vfnmsub213dd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_dd(reg, vreg, rm, 0xae);
+    }
+
+    // reg = - vreg * rm - reg
+    pub fn vfnmsub231dd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_dd(reg, vreg, rm, 0xbe);
     }
 }
