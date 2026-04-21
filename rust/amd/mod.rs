@@ -5,7 +5,7 @@ use crate::utils::Reg;
 mod asm;
 mod fused;
 
-use asm::{Amd, RoundingMode};
+use asm::Amd;
 
 mod scalar;
 mod sse;

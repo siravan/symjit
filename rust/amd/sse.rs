@@ -3,7 +3,7 @@ use crate::config::{Config, SPILL_AREA};
 use crate::generator::Generator;
 use crate::utils::align_stack;
 use crate::utils::{is_external_func, reg, DataType, Reg};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 use super::asm::{Amd, RoundingMode};
 use super::*;
@@ -30,21 +30,6 @@ macro_rules! roundop {
     ($self:ident, $dst:expr, $s1: expr, $mode: expr) => {
         $self.amd.roundsd(ϕ($dst), ϕ($s1), $mode);
     };
-}
-
-macro_rules! fuseop {
-    ($self:ident, $f132:ident, $f213:ident, $f231:ident, $dst: expr, $a: expr, $b: expr, $c:ident) => {{
-        if $dst == $a {
-            $self.amd.$f132(ϕ($a), ϕ($c), ϕ($b));
-        } else if $dst == $b {
-            $self.amd.$f213(ϕ($b), ϕ($a), ϕ($c));
-        } else if $dst == $c {
-            $self.amd.$f231(ϕ($c), ϕ($a), ϕ($b));
-        } else {
-            $self.fmov($dst, $a);
-            $self.amd.$f132(ϕ($dst), ϕ($c), ϕ($b));
-        }
-    }};
 }
 
 pub struct AmdSSEGenerator {

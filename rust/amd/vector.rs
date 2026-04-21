@@ -58,10 +58,6 @@ impl AmdVectorGenerator {
         }
     }
 
-    fn reg_size(&self) -> u32 {
-        REG_SIZE
-    }
-
     fn append_quad(&mut self, u: u64) {
         self.amd.a.append_quad(u);
     }

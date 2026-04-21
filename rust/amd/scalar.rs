@@ -3,12 +3,11 @@ use crate::config::{Config, SPILL_AREA};
 use crate::generator::Generator;
 use crate::utils::align_stack;
 use crate::utils::{is_external_func, reg, DataType, Reg};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 use super::asm::{Amd, RoundingMode};
 use super::*;
 
-const RET: u8 = 0;
 const REG_SIZE: u32 = 8;
 
 macro_rules! binop {
@@ -57,10 +56,6 @@ impl AmdScalarGenerator {
             config,
             last_load: 0,
         }
-    }
-
-    fn reg_size(&self) -> u32 {
-        8
     }
 
     fn append_quad(&mut self, u: u64) {
@@ -727,7 +722,7 @@ impl Generator for AmdScalarGenerator {
 }
 
 impl AmdScalarGenerator {
-    fn prologue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
+    fn prologue_symbolica(&mut self, cap: usize, _count_params: usize, _count_obs: usize) {
         self.amd.push(Amd::RBP);
         save_nonvolatile_regs(&mut self.amd);
 
@@ -739,7 +734,7 @@ impl AmdScalarGenerator {
         sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
     }
 
-    fn epilogue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
+    fn epilogue_symbolica(&mut self, cap: usize, _count_params: usize, _count_obs: usize) {
         add_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
 
         self.vzeroupper();
