@@ -6,8 +6,10 @@ use crate::utils::{is_external_func, reg, DataType, Reg};
 use anyhow::{anyhow, Result};
 
 use super::asm::{Amd, RoundingMode};
+use super::*;
 
 const RET: u8 = 0;
+const REG_SIZE = 32;
 
 macro_rules! binop {
     ($self:ident, $simd:ident, $dst:expr, $s1: expr, $s2: expr) => {
@@ -48,33 +50,6 @@ pub struct AmdVectorGenerator {
     last_load: usize,
 }
 
-#[cfg(target_family = "windows")]
-const ARGS: [u8; 4] = [Amd::RCX, Amd::RDX, Amd::R8, Amd::R9];
-
-#[cfg(target_family = "unix")]
-const ARGS: [u8; 4] = [Amd::RDI, Amd::RSI, Amd::RDX, Amd::RCX];
-
-const MEM: u8 = Amd::RBP;
-const STATES: u8 = Amd::R13;
-const IDX: u8 = Amd::R12;
-const PARAMS: u8 = Amd::RBX;
-const STACK: u8 = Amd::RSP;
-
-/*
- *  ϕ translates a logical register number (in Reg) to a physical
- *  register number, according to the ABI.
- */
-fn ϕ(r: Reg) -> u8 {
-    match r {
-        Reg::Ret => 0,
-        Reg::Temp => 1,
-        Reg::Left => 0,
-        Reg::Right => 1,
-        Reg::Gen(dst) => dst + 2,
-        Reg::Static(..) => panic!("passing static registers to codegen"),
-    }
-}
-
 impl AmdVectorGenerator {
     pub fn new(config: Config) -> AmdVectorGenerator {
         AmdVectorGenerator {
@@ -85,7 +60,7 @@ impl AmdVectorGenerator {
     }
 
     fn reg_size(&self) -> u32 {
-        32
+        REG_SIZE
     }
 
     fn append_quad(&mut self, u: u64) {
@@ -217,9 +192,9 @@ impl AmdVectorGenerator {
 
         self.amd.mov_reg_label(ARGS[0], &format!("_env_{}_", op));
         self.amd
-            .lea_mem(ARGS[1], STACK, (cap * self.reg_size()) as i32);
+            .lea_mem(ARGS[1], STACK, (cap * REG_SIZE) as i32);
         self.amd.mov_imm(ARGS[2], num_args as u32);
-        self.amd.lea_mem(ARGS[3], STACK, 4 * self.reg_size() as i32);
+        self.amd.lea_mem(ARGS[3], STACK, 4 * REG_SIZE as i32);
         self.vzeroupper();
 
         self.amd.call_indirect(&format!("_simd_{}_", op));
@@ -231,20 +206,20 @@ impl AmdVectorGenerator {
             self.amd.or(Amd::RAX, Amd::RAX);
             self.amd.jz(&l1);
 
-            self.amd.vmovpd_ymm_mem(2, STACK, 4 * self.reg_size() as i32);
-            self.amd.vmovpd_ymm_mem(3, STACK, 5 * self.reg_size() as i32);
+            self.amd.vmovpd_ymm_mem(2, STACK, 4 * REG_SIZE as i32);
+            self.amd.vmovpd_ymm_mem(3, STACK, 5 * REG_SIZE as i32);
             self.amd.vshufpd(0, 2, 3, 0);
             self.amd.vshufpd(1, 2, 3, 0x0f);
 
             self.amd.jmp(&l2);
             self.set_label(&l1);
 
-            self.amd.vmovpd_ymm_mem(0, STACK, 4 * self.reg_size() as i32);
-            self.amd.vmovpd_ymm_mem(1, STACK, 5 * self.reg_size() as i32);
+            self.amd.vmovpd_ymm_mem(0, STACK, 4 * REG_SIZE as i32);
+            self.amd.vmovpd_ymm_mem(1, STACK, 5 * REG_SIZE as i32);
 
             self.set_label(&l2);
         } else {
-            self.amd.vmovpd_ymm_mem(0, STACK, 4 * self.reg_size() as i32);
+            self.amd.vmovpd_ymm_mem(0, STACK, 4 * REG_SIZE as i32);
         }
 
         Ok(())
@@ -449,11 +424,11 @@ impl Generator for AmdVectorGenerator {
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        self.amd.vmovpd_ymm_mem(ϕ(dst), MEM, (idx * self.reg_size()) as i32);
+        self.amd.vmovpd_ymm_mem(ϕ(dst), MEM, (idx * REG_SIZE) as i32);
     }
 
     fn save_mem(&mut self, dst: Reg, idx: u32) {
-        self.amd.vmovpd_mem_ymm(MEM, (idx * self.reg_size()) as i32, ϕ(dst));
+        self.amd.vmovpd_mem_ymm(MEM, (idx * REG_SIZE) as i32, ϕ(dst));
     }
 
     fn save_mem_result(&mut self, idx: u32) {
@@ -464,7 +439,7 @@ impl Generator for AmdVectorGenerator {
         self.last_load = self.amd.a.ip();
 
         if self.config.symbolica() {
-            self.amd.vmovpd_ymm_mem(ϕ(dst), PARAMS, (idx * self.reg_size()) as i32);
+            self.amd.vmovpd_ymm_mem(ϕ(dst), PARAMS, (idx * REG_SIZE) as i32);
         } else {
             self.amd.vbroadcastsd(ϕ(dst), PARAMS, 8 * idx as i32);
         }
@@ -472,11 +447,11 @@ impl Generator for AmdVectorGenerator {
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        self.amd.vmovpd_ymm_mem(ϕ(dst), STACK, (idx * self.reg_size()) as i32);
+        self.amd.vmovpd_ymm_mem(ϕ(dst), STACK, (idx * REG_SIZE) as i32);
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        self.amd.vmovpd_mem_ymm(STACK, (idx * self.reg_size()) as i32, ϕ(dst));
+        self.amd.vmovpd_mem_ymm(STACK, (idx * REG_SIZE) as i32, ϕ(dst));
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
@@ -808,10 +783,10 @@ impl Generator for AmdVectorGenerator {
     fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
         self.amd.push(Amd::RBP);
 
-        let frame_size = align_stack((count_states + count_obs) as u32 * self.reg_size());
-        self.sub_rsp(frame_size);
+        let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
+        sub_rsp(&mut self.amd, frame_size);
         self.amd.mov(MEM, STACK);
-        self.sub_rsp(align_stack(cap as u32 * self.reg_size()));
+        sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
 
         for i in 0..count_states {
             self.amd.vmovsd_mem_xmm(MEM, (i * 8) as i32, i as u8);
@@ -822,14 +797,14 @@ impl Generator for AmdVectorGenerator {
     fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
         self.amd.push(Amd::RBP);
 
-        let frame_size = align_stack((count_states + count_obs) as u32 * self.reg_size());
-        self.sub_rsp(frame_size);
+        let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
+        sub_rsp(&mut self.amd, frame_size);
         self.amd.mov(MEM, STACK);
-        self.sub_rsp(align_stack(cap as u32 * self.reg_size()));
+        sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
 
         for i in 0..count_states.min(4) {
             self.amd
-                .vmovsd_mem_xmm(MEM, (i as u32 * self.reg_size()) as i32, i as u8);
+                .vmovsd_mem_xmm(MEM, (i as u32 * REG_SIZE) as i32, i as u8);
         }
 
         for i in 4..count_states {
@@ -840,19 +815,19 @@ impl Generator for AmdVectorGenerator {
             // +1 for RBP in the stack
             // -4 for the first four arguments passed in XMM0-XMM3
             self.amd
-                .vmovsd_xmm_mem(0, MEM, (frame_size + (i + 2) * self.reg_size()) as i32);
-            self.amd.vmovsd_mem_xmm(MEM, (i * self.reg_size()) as i32, 0);
+                .vmovsd_xmm_mem(0, MEM, (frame_size + (i + 2) * REG_SIZE) as i32);
+            self.amd.vmovsd_mem_xmm(MEM, (i * REG_SIZE) as i32, 0);
         }
     }
 
     fn epilogue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize, idx_ret: i32) {
         self.vzeroupper();
         self.amd
-            .movsd_xmm_mem(0, MEM, idx_ret * self.reg_size() as i32);
+            .movsd_xmm_mem(0, MEM, idx_ret * REG_SIZE as i32);
 
-        let total_size = align_stack(cap as u32 * self.reg_size())
-            + align_stack((count_states + count_obs) as u32 * self.reg_size());
-        self.amd.add_rsp(total_size);
+        let total_size = align_stack(cap as u32 * REG_SIZE)
+            + align_stack((count_states + count_obs) as u32 * REG_SIZE);
+        add_rsp(&mut self.amd, total_size);
 
         self.amd.pop(Amd::RBP);
         self.amd.ret();
@@ -878,10 +853,10 @@ impl Generator for AmdVectorGenerator {
      *      call to `save_nonvolatile_regs`.
      *  3. Optional mem area to store state variables and observables in vectorized calls.
      *      Of length `frame_size`, which is aligned to 16 by calling `align_stack`.
-     *  4. The temporary variables area of size `align_stack(cap * self.reg_size())`.
+     *  4. The temporary variables area of size `align_stack(cap * REG_SIZE)`.
      *      It has two sub-segments:
      *  4a. The actual temporary variables area.
-     *  4b. A default spill area of `16 * self.reg_size()` bytes. It is generated by
+     *  4b. A default spill area of `16 * REG_SIZE` bytes. It is generated by
      *      `SymbolTable::new` adding 16 dummy temp variables. The top 10 slots are used
      *      to store callee-saved xmm/ymm registers (`save_used_registers`). The bottom
      *      6 slots are the work area for various call routines, Specifically, the bottom
@@ -899,7 +874,7 @@ impl Generator for AmdVectorGenerator {
         }
 
         self.amd.push(Amd::RBP);
-        self.save_nonvolatile_regs();
+        save_nonvolatile_regs(&mut self.amd);
 
         self.amd.mov(MEM, ARGS[0]); // first arg = mem if direct mode, otherwise null
         self.amd.mov(STATES, ARGS[1]); // second arg = states+obs if indirect mode, otherwise null
@@ -909,19 +884,17 @@ impl Generator for AmdVectorGenerator {
         self.amd.or(STATES, STATES);
         self.amd.jz("@main");
 
-        let frame_size = align_stack((count_states + count_obs) as u32 * self.reg_size());
-        self.sub_rsp(frame_size);
+        let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
+        sub_rsp(&mut self.amd, frame_size);
         self.amd.mov(MEM, STACK); // in indirect mode, MEM is allocated on the stack
 
         // multiply IDX by 4 to convert from f64x4 index to f64 index
-        if self.reg_size() == 32 {
-            self.amd.add(IDX, IDX);
-            self.amd.add(IDX, IDX);
-        }
+        self.amd.add(IDX, IDX);
+        self.amd.add(IDX, IDX);
 
         for i in 0..count_states {
             self.amd.mov_reg_mem(Amd::RAX, STATES, 2 * 8 * i as i32);
-            let k = i as u32 * self.reg_size();
+            let k = i as u32 * REG_SIZE;
             self.amd.vmovpd_ymm_indexed(RET, Amd::RAX, IDX, 8);
             self.amd.vmovpd_mem_ymm(MEM, k as i32, RET);
         }
@@ -929,7 +902,7 @@ impl Generator for AmdVectorGenerator {
         // may save idx (RDX) as double in RBP + 8/32 * count_states
 
         self.set_label("@main");
-        self.sub_rsp(align_stack(cap as u32 * self.reg_size()));
+        sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
     }
 
     fn epilogue_indirect(
@@ -946,7 +919,7 @@ impl Generator for AmdVectorGenerator {
             return self.epilogue_symbolica(cap, count_params, count_obs);
         }
 
-        self.add_rsp(align_stack(cap as u32 * self.reg_size()));
+        add_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
 
         self.amd.or(STATES, STATES);
         self.amd.jz("@done");
@@ -954,18 +927,18 @@ impl Generator for AmdVectorGenerator {
         for i in 0..count_obs {
             self.amd
                 .mov_reg_mem(Amd::RCX, STATES, 2 * 8 * (count_states + i) as i32);
-            let k = (count_states + i) as u32 * self.reg_size();
+            let k = (count_states + i) as u32 * REG_SIZE;
             self.amd.vmovpd_ymm_mem(RET, MEM, k as i32);
             self.amd.vmovpd_indexed_ymm(Amd::RCX, IDX, 8, RET);
         }
 
-        let frame_size = align_stack((count_states + count_obs) as u32 * self.reg_size());
-        self.amd.add_rsp(frame_size);
+        let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
+        add_rsp(&mut self.amd, frame_size);
         self.set_label("@done");
 
         self.vzeroupper();
 
-        self.load_nonvolatile_regs();
+        load_nonvolatile_regs(&mut self.amd);
         self.amd.pop(Amd::RBP);
         self.amd.ret();
     }
@@ -994,18 +967,18 @@ impl Generator for AmdVectorGenerator {
 impl AmdVectorGenerator {
     fn prologue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
         self.amd.push(Amd::RBP);
-        self.save_nonvolatile_regs();
+        save_nonvolatile_regs(&mut self.amd);
 
         self.amd.mov(MEM, ARGS[0]); // first arg = mem if direct mode, otherwise null
         self.amd.mov(STATES, ARGS[1]); // second arg = states+obs if indirect mode, otherwise null
         self.amd.mov(IDX, ARGS[2]); // third arg = index if indirect mode
         self.amd.mov(PARAMS, ARGS[3]); // fourth arg = params
 
-        if self.reg_size() == 32 {
+        if REG_SIZE == 32 {
             self.amd.or(IDX, IDX);
             self.amd.jz("@main");
 
-            self.sub_rsp(align_stack(count_params as u32 * 32));
+            sub_rsp(&mut self.amd, align_stack(count_params as u32 * 32));
             self.amd.mov(Amd::RAX, PARAMS);
             self.amd.mov(PARAMS, STACK);
 
@@ -1017,19 +990,19 @@ impl AmdVectorGenerator {
                 }
             }
 
-            self.sub_rsp(align_stack(count_obs as u32 * 32));
+            sub_rsp(&mut self.amd, align_stack(count_obs as u32 * 32));
             self.amd.mov(STATES, MEM);
             self.amd.mov(MEM, STACK);
 
             self.set_label("@main");
         }
-        self.sub_rsp(align_stack(cap as u32 * self.reg_size()));
+        sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
     }
 
     fn epilogue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
-        self.add_rsp(align_stack(cap as u32 * self.reg_size()));
+        add_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
 
-        if self.reg_size() == 32 {
+        if REG_SIZE == 32 {
             self.amd.or(IDX, IDX);
             self.amd.jz("@done");
 
@@ -1043,13 +1016,13 @@ impl AmdVectorGenerator {
 
             let frame_size =
                 align_stack(count_params as u32 * 32) + align_stack(count_obs as u32 * 32);
-            self.amd.add_rsp(frame_size);
+            add_rsp(&mut self.amd, frame_size);
             self.set_label("@done");
         }
 
         self.vzeroupper();
 
-        self.load_nonvolatile_regs();
+        load_nonvolatile_regs(&mut self.amd);
         self.amd.pop(Amd::RBP);
         self.amd.ret();
     }

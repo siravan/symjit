@@ -50,21 +50,6 @@ pub struct AmdScalarGenerator {
     last_load: usize,
 }
 
-/*
- *  ϕ translates a logical register number (in Reg) to a physical
- *  register number, according to the ABI.
- */
-fn ϕ(r: Reg) -> u8 {
-    match r {
-        Reg::Ret => 0,
-        Reg::Temp => 1,
-        Reg::Left => 0,
-        Reg::Right => 1,
-        Reg::Gen(dst) => dst + 2,
-        Reg::Static(..) => panic!("passing static registers to codegen"),
-    }
-}
-
 impl AmdScalarGenerator {
     pub fn new(config: Config) -> AmdScalarGenerator {
         AmdScalarGenerator {

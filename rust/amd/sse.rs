@@ -6,6 +6,7 @@ use crate::utils::{is_external_func, reg, DataType, Reg};
 use anyhow::{anyhow, Result};
 
 use super::asm::{Amd, RoundingMode};
+use super::*;
 
 const RET: u8 = 0;
 const REG_SIZE: u32 = 8;
@@ -50,21 +51,6 @@ pub struct AmdSSEGenerator {
     amd: Amd,
     config: Config,
     last_load: usize,
-}
-
-/*
- *  ϕ translates a logical register number (in Reg) to a physical
- *  register number, according to the ABI.
- */
-fn ϕ(r: Reg) -> u8 {
-    match r {
-        Reg::Ret => 0,
-        Reg::Temp => 1,
-        Reg::Left => 0,
-        Reg::Right => 1,
-        Reg::Gen(dst) => dst + 2,
-        Reg::Static(..) => panic!("passing static registers to codegen"),
-    }
 }
 
 impl AmdSSEGenerator {
@@ -628,7 +614,7 @@ impl Generator for AmdSSEGenerator {
 
         let total_size = align_stack(cap as u32 * REG_SIZE)
             + align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        amd.add_rsp(&mut self.amd, total_size);
+        add_rsp(&mut self.amd, total_size);
 
         self.amd.pop(Amd::RBP);
         self.amd.ret();
