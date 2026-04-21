@@ -93,7 +93,7 @@ impl Amd {
 
     // reg = reg * rm - vreg
     pub fn vfmsub132pd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vfma(reg, vreg, rm, 0xa9);
+        self.vfma(reg, vreg, rm, 0x9a);
     }
 
     // reg = vreg * reg - rm

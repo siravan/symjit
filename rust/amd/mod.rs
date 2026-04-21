@@ -176,3 +176,68 @@ fn ϕ(r: Reg) -> u8 {
         Reg::Static(..) => panic!("passing static registers to codegen"),
     }
 }
+
+fn predefined_consts(amd: &mut Amd) {
+    amd.a.set_label("_minus_zero_");
+    amd.a.append_quad((-0.0f64).to_bits());
+
+    amd.a.set_label("_one_");
+    amd.a.append_quad(1.0f64.to_bits());
+
+    amd.a.set_label("_two_");
+    amd.a.append_quad(2.0f64.to_bits());
+
+    amd.a.set_label("_all_ones_");
+    amd.a.append_quad(0xffffffffffffffff);
+}
+
+/*
+ * fuse_load_math tries to fuse the last two instructions if
+ * the last one is a math-op and the one before is a load
+ * instruction. For example,
+ *
+ * vmovsd xmm0, [rbp + 0x1234]
+ * vaddsd xmm2, xmm3, xmm0
+ *
+ * fuses into
+ *
+ * vaddsd xmm2, xmm3, [rbp + 0x1234]
+ *
+ */
+fn fuse_load_math(amd: &mut Amd, last_load: usize) {
+    let ip0 = last_load; // the address of the last load instruction
+    let ip1 = amd.a.ip() - 4; // the address of the last math op
+
+    if ip1 - ip0 > 10 {
+        return;
+    }
+
+    let b: &mut [u8] = &mut amd.a.buf;
+
+    // Conditions:
+    //
+    // the first bytes are 0xc5, i.e., VEX prefix
+    // 0x10 means a load instruction (vmovsd or vmovpd)
+    // `b[ip0 + 3] & 0x38 == 0` means the destination of the load istruction
+    // is xmm0.
+    // `b[ip1 + 3] & 0x07 == 0` means the second source of the math op
+    // is xmm0.
+    //
+    // Note that `Node.load_math` specifically uses Reg::Ret (i.e., xmm0)
+    // to signal this function it is safe to fuse the operations.
+    if b[ip1] == 0xc5 && b[ip0] == 0xc5 && b[ip0 + 2] == 0x10 {
+        if b[ip0 + 3] & 0x38 == 0 && b[ip1 + 3] & 0x07 == 0 {
+            // if (b[ip0 + 3] & 0x38) >> 3 == b[ip1 + 3] & 0x07 {
+            b[ip0 + 1] = b[ip1 + 1]; // copy VEX prefix
+            b[ip0 + 2] = b[ip1 + 2]; // copy OpCode
+
+            // Fusing ModR/M byte. Destination comes from the math op and
+            // source comes the load instruction.
+            b[ip0 + 3] |= b[ip1 + 3] & 0x38;
+
+            for _ in 0..4 {
+                amd.a.buf.pop().unwrap();
+            }
+        }
+    }
+}
