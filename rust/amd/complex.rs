@@ -84,7 +84,8 @@ impl AmdComplexGenerator {
     }
 
     fn load_const_by_name(&mut self, dst: Reg, label: &str) {
-        self.amd.vbroadcastsd_label(ϕ(dst), label);
+        // self.amd.vbroadcastsd_label(ϕ(dst), label);
+        self.amd.vmovsd_xmm_label(ϕ(dst), label.as_str());
     }
 
     fn vzeroupper(&mut self) {
@@ -190,7 +191,8 @@ impl Generator for AmdComplexGenerator {
     fn load_const(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
         let label = format!("_const_{}_", idx);
-        self.amd.vbroadcastsd_label(ϕ(dst), label.as_str());
+        // self.amd.vbroadcastsd_label(ϕ(dst), label.as_str());
+        self.amd.vmovsd_xmm_label(ϕ(dst), label.as_str());
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
