@@ -85,7 +85,7 @@ impl AmdComplexGenerator {
 
     fn load_const_by_name(&mut self, dst: Reg, label: &str) {
         // self.amd.vbroadcastsd_label(ϕ(dst), label);
-        self.amd.vmovsd_xmm_label(ϕ(dst), label.as_str());
+        self.amd.vmovsd_xmm_label(ϕ(dst), label);
     }
 
     fn vzeroupper(&mut self) {
