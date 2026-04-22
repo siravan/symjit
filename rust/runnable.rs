@@ -88,7 +88,7 @@ impl Application {
 
         let config = prog.config().clone();
 
-        if config.is_complex() {
+        if config.is_complex() && !config.fast_complex() {
             mir = Complexifier::new(&reals, config.clone()).complexify(&mir)?;
         }
 
@@ -273,11 +273,16 @@ impl Application {
     }
 
     fn compile_avx(mir: &Mir, prog: &mut Program) -> Result<MachineCode<f64>> {
+        let g = if prog.config().fast_complex() {
+            AmdComplexGenerator::new(prog.config().clone())
+        } else {
+            AmdScalarGenerator::new(prog.config().clone())
+        };
+
         Self::compile::<AmdScalarGenerator>(
             mir,
             prog,
-            // AmdGenerator::new(AmdFamily::AvxScalar, prog.config().clone()),
-            AmdScalarGenerator::new(prog.config().clone()),
+            g,
             prog.mem_size(),
             "x86_64",
             1,

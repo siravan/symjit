@@ -260,7 +260,7 @@ impl Generator for AmdComplexGenerator {
     fn recip(&mut self, dst: Reg, s1: Reg) {
         self.conjugate(dst, s1);
         self.amd.vmuldd(T1, ϕ(s1), ϕ(s1));
-        self.amd.vhadddd(xt, T1, T1);
+        self.amd.vhadddd(T1, T1, T1);
         self.amd.vdivdd(ϕ(dst), ϕ(dst), T1);
     }
 

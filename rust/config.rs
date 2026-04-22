@@ -18,6 +18,7 @@ pub const SIMD_BRANCH: u32 = 0x0080;
 pub const COMPACT: u32 = 0x1000;
 pub const MEM_SAVER: u32 = 0x2000;
 pub const PERMISSIVE: u32 = 0x4000;
+pub const FAST_COMPLEX: u32 = 0x8000;
 
 pub const OPT_LEVEL_MASK: u32 = 0x0f00;
 pub const OPT_LEVEL_SHIFT: usize = 8;
@@ -203,7 +204,11 @@ impl Config {
     }
 
     pub fn is_complex(&self) -> bool {
-        self.test(COMPLEX)
+        self.test(COMPLEX) | self.test(FAST_COMPLEX)
+    }
+
+    pub fn fast_complex(&self) -> bool {
+        self.test(FAST_COMPLEX)
     }
 
     /// Sets of optimization level. The valid values are 0, 1, 2, which roughly correspond to gcc O0, O1, and O2 levels.
@@ -235,6 +240,11 @@ impl Config {
     /// Enables Complex Numbers.
     pub fn set_complex(&mut self, enabled: bool) {
         self.opt = (self.opt & !COMPLEX) | if enabled { COMPLEX } else { 0 };
+    }
+
+    /// Enables Fast Complex (using SIMD instructions in the scalar code).
+    pub fn set_fast_complex(&mut self, enabled: bool) {
+        self.opt = (self.opt & !FAST_COMPLEX) | if enabled { FAST_COMPLEX } else { 0 };
     }
 
     /// Enables Multi-threading.

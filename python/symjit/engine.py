@@ -336,6 +336,7 @@ class RustyCompiler:
         order="fortran",
         simd_branch=False,
         permissive=True,
+        fast_complex=True,
     ):
         if convert:
             model = json.dumps(model)
@@ -357,6 +358,7 @@ class RustyCompiler:
             | (0x40 if order == "c" else 0)
             | (0x80 if simd_branch else 0)
             | (0x4000 if permissive else 0)
+            | (0x8000 if fast_complex else 0)
             | ((opt_level & 0x0F) << 8)
         )
 
