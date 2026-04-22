@@ -505,12 +505,15 @@ impl Generator for Complexifier {
                     self.mir.divide(im(dst), im(dst), t);
                     self.mir.divide(re(dst), Self::T0, t);
                 } else {
-                    self.mir.times(t, re(s2), re(s2));
+                    self.mir.times(Self::T0, re(s2), re(s2));
+                    self.mir.fused_mul_add(t, im(s2), im(s2), Self::T0);
+
                     self.mir.times(Self::T0, re(s1), re(s2));
-                    self.mir.fused_mul_add(t, im(s2), im(s2), t);
                     self.mir.times(Self::T1, re(s1), im(s2));
+                    self.mir.neg(im(dst), Self::T1);
+
+                    self.mir.divide(im(dst), im(dst), t);
                     self.mir.divide(re(dst), Self::T0, t);
-                    self.mir.divide(im(dst), Self::T1, t);
                 }
             }
             Types::CC => {
