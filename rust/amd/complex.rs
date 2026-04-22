@@ -9,6 +9,8 @@ use super::asm::{Amd, RoundingMode};
 use super::*;
 
 const REG_SIZE: u32 = 8;
+const T1: u8 = 2;
+const T2: u8 = 3;
 
 macro_rules! binop {
     ($self:ident, $avx:ident, $dst:expr, $s1: expr, $s2: expr) => {
@@ -171,7 +173,7 @@ impl Generator for AmdComplexGenerator {
         fuse_load_math(&mut self.amd, self.last_load);
     }
 
-    //***********************************
+    //***********************************/
 
     fn fmov(&mut self, dst: Reg, s1: Reg) {
         if dst != s1 {
@@ -257,9 +259,9 @@ impl Generator for AmdComplexGenerator {
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
         self.conjugate(dst, s1);
-        self.amd.vmuldd(xt, ϕ(s1), ϕ(s1));
-        self.amd.vhadddd(xt, xt, xt);
-        self.amd.vdivdd(ϕ(dst), ϕ(dst), xt);
+        self.amd.vmuldd(T1, ϕ(s1), ϕ(s1));
+        self.amd.vhadddd(xt, T1, T1);
+        self.amd.vdivdd(ϕ(dst), ϕ(dst), T1);
     }
 
     fn half(&mut self, dst: Reg, s1: Reg) {
@@ -297,32 +299,26 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn times(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        let xt = 2;
-        let yt = 3;
-
-        self.amd.vunpckldd(xt, ϕ(s1), ϕ(s1));  // duplicate real
-        self.amd.vunpckhdd(yt, ϕ(s1), ϕ(s1));  // duplicate imag
-        self.amd.vmuldd(xt, xt, ϕ(s2));
-        self.amd.vmuldd(yt, yt, ϕ(s2));
-        self.amd.vshufdd(yt, yt, yt, 1);        // exchange real/imag
-        self.amd.vaddsubdd(ϕ(dst), xt, yt);
+        self.amd.vunpckldd(T1, ϕ(s1), ϕ(s1));  // duplicate real
+        self.amd.vunpckhdd(T2, ϕ(s1), ϕ(s1));  // duplicate imag
+        self.amd.vmuldd(T1, T1, ϕ(s2));
+        self.amd.vmuldd(T2, T2, ϕ(s2));
+        self.amd.vshufdd(T2, T2, T2, 1);        // exchange real/imag
+        self.amd.vaddsubdd(ϕ(dst), T1, T2);
     }
 
     fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        let xt = 2;
-        let yt = 3;
-
-        self.amd.vunpckldd(xt, ϕ(s1), ϕ(s1));  // duplicate real
-        self.amd.vunpckhdd(yt, ϕ(s1), ϕ(s1));  // duplicate imag
-        self.amd.vmuldd(xt, xt, ϕ(s2));
-        self.amd.vmuldd(yt, yt, ϕ(s2));
-        self.amd.vshufdd(xt, xt, xt, 1);        // exchange real/imag
-        self.amd.vaddsubdd(ϕ(dst), yt, xt);
+        self.amd.vunpckldd(T1, ϕ(s1), ϕ(s1));  // duplicate real
+        self.amd.vunpckhdd(T2, ϕ(s1), ϕ(s1));  // duplicate imag
+        self.amd.vmuldd(T1, T1, ϕ(s2));
+        self.amd.vmuldd(T2, T2, ϕ(s2));
+        self.amd.vshufdd(T1, T1, T1, 1);        // exchange real/imag
+        self.amd.vaddsubdd(ϕ(dst), T2, T1);
         self.amd.vshufdd(ϕ(dst), ϕ(dst), ϕ(dst), 1);
 
-        self.amd.vmuldd(xt, ϕ(s2), ϕ(s2));
-        self.amd.vhadddd(xt, xt, xt);
-        self.amd.vdivdd(ϕ(dst), ϕ(dst), xt);
+        self.amd.vmuldd(T1, ϕ(s2), ϕ(s2));
+        self.amd.vhadddd(T1, T1, T1);
+        self.amd.vdivdd(ϕ(dst), ϕ(dst), T1);
     }
 
     fn times_complex(&mut self, _xd: Reg, _yd: Reg, _x1: Reg, _y1: Reg, _x2: Reg, _y2: Reg) -> bool {
@@ -334,22 +330,19 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn real(&mut self, dst: Reg, s1: Reg) {
-        let xt = 2;
-        self.amd.xor(xt, xt, xt);
-        self.amd.vunpckldd(ϕ(dst), ϕ(s1), xt);
+        self.amd.vxorpd(T1, T1, T1);
+        self.amd.vunpckldd(ϕ(dst), ϕ(s1), T1);
     }
 
     fn imaginary(&mut self, dst: Reg, s1: Reg) {
-        let xt = 2;
-        self.amd.xor(xt, xt, xt);
-        self.amd.vunpckhdd(ϕ(dst), ϕ(s1), xt);
+        self.amd.vxorpd(T1, T1, T1);
+        self.amd.vunpckhdd(ϕ(dst), ϕ(s1), T1);
     }
 
     fn conjugate(&mut self, dst: Reg, s1: Reg) {
-        let xt = 2;
-        self.amd.xor(xt, xt, xt);
+        self.amd.vxorpd(T1, T1, T1);
         self.amd.vshufdd(ϕ(dst), ϕ(s1), ϕ(s1), 1);
-        self.amd.vaddsubdd(ϕ(dst), xt, ϕ(dst));
+        self.amd.vaddsubdd(ϕ(dst), T1, ϕ(dst));
         self.amd.vshufdd(ϕ(dst), ϕ(dst), ϕ(dst), 1);
     }
 
