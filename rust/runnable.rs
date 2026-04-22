@@ -106,7 +106,7 @@ impl Application {
             _ => return Err(anyhow!("unrecognized `ty`")),
         };
 
-        let use_simd = config.use_simd() && prog.count_loops == 0;
+        let use_simd = config.use_simd() && prog.count_loops == 0 && !config.fast_complex();
         let use_threads = config.use_threads() && prog.mem_size() < 128;
 
         let can_fast = config.may_fast()
@@ -273,8 +273,8 @@ impl Application {
     }
 
     fn compile_avx(mir: &Mir, prog: &mut Program) -> Result<MachineCode<f64>> {
-        if prog.config().fast_complex() {
-            Self::compile::<AmdScalarGenerator>(
+        if prog.config().is_complex() && prog.config().fast_complex() {
+            Self::compile::<AmdComplexGenerator>(
                 mir,
                 prog,
                 AmdComplexGenerator::new(prog.config().clone()),

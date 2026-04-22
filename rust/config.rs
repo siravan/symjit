@@ -204,7 +204,7 @@ impl Config {
     }
 
     pub fn is_complex(&self) -> bool {
-        self.test(COMPLEX) | self.test(FAST_COMPLEX)
+        self.test(COMPLEX)
     }
 
     pub fn fast_complex(&self) -> bool {
