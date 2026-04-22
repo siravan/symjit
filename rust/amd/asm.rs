@@ -641,6 +641,12 @@ impl Amd {
         self.modrm_reg(reg, rm);
     }
 
+    pub fn vhadddd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0x7c);
+        self.modrm_reg(reg, rm);
+    }
+
     pub fn vsubdd(&mut self, reg: u8, vreg: u8, rm: u8) {
         self.vex_dd(reg, vreg, rm, 0);
         self.append_byte(0x5c);

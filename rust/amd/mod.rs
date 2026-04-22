@@ -9,10 +9,12 @@ use asm::Amd;
 mod scalar;
 mod sse;
 mod vector;
+mod complex;
 
 pub use scalar::AmdScalarGenerator;
 pub use sse::AmdSSEGenerator;
 pub use vector::AmdVectorGenerator;
+pub use complex::AmdComplexGenerator;
 
 #[cfg(target_family = "windows")]
 const ARGS: [u8; 4] = [Amd::RCX, Amd::RDX, Amd::R8, Amd::R9];

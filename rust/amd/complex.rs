@@ -111,7 +111,7 @@ impl AmdComplexGenerator {
     }
 }
 
-impl Generator for AmdScalarGenerator {
+impl Generator for AmdComplexGenerator {
     fn bytes(&mut self) -> Vec<u8> {
         self.amd.a.bytes()
     }
@@ -152,7 +152,7 @@ impl Generator for AmdScalarGenerator {
     }
 
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
-        self.amd.vmovmskdd(Amd::RAX, ϕ(cond));
+        self.amd.vmovmskpd(Amd::RAX, ϕ(cond));
         self.amd.and_imm(Amd::RAX, 3);
 
         if !is_else {
@@ -218,19 +218,19 @@ impl Generator for AmdScalarGenerator {
         self.amd.vmovdd_mem_xmm(STACK, (idx * REG_SIZE) as i32, ϕ(dst));
     }
 
-    fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
+    fn load_mem_complex(&mut self, _xd: Reg, _yd: Reg, _idx: u32) {
     }
 
-    fn save_mem_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
+    fn save_mem_complex(&mut self, _xs: Reg, _ys: Reg, _idx: u32) {
     }
 
-    fn load_param_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
+    fn load_param_complex(&mut self, _xd: Reg, _yd: Reg, _idx: u32) {
     }
 
-    fn load_stack_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
+    fn load_stack_complex(&mut self, _xd: Reg, _yd: Reg, _idx: u32) {
     }
 
-    fn save_stack_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
+    fn save_stack_complex(&mut self, _xs: Reg, _ys: Reg, _idx: u32) {
     }
 
     fn save_stack_result(&mut self, idx: u32) {
@@ -256,8 +256,10 @@ impl Generator for AmdScalarGenerator {
     }
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
-        self.load_const_by_name(Reg::Temp, "_one_");
-        self.divide(dst, Reg::Temp, s1);
+        self.conjugate(dst, s1);
+        self.amd.vmuldd(xt, ϕ(s1), ϕ(s1));
+        self.amd.vhadddd(xt, xt, xt);
+        self.amd.vdivdd(ϕ(dst), ϕ(dst), xt);
     }
 
     fn half(&mut self, dst: Reg, s1: Reg) {
@@ -298,38 +300,57 @@ impl Generator for AmdScalarGenerator {
         let xt = 2;
         let yt = 3;
 
-        self.amd.vmuldd(xt, ϕ(s1), ϕ(s2));
-        self.amd.vshufdd(yt, ϕ(s2), ϕ(s2), 1);
-        self.amd.vmuldd(yt, ϕ(s1), yt);
+        self.amd.vunpckldd(xt, ϕ(s1), ϕ(s1));  // duplicate real
+        self.amd.vunpckhdd(yt, ϕ(s1), ϕ(s1));  // duplicate imag
+        self.amd.vmuldd(xt, xt, ϕ(s2));
+        self.amd.vmuldd(yt, yt, ϕ(s2));
+        self.amd.vshufdd(yt, yt, yt, 1);        // exchange real/imag
         self.amd.vaddsubdd(ϕ(dst), xt, yt);
     }
 
     fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        todo!();
+        let xt = 2;
+        let yt = 3;
+
+        self.amd.vunpckldd(xt, ϕ(s1), ϕ(s1));  // duplicate real
+        self.amd.vunpckhdd(yt, ϕ(s1), ϕ(s1));  // duplicate imag
+        self.amd.vmuldd(xt, xt, ϕ(s2));
+        self.amd.vmuldd(yt, yt, ϕ(s2));
+        self.amd.vshufdd(xt, xt, xt, 1);        // exchange real/imag
+        self.amd.vaddsubdd(ϕ(dst), yt, xt);
+        self.amd.vshufdd(ϕ(dst), ϕ(dst), ϕ(dst), 1);
+
+        self.amd.vmuldd(xt, ϕ(s2), ϕ(s2));
+        self.amd.vhadddd(xt, xt, xt);
+        self.amd.vdivdd(ϕ(dst), ϕ(dst), xt);
     }
 
-    fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
+    fn times_complex(&mut self, _xd: Reg, _yd: Reg, _x1: Reg, _y1: Reg, _x2: Reg, _y2: Reg) -> bool {
         false
     }
 
-    fn divide_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
+    fn divide_complex(&mut self, _xd: Reg, _yd: Reg, _x1: Reg, _y1: Reg, _x2: Reg, _y2: Reg) -> bool {
         false
     }
 
     fn real(&mut self, dst: Reg, s1: Reg) {
         let xt = 2;
-        self.xor(xt, xt, xt);
+        self.amd.xor(xt, xt, xt);
         self.amd.vunpckldd(ϕ(dst), ϕ(s1), xt);
     }
 
     fn imaginary(&mut self, dst: Reg, s1: Reg) {
         let xt = 2;
-        self.xor(xt, xt, xt);
-        self.amd.vunpckhdd(ϕ(dst), xt, ϕ(s1));
+        self.amd.xor(xt, xt, xt);
+        self.amd.vunpckhdd(ϕ(dst), ϕ(s1), xt);
     }
 
     fn conjugate(&mut self, dst: Reg, s1: Reg) {
-        todo!();
+        let xt = 2;
+        self.amd.xor(xt, xt, xt);
+        self.amd.vshufdd(ϕ(dst), ϕ(s1), ϕ(s1), 1);
+        self.amd.vaddsubdd(ϕ(dst), xt, ϕ(dst));
+        self.amd.vshufdd(ϕ(dst), ϕ(dst), ϕ(dst), 1);
     }
 
     fn complex(&mut self, dst: Reg, s1: Reg, s2: Reg) {
@@ -337,27 +358,33 @@ impl Generator for AmdScalarGenerator {
     }
 
     fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vcmpnledd, dst, s1, s2);
+        binop!(self, vcmpnlesd, dst, s1, s2);
+        self.amd.vunpckldd(ϕ(dst), ϕ(dst), ϕ(dst));
     }
 
     fn geq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vcmpnltdd, dst, s1, s2);
+        binop!(self, vcmpnltsd, dst, s1, s2);
+        self.amd.vunpckldd(ϕ(dst), ϕ(dst), ϕ(dst));
     }
 
     fn lt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vcmpltdd, dst, s1, s2);
+        binop!(self, vcmpltsd, dst, s1, s2);
+        self.amd.vunpckldd(ϕ(dst), ϕ(dst), ϕ(dst));
     }
 
     fn leq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vcmpledd, dst, s1, s2);
+        binop!(self, vcmplesd, dst, s1, s2);
+        self.amd.vunpckldd(ϕ(dst), ϕ(dst), ϕ(dst));
     }
 
     fn eq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vcmpeqdd, dst, s1, s2);
+        binop!(self, vcmpeqsd, dst, s1, s2);
+        self.amd.vunpckldd(ϕ(dst), ϕ(dst), ϕ(dst));
     }
 
     fn neq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vcmpneqdd, dst, s1, s2);
+        binop!(self, vcmpneqsd, dst, s1, s2);
+        self.amd.vunpckldd(ϕ(dst), ϕ(dst), ϕ(dst));
     }
 
     fn and(&mut self, dst: Reg, s1: Reg, s2: Reg) {
@@ -645,7 +672,7 @@ impl Generator for AmdScalarGenerator {
 
         for r in used {
             if *r >= count_shadows {
-                self.amd.vmovsd_mem_xmm(STACK, *r as u32 + 4, *r);
+                self.amd.vmovsd_mem_xmm(STACK, (*r as u32 + 4) as i32, *r);
             }
         }
     }
@@ -655,7 +682,7 @@ impl Generator for AmdScalarGenerator {
 
         for r in used {
             if *r >= count_shadows {
-                self.amd.vmovsd_xmm_mem(*r, STACK, *r as u32 + 4);
+                self.amd.vmovsd_xmm_mem(*r, STACK, (*r as u32 + 4) as i32);
             }
         }
     }
