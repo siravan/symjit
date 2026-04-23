@@ -289,8 +289,11 @@ class SymbolicaFunc:
         c.evaluate_matrix(args, outs, 2)
         return outs
 
-    def dump(self, name, what="scalar"):
-        self.compiler.dump(name, what=what)
+    def dump(self, name, what="scalar", dtype="complex128"):
+        if dtype == "complex128" and self.complex_compiler is not None:
+            return self.complex_compiler.dump(name, what=what)
+        elif self.compiler is not None:
+            return self.compiler.dump(name, what=what)
 
     def dumps(self, what="scalar", dtype="complex128"):
         if dtype == "complex128" and self.complex_compiler is not None:

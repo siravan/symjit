@@ -122,7 +122,7 @@ def compile_func(
     else:
         f = Func(compiler, eqs)
 
-    # return f
+    return f
 
     if isinstance(compiler, engine.RustyCompiler) and action != "load":
         # print(f.dumps("bytecode"))
@@ -474,6 +474,8 @@ def compile_evaluator(
             f = FuncComplex(compiler, [])
         else:
             f = Func(compiler, [])
+
+        return f
 
         if isinstance(compiler, engine.RustyCompiler) and action != "load":
             print("save/load")

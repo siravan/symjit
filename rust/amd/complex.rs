@@ -85,6 +85,7 @@ impl AmdComplexGenerator {
 
     fn load_const_by_name(&mut self, dst: Reg, label: &str) {
         // self.amd.vbroadcastsd_label(ϕ(dst), label);
+        self.xor(ϕ(dst), ϕ(dst), ϕ(dst));
         self.amd.vmovsd_xmm_label(ϕ(dst), label);
     }
 
@@ -186,6 +187,7 @@ impl Generator for AmdComplexGenerator {
         self.last_load = self.amd.a.ip();
         let label = format!("_const_{}_", idx);
         // self.amd.vbroadcastsd_label(ϕ(dst), label.as_str());
+        self.xor(ϕ(dst), ϕ(dst), ϕ(dst));
         self.amd.vmovsd_xmm_label(ϕ(dst), label.as_str());
     }
 
@@ -248,7 +250,7 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn root(&mut self, dst: Reg, s1: Reg) {
-        todo!();
+        println!("complex root is not implemented");
         // uniop!(self, vsqrtsd, dst, s1);
     }
 
