@@ -192,10 +192,12 @@ impl Config {
     }
 
     pub fn count_scratch(&self) -> u8 {
-        if self.is_complex() {
-            (self.available_registers() - 6) / 2
-        } else {
+        if !self.is_complex() {
             self.available_registers() - 2
+        } else if self.fast_complex() {
+            self.available_registers() - 4
+        } else {
+            (self.available_registers() - 6) / 2
         }
     }
 

@@ -155,18 +155,12 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
-        self.amd.vmovmskpd(Amd::RAX, ϕ(cond));
-        self.amd.and_imm(Amd::RAX, 3);
+        self.amd.vucomisd(ϕ(cond), ϕ(cond));
 
-        if !is_else {
-            self.amd.cmp_imm(Amd::RAX, 3);
-        }
-
-        self.amd.jz(label);
-
-        if !self.config.simd_branch() {
-            self.amd.or(Amd::RAX, Amd::RAX);
-            self.amd.jnz("@epilogue");
+        if is_else {
+            self.amd.jpo(label);
+        } else {
+            self.amd.jpe(label);
         }
     }
 
@@ -243,16 +237,19 @@ impl Generator for AmdComplexGenerator {
 
     fn neg(&mut self, dst: Reg, s1: Reg) {
         self.load_const_by_name(Reg::Temp, "_minus_zero_");
+        self.amd.vunpckldd(ϕ(Reg::Temp), ϕ(Reg::Temp), ϕ(Reg::Temp));
         self.xor(dst, s1, Reg::Temp);
     }
 
     fn abs(&mut self, dst: Reg, s1: Reg) {
         self.load_const_by_name(Reg::Temp, "_minus_zero_");
+        self.amd.vunpckldd(ϕ(Reg::Temp), ϕ(Reg::Temp), ϕ(Reg::Temp));
         self.andnot(dst, Reg::Temp, s1);
     }
 
     fn root(&mut self, dst: Reg, s1: Reg) {
-        uniop!(self, vsqrtsd, dst, s1);
+        todo!();
+        // uniop!(self, vsqrtsd, dst, s1);
     }
 
     fn real_root(&mut self, dst: Reg, s1: Reg) {
@@ -260,10 +257,14 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
+        self.load_const_by_name(Reg::Temp, "_one_");
+        self.divide(dst, Reg::Temp, s1);
+        /*
         self.conjugate(dst, s1);
         self.amd.vmuldd(T1, ϕ(s1), ϕ(s1));
         self.amd.vhadddd(T1, T1, T1);
         self.amd.vdivdd(ϕ(dst), ϕ(dst), T1);
+        */
     }
 
     fn half(&mut self, dst: Reg, s1: Reg) {
@@ -400,6 +401,7 @@ impl Generator for AmdComplexGenerator {
 
     fn not(&mut self, dst: Reg, s1: Reg) {
         self.load_const_by_name(Reg::Temp, "_all_ones_");
+        self.amd.vunpckldd(ϕ(Reg::Temp), ϕ(Reg::Temp), ϕ(Reg::Temp));
         self.xor(dst, s1, Reg::Temp);
     }
 
@@ -467,6 +469,9 @@ impl Generator for AmdComplexGenerator {
         if num_args == 2 {
             self.save_stack(Reg::Right, 4);
         }
+
+        // loading the imaginary part of the argument into xmm1
+        self.amd.vunpckhdd(1, 0, 0);
 
         self.vzeroupper();
 
