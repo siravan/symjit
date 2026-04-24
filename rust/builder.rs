@@ -90,6 +90,10 @@ impl Builder {
     pub fn add_binary(&mut self, op: &str, left: Node, right: Node) -> Result<Node> {
         if op == "power" {
             if let Some(val) = right.as_int_const() {
+                if let Some(left) = left.as_const() {
+                    return self.create_const(left.powi(val));
+                }
+
                 match val {
                     0 => return self.create_const(1.0),
                     1 => return Ok(left),
