@@ -55,27 +55,27 @@ impl ArmGenerator {
     }
 
     fn load_d_from_mem(&mut self, d: u8, base: u8, idx: u32) {
-        load_d_from_mem(self.a, d, base, idx);
+        load_d_from_mem(&mut self.a, d, base, idx);
     }
 
     fn save_d_to_mem(&mut self, d: u8, base: u8, idx: u32) {
-        save_d_to_mem(self.a, d, base, idx);
+        save_d_to_mem(&mut self.a, d, base, idx);
     }
 
     fn load_q_from_mem(&mut self, d: u8, base: u8, mut idx: u32) {
-        load_q_from_mem(self.a, d, base, idx / 2);
+        load_q_from_mem(&mut self.a, d, base, idx / 2);
     }
 
     fn save_q_to_mem(&mut self, d: u8, base: u8, mut idx: u32) {
-        save_q_to_mem(self.a, d, base, idx / 2);
+        save_q_to_mem(&mut self.a, d, base, idx / 2);
     }
 
     fn load_x_from_mem(&mut self, r: u8, base: u8, idx: u32) {
-        load_x_from_mem(self.a, r, base, idx);
+        load_x_from_mem(&mut self.a, r, base, idx);
     }
 
     fn load_x_from_label(&mut self, dst: u8, label: &str) {
-        load_x_from_label(self.a, dst, label);
+        load_x_from_label(&mut self.a, dst, label);
     }
 
     fn sub_stack(&mut self, size: u32) {
