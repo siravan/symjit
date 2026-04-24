@@ -55,84 +55,27 @@ impl ArmGenerator {
     }
 
     fn load_d_from_mem(&mut self, d: u8, base: u8, idx: u32) {
-        if idx < 4096 {
-            self.emit(arm! {ldr d(d), [x(base), #8*idx]});
-        } else if idx < 65536 {
-            self.emit(arm! {movz x(SCRATCH1), #idx});
-            self.emit(arm! {ldr d(d), [x(base), x(SCRATCH1), lsl #3]});
-        } else {
-            self.emit(arm! {movz x(SCRATCH1), #idx & 0xffff});
-            self.emit(arm! {movk_lsl16 x(SCRATCH1), #idx >> 16});
-            self.emit(arm! {ldr d(d), [x(base), x(SCRATCH1), lsl #3]});
-        }
+        load_d_from_mem(self.a, d, base, idx);
     }
 
     fn save_d_to_mem(&mut self, d: u8, base: u8, idx: u32) {
-        if idx < 4096 {
-            self.emit(arm! {str d(d), [x(base), #8*idx]});
-        } else if idx < 65536 {
-            self.emit(arm! {movz x(SCRATCH1), #idx});
-            self.emit(arm! {str x`d(d), [x(base), x(SCRATCH1), lsl #3]});
-        } else {
-            self.emit(arm! {movz x(SCRATCH1), #idx & 0xffff});
-            self.emit(arm! {movk_lsl16 x(SCRATCH1), #idx >> 16});
-            self.emit(arm! {str d(d), [x(base), x(SCRATCH1), lsl #3]});
-        }
+        save_d_to_mem(self.a, d, base, idx);
     }
 
     fn load_q_from_mem(&mut self, d: u8, base: u8, mut idx: u32) {
-        idx /= 2;
-        if idx < 4096 {
-            self.emit(arm! {ldr q(d), [x(base), #16*idx]});
-        } else if idx < 65536 {
-            self.emit(arm! {movz x(SCRATCH1), #idx});
-            self.emit(arm! {ldr q(d), [x(base), x(SCRATCH1), lsl #4]});
-        } else {
-            self.emit(arm! {movz x(SCRATCH1), #idx & 0xffff});
-            self.emit(arm! {movk_lsl16 x(SCRATCH1), #idx >> 16});
-            self.emit(arm! {ldr q(d), [x(base), x(SCRATCH1), lsl #4]});
-        }
+        load_q_from_mem(self.a, d, base, idx / 2);
     }
 
     fn save_q_to_mem(&mut self, d: u8, base: u8, mut idx: u32) {
-        idx /= 2;
-        if idx < 4096 {
-            self.emit(arm! {str q(d), [x(base), #16*idx]});
-        } else if idx < 65536 {
-            self.emit(arm! {movz x(SCRATCH1), #idx});
-            self.emit(arm! {str q(d), [x(base), x(SCRATCH1), lsl #4]});
-        } else {
-            self.emit(arm! {movz x(SCRATCH1), #idx & 0xffff});
-            self.emit(arm! {movk_lsl16 x(SCRATCH1), #idx >> 16});
-            self.emit(arm! {str q(d), [x(base), x(SCRATCH1), lsl #4]});
-        }
+        save_q_to_mem(self.a, d, base, idx / 2);
     }
 
     fn load_x_from_mem(&mut self, r: u8, base: u8, idx: u32) {
-        assert!(r != 9);
-
-        if idx < 4096 {
-            self.emit(arm! {ldr x(r), [x(base), #8*idx]});
-        } else if idx < 65536 {
-            self.emit(arm! {movz x(SCRATCH1), #idx});
-            self.emit(arm! {ldr x(r), [x(base), x(SCRATCH1), lsl #3]});
-        } else {
-            self.emit(arm! {movz x(SCRATCH1), #idx & 0xffff});
-            self.emit(arm! {movk_lsl16 x(SCRATCH1), #idx >> 16});
-            self.emit(arm! {ldr x(r), [x(base), x(SCRATCH1), lsl #3]});
-        }
+        load_x_from_mem(self.a, r, base, idx);
     }
 
     fn load_x_from_label(&mut self, dst: u8, label: &str) {
-        self.jump_abs(label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
-            arm! {adrp x(9), label((offset - pg as i32) as u32)}
-        });
-
-        self.jump_abs(
-            label,
-            dst as u32,
-            |offset, dst| arm! {ldr x(dst), [x(9), #offset & 0x0fff]},
-        );
+        load_x_from_label(self.a, dst, label);
     }
 
     fn sub_stack(&mut self, size: u32) {
