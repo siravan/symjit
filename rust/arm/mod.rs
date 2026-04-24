@@ -25,7 +25,7 @@ mod scalar;
 mod vector;
 
 pub use scalar::ArmGenerator;
-pub use vector::AmdSimdGenerator;
+pub use vector::ArmSimdGenerator;
 
 fn ϕ(r: Reg) -> u8 {
     match r {

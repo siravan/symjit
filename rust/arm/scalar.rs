@@ -1,11 +1,12 @@
+
+use anyhow::{anyhow, Result};
+
+use crate::assembler::{Assembler, Jumper};
 use crate::code::Func;
 use crate::config::{Config, SPILL_AREA};
 use crate::generator::Generator;
-use crate::utils::align_stack;
-use crate::utils::{is_external_func, reg, DataType, Reg};
-use anyhow::Result;
+use crate::utils::{align_stack, is_external_func, reg, Reg};
 
-use super::asm::Arm;
 use super::*;
 
 const REG_SIZE: u32 = 8;
@@ -16,24 +17,6 @@ pub struct ArmGenerator {
     config: Config,
 }
 
-fn ϕ(r: Reg) -> u8 {
-    match r {
-        Reg::Ret => 0,  // d0
-        Reg::Temp => 1, // d1
-        Reg::Left => 0,
-        Reg::Right => 1,
-        Reg::Gen(dst) => {
-            if dst < 6 {
-                dst + 2 // d2-d7
-            } else if dst < 22 {
-                dst + 10 // d16-d31
-            } else {
-                dst - 14 // d8-d15 (non-volatile)
-            }
-        }
-        Reg::Static(..) => panic!("passing static registers to codegen"),
-    }
-}
 
 impl ArmGenerator {
     pub fn new(config: Config) -> ArmGenerator {
@@ -89,7 +72,7 @@ impl ArmGenerator {
             self.emit(arm! {str d(d), [x(base), #8*idx]});
         } else if idx < 65536 {
             self.emit(arm! {movz x(SCRATCH1), #idx});
-            self.emit(arm! {str d(d), [x(base), x(SCRATCH1), lsl #3]});
+            self.emit(arm! {str x`d(d), [x(base), x(SCRATCH1), lsl #3]});
         } else {
             self.emit(arm! {movz x(SCRATCH1), #idx & 0xffff});
             self.emit(arm! {movk_lsl16 x(SCRATCH1), #idx >> 16});
@@ -168,7 +151,7 @@ impl ArmGenerator {
 
     fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
         self.load_x_from_label(0, &format!("_env_{}_", op));
-        let ofs = SPILL_AREA as u32 * self.reg_size();
+        let ofs = SPILL_AREA as u32 * REG_SIZE;
         self.emit(arm! {add x(1), x(31), #ofs});
         self.emit(arm! {movz x(2), #num_args});
         self.emit(arm! {add x(3), x(SP), #0});
@@ -645,10 +628,10 @@ impl Generator for ArmGenerator {
         self.emit(arm! {str lr, [sp, #0]});
         self.emit(arm! {str x(MEM), [sp, #8]});
 
-        let frame_size = align_stack((count_states + count_obs) as u32 * self.reg_size());
+        let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
         self.sub_stack(frame_size);
         self.emit(arm! {mov x(MEM), sp});
-        let stack_size = align_stack(cap as u32 * self.reg_size());
+        let stack_size = align_stack(cap as u32 * REG_SIZE);
         self.sub_stack(stack_size);
 
         for i in 0..count_states {
@@ -659,8 +642,8 @@ impl Generator for ArmGenerator {
     fn epilogue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize, idx_ret: i32) {
         self.emit(arm! {ldr d(0), [x(MEM), #8*idx_ret]});
 
-        let total_size = align_stack(cap as u32 * self.reg_size())
-            + align_stack((count_states + count_obs) as u32 * self.reg_size());
+        let total_size = align_stack(cap as u32 * REG_SIZE)
+            + align_stack((count_states + count_obs) as u32 * REG_SIZE);
         self.add_stack(total_size);
 
         self.emit(arm! {ldr x(MEM), [sp, #8]});
@@ -697,7 +680,7 @@ impl Generator for ArmGenerator {
         self.emit(arm! {tst x(STATES), x(STATES)});
         self.jump("@main", 0, |offset, _| arm! {b.eq label(offset)});
 
-        let frame_size = align_stack((count_states + count_obs) as u32 * self.reg_size());
+        let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
         self.sub_stack(frame_size);
         self.emit(arm! {mov x(MEM), sp});
 
@@ -711,7 +694,7 @@ impl Generator for ArmGenerator {
 
         self.set_label("@main");
 
-        let stack_size = align_stack(cap as u32 * self.reg_size());
+        let stack_size = align_stack(cap as u32 * REG_SIZE);
         self.sub_stack(stack_size);
     }
 
@@ -722,7 +705,7 @@ impl Generator for ArmGenerator {
         count_obs: usize,
         _count_params: usize,
     ) {
-        let stack_size = align_stack(cap as u32 * self.reg_size());
+        let stack_size = align_stack(cap as u32 * REG_SIZE);
         self.add_stack(stack_size);
 
         self.emit(arm! {tst x(STATES), x(STATES)});
@@ -735,7 +718,7 @@ impl Generator for ArmGenerator {
             self.emit(arm! {str d(0), [x(SCRATCH2), x(IDX), lsl #3]});
         }
 
-        let frame_size = align_stack((count_states + count_obs) as u32 * self.reg_size());
+        let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
         self.add_stack(frame_size);
 
         self.set_label("@done");
