@@ -472,7 +472,7 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn add_func(&mut self, op: &str, f: Func) {
-        add_funcs(&mut self.a, op, f);
+        add_func(&mut self.a, op, f);
     }
 
     fn call(&mut self, op: &str, num_args: usize) -> Result<()> {

@@ -1,12 +1,9 @@
 #[macro_use]
 mod macros;
 
-use anyhow::{anyhow, Result};
-
-use crate::assembler::{Assembler, Jumper};
+use crate::assembler::Assembler;
 use crate::code::Func;
-use crate::config::{Config, SPILL_AREA};
-use crate::utils::{align_stack, is_external_func, reg, Reg};
+use crate::utils::Reg;
 
 const SP: u8 = 31;
 
@@ -75,7 +72,7 @@ fn save_d_to_mem(a: &mut Assembler, d: u8, base: u8, idx: u32) {
     }
 }
 
-fn load_q_from_mem(a: &mut Assembler, d: u8, base: u8, mut idx: u32) {
+fn load_q_from_mem(a: &mut Assembler, d: u8, base: u8, idx: u32) {
     if idx < 4096 {
         emit(a, arm! {ldr q(d), [x(base), #16*idx]});
     } else if idx < 65536 {
@@ -88,7 +85,7 @@ fn load_q_from_mem(a: &mut Assembler, d: u8, base: u8, mut idx: u32) {
     }
 }
 
-fn save_q_to_mem(a: &mut Assembler, d: u8, base: u8, mut idx: u32) {
+fn save_q_to_mem(a: &mut Assembler, d: u8, base: u8, idx: u32) {
     if idx < 4096 {
         emit(a, arm! {str q(d), [x(base), #16*idx]});
     } else if idx < 65536 {
