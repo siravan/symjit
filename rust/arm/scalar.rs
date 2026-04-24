@@ -62,11 +62,11 @@ impl ArmGenerator {
         save_d_to_mem(&mut self.a, d, base, idx);
     }
 
-    fn load_q_from_mem(&mut self, d: u8, base: u8, mut idx: u32) {
+    fn load_q_from_mem(&mut self, d: u8, base: u8, idx: u32) {
         load_q_from_mem(&mut self.a, d, base, idx / 2);
     }
 
-    fn save_q_to_mem(&mut self, d: u8, base: u8, mut idx: u32) {
+    fn save_q_to_mem(&mut self, d: u8, base: u8, idx: u32) {
         save_q_to_mem(&mut self.a, d, base, idx / 2);
     }
 

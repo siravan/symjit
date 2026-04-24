@@ -47,7 +47,7 @@ fn emit(a: &mut Assembler, w: u32) {
 }
 
 fn load_long(a: &mut Assembler, reg: u8, label: &str) {
-    let data = ((a.ip() & 0xfffff000) | reg) as u32;
+    let data = (a.ip() & 0xfffff000) as u32 | reg as u32;
 
     a.jump_abs(label, data, |offset, data| {
         let pg = (data & 0xfffff000) as i32;
