@@ -33,10 +33,10 @@ def process_argv():
         dest="fastmath",
     )
     parser.add_argument(
-        "--permissive",
-        help="permit using SIMD instructions for scalar ops",
+        "--fast_complex",
+        help="use SIMD instructions for scalar complex functions",
         action="store_true",
-        dest="permissive",
+        dest="fast_complex",
     )
     parser.add_argument("--dtype", help="data type", default="float64")
     parser.add_argument(
