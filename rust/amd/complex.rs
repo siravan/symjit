@@ -247,8 +247,8 @@ impl Generator for AmdComplexGenerator {
         self.amd.vmuldd(T1, ϕ(s1), ϕ(s1));
         self.amd.vhadddd(T1, T1, T1);
         self.amd.vsqrtsd(ϕ(s1), T1);
-        self.vxorpd(T1, T1, T1);
-        self.vunpckldd(ϕ(s1), ϕ(s1), T1);
+        self.amd.vxorpd(T1, T1, T1);
+        self.amd.vunpckldd(ϕ(s1), ϕ(s1), T1);
     }
 
     fn root(&mut self, dst: Reg, s1: Reg) {
@@ -284,14 +284,19 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
+        /*
         self.load_const_by_name(Reg::Temp, "_one_");
         self.divide(dst, Reg::Temp, s1);
-        /*
-        self.conjugate(dst, s1);
+        */
+
+        self.amd.vshufdd(T1, ϕ(s1), ϕ(s1), 1);
+        self.amd.vxorpd(T2, T2, T2);
+        self.amd.vaddsubdd(T1, T2, T1);
+        self.amd.vshufdd(T2, T1, T1, 1);
+
         self.amd.vmuldd(T1, ϕ(s1), ϕ(s1));
         self.amd.vhadddd(T1, T1, T1);
-        self.amd.vdivdd(ϕ(dst), ϕ(dst), T1);
-        */
+        self.amd.vdivdd(ϕ(dst), T2, T1);
     }
 
     fn half(&mut self, dst: Reg, s1: Reg) {
