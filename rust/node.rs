@@ -429,7 +429,7 @@ impl Node {
         Err(anyhow!("cannot fuse!"))
     }
 
-    fn is_leaf_const(&self) -> bool {
+    pub fn is_leaf_const(&self) -> bool {
         matches!(self, Node::Const { .. })
     }
 
