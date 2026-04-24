@@ -46,6 +46,22 @@ fn emit(a: &mut Assembler, w: u32) {
     a.append_word(w);
 }
 
+fn load_long(a: &mut Assembler, reg: u8, label: &str) {
+    let data = ((a.ip() & 0xfffff000) | reg) as u32;
+
+    a.jump_abs(label, data, |offset, data| {
+        let pg = (data & 0xfffff000) as i32;
+        let reg = (data & 0x0f) as u8;
+        arm! {adrp x(reg), label((offset - pg) as u32)}
+    });
+
+    a.jump_abs(
+        label,
+        reg as u32,
+        |offset, reg| arm! {ldr x(reg), [x(reg), #offset & 0x0fff]},
+    );
+}
+
 fn load_d_from_mem(a: &mut Assembler, d: u8, base: u8, idx: u32) {
     if idx < 4096 {
         emit(a, arm! {ldr d(d), [x(base), #8*idx]});
