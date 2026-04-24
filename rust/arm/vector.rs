@@ -51,31 +51,31 @@ impl ArmSimdGenerator {
         self.a.append_word(w);
     }
 
-    fn load_d_from_mem(&mut self.a, d: u8, base: u8, idx: u32) {
+    fn load_d_from_mem(&mut self, d: u8, base: u8, idx: u32) {
         load_d_from_mem(&mut self.a, d, base, idx);
     }
 
-    fn save_d_to_mem(&mut self.a, d: u8, base: u8, idx: u32) {
+    fn save_d_to_mem(&mut self, d: u8, base: u8, idx: u32) {
         save_d_to_mem(&mut self.a, d, base, idx);
     }
 
-    fn load_q_from_mem(&mut self.a, d: u8, base: u8, idx: u32) {
+    fn load_q_from_mem(&mut self, d: u8, base: u8, idx: u32) {
          load_q_from_mem(&mut self.a, d, base, idx);
     }
 
-    fn save_q_to_mem(&mut self.a, d: u8, base: u8, idx: u32) {
+    fn save_q_to_mem(&mut self, d: u8, base: u8, idx: u32) {
         save_q_to_mem(&mut self.a, d, base, idx);
     }
 
-    fn load_x_from_mem(&mut self.a, r: u8, base: u8, idx: u32) {
+    fn load_x_from_mem(&mut self, r: u8, base: u8, idx: u32) {
         load_x_from_mem(&mut self.a, r, base, idx);
     }
 
-    fn load_x_from_label(&mut self.a, dst: u8, label: &str) {
+    fn load_x_from_label(&mut self, dst: u8, label: &str) {
         load_x_from_label(&mut self.a, dst, label);
     }
 
-    fn call_external(&mut self.a, op: &str, num_args: usize) -> Result<()> {
+    fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
         let label = format!("_simd_{}_", op);
         self.jump_abs(&label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
             arm! {adrp x(CALL), label((offset - pg as i32) as u32)}
