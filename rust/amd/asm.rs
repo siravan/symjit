@@ -1180,6 +1180,12 @@ impl Amd {
         self.jump(label);
     }
 
+    pub fn js(&mut self, label: &str) {
+        // jump if sign = 1
+        self.append_bytes(&[0x0f, 0x88]);
+        self.jump(label);
+    }
+
     pub fn nop(&mut self) {
         self.append_byte(0x90);
     }

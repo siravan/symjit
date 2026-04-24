@@ -255,23 +255,7 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn root(&mut self, dst: Reg, s1: Reg) {
-        self.fmov(Reg::Ret, s1);
-        self.amd.vunpckhdd(1, 0, 0);
-        self.vzeroupper();
-
-        if cfg!(target_family = "windows") {
-            self.amd.lea_mem(Amd::R8, STACK, 32);
-        } else {
-            self.amd.lea_mem(Amd::RDI, STACK, 32);
-        }
-
-        self.amd.call_indirect("_root_");
-        self.load_stack(Reg::Ret, 4);
-
-        /*
-        self.amd.vxorpd(T1, T1, T1);
-        self.amd.vcmpltsd(T1, T1, ϕ(s1));
-        self.amd.vmovdd_mem_xmm(STACK, 0, T1);
+        self.amd.vmovdd_mem_xmm(STACK, 0, ϕ(s1));
 
         self.amd.vmuldd(T1, ϕ(s1), ϕ(s1));
         self.amd.vhadddd(T1, T1, T1);
@@ -288,15 +272,14 @@ impl Generator for AmdComplexGenerator {
         self.amd.vdivsd(T2, T2, T1);
         self.amd.vdivsd(T2, T2, T0);
 
-        self.amd.vunpckldd(ϕ(dst), T1, T2);
+        self.amd.vunpckldd(ϕ(dst), T2, T1);
 
         let label = format!(".Y{}", self.amd.ip());
         self.amd.mov_reg_mem(Amd::RAX, STACK, 0);
         self.amd.or(Amd::RAX, Amd::RAX);
-        self.amd.jz(&label);
+        self.amd.js(&label);
         self.amd.vshufdd(ϕ(dst), ϕ(dst), ϕ(dst), 1);
         self.amd.set_label(&label);
-        */
     }
 
     fn real_root(&mut self, dst: Reg, s1: Reg) {
