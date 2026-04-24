@@ -228,8 +228,8 @@ impl Builder {
         let node = match op {
             "times" if left.is_const(-1.0) => self.create_unary("neg", right)?,
             "times" if right.is_const(-1.0) => self.create_unary("neg", left)?,
-            "times" if left.is_const(1.0) => right,
-            "times" if right.is_const(1.0) => left,
+            "times" if left.is_const(1.0) && !right.is_leaf_const() => right,
+            "times" if right.is_const(1.0) && !left.is_leaf_const() => left,
             "times" if left.is_unary("recip") => {
                 self.create_binary("divide", right, left.arg().unwrap())?
             }
