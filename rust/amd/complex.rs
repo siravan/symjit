@@ -274,12 +274,12 @@ impl Generator for AmdComplexGenerator {
 
         self.amd.vunpckldd(ϕ(dst), T2, T1);
 
-        let label = format!(".Y{}", self.amd.ip());
+        let label = format!(".Y{}", self.amd.a.ip());
         self.amd.mov_reg_mem(Amd::RAX, STACK, 0);
         self.amd.or(Amd::RAX, Amd::RAX);
         self.amd.js(&label);
         self.amd.vshufdd(ϕ(dst), ϕ(dst), ϕ(dst), 1);
-        self.amd.set_label(&label);
+        self.set_label(&label);
     }
 
     fn real_root(&mut self, dst: Reg, s1: Reg) {
