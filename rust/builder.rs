@@ -229,7 +229,9 @@ impl Builder {
             "times" if left.is_const(-1.0) => self.create_unary("neg", right)?,
             "times" if right.is_const(-1.0) => self.create_unary("neg", left)?,
             "times" if left.is_const(1.0) && !right.is_leaf_const() => right,
+            "times" if left.is_const(1.0) && right.is_leaf_const() => self.create_unary("real", right)?,
             "times" if right.is_const(1.0) && !left.is_leaf_const() => left,
+            "times" if right.is_const(1.0) && left.is_leaf_const() => self.create_unary("real", left)?,
             "times" if left.is_unary("recip") => {
                 self.create_binary("divide", right, left.arg().unwrap())?
             }
