@@ -88,7 +88,7 @@ impl Application {
 
         let config = prog.config().clone();
 
-        if config.is_complex() && !config.fast_complex()) {
+        if config.is_complex() && !config.fast_complex() {
             mir = Complexifier::new(&reals, config.clone()).complexify(&mir)?;
         }
 

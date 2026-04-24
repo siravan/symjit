@@ -113,11 +113,6 @@ impl AmdComplexGenerator {
     fn predefined_consts(&mut self) {
         self.align();
         predefined_consts(&mut self.amd);
-
-        amd.a.set_label("_root_");
-        let p = VirtualTable::from_str("cplx_root").unwrap().func_ptr();
-        amd.a.append_quad(p);
-
     }
 }
 
@@ -249,9 +244,11 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn abs(&mut self, dst: Reg, s1: Reg) {
-        self.load_const_by_name(Reg::Temp, "_minus_zero_");
-        self.amd.vunpckldd(ϕ(Reg::Temp), ϕ(Reg::Temp), ϕ(Reg::Temp));
-        self.andnot(dst, Reg::Temp, s1);
+        self.amd.vmuldd(T1, ϕ(s1), ϕ(s1));
+        self.amd.vhadddd(T1, T1, T1);
+        self.amd.vsqrtsd(ϕ(s1), T1);
+        self.vxorpd(T1, T1, T1);
+        self.vunpckldd(ϕ(s1), ϕ(s1), T1);
     }
 
     fn root(&mut self, dst: Reg, s1: Reg) {
