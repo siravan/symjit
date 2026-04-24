@@ -3,12 +3,14 @@ use crate::config::{Config, SPILL_AREA};
 use crate::generator::Generator;
 use crate::utils::align_stack;
 use crate::utils::{is_external_func, reg, DataType, Reg};
+use crate::code::VirtualTable;
 use anyhow::Result;
 
 use super::asm::{Amd, RoundingMode};
 use super::*;
 
 const REG_SIZE: u32 = 8;
+const T0: u8 = 1;   // Reg::Temp
 const T1: u8 = 2;
 const T2: u8 = 3;
 
@@ -111,6 +113,11 @@ impl AmdComplexGenerator {
     fn predefined_consts(&mut self) {
         self.align();
         predefined_consts(&mut self.amd);
+
+        amd.a.set_label("_root_");
+        let p = VirtualTable::from_str("cplx_root").unwrap().func_ptr();
+        amd.a.append_quad(p);
+
     }
 }
 
@@ -248,8 +255,48 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn root(&mut self, dst: Reg, s1: Reg) {
-        println!("complex root is not implemented");
-        // uniop!(self, vsqrtsd, dst, s1);
+        self.fmov(Reg::Ret, s1);
+        self.amd.vunpckhdd(1, 0, 0);
+        self.vzeroupper();
+
+        if cfg!(target_family = "windows") {
+            self.amd.lea_mem(Amd::R8, STACK, 32);
+        } else {
+            self.amd.lea_mem(Amd::RDI, STACK, 32);
+        }
+
+        self.amd.call_indirect("_root_");
+        self.load_stack(Reg::Ret, 4);
+
+        /*
+        self.amd.vxorpd(T1, T1, T1);
+        self.amd.vcmpltsd(T1, T1, ϕ(s1));
+        self.amd.vmovdd_mem_xmm(STACK, 0, T1);
+
+        self.amd.vmuldd(T1, ϕ(s1), ϕ(s1));
+        self.amd.vhadddd(T1, T1, T1);
+
+        self.amd.vsqrtsd(T1, T1);
+        self.amd.vmovsd_xmm_label(T0, "_minus_zero_");
+        self.amd.vandnpd(T2, T0, ϕ(s1));
+        self.amd.vaddsd(T1, T1, T2);
+        self.amd.vmovsd_xmm_label(T0, "_two_");
+        self.amd.vdivsd(T1, T1, T0);
+        self.amd.vsqrtsd(T1, T1);
+
+        self.amd.vunpckhdd(T2, ϕ(s1), ϕ(s1));
+        self.amd.vdivsd(T2, T2, T1);
+        self.amd.vdivsd(T2, T2, T0);
+
+        self.amd.vunpckldd(ϕ(dst), T1, T2);
+
+        let label = format!(".Y{}", self.amd.ip());
+        self.amd.mov_reg_mem(Amd::RAX, STACK, 0);
+        self.amd.or(Amd::RAX, Amd::RAX);
+        self.amd.jz(&label);
+        self.amd.vshufdd(ϕ(dst), ϕ(dst), ϕ(dst), 1);
+        self.amd.set_label(&label);
+        */
     }
 
     fn real_root(&mut self, dst: Reg, s1: Reg) {

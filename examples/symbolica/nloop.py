@@ -44,7 +44,7 @@ t_start = time.time()
 evaluator.compile("test", "./test.cpp", "./test.so", "complex", inline_asm="default")
 print(f"completed in {time.time() - t_start:.1f} s.")
 
-print(symjit_f.dumps("bytecode"))
+# print(symjit_f.dumps("bytecode"))
 symjit_f.save(f"loop.sjb")
 
 N_SAMPLES = 1000
