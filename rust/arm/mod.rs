@@ -6,7 +6,6 @@ use anyhow::{anyhow, Result};
 use crate::assembler::{Assembler, Jumper};
 use crate::code::Func;
 use crate::config::{Config, SPILL_AREA};
-use crate::generator::Generator;
 use crate::utils::{align_stack, is_external_func, reg, Reg};
 
 const SP: u8 = 31;
@@ -118,7 +117,7 @@ fn load_x_from_mem(a: &mut Assembler, r: u8, base: u8, idx: u32) {
 }
 
 fn load_x_from_label(a: &mut Assembler, dst: u8, label: &str) {
-    a.jump_abs(label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
+    a.jump_abs(label, (a.ip() & 0xfffff000) as u32, |offset, pg| {
         arm! {adrp x(9), label((offset - pg as i32) as u32)}
     });
 
@@ -127,4 +126,38 @@ fn load_x_from_label(a: &mut Assembler, dst: u8, label: &str) {
         dst as u32,
         |offset, dst| arm! {ldr x(dst), [x(9), #offset & 0x0fff]},
     );
+}
+
+fn add_consts(a: &mut Assembler, consts: &[f64]) {
+    for (idx, val) in consts.iter().enumerate() {
+        let label = format!("_const_{}_", idx);
+        a.set_label(label.as_str());
+        a.append_quad((*val).to_bits());
+    }
+}
+
+fn add_func(a: &mut Assembler, op: &str, f: Func) {
+    if let Func::Slice {
+        f_scalar,
+        f_simd,
+        env,
+        ..
+    } = f
+    {
+        let label = format!("_func_{}_", op);
+        a.set_label(label.as_str());
+        a.append_quad(f_scalar as u64);
+
+        let label = format!("_simd_{}_", op);
+        a.set_label(label.as_str());
+        a.append_quad(f_simd as u64);
+
+        let label = format!("_env_{}_", op);
+        a.set_label(label.as_str());
+        a.append_quad(env as u64);
+    } else {
+        let label = format!("_func_{}_", op);
+        a.set_label(label.as_str());
+        a.append_quad(f.func_ptr());
+    }
 }

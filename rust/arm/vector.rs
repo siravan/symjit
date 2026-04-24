@@ -468,37 +468,11 @@ impl Generator for ArmSimdGenerator {
 
     fn add_consts(&mut self, consts: &[f64]) {
         self.align();
-        for (idx, val) in consts.iter().enumerate() {
-            let label = format!("_const_{}_", idx);
-            self.set_label(label.as_str());
-            self.append_quad((*val).to_bits());
-        }
+        add_consts(&mut self.a, consts)
     }
 
     fn add_func(&mut self, op: &str, f: Func) {
-        if let Func::Slice {
-            f_scalar,
-            f_simd,
-            env,
-            ..
-        } = f
-        {
-            let label = format!("_func_{}_", op);
-            self.set_label(label.as_str());
-            self.append_quad(f_scalar as u64);
-
-            let label = format!("_simd_{}_", op);
-            self.set_label(label.as_str());
-            self.append_quad(f_simd as u64);
-
-            let label = format!("_env_{}_", op);
-            self.set_label(label.as_str());
-            self.append_quad(env as u64);
-        } else {
-            let label = format!("_func_{}_", op);
-            self.set_label(label.as_str());
-            self.append_quad(f.func_ptr());
-        }
+        add_funcs(&mut self.a, op, f);
     }
 
     fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
