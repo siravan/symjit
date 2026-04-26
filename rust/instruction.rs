@@ -38,7 +38,8 @@ pub enum Instruction {
     Powf(Slot, Slot, Slot, bool),
     /// `Fun(o, s, a)` means `o = s(a)`, where `s` is assumed to
     /// be a built-in function such as `sin`.
-    Fun(Slot, BuiltinSymbol, Slot, bool),
+    //Fun(Slot, BuiltinSymbol, Slot, bool),
+    Fun(Slot, String, Vec<Slot>, bool),
     /// `ExternalFun(o, s, a,...)` means `o = s(a, ...)`, where `s` is an external function.
     ExternalFun(Slot, String, Vec<Slot>),
     /// `Assign(o, v)` means `o = v`.

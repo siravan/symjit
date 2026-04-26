@@ -478,7 +478,7 @@ impl Composer for Translator {
         Ok(())
     }
 
-    fn append_fun(
+    fn append_fun_v1(
         &mut self,
         lhs: &Slot,
         fun: &BuiltinSymbol,
@@ -487,7 +487,26 @@ impl Composer for Translator {
     ) -> Result<()> {
         let arg = self.consume(arg)?;
         let lhs = self.produce(lhs)?;
-        self.ssa.push(Instruction::Fun(lhs, *fun, arg, is_real));
+
+        let op = match fun.0 {
+            2 => "symbolica_exp",
+            3 => "symbolica_ln",
+            4 => "symbolica_sin",
+            5 => "symbolica_cos",
+            6 => "symbolica_root",
+            7 => "symbolica_conjugate",
+            8 => "symbolica_abs",
+            _ => return Err(anyhow!("Builtin function {} is not defined.", fun.0)),
+        };
+
+        self.append_fun(&lhs, op, &[arg], is_real)
+    }
+
+    fn append_fun(&mut self, lhs: &Slot, fun: &str, args: &[Slot], is_real: bool) -> Result<()> {
+        let args = self.consume_list(args)?;
+        let lhs = self.produce(lhs)?;
+        self.ssa
+            .push(Instruction::Fun(lhs, fun.to_string(), args, is_real));
         Ok(())
     }
 
@@ -566,8 +585,8 @@ impl Translator {
                     self.append_powf(lhs, arg, p, *is_real)?
                 }
                 Instruction::Assign(lhs, rhs) => self.append_assign(lhs, rhs)?,
-                Instruction::Fun(lhs, fun, arg, is_real) => {
-                    self.append_fun(lhs, fun, arg, *is_real)?
+                Instruction::Fun(lhs, fun, args, is_real) => {
+                    self.append_fun(lhs, fun, args, *is_real)?
                 }
                 Instruction::Join(lhs, cond, true_val, false_val) => {
                     self.depth -= 1;
@@ -656,8 +675,8 @@ impl Translator {
                     self.translate_pow(lhs, arg, &p, *is_real)?
                 }
                 Instruction::Assign(lhs, rhs) => self.translate_assign(lhs, rhs)?,
-                Instruction::Fun(lhs, fun, arg, is_real) => {
-                    self.translate_fun(lhs, fun, arg, *is_real)?
+                Instruction::Fun(lhs, fun, args, is_real) => {
+                    self.translate_fun(lhs, fun, args, *is_real)?
                 }
                 Instruction::Join(lhs, cond, true_val, false_val) => {
                     self.translate_join(lhs, cond, true_val, false_val)?
@@ -666,7 +685,7 @@ impl Translator {
                 Instruction::IfElse(cond, id) => self.translate_ifelse(cond, *id)?,
                 Instruction::Goto(id) => self.translate_goto(*id)?,
                 Instruction::ExternalFun(lhs, op, args) => {
-                    self.translate_external_fun(lhs, op, args)?
+                    self.translate_external_fun(lhs, op, args, false)?
                 }
             }
         }
@@ -788,39 +807,42 @@ impl Translator {
         self.assign(lhs, rhs)
     }
 
-    fn translate_fun(
-        &mut self,
-        lhs: &Slot,
-        fun: &BuiltinSymbol,
-        arg: &Slot,
-        is_real: bool,
-    ) -> Result<()> {
-        let arg = self.expr(arg, is_real);
-
-        let op = match fun.0 {
-            2 => "exp",
-            3 => "ln",
-            4 => "sin",
-            5 => "cos",
-            6 => {
-                if is_real {
-                    "real_root"
-                } else {
-                    "root"
-                }
+    fn translate_fun(&mut self, lhs: &Slot, fun: &str, args: &[Slot], is_real: bool) -> Result<()> {
+        println!("..... {}", fun);
+        let op = if fun == "symbolica_root" || fun == "symbolica_sqrt" {
+            if is_real {
+                "real_root"
+            } else {
+                "root"
             }
-            7 => "conjugate",
-            8 => "abs",
-            _ => return Err(anyhow!("Builtin function {} is not defined.", fun.0)),
+        } else if fun.starts_with("symbolica_") && VirtualTable::from_str(&fun[10..]).is_ok() {
+            &fun[10..]
+        } else {
+            fun
         };
 
-        self.assign(lhs, Expr::unary(op, &arg))
+        self.translate_external_fun(lhs, op, args, is_real)
     }
 
-    fn translate_external_fun(&mut self, lhs: &Slot, op: &str, args: &[Slot]) -> Result<()> {
+    fn translate_external_fun(
+        &mut self,
+        lhs: &Slot,
+        op: &str,
+        args: &[Slot],
+        is_real: bool,
+    ) -> Result<()> {
+        println!(">>>>> {}", op);
         let n = args.len();
         assert!(n <= SLICE_CAP);
-        let args: Vec<Expr> = args.iter().map(|a| self.expr(a, false)).collect();
+
+        if let Slot::Param(idx) = lhs {
+            if is_real {
+                self.reals.insert(Loc::Param(*idx as u32));
+            }
+        }
+
+        // is this always correct? (no need for a complex op)
+        let args: Vec<Expr> = args.iter().map(|a| self.expr(a, is_real)).collect();
 
         if VirtualTable::from_str(op).is_ok() {
             if n == 1 {
