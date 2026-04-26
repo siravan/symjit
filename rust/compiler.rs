@@ -493,7 +493,7 @@ impl Composer for Translator {
             3 => "symbolica_ln",
             4 => "symbolica_sin",
             5 => "symbolica_cos",
-            6 => "symbolica_root",
+            6 => "symbolica_sqrt",
             7 => "symbolica_conjugate",
             8 => "symbolica_abs",
             _ => return Err(anyhow!("Builtin function {} is not defined.", fun.0)),
@@ -818,7 +818,6 @@ impl Translator {
         args: &[Slot],
         is_real: bool,
     ) -> Result<()> {
-        println!(">>>>> {}", op);
         let n = args.len();
         assert!(n <= SLICE_CAP);
 
@@ -828,8 +827,13 @@ impl Translator {
             }
         }
 
-        // is this always correct? (no need for a complex op)
-        let args: Vec<Expr> = args.iter().map(|a| self.expr(a, is_real)).collect();
+        let args: Vec<Expr> = if is_real {
+            args.iter()
+                .map(|a| Expr::unary("real", &self.expr(a, true)))
+                .collect()
+        } else {
+            args.iter().map(|a| self.expr(a, false)).collect()
+        };
 
         if VirtualTable::from_str(op).is_ok() {
             if n == 1 {
