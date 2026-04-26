@@ -3,6 +3,7 @@ use anyhow::{anyhow, Result};
 use std::io::{Read, Write};
 use std::sync::Arc;
 
+use crate::code::VirtualTable;
 use crate::defuns::Defuns;
 use crate::utils::Storage;
 
@@ -341,6 +342,30 @@ impl Config {
 
     pub fn is_intrinsic_binary(&self, op: &str) -> bool {
         BINARY.contains(&op)
+    }
+
+    pub fn symbolica_fun(&self, fun: &str, is_real: bool) -> String {
+        if fun == "symbolica_sqrt" {
+            if is_real {
+                "real_root".into()
+            } else {
+                "root".into()
+            }
+        } else if fun.starts_with("symbolica_") {
+            let op = &fun[10..];
+
+            if self.is_intrinsic_unary(op)
+                || self.is_intrinsic_binary(op)
+                || (!self.is_complex() && VirtualTable::from_str(op).is_ok())
+                || (self.is_complex() && VirtualTable::from_str(&format!("cplx_{}", op)).is_ok())
+            {
+                op.into()
+            } else {
+                fun.into()
+            }
+        } else {
+            fun.into()
+        }
     }
 }
 

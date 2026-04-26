@@ -22,7 +22,8 @@ pub trait Composer {
     fn append_if_else(&mut self, cond: &Slot, id: usize) -> Result<()>;
     fn append_goto(&mut self, id: usize) -> Result<()>;
     fn append_external_fun(&mut self, lhs: &Slot, op: &str, args: &[Slot]) -> Result<()>;
-    fn append_fun(
+    fn append_fun(&mut self, lhs: &Slot, fun: &str, args: &[Slot], is_real: bool) -> Result<()>;
+    fn append_fun_v1(
         &mut self,
         lhs: &Slot,
         fun: &BuiltinSymbol,
@@ -248,6 +249,59 @@ impl Transliterator {
 
         Ok(())
     }
+
+    fn append_fun_generic(
+        &mut self,
+        lhs: &Slot,
+        op: &str,
+        args: &[Slot],
+        is_real: bool,
+    ) -> Result<()> {
+        let n = args.len();
+        assert!(n <= SLICE_CAP);
+
+        // TODO: handling is_real
+
+        if VirtualTable::from_str(op).is_ok() {
+            if n == 1 {
+                self.load(reg(0), &args[0])?;
+                self.mir.setup_call_unary(reg(0));
+                self.mir.call(op, 1)?;
+                self.save(Reg::Ret, lhs)?;
+                self.ft.insert(op.to_string());
+            } else if n == 2 {
+                self.load(reg(0), &args[0])?;
+                self.load(reg(1), &args[1])?;
+                self.mir.setup_call_binary(reg(0), reg(1));
+                self.mir.call(op, 2)?;
+                self.save(Reg::Ret, lhs)?;
+                self.ft.insert(op.to_string());
+            } else {
+                return Err(anyhow!("wrong number of arguments to {:?}", op));
+            }
+        } else if self.mir.config.is_intrinsic_unary(op) && n == 1 {
+            self.load(reg(0), &args[0])?;
+            self.compile_unary(op, reg(1), reg(0))?;
+            self.save(reg(1), lhs)?;
+        } else if self.mir.config.is_intrinsic_binary(op) && n == 2 {
+            self.load(reg(0), &args[0])?;
+            self.load(reg(1), &args[1])?;
+            self.compile_binary(op, reg(2), reg(0), reg(1))?;
+            self.save(reg(2), lhs)?;
+        } else {
+            for (i, arg) in args.iter().enumerate() {
+                self.load(reg(0), arg)?;
+                self.save(reg(0), &Slot::Arg(i))?;
+            }
+
+            let op = format!("${}", op);
+            self.mir.call(&op, n)?;
+            self.save(Reg::Ret, lhs)?;
+            self.ft.insert(op.to_string());
+        }
+
+        Ok(())
+    }
 }
 
 impl Composer for Transliterator {
@@ -378,64 +432,16 @@ impl Composer for Transliterator {
     }
 
     fn append_external_fun(&mut self, lhs: &Slot, op: &str, args: &[Slot]) -> Result<()> {
-        let n = args.len();
-        assert!(n <= SLICE_CAP);
-
-        //let args: Vec<Expr> = args.iter().map(|a| self.expr(a, false)).collect();
-
-        if VirtualTable::from_str(op).is_ok() {
-            if n == 1 {
-                self.load(reg(0), &args[0])?;
-                self.mir.setup_call_unary(reg(0));
-                self.mir.call(op, 1)?;
-                self.save(Reg::Ret, lhs)?;
-                self.ft.insert(op.to_string());
-            } else if n == 2 {
-                self.load(reg(0), &args[0])?;
-                self.load(reg(1), &args[1])?;
-                self.mir.setup_call_binary(reg(0), reg(1));
-                self.mir.call(op, 2)?;
-                self.save(Reg::Ret, lhs)?;
-                self.ft.insert(op.to_string());
-            } else {
-                return Err(anyhow!("wrong number of arguments to {:?}", op));
-            }
-        } else if self.mir.config.is_intrinsic_unary(op) && n == 1 {
-            self.load(reg(0), &args[0])?;
-            self.compile_unary(op, reg(1), reg(0))?;
-            self.save(reg(1), lhs)?;
-        } else if self.mir.config.is_intrinsic_binary(op) && n == 2 {
-            self.load(reg(0), &args[0])?;
-            self.load(reg(1), &args[1])?;
-            self.compile_binary(op, reg(2), reg(0), reg(1))?;
-            self.save(reg(2), lhs)?;
-        } else {
-            for (i, arg) in args.iter().enumerate() {
-                self.load(reg(0), arg)?;
-                self.save(reg(0), &Slot::Arg(i))?;
-            }
-
-            let op = format!("${}", op);
-            self.mir.call(&op, n)?;
-            self.save(Reg::Ret, lhs)?;
-            self.ft.insert(op.to_string());
-        }
-
-        Ok(())
+        self.append_fun_generic(lhs, op, args, false)
     }
 
-    fn append_fun(
+    fn append_fun_v1(
         &mut self,
         lhs: &Slot,
         fun: &BuiltinSymbol,
         arg: &Slot,
         is_real: bool,
     ) -> Result<()> {
-        self.load(reg(0), arg)?;
-        self.mark_real(arg, is_real);
-
-        self.mir.setup_call_unary(reg(0));
-
         let op = match fun.0 {
             2 => "exp",
             3 => "ln",
@@ -449,14 +455,20 @@ impl Composer for Transliterator {
                 }
             }
             7 => "conjugate",
-            _ => return Err(anyhow!("function is not defined.")),
+            8 => "abs",
+            _ => return Err(anyhow!("Builtin function {} is not defined.", fun.0)),
         };
 
-        self.mir.call(op, 1)?;
-        self.save(Reg::Ret, lhs)?;
-        self.ft.insert(op.to_string());
+        self.append_fun_generic(&lhs, op, &[*arg], is_real)
+    }
 
-        Ok(())
+    fn append_fun(&mut self, lhs: &Slot, fun: &str, args: &[Slot], is_real: bool) -> Result<()> {
+        self.append_fun_generic(
+            lhs,
+            &self.mir.config.symbolica_fun(fun, is_real),
+            args,
+            is_real,
+        )
     }
 
     fn set_num_params(&mut self, num_params: usize) {

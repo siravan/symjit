@@ -370,17 +370,12 @@ impl Parser {
         self.expects(Token::Comma)?;
         let b = self.parse_bool()?;
 
-        let id = match name.as_str() {
-            "exp" => 2,
-            "ln" => 3,
-            "sin" => 4,
-            "cos" => 5,
-            "sqrt" => 6,
-            "conjugate" => 7,
-            _ => return Err(anyhow!("function {:?} is not defined", &name)),
-        };
-
-        Ok(Instruction::Fun(dst, BuiltinSymbol(id), arg, b))
+        Ok(Instruction::Fun(
+            dst,
+            format!("symbolica_{}", name),
+            vec![arg],
+            b,
+        ))
     }
 
     fn parse_external_fun(&mut self) -> Result<Instruction> {
