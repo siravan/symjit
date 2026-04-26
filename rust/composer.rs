@@ -257,14 +257,22 @@ impl Transliterator {
         args: &[Slot],
         is_real: bool,
     ) -> Result<()> {
+        println!("fun = {}", op);
         let n = args.len();
         assert!(n <= SLICE_CAP);
 
-        // TODO: handling is_real
+        if let Slot::Param(idx) = lhs {
+            if is_real {
+                self.reals.insert(Loc::Param(*idx as u32));
+            }
+        }
 
         if VirtualTable::from_str(op).is_ok() {
             if n == 1 {
                 self.load(reg(0), &args[0])?;
+                if is_real {
+                    self.mir.real(reg(0), reg(0));
+                }
                 self.mir.setup_call_unary(reg(0));
                 self.mir.call(op, 1)?;
                 self.save(Reg::Ret, lhs)?;
@@ -272,6 +280,10 @@ impl Transliterator {
             } else if n == 2 {
                 self.load(reg(0), &args[0])?;
                 self.load(reg(1), &args[1])?;
+                if is_real {
+                    self.mir.real(reg(0), reg(0));
+                    self.mir.real(reg(1), reg(1));
+                }
                 self.mir.setup_call_binary(reg(0), reg(1));
                 self.mir.call(op, 2)?;
                 self.save(Reg::Ret, lhs)?;
@@ -281,16 +293,26 @@ impl Transliterator {
             }
         } else if self.mir.config.is_intrinsic_unary(op) && n == 1 {
             self.load(reg(0), &args[0])?;
+            if is_real {
+                self.mir.real(reg(0), reg(0));
+            }
             self.compile_unary(op, reg(1), reg(0))?;
             self.save(reg(1), lhs)?;
         } else if self.mir.config.is_intrinsic_binary(op) && n == 2 {
             self.load(reg(0), &args[0])?;
             self.load(reg(1), &args[1])?;
+            if is_real {
+                self.mir.real(reg(0), reg(0));
+                self.mir.real(reg(1), reg(1));
+            }
             self.compile_binary(op, reg(2), reg(0), reg(1))?;
             self.save(reg(2), lhs)?;
         } else {
             for (i, arg) in args.iter().enumerate() {
                 self.load(reg(0), arg)?;
+                if is_real {
+                    self.mir.real(reg(0), reg(0));
+                }
                 self.save(reg(0), &Slot::Arg(i))?;
             }
 

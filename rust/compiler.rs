@@ -485,9 +485,6 @@ impl Composer for Translator {
         arg: &Slot,
         is_real: bool,
     ) -> Result<()> {
-        let arg = self.consume(arg)?;
-        let lhs = self.produce(lhs)?;
-
         let op = match fun.0 {
             2 => "symbolica_exp",
             3 => "symbolica_ln",
@@ -499,7 +496,7 @@ impl Composer for Translator {
             _ => return Err(anyhow!("Builtin function {} is not defined.", fun.0)),
         };
 
-        self.append_fun(&lhs, op, &[arg], is_real)
+        self.append_fun(&lhs, op, &[*arg], is_real)
     }
 
     fn append_fun(&mut self, lhs: &Slot, fun: &str, args: &[Slot], is_real: bool) -> Result<()> {

@@ -131,7 +131,7 @@ impl VirtualTable {
             "cplx_arcsinh" => Func::UnaryCplx(Self::cplx_asinh),
             "cplx_arccosh" => Func::UnaryCplx(Self::cplx_acosh),
             "cplx_arctanh" => Func::UnaryCplx(Self::cplx_atanh),
-            "cplx_root" => Func::UnaryCplx(Self::cplx_root),
+            // "cplx_root" => Func::UnaryCplx(Self::cplx_root),
             "cplx_cbrt" => Func::UnaryCplx(Self::cplx_cbrt),
             "cplx_exp" => Func::UnaryCplx(Self::cplx_exp),
             "cplx_ln" => Func::UnaryCplx(Self::cplx_ln),
