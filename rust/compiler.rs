@@ -808,20 +808,7 @@ impl Translator {
     }
 
     fn translate_fun(&mut self, lhs: &Slot, fun: &str, args: &[Slot], is_real: bool) -> Result<()> {
-        println!("..... {}", fun);
-        let op = if fun == "symbolica_root" || fun == "symbolica_sqrt" {
-            if is_real {
-                "real_root"
-            } else {
-                "root"
-            }
-        } else if fun.starts_with("symbolica_") && VirtualTable::from_str(&fun[10..]).is_ok() {
-            &fun[10..]
-        } else {
-            fun
-        };
-
-        self.translate_external_fun(lhs, op, args, is_real)
+        self.translate_external_fun(lhs, &self.config.symbolica_fun(fun, is_real), args, is_real)
     }
 
     fn translate_external_fun(

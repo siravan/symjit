@@ -447,7 +447,13 @@ impl Composer for Transliterator {
             3 => "ln",
             4 => "sin",
             5 => "cos",
-            6 => "root",
+            6 => {
+                if is_real {
+                    "real_root"
+                } else {
+                    "root"
+                }
+            }
             7 => "conjugate",
             8 => "abs",
             _ => return Err(anyhow!("Builtin function {} is not defined.", fun.0)),
@@ -457,13 +463,12 @@ impl Composer for Transliterator {
     }
 
     fn append_fun(&mut self, lhs: &Slot, fun: &str, args: &[Slot], is_real: bool) -> Result<()> {
-        let op = if fun.starts_with("symbolica_") && VirtualTable::from_str(&fun[10..]).is_ok() {
-            &fun[10..]
-        } else {
-            fun
-        };
-
-        self.append_fun_generic(lhs, op, args, is_real)
+        self.append_fun_generic(
+            lhs,
+            &self.mir.config.symbolica_fun(fun, is_real),
+            args,
+            is_real,
+        )
     }
 
     fn set_num_params(&mut self, num_params: usize) {
