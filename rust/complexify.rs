@@ -311,6 +311,11 @@ impl Generator for Complexifier {
         self.mir.divide(y, im(s1), x);
         self.mir.half(y, y);
 
+        // if the input is 0, y becomes 0/0 = NaN
+        // the following two liness converted NaN to 0
+        self.mir.eq(re(dst), y, y);
+        self.mir.and(y, y, re(dst));
+
         self.mir.ifelse(re(dst), x, y, Loc::Stack(1));
         self.mir.ifelse(im(dst), y, x, Loc::Stack(1));
 
