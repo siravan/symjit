@@ -297,7 +297,7 @@ impl Generator for Complexifier {
         self.ensure_complex(s1);
 
         self.mir.xor(x, x, x);
-        self.mir.geq(x, re(s1), x);
+        self.mir.lt(x, x, re(s1)); // lt intead of ge for SSE to work correctly
         self.mir.save_stack(x, 1);
 
         self.mir.times(x, re(s1), re(s1));
@@ -311,8 +311,6 @@ impl Generator for Complexifier {
         self.mir.divide(y, im(s1), x);
         self.mir.half(y, y);
 
-        // if the input is 0, y becomes 0/0 = NaN
-        // the following two liness converted NaN to 0
         self.mir.eq(re(dst), y, y);
         self.mir.and(y, y, re(dst));
 

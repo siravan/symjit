@@ -18,8 +18,11 @@ macro_rules! binop {
             AmdFamily::AvxScalar => $self.amd.$avx(ϕ($dst), ϕ($s1), ϕ($s2)),
             AmdFamily::AvxVector => $self.amd.$simd(ϕ($dst), ϕ($s1), ϕ($s2)),
             AmdFamily::SSEScalar => {
-                let (x, y) = $self.shrink($dst, $s1, $s2, $com);
+                let (x, y, swap) = $self.shrink($dst, $s1, $s2, $com);
                 $self.amd.$sse(ϕ(x), ϕ(y));
+                if swap {
+                    $self.amd.movq_xmm_reg(ϕ($s1), Amd::RAX);
+                }
             }
         }
     };
@@ -149,19 +152,23 @@ impl AmdGenerator {
         a and/or b. Therefore, cannot assume a and b are intact
         after calling this function.
     */
-    fn shrink(&mut self, dst: Reg, s1: Reg, s2: Reg, commutative: bool) -> (Reg, Reg) {
+    fn shrink(&mut self, dst: Reg, s1: Reg, s2: Reg, commutative: bool) -> (Reg, Reg, bool) {
         if dst == s1 {
-            (dst, s2)
+            (dst, s2, false)
         } else if dst == s2 {
             // difficult case: dst == b, dst != a
             if !commutative {
-                self.fxchg(s1, s2);
-            };
-            (dst, s1)
+                self.amd.movq_reg_xmm(Amd::RAX, ϕ(s1));
+                self.amd.movapd(ϕ(s1), ϕ(s2));
+                self.amd.movq_xmm_reg(ϕ(s2), Amd::RAX);
+                (dst, s1, true)
+            } else {
+                (dst, s1, false)
+            }
         } else {
             // dst != a, dst != b, a ?= b
             self.fmov(dst, s1);
-            (dst, s2)
+            (dst, s2, false)
         }
     }
 

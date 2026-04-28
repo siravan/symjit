@@ -1157,6 +1157,18 @@ impl Amd {
         self.jump(label);
     }
 
+    pub fn movq_reg_xmm(&mut self, rm: u8, reg: u8) {
+        self.sse_pd(reg, rm);
+        self.append_byte(0x7e);
+        self.modrm_reg(reg, rm);
+    }
+
+    pub fn movq_xmm_reg(&mut self, reg: u8, rm: u8) {
+        self.sse_pd(reg, rm);
+        self.append_byte(0x6e);
+        self.modrm_reg(reg, rm);
+    }
+
     pub fn nop(&mut self) {
         self.append_byte(0x90);
     }
