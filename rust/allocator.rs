@@ -592,7 +592,8 @@ impl GreedyAllocator {
     // static register and then returns the static register.
     fn consume(&mut self, ip: usize, src: Reg) -> Reg {
         if let Reg::Gen(r) = src {
-            let s = self.regs[r as usize].expect(&format!("reg {:?} not found (line {})", src, ip));
+            let s = self.regs[r as usize]
+                .unwrap_or_else(|| panic!("reg {:?} not found (line {})", src, ip));
             self.statics[s].end = ip;
             Reg::Static(s as u32)
         } else {

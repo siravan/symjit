@@ -378,9 +378,6 @@ impl Builder {
     }
 
     fn append_vt_section(&self, mir: &Mir, ir: &mut impl Generator) {
-        // needed for complex root
-        let _ = mir.find_op("root").map(|p| ir.add_func("root", p));
-
         for op in self.ft.iter() {
             let p = mir.find_op(op).expect("func not found");
             ir.add_func(op, p);

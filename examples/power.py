@@ -3,12 +3,13 @@ import util
 args = util.process_argv()
 
 import math
-from sympy import symbols, sin
+
 from symjit import compile_func
+from sympy import sin, symbols
 
 # calculating pi using Machine formula
 
-N = 100
+N = 150
 
 x = symbols("x")
 

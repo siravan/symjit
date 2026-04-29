@@ -297,7 +297,7 @@ impl Generator for Complexifier {
         self.ensure_complex(s1);
 
         self.mir.xor(x, x, x);
-        self.mir.lt(x, x, re(s1));
+        self.mir.lt(x, x, re(s1)); // lt intead of ge for SSE to work correctly
         self.mir.save_stack(x, 1);
 
         self.mir.times(x, re(s1), re(s1));
@@ -310,6 +310,9 @@ impl Generator for Complexifier {
         self.mir.root(x, x);
         self.mir.divide(y, im(s1), x);
         self.mir.half(y, y);
+
+        self.mir.eq(re(dst), y, y);
+        self.mir.and(y, y, re(dst));
 
         self.mir.ifelse(re(dst), x, y, Loc::Stack(1));
         self.mir.ifelse(im(dst), y, x, Loc::Stack(1));
@@ -567,11 +570,17 @@ impl Generator for Complexifier {
 
     fn real(&mut self, dst: Reg, s1: Reg) {
         self.mir.fmov(re(dst), re(s1));
+        self.mir.xor(im(dst), im(dst), im(dst));
         self.set_reg_real(dst);
     }
 
     fn imaginary(&mut self, dst: Reg, s1: Reg) {
-        self.mir.fmov(re(dst), im(s1));
+        if !self.is_real_reg(s1) {
+            self.mir.fmov(re(dst), im(s1));
+        } else {
+            self.mir.xor(re(dst), re(dst), re(dst));
+        }
+        self.mir.xor(im(dst), im(dst), im(dst));
         self.set_reg_real(dst);
     }
 

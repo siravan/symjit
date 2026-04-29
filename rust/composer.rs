@@ -55,11 +55,6 @@ pub struct Transliterator {
 
 impl Transliterator {
     pub fn new(mut config: Config) -> Transliterator {
-        // Stack frame compactification is off because of a subtle
-        // bug. In addition, it is likely not even needed as
-        // Symbolica does this already.
-        config.set_compact(false);
-
         // opt_level should be 2 for proper register allocation.
         config.set_opt_level(2);
 
@@ -83,7 +78,7 @@ impl Transliterator {
         self.prog
             .builder
             .symbol_table()
-            .find_sym(&name)
+            .find_sym(name)
             .map(|s| s.borrow().loc)
     }
 
@@ -99,9 +94,11 @@ impl Transliterator {
                 if self.consts[(n + 1) as usize] == 0.0 {
                     self.mir.load_const(dst, n);
                 } else {
-                    self.mir.load_const(reg(0), n);
-                    self.mir.load_const(reg(1), n + 1);
-                    self.mir.complex(dst, reg(0), reg(1));
+                    // Important! We cannot use reg(0) and reg(1) here to
+                    // prevent conflict.
+                    self.mir.load_const(Reg::Ret, n);
+                    self.mir.load_const(dst, n + 1);
+                    self.mir.complex(dst, Reg::Ret, dst);
                 }
             }
             Slot::Param(idx) => {
@@ -260,7 +257,11 @@ impl Transliterator {
         let n = args.len();
         assert!(n <= SLICE_CAP);
 
-        // TODO: handling is_real
+        if let Slot::Param(idx) = lhs {
+            if is_real {
+                self.reals.insert(Loc::Param(*idx as u32));
+            }
+        }
 
         if VirtualTable::from_str(op).is_ok() {
             if n == 1 {
@@ -352,23 +353,23 @@ impl Composer for Transliterator {
 
     fn append_pow(&mut self, lhs: &Slot, arg: &Slot, p: i64, is_real: bool) -> Result<()> {
         self.load(reg(0), arg)?;
-        self.mark_real(&arg, is_real);
+        self.mark_real(arg, is_real);
 
         match p {
-            2 => self.mir.square(reg(0), reg(0)),
-            3 => self.mir.cube(reg(0), reg(0)),
-            -1 => self.mir.recip(reg(0), reg(0)),
+            2 => self.mir.square(reg(1), reg(0)),
+            3 => self.mir.cube(reg(1), reg(0)),
+            -1 => self.mir.recip(reg(1), reg(0)),
             -2 => {
-                self.mir.recip(reg(0), reg(0));
-                self.mir.square(reg(0), reg(0))
+                self.mir.recip(reg(1), reg(0));
+                self.mir.square(reg(1), reg(0))
             }
             -3 => {
-                self.mir.recip(reg(0), reg(0));
-                self.mir.cube(reg(0), reg(0))
+                self.mir.recip(reg(1), reg(0));
+                self.mir.cube(reg(1), reg(0))
             }
-            _ => self.mir.powi(reg(0), reg(0), p as i32),
+            p => self.mir.powi(reg(1), reg(0), p as i32),
         }
-        self.save(reg(0), lhs)?;
+        self.save(reg(1), lhs)?;
 
         Ok(())
     }
@@ -399,9 +400,9 @@ impl Composer for Transliterator {
     fn append_if_else(&mut self, cond: &Slot, id: usize) -> Result<()> {
         let label = format!(".S{}", id);
         self.load(reg(0), cond)?;
-        self.mir.xor(reg(1), reg(0), reg(0));
-        self.mir.eq(reg(2), reg(0), reg(1));
-        self.mir.branch_if(reg(2), &label, false);
+        self.mir.xor(Reg::Ret, reg(0), reg(0));
+        self.mir.eq(reg(1), reg(0), Reg::Ret);
+        self.mir.branch_if(reg(1), &label, false);
         Ok(())
     }
 
@@ -419,9 +420,9 @@ impl Composer for Transliterator {
         false_val: &Slot,
     ) -> Result<()> {
         self.load(reg(0), cond)?;
-        self.mir.xor(reg(1), reg(0), reg(0));
-        self.mir.eq(reg(2), reg(0), reg(1));
-        self.save(reg(2), &Slot::Arg(0))?;
+        self.mir.xor(Reg::Ret, reg(0), reg(0));
+        self.mir.eq(reg(1), reg(0), Reg::Ret);
+        self.save(reg(1), &Slot::Arg(0))?;
         self.load(reg(0), true_val)?;
         self.load(reg(1), false_val)?;
         let loc = self.as_loc(&Slot::Arg(0)).unwrap();
@@ -459,7 +460,7 @@ impl Composer for Transliterator {
             _ => return Err(anyhow!("Builtin function {} is not defined.", fun.0)),
         };
 
-        self.append_fun_generic(&lhs, op, &[*arg], is_real)
+        self.append_fun_generic(lhs, op, &[*arg], is_real)
     }
 
     fn append_fun(&mut self, lhs: &Slot, fun: &str, args: &[Slot], is_real: bool) -> Result<()> {

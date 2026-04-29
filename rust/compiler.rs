@@ -485,21 +485,18 @@ impl Composer for Translator {
         arg: &Slot,
         is_real: bool,
     ) -> Result<()> {
-        let arg = self.consume(arg)?;
-        let lhs = self.produce(lhs)?;
-
         let op = match fun.0 {
             2 => "symbolica_exp",
             3 => "symbolica_ln",
             4 => "symbolica_sin",
             5 => "symbolica_cos",
-            6 => "symbolica_root",
+            6 => "symbolica_sqrt",
             7 => "symbolica_conjugate",
             8 => "symbolica_abs",
             _ => return Err(anyhow!("Builtin function {} is not defined.", fun.0)),
         };
 
-        self.append_fun(&lhs, op, &[arg], is_real)
+        self.append_fun(lhs, op, &[*arg], is_real)
     }
 
     fn append_fun(&mut self, lhs: &Slot, fun: &str, args: &[Slot], is_real: bool) -> Result<()> {
@@ -541,6 +538,7 @@ impl Composer for Translator {
 
 impl Translator {
     pub fn new(config: Config) -> Translator {
+        println!("{:?}", &config);
         Translator {
             config,
             ssa: Vec::new(),
@@ -827,8 +825,13 @@ impl Translator {
             }
         }
 
-        // is this always correct? (no need for a complex op)
-        let args: Vec<Expr> = args.iter().map(|a| self.expr(a, is_real)).collect();
+        let args: Vec<Expr> = if is_real {
+            args.iter()
+                .map(|a| Expr::unary("real", &self.expr(a, true)))
+                .collect()
+        } else {
+            args.iter().map(|a| self.expr(a, false)).collect()
+        };
 
         if VirtualTable::from_str(op).is_ok() {
             if n == 1 {
