@@ -148,6 +148,7 @@ impl Amd {
         let r = (!reg & 8) << 4;
         let x = (!index & 8) << 3;
         let b = (!rm & 8) << 2;
+        let w = 0;
         let vvvv = (!vreg & 0x0f) << 3;
 
         let pp = match self.dtype {
@@ -157,7 +158,27 @@ impl Amd {
 
         self.append_byte(0xc4);
         self.append_byte(r | x | b | encoding);
-        self.append_byte(vvvv | 4 | pp);
+        self.append_byte(w | vvvv | 4 | pp);
+    }
+
+    pub fn vex3pd_w1(&mut self, reg: u8, vreg: u8, rm: u8, index: u8, encoding: u8) {
+        // This is the three-byte VEX prefix (VEX3) for packed-double (pd)
+        // and 256-bit ymm registers
+        // fnault encoding is 1
+        let r = (!reg & 8) << 4;
+        let x = (!index & 8) << 3;
+        let b = (!rm & 8) << 2;
+        let w = 0x80;
+        let vvvv = (!vreg & 0x0f) << 3;
+
+        let pp = match self.dtype {
+            DataType::F32 => 0, // ps
+            DataType::F64 => 1, // pd
+        };
+
+        self.append_byte(0xc4);
+        self.append_byte(r | x | b | encoding);
+        self.append_byte(w | vvvv | 4 | pp);
     }
 
     pub fn vex3sd(&mut self, reg: u8, vreg: u8, rm: u8, index: u8, encoding: u8) {
@@ -167,6 +188,7 @@ impl Amd {
         let r = (!reg & 8) << 4;
         let x = (!index & 8) << 3;
         let b = (!rm & 8) << 2;
+        let w = 0;
         let vvvv = (!vreg & 0x0f) << 3;
 
         let pp = match self.dtype {
@@ -176,7 +198,7 @@ impl Amd {
 
         self.append_byte(0xc4);
         self.append_byte(r | x | b | encoding);
-        self.append_byte(vvvv | pp);
+        self.append_byte(w | vvvv | pp);
     }
 
     pub fn vex_sd(&mut self, reg: u8, vreg: u8, rm: u8, index: u8) {
@@ -217,6 +239,7 @@ impl Amd {
         let r = (!reg & 8) << 4;
         let x = (!index & 8) << 3;
         let b = (!rm & 8) << 2;
+        let w = 0;
         let vvvv = (!vreg & 0x0f) << 3;
 
         let pp = match self.dtype {
@@ -226,7 +249,27 @@ impl Amd {
 
         self.append_byte(0xc4);
         self.append_byte(r | x | b | encoding);
-        self.append_byte(vvvv | pp);
+        self.append_byte(w | vvvv | pp);
+    }
+
+    pub fn vex3dd_w1(&mut self, reg: u8, vreg: u8, rm: u8, index: u8, encoding: u8) {
+        // This is the three-byte VEX prefix (VEX3) for packed-double (pd)
+        // and 128-bit xmm registers
+        // default encoding is 1
+        let r = (!reg & 8) << 4;
+        let x = (!index & 8) << 3;
+        let b = (!rm & 8) << 2;
+        let w = 0x80;
+        let vvvv = (!vreg & 0x0f) << 3;
+
+        let pp = match self.dtype {
+            DataType::F32 => 0, // ps
+            DataType::F64 => 1, // pd
+        };
+
+        self.append_byte(0xc4);
+        self.append_byte(r | x | b | encoding);
+        self.append_byte(w | vvvv | pp);
     }
 
     pub fn vex_dd(&mut self, reg: u8, vreg: u8, rm: u8, index: u8) {
@@ -1194,6 +1237,18 @@ impl Amd {
 
     pub fn movq_xmm_reg(&mut self, reg: u8, rm: u8) {
         self.sse_pd(reg, rm);
+        self.append_byte(0x6e);
+        self.modrm_reg(reg, rm);
+    }
+
+    pub fn vmovq_reg_xmm(&mut self, rm: u8, reg: u8) {
+        self.vex3dd_w1(reg, 0, rm, 0, 1);
+        self.append_byte(0x7e);
+        self.modrm_reg(reg, rm);
+    }
+
+    pub fn vmovq_xmm_reg(&mut self, reg: u8, rm: u8) {
+        self.vex3dd_w1(reg, 0, rm, 0, 1);
         self.append_byte(0x6e);
         self.modrm_reg(reg, rm);
     }

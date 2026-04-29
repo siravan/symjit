@@ -2,15 +2,14 @@ use crate::code::Func;
 use crate::config::{Config, SPILL_AREA};
 use crate::generator::Generator;
 use crate::utils::align_stack;
-use crate::utils::{is_external_func, reg, DataType, Reg};
-use crate::code::VirtualTable;
+use crate::utils::{is_external_func, DataType, Reg};
 use anyhow::Result;
 
 use super::asm::{Amd, RoundingMode};
 use super::*;
 
 const REG_SIZE: u32 = 8;
-const T0: u8 = 1;   // Reg::Temp
+const T0: u8 = 1; // Reg::Temp
 const T1: u8 = 2;
 const T2: u8 = 3;
 
@@ -98,8 +97,7 @@ impl AmdComplexGenerator {
         let cap = SPILL_AREA as u32;
 
         self.amd.mov_reg_label(ARGS[0], &format!("_env_{}_", op));
-        self.amd
-            .lea_mem(ARGS[1], STACK, (cap * REG_SIZE) as i32);
+        self.amd.lea_mem(ARGS[1], STACK, (cap * REG_SIZE) as i32);
         self.amd.mov_imm(ARGS[2], num_args as u32);
         self.amd.lea_mem(ARGS[3], STACK, 4 * REG_SIZE as i32);
         self.vzeroupper();
@@ -171,7 +169,6 @@ impl Generator for AmdComplexGenerator {
     }
 
     //***********************************/
-
     fn fmov(&mut self, dst: Reg, s1: Reg) {
         if dst != s1 {
             self.amd.vmovapd(ϕ(dst), ϕ(s1));
@@ -193,11 +190,13 @@ impl Generator for AmdComplexGenerator {
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        self.amd.vmovdd_xmm_mem(ϕ(dst), MEM, (idx * REG_SIZE) as i32);
+        self.amd
+            .vmovdd_xmm_mem(ϕ(dst), MEM, (idx * REG_SIZE) as i32);
     }
 
     fn save_mem(&mut self, dst: Reg, idx: u32) {
-        self.amd.vmovdd_mem_xmm(MEM, (idx * REG_SIZE) as i32, ϕ(dst));
+        self.amd
+            .vmovdd_mem_xmm(MEM, (idx * REG_SIZE) as i32, ϕ(dst));
     }
 
     fn save_mem_result(&mut self, idx: u32) {
@@ -206,32 +205,30 @@ impl Generator for AmdComplexGenerator {
 
     fn load_param(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        self.amd.vmovdd_xmm_mem(ϕ(dst), PARAMS, (idx * REG_SIZE) as i32);
+        self.amd
+            .vmovdd_xmm_mem(ϕ(dst), PARAMS, (idx * REG_SIZE) as i32);
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        self.amd.vmovdd_xmm_mem(ϕ(dst), STACK, (idx * REG_SIZE) as i32);
+        self.amd
+            .vmovdd_xmm_mem(ϕ(dst), STACK, (idx * REG_SIZE) as i32);
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        self.amd.vmovdd_mem_xmm(STACK, (idx * REG_SIZE) as i32, ϕ(dst));
+        self.amd
+            .vmovdd_mem_xmm(STACK, (idx * REG_SIZE) as i32, ϕ(dst));
     }
 
-    fn load_mem_complex(&mut self, _xd: Reg, _yd: Reg, _idx: u32) {
-    }
+    fn load_mem_complex(&mut self, _xd: Reg, _yd: Reg, _idx: u32) {}
 
-    fn save_mem_complex(&mut self, _xs: Reg, _ys: Reg, _idx: u32) {
-    }
+    fn save_mem_complex(&mut self, _xs: Reg, _ys: Reg, _idx: u32) {}
 
-    fn load_param_complex(&mut self, _xd: Reg, _yd: Reg, _idx: u32) {
-    }
+    fn load_param_complex(&mut self, _xd: Reg, _yd: Reg, _idx: u32) {}
 
-    fn load_stack_complex(&mut self, _xd: Reg, _yd: Reg, _idx: u32) {
-    }
+    fn load_stack_complex(&mut self, _xd: Reg, _yd: Reg, _idx: u32) {}
 
-    fn save_stack_complex(&mut self, _xs: Reg, _ys: Reg, _idx: u32) {
-    }
+    fn save_stack_complex(&mut self, _xs: Reg, _ys: Reg, _idx: u32) {}
 
     fn save_stack_result(&mut self, idx: u32) {
         self.save_stack(Reg::Ret, idx);
@@ -252,7 +249,7 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn root(&mut self, dst: Reg, s1: Reg) {
-        self.amd.vmovdd_mem_xmm(STACK, 0, ϕ(s1));
+        self.amd.vmovq_reg_xmm(Amd::RAX, ϕ(s1));
 
         self.amd.vmuldd(T1, ϕ(s1), ϕ(s1));
         self.amd.vhadddd(T1, T1, T1);
@@ -269,10 +266,13 @@ impl Generator for AmdComplexGenerator {
         self.amd.vdivsd(T2, T2, T1);
         self.amd.vdivsd(T2, T2, T0);
 
+        self.amd.vcmpeqsd(T0, T2, T2);
+        self.amd.vandpd(T2, T2, T0);
+
         self.amd.vunpckldd(ϕ(dst), T2, T1);
 
         let label = format!(".Y{}", self.amd.a.ip());
-        self.amd.mov_reg_mem(Amd::RAX, STACK, 0);
+        // self.amd.mov_reg_mem(Amd::RAX, STACK, 0);
         self.amd.or(Amd::RAX, Amd::RAX);
         self.amd.js(&label);
         self.amd.vshufdd(ϕ(dst), ϕ(dst), ϕ(dst), 1);
@@ -334,20 +334,20 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn times(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.amd.vunpckldd(T1, ϕ(s1), ϕ(s1));  // duplicate real
-        self.amd.vunpckhdd(T2, ϕ(s1), ϕ(s1));  // duplicate imag
+        self.amd.vunpckldd(T1, ϕ(s1), ϕ(s1)); // duplicate real
+        self.amd.vunpckhdd(T2, ϕ(s1), ϕ(s1)); // duplicate imag
         self.amd.vmuldd(T1, T1, ϕ(s2));
         self.amd.vmuldd(T2, T2, ϕ(s2));
-        self.amd.vshufdd(T2, T2, T2, 1);        // exchange real/imag
+        self.amd.vshufdd(T2, T2, T2, 1); // exchange real/imag
         self.amd.vaddsubdd(ϕ(dst), T1, T2);
     }
 
     fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.amd.vunpckldd(T1, ϕ(s1), ϕ(s1));  // duplicate real
-        self.amd.vunpckhdd(T2, ϕ(s1), ϕ(s1));  // duplicate imag
+        self.amd.vunpckldd(T1, ϕ(s1), ϕ(s1)); // duplicate real
+        self.amd.vunpckhdd(T2, ϕ(s1), ϕ(s1)); // duplicate imag
         self.amd.vmuldd(T1, T1, ϕ(s2));
         self.amd.vmuldd(T2, T2, ϕ(s2));
-        self.amd.vshufdd(T1, T1, T1, 1);        // exchange real/imag
+        self.amd.vshufdd(T1, T1, T1, 1); // exchange real/imag
         self.amd.vaddsubdd(ϕ(dst), T2, T1);
         self.amd.vshufdd(ϕ(dst), ϕ(dst), ϕ(dst), 1);
 
@@ -356,11 +356,27 @@ impl Generator for AmdComplexGenerator {
         self.amd.vdivdd(ϕ(dst), ϕ(dst), T1);
     }
 
-    fn times_complex(&mut self, _xd: Reg, _yd: Reg, _x1: Reg, _y1: Reg, _x2: Reg, _y2: Reg) -> bool {
+    fn times_complex(
+        &mut self,
+        _xd: Reg,
+        _yd: Reg,
+        _x1: Reg,
+        _y1: Reg,
+        _x2: Reg,
+        _y2: Reg,
+    ) -> bool {
         false
     }
 
-    fn divide_complex(&mut self, _xd: Reg, _yd: Reg, _x1: Reg, _y1: Reg, _x2: Reg, _y2: Reg) -> bool {
+    fn divide_complex(
+        &mut self,
+        _xd: Reg,
+        _yd: Reg,
+        _x1: Reg,
+        _y1: Reg,
+        _x2: Reg,
+        _y2: Reg,
+    ) -> bool {
         false
     }
 
@@ -582,8 +598,7 @@ impl Generator for AmdComplexGenerator {
 
     fn epilogue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize, idx_ret: i32) {
         self.vzeroupper();
-        self.amd
-            .vmovsd_xmm_mem(0, MEM, idx_ret * REG_SIZE as i32);
+        self.amd.vmovsd_xmm_mem(0, MEM, idx_ret * REG_SIZE as i32);
 
         let total_size = align_stack(cap as u32 * REG_SIZE)
             + align_stack((count_states + count_obs) as u32 * REG_SIZE);

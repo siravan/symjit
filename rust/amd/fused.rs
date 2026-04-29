@@ -2,23 +2,14 @@ use super::asm::Amd;
 
 #[allow(dead_code)]
 impl Amd {
-    // sets W bit of vex3 to 1
-    // should be called immediately after a vex-prefix instruction
-    fn set_w1(&mut self) {
-        let b = self.a.buf.pop().unwrap();
-        self.a.buf.push(b | 0x80);
-    }
-
     fn vfma(&mut self, reg: u8, vreg: u8, rm: u8, code: u8) {
-        self.vex3pd(reg, vreg, rm, 0, 2);
-        self.set_w1();
+        self.vex3pd_w1(reg, vreg, rm, 0, 2);
         self.append_byte(code);
         self.modrm_reg(reg, rm);
     }
 
     fn vfma_dd(&mut self, reg: u8, vreg: u8, rm: u8, code: u8) {
-        self.vex3dd(reg, vreg, rm, 0, 2);
-        self.set_w1();
+        self.vex3dd_w1(reg, vreg, rm, 0, 2);
         self.append_byte(code);
         self.modrm_reg(reg, rm);
     }
