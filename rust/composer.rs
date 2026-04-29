@@ -78,7 +78,7 @@ impl Transliterator {
         self.prog
             .builder
             .symbol_table()
-            .find_sym(&name)
+            .find_sym(name)
             .map(|s| s.borrow().loc)
     }
 
@@ -353,7 +353,7 @@ impl Composer for Transliterator {
 
     fn append_pow(&mut self, lhs: &Slot, arg: &Slot, p: i64, is_real: bool) -> Result<()> {
         self.load(reg(0), arg)?;
-        self.mark_real(&arg, is_real);
+        self.mark_real(arg, is_real);
 
         match p {
             2 => self.mir.square(reg(1), reg(0)),
@@ -460,7 +460,7 @@ impl Composer for Transliterator {
             _ => return Err(anyhow!("Builtin function {} is not defined.", fun.0)),
         };
 
-        self.append_fun_generic(&lhs, op, &[*arg], is_real)
+        self.append_fun_generic(lhs, op, &[*arg], is_real)
     }
 
     fn append_fun(&mut self, lhs: &Slot, fun: &str, args: &[Slot], is_real: bool) -> Result<()> {

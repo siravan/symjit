@@ -496,7 +496,7 @@ impl Composer for Translator {
             _ => return Err(anyhow!("Builtin function {} is not defined.", fun.0)),
         };
 
-        self.append_fun(&lhs, op, &[*arg], is_real)
+        self.append_fun(lhs, op, &[*arg], is_real)
     }
 
     fn append_fun(&mut self, lhs: &Slot, fun: &str, args: &[Slot], is_real: bool) -> Result<()> {
@@ -538,6 +538,7 @@ impl Composer for Translator {
 
 impl Translator {
     pub fn new(config: Config) -> Translator {
+        println!("{:?}", &config);
         Translator {
             config,
             ssa: Vec::new(),

@@ -339,8 +339,16 @@ impl Config {
             } else {
                 "root".into()
             }
-        } else if fun.starts_with("symbolica_") {
-            let op = &fun[10..];
+        } else if let Some(op) = fun.strip_prefix("symbolica_") {
+            let op = match op {
+                "asin" => "arcsin",
+                "acos" => "arccos",
+                "atan" => "arctan",
+                "asinh" => "arcsinh",
+                "acosh" => "arccosh",
+                "atanh" => "arctanh",
+                op => op,
+            };
 
             if self.is_intrinsic_unary(op)
                 || self.is_intrinsic_binary(op)

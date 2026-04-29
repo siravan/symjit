@@ -456,7 +456,7 @@ impl MirReader {
                 let num_args = self.pop()? as usize;
                 let op = self.string()?;
                 mir.call(&op, num_args)
-                    .expect(&format!("op code {:?} not found.", &op));
+                    .unwrap_or_else(|_| panic!("op code {:?} not found.", &op));
             }
             LABEL => {
                 let label = self.string()?;

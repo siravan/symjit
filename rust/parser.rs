@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 
 use crate::instruction::{
-    BuiltinSymbol, ComplexRational, ConstType, Instruction, Rational, Slot, SymbolicaModel, Value,
+    ComplexRational, ConstType, Instruction, Rational, Slot, SymbolicaModel, Value,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -137,32 +137,6 @@ impl Iterator for Tokenizer {
                     self.advance();
                     Some(Token::Ident(s))
                 }
-                'T' => {
-                    let mut s = "T".to_string();
-                    self.advance();
-                    for _ in 0..3 {
-                        s.push(self.head());
-                        self.advance();
-                    }
-                    if s == "True" {
-                        Some(Token::True)
-                    } else {
-                        None
-                    }
-                }
-                'F' => {
-                    let mut s = "F".to_string();
-                    self.advance();
-                    for _ in 0..4 {
-                        s.push(self.head());
-                        self.advance();
-                    }
-                    if s == "False" {
-                        Some(Token::False)
-                    } else {
-                        None
-                    }
-                }
                 c if c.is_ascii() => {
                     let mut s = String::from(c);
                     self.advance();
@@ -170,7 +144,12 @@ impl Iterator for Tokenizer {
                         s.push(self.head());
                         self.advance();
                     }
-                    Some(Token::Ident(s))
+
+                    match s.as_str() {
+                        "True" => Some(Token::True),
+                        "False" => Some(Token::False),
+                        _ => Some(Token::Ident(s)),
+                    }
                 }
                 _ => None,
             }
@@ -316,6 +295,24 @@ impl Parser {
         Ok(slots)
     }
 
+    fn parse_tags(&mut self) -> Result<Vec<String>> {
+        self.expects(Token::LeftBracket)?;
+
+        let mut tags: Vec<String> = Vec::new();
+
+        loop {
+            tags.push(self.parse_ident()?);
+
+            match self.next() {
+                Some(Token::Comma) => {}
+                Some(Token::RightBracket) => break,
+                _ => return Err(anyhow!("expects , or ]")),
+            }
+        }
+
+        Ok(tags)
+    }
+
     fn parse_add(&mut self) -> Result<Instruction> {
         self.expects(Token::Comma)?;
         let dst = self.parse_slot()?;
@@ -366,16 +363,29 @@ impl Parser {
         self.expects(Token::Comma)?;
         let name = self.parse_ident()?;
         self.expects(Token::Comma)?;
-        let arg = self.parse_slot()?;
-        self.expects(Token::Comma)?;
-        let b = self.parse_bool()?;
 
-        Ok(Instruction::Fun(
-            dst,
-            format!("symbolica_{}", name),
-            vec![arg],
-            b,
-        ))
+        if self.lex.head() == '[' {
+            // v2
+            let _tags = self.parse_tags()?;
+            self.expects(Token::Comma)?;
+            let args = self.parse_slots()?;
+            self.expects(Token::Comma)?;
+            let b = self.parse_bool()?;
+
+            Ok(Instruction::Fun(dst, name, args, b))
+        } else {
+            // v1
+            let arg = self.parse_slot()?;
+            self.expects(Token::Comma)?;
+            let b = self.parse_bool()?;
+
+            Ok(Instruction::Fun(
+                dst,
+                format!("symbolica_{}", name),
+                vec![arg],
+                b,
+            ))
+        }
     }
 
     fn parse_external_fun(&mut self) -> Result<Instruction> {
@@ -440,9 +450,8 @@ impl Parser {
         let mut v: Vec<ConstType> = Vec::new();
 
         loop {
-            match self.parse_const() {
-                Ok(val) => v.push(val),
-                Err(_) => {}
+            if let Ok(val) = self.parse_const() {
+                v.push(val)
             }
 
             match self.next() {

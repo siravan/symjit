@@ -36,9 +36,12 @@ pub enum Instruction {
     Pow(Slot, Slot, i64, bool),
     /// `Powf(o, b, e)` means `o = b^e`.
     Powf(Slot, Slot, Slot, bool),
-    /// `Fun(o, s, a)` means `o = s(a)`, where `s` is assumed to
-    /// be a built-in function such as `sin`.
-    //Fun(Slot, BuiltinSymbol, Slot, bool),
+    /// A function that has a known evaluator or is external, given a symbol name, tags, and arguments.
+    /// `Fun(o, (s, t, a), is_real)` means `o = s(t, a)`.
+    /// The `is_real` flag indicates whether the function is expected to yield a real number.
+    /// Fun(Slot, Box<(Symbol, Vec<String>, Vec<Slot>)>, bool),
+    ///
+    /// Note that Symjit uses the following simplified version of Fun:
     Fun(Slot, String, Vec<Slot>, bool),
     /// `ExternalFun(o, s, a,...)` means `o = s(a, ...)`, where `s` is an external function.
     ExternalFun(Slot, String, Vec<Slot>),
