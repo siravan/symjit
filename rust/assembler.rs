@@ -84,4 +84,8 @@ impl Assembler {
             self.buf[*ip + 3] |= ((x >> 24) & 0xff) as u8;
         }
     }
+
+    pub fn create_label(&self) -> String {
+        format!(".L{}", self.ip())
+    }
 }

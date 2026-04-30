@@ -1,5 +1,4 @@
-
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 use crate::assembler::{Assembler, Jumper};
 use crate::code::Func;
@@ -11,12 +10,10 @@ use super::*;
 
 const REG_SIZE: u32 = 8;
 
-
 pub struct ArmGenerator {
     a: Assembler,
     config: Config,
 }
-
 
 impl ArmGenerator {
     pub fn new(config: Config) -> ArmGenerator {
@@ -24,14 +21,6 @@ impl ArmGenerator {
             a: Assembler::new(),
             config,
         }
-    }
-
-    fn reg_size(&self) -> u32 {
-        8
-    }
-
-    fn append_quad(&mut self, u: u64) {
-        self.a.append_quad(u);
     }
 
     pub fn jump(&mut self, label: &str, code: u32, f: Jumper) {
@@ -79,17 +68,11 @@ impl ArmGenerator {
     }
 
     fn sub_stack(&mut self, size: u32) {
-        self.emit(arm! {sub sp, sp, #size & 0x0fff});
-        if size >> 12 != 0 {
-            self.emit(arm! {sub sp, sp, #size >> 12, lsl #12});
-        }
+        sub_stack(&mut self.a, size);
     }
 
     fn add_stack(&mut self, size: u32) {
-        if size >> 12 != 0 {
-            self.emit(arm! {add sp, sp, #size >> 12, lsl #12});
-        }
-        self.emit(arm! {add sp, sp, #size & 0x0fff});
+        add_stack(&mut self.a, size);
     }
 
     fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
@@ -100,17 +83,7 @@ impl ArmGenerator {
         self.emit(arm! {add x(3), x(SP), #0});
 
         let label = format!("_func_{}_", op);
-
-        self.jump_abs(&label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
-            arm! {adrp x(9), label((offset - pg as i32) as u32)}
-        });
-
-        self.jump_abs(
-            &label,
-            0,
-            |offset, _| arm! {ldr x(9), [x(9), #offset & 0x0fff]},
-        );
-
+        load_long(&mut self.a, 9, &label);
         self.emit(arm! {blr x(9)});
 
         self.load_stack(Reg::Ret, 0);
@@ -156,7 +129,7 @@ impl Generator for ArmGenerator {
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
         self.emit(arm! {fcmp d(ϕ(cond)), #0.0});
 
-        let l = format!(".J{}", self.a.ip());
+        let l = self.a.create_label();
 
         if is_else {
             self.jump(&l, 0, |offset, _| arm! {b.ne label(offset)});
@@ -224,53 +197,28 @@ impl Generator for ArmGenerator {
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        if self.config.permissive() {
-            self.load_q_from_mem(ϕ(xd), MEM, idx);
-            self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xd))[1]});
-        } else {
-            self.load_mem(xd, idx);
-            self.load_mem(yd, idx + 1);
-        }
+        self.load_q_from_mem(ϕ(xd), MEM, idx);
+        self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xd))[1]});
     }
 
     fn save_mem_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
-        if self.config.permissive() {
-            self.emit(arm! {zip1 q(ϕ(xs)), q(ϕ(xs)), q(ϕ(ys))});
-            self.save_q_to_mem(ϕ(xs), MEM, idx);
-        } else {
-            self.save_mem(xs, idx);
-            self.save_mem(ys, idx + 1);
-        }
+        self.emit(arm! {zip1 q(ϕ(xs)), q(ϕ(xs)), q(ϕ(ys))});
+        self.save_q_to_mem(ϕ(xs), MEM, idx);
     }
 
     fn load_param_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        if self.config.permissive() {
-            self.load_q_from_mem(ϕ(xd), PARAMS, idx);
-            self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xd))[1]});
-        } else {
-            self.load_param(xd, idx);
-            self.load_param(yd, idx + 1);
-        }
+        self.load_q_from_mem(ϕ(xd), PARAMS, idx);
+        self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xd))[1]});
     }
 
     fn load_stack_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        if self.config.permissive() {
-            self.load_q_from_mem(ϕ(xd), SP, idx);
-            self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xd))[1]});
-        } else {
-            self.load_stack(xd, idx);
-            self.load_stack(yd, idx + 1);
-        }
+        self.load_q_from_mem(ϕ(xd), SP, idx);
+        self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xd))[1]});
     }
 
     fn save_stack_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
-        if self.config.permissive() {
-            self.emit(arm! {zip1 q(ϕ(xs)), q(ϕ(xs)), q(ϕ(ys))});
-            self.save_q_to_mem(ϕ(xs), SP, idx);
-        } else {
-            self.save_stack(xs, idx);
-            self.save_stack(ys, idx + 1);
-        }
+        self.emit(arm! {zip1 q(ϕ(xs)), q(ϕ(xs)), q(ϕ(ys))});
+        self.save_q_to_mem(ϕ(xs), SP, idx);
     }
 
     fn save_stack_result(&mut self, idx: u32) {
@@ -341,50 +289,42 @@ impl Generator for ArmGenerator {
     }
 
     fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
-        if self.config.permissive() {
-            let xt = Reg::Gen(2);
-            let yt = Reg::Gen(3);
+        let xt = Reg::Gen(2);
+        let yt = Reg::Gen(3);
 
-            self.times(xt, y1, y2);
-            self.fused_mul_sub(xt, x1, x2, xt);
-            self.times(yt, x1, y2);
-            self.fused_mul_add(yd, x2, y1, yt);
-            self.fmov(xd, xt);
+        self.times(xt, y1, y2);
+        self.fused_mul_sub(xt, x1, x2, xt);
+        self.times(yt, x1, y2);
+        self.fused_mul_add(yd, x2, y1, yt);
+        self.fmov(xd, xt);
 
-            /*
-            self.emit(arm! {zip1 q(ϕ(x1)), q(ϕ(x1)), q(ϕ(y1))});
-            self.emit(arm! {zip1 q(ϕ(x2)), q(ϕ(x2)), q(ϕ(y2))});
-            self.xor(xt, xt, xt);
-            self.emit(arm! {fcmla q(ϕ(xt)), q(ϕ(x1)), q(ϕ(x2)), #0});
-            self.emit(arm! {fcmla q(ϕ(xt)), q(ϕ(x1)), q(ϕ(x2)), #90});
-            self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xt))[1]});
-            self.emit(arm! {dup q(ϕ(xd)), q(ϕ(xt))[0]});
-            */
+        /*
+        self.emit(arm! {zip1 q(ϕ(x1)), q(ϕ(x1)), q(ϕ(y1))});
+        self.emit(arm! {zip1 q(ϕ(x2)), q(ϕ(x2)), q(ϕ(y2))});
+        self.xor(xt, xt, xt);
+        self.emit(arm! {fcmla q(ϕ(xt)), q(ϕ(x1)), q(ϕ(x2)), #0});
+        self.emit(arm! {fcmla q(ϕ(xt)), q(ϕ(x1)), q(ϕ(x2)), #90});
+        self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xt))[1]});
+        self.emit(arm! {dup q(ϕ(xd)), q(ϕ(xt))[0]});
+        */
 
-            true
-        } else {
-            false
-        }
+        true
     }
 
     fn divide_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
-        if self.config.permissive() {
-            let xt = Reg::Gen(2);
-            let yt = Reg::Gen(3);
-            let t = Reg::Temp;
+        let xt = Reg::Gen(2);
+        let yt = Reg::Gen(3);
+        let t = Reg::Temp;
 
-            self.times(xt, y1, y2);
-            self.fused_mul_add(xt, x1, x2, xt);
-            self.times(yt, x1, y2);
-            self.fused_mul_sub(yt, x2, y1, yt);
-            self.times(t, x2, x2);
-            self.fused_mul_add(t, y2, y2, t);
-            self.divide(xd, xt, t);
-            self.divide(yd, yt, t);
-            true
-        } else {
-            false
-        }
+        self.times(xt, y1, y2);
+        self.fused_mul_add(xt, x1, x2, xt);
+        self.times(yt, x1, y2);
+        self.fused_mul_sub(yt, x2, y1, yt);
+        self.times(t, x2, x2);
+        self.fused_mul_add(t, y2, y2, t);
+        self.divide(xd, xt, t);
+        self.divide(yd, yt, t);
+        true
     }
 
     fn real(&mut self, dst: Reg, s1: Reg) {
@@ -494,17 +434,7 @@ impl Generator for ArmGenerator {
         }
 
         let label = format!("_func_{}_", op);
-
-        self.jump_abs(&label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
-            arm! {adrp x(9), label((offset - pg as i32) as u32)}
-        });
-
-        self.jump_abs(
-            &label,
-            0,
-            |offset, _| arm! {ldr x(9), [x(9), #offset & 0x0fff]},
-        );
-
+        load_long(&mut self.a, 9, &label);
         self.emit(arm! {blr x(9)});
 
         Ok(())

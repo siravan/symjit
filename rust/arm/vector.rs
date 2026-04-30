@@ -23,14 +23,6 @@ impl ArmSimdGenerator {
         }
     }
 
-    fn reg_size(&self) -> u32 {
-        16
-    }
-
-    fn append_quad(&mut self, u: u64) {
-        self.a.append_quad(u);
-    }
-
     pub fn jump(&mut self, label: &str, code: u32, f: Jumper) {
         self.a.jump(label, code, f)
     }
@@ -60,7 +52,7 @@ impl ArmSimdGenerator {
     }
 
     fn load_q_from_mem(&mut self, d: u8, base: u8, idx: u32) {
-         load_q_from_mem(&mut self.a, d, base, idx);
+        load_q_from_mem(&mut self.a, d, base, idx);
     }
 
     fn save_q_to_mem(&mut self, d: u8, base: u8, idx: u32) {
@@ -77,15 +69,7 @@ impl ArmSimdGenerator {
 
     fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
         let label = format!("_simd_{}_", op);
-        self.jump_abs(&label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
-            arm! {adrp x(CALL), label((offset - pg as i32) as u32)}
-        });
-
-        self.jump_abs(
-            &label,
-            0,
-            |offset, _| arm! {ldr x(CALL), [x(CALL), #offset & 0x0fff]},
-        );
+        load_long(&mut self.a, CALL, &label);
 
         let ofs = SPILL_AREA as u32 * REG_SIZE;
 
@@ -97,15 +81,14 @@ impl ArmSimdGenerator {
         self.emit(arm! {blr x(CALL)});
 
         if self.config.is_complex() {
-            let l1 = format!(".P{}", self.a.ip());
-            let l2 = format!(".Q{}", self.a.ip());
-
             self.emit(arm! {tst x(0), x(0)});
+            let l1 = self.a.create_label();
             self.jump(&l1, 0, |offset, _| arm! {b.eq label(offset)});
             self.emit(arm! {ldr q(2), [sp, #0]});
             self.emit(arm! {ldr q(3), [sp, #16]});
             self.emit(arm! {uzp1 q(0), q(2), q(3)});
             self.emit(arm! {uzp2 q(1), q(2), q(3)});
+            let l2 = self.a.create_label();
             self.branch(&l2);
             self.set_label(&l1);
             self.emit(arm! {ldr q(0), [sp, #0]});
@@ -341,41 +324,33 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
-        if self.config.permissive() {
-            let xt = Reg::Gen(2);
-            let yt = Reg::Gen(3);
+        let xt = Reg::Gen(2);
+        let yt = Reg::Gen(3);
 
-            self.times(xt, x1, x2); // xt := x1 * x2
-            self.emit(arm! {fmls q(ϕ(xt)), q(ϕ(y1)), q(ϕ(y2))}); // xt := x1 * x2 - y1 * y2
-            self.times(yt, x1, y2); // yt := x1 * y2
-            self.emit(arm! {fmla q(ϕ(yt)), q(ϕ(x2)), q(ϕ(y1))}); // xt := x1 * y2 + x2 * y1
-            self.fmov(xd, xt);
-            self.fmov(yd, yt);
+        self.times(xt, x1, x2); // xt := x1 * x2
+        self.emit(arm! {fmls q(ϕ(xt)), q(ϕ(y1)), q(ϕ(y2))}); // xt := x1 * x2 - y1 * y2
+        self.times(yt, x1, y2); // yt := x1 * y2
+        self.emit(arm! {fmla q(ϕ(yt)), q(ϕ(x2)), q(ϕ(y1))}); // xt := x1 * y2 + x2 * y1
+        self.fmov(xd, xt);
+        self.fmov(yd, yt);
 
-            true
-        } else {
-            false
-        }
+        true
     }
 
     fn divide_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
-        if self.config.permissive() {
-            let xt = Reg::Gen(2);
-            let yt = Reg::Gen(3);
-            let t = Reg::Temp;
+        let xt = Reg::Gen(2);
+        let yt = Reg::Gen(3);
+        let t = Reg::Temp;
 
-            self.times(xt, x1, x2);
-            self.emit(arm! {fmla q(ϕ(xt)), q(ϕ(y1)), q(ϕ(y2))}); // xt := x1 * x2 + y1 * y2
-            self.times(yt, x2, y1);
-            self.emit(arm! {fmls q(ϕ(yt)), q(ϕ(x1)), q(ϕ(y2))}); // yt := x2 * y1 - x1 * y2
-            self.times(t, x2, x2);
-            self.emit(arm! {fmla q(ϕ(t)), q(ϕ(y2)), q(ϕ(y2))}); // t := x2 * x2 + y2 * y2
-            self.divide(xd, xt, t);
-            self.divide(yd, yt, t);
-            true
-        } else {
-            false
-        }
+        self.times(xt, x1, x2);
+        self.emit(arm! {fmla q(ϕ(xt)), q(ϕ(y1)), q(ϕ(y2))}); // xt := x1 * x2 + y1 * y2
+        self.times(yt, x2, y1);
+        self.emit(arm! {fmls q(ϕ(yt)), q(ϕ(x1)), q(ϕ(y2))}); // yt := x2 * y1 - x1 * y2
+        self.times(t, x2, x2);
+        self.emit(arm! {fmla q(ϕ(t)), q(ϕ(y2)), q(ϕ(y2))}); // t := x2 * x2 + y2 * y2
+        self.divide(xd, xt, t);
+        self.divide(yd, yt, t);
+        true
     }
 
     fn real(&mut self, dst: Reg, s1: Reg) {
@@ -481,16 +456,7 @@ impl Generator for ArmSimdGenerator {
         }
 
         let label = format!("_func_{}_", op);
-
-        self.jump_abs(&label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
-            arm! {adrp x(CALL), label((offset - pg as i32) as u32)}
-        });
-
-        self.jump_abs(
-            &label,
-            0,
-            |offset, _| arm! {ldr x(CALL), [x(CALL), #offset & 0x0fff]},
-        );
+        load_long(&mut self.a, CALL, &label);
 
         match num_args {
             1 => {
@@ -825,8 +791,8 @@ impl ArmSimdGenerator {
             }
         }
 
-        let frame_size = align_stack(count_params as u32 * REG_SIZE)
-            + align_stack(count_obs as u32 * REG_SIZE);
+        let frame_size =
+            align_stack(count_params as u32 * REG_SIZE) + align_stack(count_obs as u32 * REG_SIZE);
         self.add_stack(frame_size);
         self.set_label("@done");
 

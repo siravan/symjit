@@ -17,9 +17,11 @@ const SCRATCH1: u8 = 9;
 const SCRATCH2: u8 = 10;
 const TEMP: u8 = 1;
 
+// mod complex;
 mod scalar;
 mod vector;
 
+// pub use complex::ArmComplexGenerator;
 pub use scalar::ArmGenerator;
 pub use vector::ArmSimdGenerator;
 
@@ -130,15 +132,7 @@ fn load_x_from_mem(a: &mut Assembler, r: u8, base: u8, idx: u32) {
 }
 
 fn load_x_from_label(a: &mut Assembler, dst: u8, label: &str) {
-    a.jump_abs(label, (a.ip() & 0xfffff000) as u32, |offset, pg| {
-        arm! {adrp x(9), label((offset - pg as i32) as u32)}
-    });
-
-    a.jump_abs(
-        label,
-        dst as u32,
-        |offset, dst| arm! {ldr x(dst), [x(9), #offset & 0x0fff]},
-    );
+    load_long(a, dst, label);
 }
 
 fn add_consts(a: &mut Assembler, consts: &[f64]) {
@@ -173,4 +167,18 @@ fn add_func(a: &mut Assembler, op: &str, f: Func) {
         a.set_label(label.as_str());
         a.append_quad(f.func_ptr());
     }
+}
+
+fn sub_stack(a: &mut Assembler, size: u32) {
+    emit(a, arm! {sub sp, sp, #size & 0x0fff});
+    if size >> 12 != 0 {
+        emit(a, arm! {sub sp, sp, #size >> 12, lsl #12});
+    }
+}
+
+fn add_stack(a: &mut Assembler, size: u32) {
+    if size >> 12 != 0 {
+        emit(a, arm! {add sp, sp, #size >> 12, lsl #12});
+    }
+    emit(a, arm! {add sp, sp, #size & 0x0fff});
 }
