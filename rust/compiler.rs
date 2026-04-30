@@ -538,7 +538,6 @@ impl Composer for Translator {
 
 impl Translator {
     pub fn new(config: Config) -> Translator {
-        println!("{:?}", &config);
         Translator {
             config,
             ssa: Vec::new(),
