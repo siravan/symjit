@@ -238,7 +238,30 @@ impl Generator for ArmComplexGenerator {
     }
 
     fn root(&mut self, dst: Reg, s1: Reg) {
-        todo!();
+        self.emit(arm! {fmov x(0), d(ϕ(s1))});
+
+        self.emit(arm! {fmul q(T1), q(ϕ(s1)), q(ϕ(s1))});
+        self.emit(arm! {faddp d(T1), q(T1)});
+        self.emit(arm! {fsqrt d(T1), d(T1)});
+        self.emit(arm! {fabs d(T2), d(ϕ(s1))});
+        self.emit(arm! {fadd d(T1), d(T1), d(T2)});
+        self.emit(arm! {fmov d(T0), #2.0});
+        self.emit(arm! {fdiv d(T1), d(T1), d(T0)});
+        self.emit(arm! {fsqrt d(T1), d(T1)});
+
+        self.emit(arm! {zip2 q(T2), q(ϕ(s1)), q(ϕ(s1))});
+        self.emit(arm! {fdiv d(T2), d(T2), d(T1)});
+        self.emit(arm! {fdiv d(T2), d(T2), d(T0)});
+
+        self.emit(arm! {fcmeq d(T0), d(T2), d(T2)});
+        self.emit(arm! {and v(T2).8b, v(T2).8b, v(T0).8b});
+
+        self.emit(arm! {zip1 q(ϕ(dst)), q(T2), q(T1)});
+        let label = self.a.create_label();
+        self.emit(arm! {tst x(0), x(0)});
+        self.jump(&label, 0, |offset, _| arm! {b.mi label(offset)});
+        self.emit(arm! {zip1 q(ϕ(dst)), q(T1), q(T2)});
+        self.set_label(&label);
     }
 
     fn real_root(&mut self, dst: Reg, s1: Reg) {

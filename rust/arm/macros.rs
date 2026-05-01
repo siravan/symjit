@@ -353,6 +353,7 @@ macro_rules! arm {
     (b.le label($ofs:expr)) => { 0x5400000D | ofs_pc!($ofs) };
     (b.gt label($ofs:expr)) => { 0x5400000C | ofs_pc!($ofs) };
     (b.ge label($ofs:expr)) => { 0x5400000A | ofs_pc!($ofs) };
+    (b.mi label($ofs:expr)) => { 0x54000004 | ofs_pc!($ofs) };  // minus
 
     (tst x($rn:expr), x($rm:expr)) => {
         0xea00001f | rn!($rn) | rm!($rm)
