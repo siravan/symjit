@@ -211,7 +211,7 @@ impl Config {
     }
 
     pub fn fast_complex(&self) -> bool {
-        self.test(FAST_COMPLEX) && self.has_avx()
+        self.test(FAST_COMPLEX) && (self.has_avx() || self.is_arm64())
     }
 
     /// Sets of optimization level. The valid values are 0, 1, 2, which roughly correspond to gcc O0, O1, and O2 levels.
