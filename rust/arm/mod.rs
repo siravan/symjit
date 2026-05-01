@@ -17,11 +17,11 @@ const SCRATCH1: u8 = 9;
 const SCRATCH2: u8 = 10;
 const TEMP: u8 = 1;
 
-// mod complex;
+mod complex;
 mod scalar;
 mod vector;
 
-// pub use complex::ArmComplexGenerator;
+pub use complex::ArmComplexGenerator;
 pub use scalar::ArmGenerator;
 pub use vector::ArmSimdGenerator;
 
@@ -53,7 +53,7 @@ fn load_long(a: &mut Assembler, reg: u8, label: &str) {
 
     a.jump_abs(label, data, |offset, data| {
         let pg = (data & 0xfffff000) as i32;
-        let reg = (data & 0x0f) as u8;
+        let reg = (data & 0xff) as u8;
         arm! {adrp x(reg), label((offset - pg) as u32)}
     });
 

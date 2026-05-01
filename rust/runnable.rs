@@ -2,9 +2,9 @@ use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 use std::io::{Read, Write};
 
-use crate::amd::{AmdScalarGenerator, AmdSSEGenerator, AmdVectorGenerator, AmdComplexGenerator};
+use crate::amd::{AmdComplexGenerator, AmdSSEGenerator, AmdScalarGenerator, AmdVectorGenerator};
 use crate::applet::Applet;
-use crate::arm::{ArmGenerator, ArmSimdGenerator};
+use crate::arm::{ArmComplexGenerator, ArmGenerator, ArmSimdGenerator};
 use crate::complexify::Complexifier;
 use crate::config::Config;
 use crate::generator::Generator;
@@ -306,14 +306,25 @@ impl Application {
     }
 
     fn compile_arm(mir: &Mir, prog: &mut Program) -> Result<MachineCode<f64>> {
-        Self::compile::<ArmGenerator>(
-            mir,
-            prog,
-            ArmGenerator::new(prog.config().clone()),
-            prog.mem_size(),
-            "aarch64",
-            1,
-        )
+        if prog.config().is_complex() && prog.config().fast_complex() {
+            Self::compile::<ArmComplexGenerator>(
+                mir,
+                prog,
+                ArmComplexGenerator::new(prog.config().clone()),
+                prog.mem_size(),
+                "aarch64",
+                1,
+            )
+        } else {
+            Self::compile::<ArmGenerator>(
+                mir,
+                prog,
+                ArmGenerator::new(prog.config().clone()),
+                prog.mem_size(),
+                "aarch64",
+                1,
+            )
+        }
     }
 
     fn compile_arm_simd(mir: &Mir, prog: &mut Program) -> Result<MachineCode<f64>> {

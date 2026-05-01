@@ -228,6 +228,9 @@ macro_rules! arm {
         0x1e601800 | rd!($rd) | rn!($rn) | rm!($rm)
     };
 
+    (faddp d($rd:expr), q($rn:expr)) => {
+        0x7e70d800 | rd!($rd) | rn!($rn)
+    };
     (fsqrt d($rd:expr), d($rn:expr)) => {
         0x1e61c000 | rd!($rd) | rn!($rn)
     };
@@ -454,6 +457,42 @@ macro_rules! arm {
         0x4ee0f800 | rd!($rd) | rn!($rn)
     };
 
+    // rd := rm * rn + ra
+    (fmadd q($rd:expr), q($rn:expr), q($rm:expr), q($ra:expr)) => {
+        0x1f400000 | rd!($rd) | rn!($rn) | rm!($rm) | ra!($ra)
+    };
+
+    // rd := -rm * rn + ra
+    (fmsub q($rd:expr), q($rn:expr), q($rm:expr), q($ra:expr)) => {
+        0x1f408000 | rd!($rd) | rn!($rn) | rm!($rm) | ra!($ra)
+    };
+
+    // rd := -(rm * rn + ra)
+    (fnmadd q($rd:expr), q($rn:expr), q($rm:expr), q($ra:expr)) => {
+        0x1f600000 | rd!($rd) | rn!($rn) | rm!($rm) | ra!($ra)
+    };
+
+    // rd := -(rm * rn - ra)
+    (fnmsub q($rd:expr), q($rn:expr), q($rm:expr), q($ra:expr)) => {
+        0x1f608000 | rd!($rd) | rn!($rn) | rm!($rm) | ra!($ra)
+    };
+
+    /*
+     * let q1 = y1:x1 and q2 = y2:x2,
+     *
+     * zip1 q0, q1, q2 => q0 = x2:x1
+     * zip2 q0, q1, q2 => q0 = y2:y1
+     * uzp1 q0, q1, q2 => q0 = x2:x1
+     * uzp2 q0, q1, q2 => q0 = y2:y1
+     *
+     * dup q0, q1[0] => q0 = x1:x1
+     * dup q0, q1[1] => q0 = x2:x2
+     *
+     * ext q0, q1, q2, #8 => x1:y2
+     * ext q0, q1, q1, #8 => x1:y1
+     *
+     */
+
     (zip1 q($rd:expr), q($rn:expr), q($rm:expr)) => {
         0x4ec03800 | rd!($rd) | rn!($rn) | rm!($rm)
     };
@@ -466,12 +505,24 @@ macro_rules! arm {
     (uzp2 q($rd:expr), q($rn:expr), q($rm:expr)) => {
         0x4ec05800 | rd!($rd) | rn!($rn) | rm!($rm)
     };
+    (ext q($rd:expr), q($rn:expr), q($rm:expr), #8) => {
+        0x6e004000 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (rev64 q($rd:expr), q($rn:expr)) => {
+        0x4e200800 | rd!($rd) | rn!($rn)
+    };
 
     (fcmla q($rd:expr), q($rn:expr), q($rm:expr), #0) => {
         0x6ec0c400 | rd!($rd) | rn!($rn) | rm!($rm)
     };
     (fcmla q($rd:expr), q($rn:expr), q($rm:expr), #90) => {
         0x6ec0cc00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (fcmla q($rd:expr), q($rn:expr), q($rm:expr), #180) => {
+        0x6ec0d400 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (fcmla q($rd:expr), q($rn:expr), q($rm:expr), #270) => {
+        0x6ec0dc00 | rd!($rd) | rn!($rn) | rm!($rm)
     };
 
     // FMA instructions are not defined for 2d packed-double
