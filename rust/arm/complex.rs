@@ -326,12 +326,14 @@ impl Generator for ArmComplexGenerator {
         self.emit(arm! { dup q(T1), q(ϕ(s1))[1] });
         self.emit(arm! { dup q(T2), q(ϕ(s2))[1] });
         self.emit(arm! { fmsub d(T0), d(T1), d(T2), d(T0) });
-        self.emit(arm! { fmul d(T2), d(ϕ(s1)), d(T2) });
-        self.emit(arm! { fmadd d(T2), d(ϕ(s2)), d(T1), d(T2) });
+        self.emit(arm! { fmul d(T2), d(ϕ(s2)), d(T1) });
+        self.emit(arm! { fmadd d(T2), d(ϕ(s1)), d(T2), d(T2) });
+
         self.emit(arm! { zip1 q(ϕ(dst)), q(T0), q(T2) });
     }
 
     fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
+        /*
         self.emit(arm! {eor v(T1).16b, v(T1).16b, v(T1).16b});
         self.emit(arm! {fcmla q(T1), q(ϕ(s2)), q(ϕ(s1)), #0});
         self.emit(arm! {fcmla q(T1), q(ϕ(s2)), q(ϕ(s1)), #270});
@@ -340,6 +342,21 @@ impl Generator for ArmComplexGenerator {
         self.emit(arm! {faddp d(T2), q(T2)});
         self.emit(arm! {dup q(T2), q(T2)[0]});
         self.emit(arm! {fdiv q(ϕ(dst)), q(T1), q(T2)});
+        */
+
+        self.emit(arm! { fmul d(T0), d(ϕ(s1)), d(ϕ(s2)) });
+        self.emit(arm! { dup q(T1), q(ϕ(s1))[1] });
+        self.emit(arm! { dup q(T2), q(ϕ(s2))[1] });
+        self.emit(arm! { fmadd d(T0), d(T1), d(T2), d(T0) });
+        self.emit(arm! { fmul d(T1), d(ϕ(s2)), d(T1) });
+        self.emit(arm! { fmsub d(T1), d(ϕ(s1)), d(T2), d(T1) });
+
+        self.emit(arm! { zip1 q(T0), q(T0), q(T1) });
+
+        self.emit(arm! { fmul d(T1), d(ϕ(s2)), d(ϕ(s2)) });
+        self.emit(arm! { fmadd d(T1), d(T2), d(T2), d(T1) });
+        self.emit(arm! { dup q(T1), q(T1)[1] });
+        self.emit(arm! { fdiv q(ϕ(dst)), q(T0), q(T1) });
     }
 
     fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
