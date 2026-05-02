@@ -3,11 +3,13 @@ import util
 args = util.process_argv()
 
 import math
-from sympy import symbols, lambdify
+
 from symjit import compile_func
+from sympy import lambdify, symbols
+
 # calculating pi using Machine formula
 
-N = 4
+N = 21
 
 
 def arctan_series(x):
@@ -22,7 +24,7 @@ def arctan_series(x):
 
 x, y = symbols("x y")
 p = 4 * (4 * arctan_series(x) - arctan_series(y))
-print(p)
+# print(p)
 
 f = compile_func([x, y], p, **args)
 g = lambdify([x, y], p)

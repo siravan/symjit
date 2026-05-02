@@ -322,14 +322,14 @@ impl Generator for ArmComplexGenerator {
         self.emit(arm! {fmov q(ϕ(dst)), q(T1)});
         */
 
-        self.emit(arm! { fmul d(T0), d(ϕ(s1)), d(ϕ(s2)) });
-        self.emit(arm! { dup q(T1), q(ϕ(s1))[1] });
-        self.emit(arm! { dup q(T2), q(ϕ(s2))[1] });
-        self.emit(arm! { fmsub d(T0), d(T1), d(T2), d(T0) });
-        self.emit(arm! { fmul d(T2), d(ϕ(s2)), d(T1) });
-        self.emit(arm! { fmadd d(T2), d(ϕ(s1)), d(T2), d(T2) });
+        self.emit(arm! { fmul d(T0), d(ϕ(s1)), d(ϕ(s2)) }); // T0 = x1*x2
+        self.emit(arm! { dup q(T1), q(ϕ(s1))[1] }); // T1 = y1
+        self.emit(arm! { dup q(T2), q(ϕ(s2))[1] }); // T2 = y2
+        self.emit(arm! { fmsub d(T0), d(T1), d(T2), d(T0) }); // T0 = x1*x2 - y1*y2
+        self.emit(arm! { fmul d(T2), d(ϕ(s1)), d(T2) }); // T2 = x1*y2
+        self.emit(arm! { fmadd d(T2), d(ϕ(s2)), d(T1), d(T2) }); // T2 = x1*y2 + x2*y1
 
-        self.emit(arm! { zip1 q(ϕ(dst)), q(T0), q(T2) });
+        self.emit(arm! { zip1 q(ϕ(dst)), q(T0), q(T2) }); // dst = (x1*x2 - y1*y2) + (x1*y2 + x2*y1)*im
     }
 
     fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
@@ -344,19 +344,19 @@ impl Generator for ArmComplexGenerator {
         self.emit(arm! {fdiv q(ϕ(dst)), q(T1), q(T2)});
         */
 
-        self.emit(arm! { fmul d(T0), d(ϕ(s1)), d(ϕ(s2)) });
-        self.emit(arm! { dup q(T1), q(ϕ(s1))[1] });
-        self.emit(arm! { dup q(T2), q(ϕ(s2))[1] });
-        self.emit(arm! { fmadd d(T0), d(T1), d(T2), d(T0) });
-        self.emit(arm! { fmul d(T1), d(ϕ(s2)), d(T1) });
-        self.emit(arm! { fmsub d(T1), d(ϕ(s1)), d(T2), d(T1) });
+        self.emit(arm! { fmul d(T0), d(ϕ(s1)), d(ϕ(s2)) }); // T0 = x1*x2
+        self.emit(arm! { dup q(T1), q(ϕ(s1))[1] }); // T1 = y1
+        self.emit(arm! { dup q(T2), q(ϕ(s2))[1] }); // T2 = y2
+        self.emit(arm! { fmadd d(T0), d(T1), d(T2), d(T0) }); // T0 = x1*x2 + y1*y2
+        self.emit(arm! { fmul d(T1), d(ϕ(s2)), d(T1) }); // T1 = x2*y1
+        self.emit(arm! { fmsub d(T1), d(ϕ(s1)), d(T2), d(T1) }); // T1 = x2*y1 - x1*y2
 
-        self.emit(arm! { zip1 q(T0), q(T0), q(T1) });
+        self.emit(arm! { zip1 q(T0), q(T0), q(T1) }); // T0 = (x1*x2 + y1*y2) + (x2*y1 - x1*y2)*im
 
-        self.emit(arm! { fmul d(T1), d(ϕ(s2)), d(ϕ(s2)) });
-        self.emit(arm! { fmadd d(T1), d(T2), d(T2), d(T1) });
-        self.emit(arm! { dup q(T1), q(T1)[1] });
-        self.emit(arm! { fdiv q(ϕ(dst)), q(T0), q(T1) });
+        self.emit(arm! { fmul d(T1), d(ϕ(s2)), d(ϕ(s2)) }); // T1 = x2*x2
+        self.emit(arm! { fmadd d(T1), d(T2), d(T2), d(T1) }); // T1 = x2*x2 + y2*y2
+        self.emit(arm! { dup q(T1), q(T1)[0] });
+        self.emit(arm! { fdiv q(ϕ(dst)), q(T0), q(T1) }); // T0 = (x1*x2 + y1*y2)/T1 + (x2*y1 - x1*y2)/T1*im
     }
 
     fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
