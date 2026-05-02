@@ -307,12 +307,14 @@ impl Node {
             ..
         } = self
         {
-            if let Ok(dst) = self.load_math(mir, base, op, left, right) {
-                return Ok(dst);
-            }
+            if mir.config.is_amd64() {
+                if let Ok(dst) = self.load_math(mir, base, op, left, right) {
+                    return Ok(dst);
+                }
 
-            if let Ok(dst) = self.load_const_math(mir, base, op, left, right) {
-                return Ok(dst);
+                if let Ok(dst) = self.load_const_math(mir, base, op, left, right) {
+                    return Ok(dst);
+                }
             }
 
             let (dst, l, r) = self.alloc(mir, base, left, right)?;
