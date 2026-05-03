@@ -9,24 +9,9 @@ use crate::utils::{align_stack, is_external_func, reg, Reg};
 use super::*;
 
 const REG_SIZE: u32 = 8;
-const T0: u8 = 1; // Reg::Temp
-const T1: u8 = 2;
-const T2: u8 = 3;
-
-/*
- *  ϕ translates a logical register number (in Reg) to a physical
- *  register number, according to the ABI.
- */
-fn ϕ(r: Reg) -> u8 {
-    match r {
-        Reg::Ret => 0,
-        Reg::Temp => 1,
-        Reg::Left => 0,
-        Reg::Right => 1,
-        Reg::Gen(dst) => dst + 4,
-        Reg::Static(..) => panic!("passing static registers to codegen"),
-    }
-}
+const T0: u8 = 24; // Reg::Temp
+const T1: u8 = 25;
+const T2: u8 = 26;
 
 pub struct ArmComplexGenerator {
     a: Assembler,

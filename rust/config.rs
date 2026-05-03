@@ -195,8 +195,10 @@ impl Config {
     pub fn count_scratch(&self) -> u8 {
         if !self.is_complex() {
             self.available_registers() - 2
-        } else if self.fast_complex() {
+        } else if self.fast_complex() && self.is_amd64() {
             self.available_registers() - 4
+        } else if self.fast_complex() && self.is_arm64() {
+            self.available_registers() - 2
         } else {
             (self.available_registers() - 6) / 2
         }
