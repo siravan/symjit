@@ -3,7 +3,7 @@ use anyhow::{anyhow, Result};
 use crate::assembler::{Assembler, Jumper};
 use crate::code::Func;
 use crate::config::{Config, SPILL_AREA};
-use crate::generator::Generator;
+use crate::generator::{FuncletType, Generator};
 use crate::utils::{align_stack, is_external_func, reg, Reg};
 
 use super::*;
@@ -127,6 +127,10 @@ impl Generator for ArmSimdGenerator {
 
     fn count_shadows(&self) -> u8 {
         14
+    }
+
+    fn support_funclet(&self) -> FuncletType {
+        FuncletType::None
     }
 
     fn seal(&mut self) {
@@ -575,6 +579,14 @@ impl Generator for ArmSimdGenerator {
         }
 
         Ok(())
+    }
+
+    fn call_funclet(&mut self, _label: &str) {
+        todo!();
+    }
+
+    fn ret(&mut self) {
+        self.emit(arm! {ret});
     }
 
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {

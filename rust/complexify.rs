@@ -3,7 +3,7 @@ use std::collections::HashSet;
 
 use crate::code::Func;
 use crate::config::Config;
-use crate::generator::Generator;
+use crate::generator::{FuncletType, Generator};
 use crate::mir::Mir;
 use crate::symbol::Loc;
 use crate::utils::Reg;
@@ -145,6 +145,10 @@ impl Generator for Complexifier {
 
     fn bytes(&mut self) -> Vec<u8> {
         Vec::new()
+    }
+
+    fn support_funclet(&self) -> FuncletType {
+        FuncletType::None
     }
 
     fn seal(&mut self) {}
@@ -734,6 +738,10 @@ impl Generator for Complexifier {
 
         self.mir.call(op, num_args)
     }
+
+    fn call_funclet(&mut self, _label: &str) {}
+
+    fn ret(&mut self) {}
 
     fn prologue_fast(&mut self, _cap: usize, _count_states: usize, _count_obs: usize) {}
     fn epilogue_fast(

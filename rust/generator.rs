@@ -3,11 +3,19 @@ use anyhow::Result;
 use crate::code::Func;
 use crate::utils::Reg;
 
+pub enum FuncletType {
+    None,
+    Real,
+    Complex,
+}
+
 #[allow(dead_code)]
 pub trait Generator {
     fn count_shadows(&self) -> u8;
     fn three_address(&self) -> bool;
     fn bytes(&mut self) -> Vec<u8>;
+    fn support_funclet(&self) -> FuncletType;
+
     fn seal(&mut self);
     fn align(&mut self);
     fn set_label(&mut self, label: &str);
@@ -83,6 +91,9 @@ pub trait Generator {
     fn add_func(&mut self, f: &str, p: Func);
     fn call(&mut self, op: &str, num_args: usize) -> Result<()>;
     fn call_complex(&mut self, op: &str, num_args: usize) -> Result<()>;
+
+    fn call_funclet(&mut self, label: &str);
+    fn ret(&mut self);
 
     fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize);
     fn epilogue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize, idx_ret: i32);

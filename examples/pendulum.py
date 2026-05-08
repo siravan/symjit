@@ -5,13 +5,14 @@ import util
 args = util.process_argv()
 
 # %%
+import time
+
+import matplotlib.pyplot as plt
+import numpy as np
 import sympy as sm
 import sympy.physics.mechanics as me
-import time
-import numpy as np
 from scipy.integrate import solve_ivp
-import matplotlib.pyplot as plt
-from symjit import compile_func, OdeFunc
+from symjit import OdeFunc, compile_func
 
 # %%
 # **A chain**
@@ -147,6 +148,9 @@ force1 = list(force1)
 pL1 = (m, g, l, iZZ, reibung)
 MM_jit = compile_func((*w1, *v1), MM1, params=pL1, **args)
 force_jit = compile_func((*w1, *v1), force1, params=pL1, **args)
+
+MM_jit.dump("mm.mir", "bytecode")
+force_jit.dump("force.mir", "bytecode")
 
 # print('w1 = ', w1)
 # print('v1 = ', v1)

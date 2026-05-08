@@ -1,9 +1,12 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::rc::Rc;
 
+use anyhow::anyhow;
 use anyhow::Result;
 use num_complex::Complex;
 use petgraph::matrix_graph::Zero;
@@ -12,13 +15,14 @@ use crate::code::{Func, VirtualTable};
 use crate::complexify::Complexifier;
 use crate::config::Config;
 use crate::config::SPILL_AREA;
+use crate::generator::FuncletType;
 use crate::generator::Generator;
 use crate::machine::MachineCode;
 use crate::symbol::Loc;
 use crate::utils::is_external_func;
 use crate::utils::{bool_to_f64, Compiled, CompiledFunc, Reg};
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash)]
 #[repr(u8)]
 pub enum UniOp {
     Neg,
@@ -37,7 +41,7 @@ pub enum UniOp {
     Half,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash)]
 #[repr(u8)]
 pub enum BinOp {
     Plus,
@@ -57,7 +61,7 @@ pub enum BinOp {
     Complex,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash)]
 #[repr(u8)]
 pub enum ArithOp {
     Plus = 0,
@@ -66,13 +70,20 @@ pub enum ArithOp {
     Divide = 3,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash)]
 #[repr(u8)]
 pub enum FusedOp {
     MulAdd = 0,    // + a * b + c
     MulSub = 1,    // a * b - c
     NegMulAdd = 2, // - a * b + c
     NegMulSub = 3, // -a * b - c
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Hash, Eq)]
+#[repr(u8)]
+pub enum FuncletOp {
+    Times,
+    TimesComplex,
 }
 
 #[derive(Clone)]
@@ -166,6 +177,13 @@ pub enum Instruction {
         x2: Reg,
         y2: Reg,
     },
+}
+
+impl Hash for Instruction {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let s = format!("{:?}", &self);
+        s.hash(state);
+    }
 }
 
 impl fmt::Debug for Instruction {
@@ -1412,7 +1430,89 @@ impl Mir {
         };
     }
 
+    fn funclet_name(ins: &Instruction) -> Option<String> {
+        if let Instruction::Bi {
+            op: BinOp::Times,
+            dst,
+            s1,
+            s2,
+        } = ins
+        {
+            Some(format!("times_{:?}_{:?}_{:?}", dst, s1, s2))
+        } else if let Instruction::ComplexBi {
+            op: ArithOp::Times,
+            xd,
+            yd,
+            x1,
+            y1,
+            x2,
+            y2,
+        } = ins
+        {
+            Some(format!(
+                "times_complex_{:?}_{:?}_{:?}_{:?}_{:?}_{:?}",
+                xd, yd, x1, y1, x2, y2
+            ))
+        } else {
+            None
+        }
+    }
+
+    fn create_funclets(
+        &self,
+        ir: &mut dyn Generator,
+        funclets: HashSet<(FuncletOp, Vec<Reg>)>,
+    ) -> Result<()> {
+        if funclets.is_empty() {
+            return Ok(());
+        }
+
+        ir.branch("@funclets");
+
+        let mut count_times = 0;
+        let mut count_times_complex = 0;
+
+        for f in funclets.iter() {
+            if let (FuncletOp::Times, args) = f {
+                let dst = args[0];
+                let s1 = args[1];
+                let s2 = args[2];
+                let name = format!("times_{:?}_{:?}_{:?}", dst, s1, s2);
+                ir.set_label(&name);
+                ir.times(dst, s1, s2);
+                ir.ret();
+                count_times += 1;
+            } else if let (FuncletOp::TimesComplex, args) = f {
+                let xd = args[0];
+                let yd = args[1];
+                let x1 = args[2];
+                let y1 = args[3];
+                let x2 = args[4];
+                let y2 = args[5];
+                let name = format!(
+                    "times_complex_{:?}_{:?}_{:?}_{:?}_{:?}_{:?}",
+                    xd, yd, x1, y1, x2, y2
+                );
+                ir.set_label(&name);
+                ir.times_complex(xd, yd, x1, y1, x2, y2);
+                ir.ret();
+                count_times_complex += 1;
+            }
+        }
+
+        ir.set_label("@funclets");
+
+        println!(
+            "{} times and {} complex times funclets.",
+            count_times, count_times_complex
+        );
+
+        Ok(())
+    }
+
     pub fn rerun(&self, ir: &mut dyn Generator) -> Result<()> {
+        let mut funclets: HashSet<(FuncletOp, Vec<Reg>)> = HashSet::new();
+
         for ins in self.code.iter() {
             match ins {
                 Instruction::Nop | Instruction::End => {}
@@ -1420,7 +1520,16 @@ impl Mir {
                     Self::rerun_uniop(ir, *op, *dst, *s1);
                 }
                 Instruction::Bi { op, dst, s1, s2 } => {
-                    Self::rerun_binop(ir, *op, *dst, *s1, *s2);
+                    if self.config.mem_saver()
+                        && self.config.is_complex()
+                        && matches!(op, BinOp::Times)
+                        && matches!(ir.support_funclet(), FuncletType::Real)
+                    {
+                        funclets.insert((FuncletOp::Times, vec![*dst, *s1, *s2]));
+                        ir.call_funclet(&Self::funclet_name(ins).unwrap());
+                    } else {
+                        Self::rerun_binop(ir, *op, *dst, *s1, *s2);
+                    }
                 }
                 Instruction::Mov { dst, s1 } => {
                     if *dst != *s1 {
@@ -1562,7 +1671,15 @@ impl Mir {
                         Complexifier::generic_complex_minus(ir, *xd, *yd, *x1, *y1, *x2, *y2)
                     }
                     ArithOp::Times => {
-                        if !ir.times_complex(*xd, *yd, *x1, *y1, *x2, *y2) {
+                        if self.config.mem_saver()
+                            && matches!(ir.support_funclet(), FuncletType::Complex)
+                        {
+                            funclets.insert((
+                                FuncletOp::TimesComplex,
+                                vec![*xd, *yd, *x1, *y1, *x2, *y2],
+                            ));
+                            ir.call_funclet(&Self::funclet_name(ins).unwrap());
+                        } else if !ir.times_complex(*xd, *yd, *x1, *y1, *x2, *y2) {
                             Complexifier::generic_complex_times(ir, *xd, *yd, *x1, *y1, *x2, *y2)
                         }
                     }
@@ -1574,6 +1691,8 @@ impl Mir {
                 },
             }
         }
+
+        self.create_funclets(ir, funclets)?;
 
         Ok(())
     }

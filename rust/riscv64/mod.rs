@@ -3,7 +3,7 @@ mod macros;
 
 use crate::assembler::{Assembler, Jumper};
 use crate::config::Config;
-use crate::generator::Generator;
+use crate::generator::{FuncletType, Generator};
 use crate::utils::{align_stack, reg, Reg};
 use anyhow::Result;
 
@@ -235,6 +235,10 @@ impl Generator for RiscV {
 
     fn count_shadows(&self) -> u8 {
         14
+    }
+
+    fn support_funclet(&self) -> FuncletType {
+        FuncletType::None
     }
 
     fn seal(&mut self) {
@@ -601,6 +605,14 @@ impl Generator for RiscV {
         self.load_stack(Reg::Ret, 0);
         self.load_stack(Reg::Temp, 1);
         Ok(())
+    }
+
+    fn call_funclet(&mut self, _label: &str) {
+        todo!();
+    }
+
+    fn ret(&mut self) {
+        self.emit(rvv! {ret});
     }
 
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {

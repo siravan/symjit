@@ -49,7 +49,7 @@ pub enum DataType {
     F64,
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Hash, Eq)]
 pub enum Reg {
     Ret,
     Temp,

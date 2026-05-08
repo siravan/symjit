@@ -36,7 +36,7 @@ n = len(input_params)
 
 print("Building symjit evaluator...")
 t_start = time.time()
-symjit_f = compile_evaluator(evaluator, dtype="complex128")
+symjit_f = compile_evaluator(evaluator, dtype="complex128", mem_saver=True)
 print(f"completed in {time.time() - t_start:.1f} s.")
 
 print("Compiling symbolica evaluator...")

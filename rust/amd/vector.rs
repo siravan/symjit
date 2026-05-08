@@ -1,6 +1,6 @@
 use crate::code::Func;
 use crate::config::{Config, SPILL_AREA};
-use crate::generator::Generator;
+use crate::generator::{FuncletType, Generator};
 use crate::utils::align_stack;
 use crate::utils::{is_external_func, reg, DataType, Reg};
 use anyhow::{anyhow, Result};
@@ -186,8 +186,7 @@ impl AmdVectorGenerator {
         let cap = SPILL_AREA as u32;
 
         self.amd.mov_reg_label(ARGS[0], &format!("_env_{}_", op));
-        self.amd
-            .lea_mem(ARGS[1], STACK, (cap * REG_SIZE) as i32);
+        self.amd.lea_mem(ARGS[1], STACK, (cap * REG_SIZE) as i32);
         self.amd.mov_imm(ARGS[2], num_args as u32);
         self.amd.lea_mem(ARGS[3], STACK, 4 * REG_SIZE as i32);
         self.vzeroupper();
@@ -241,6 +240,10 @@ impl Generator for AmdVectorGenerator {
 
     fn three_address(&self) -> bool {
         true
+    }
+
+    fn support_funclet(&self) -> FuncletType {
+        FuncletType::Complex
     }
 
     fn seal(&mut self) {
@@ -308,11 +311,13 @@ impl Generator for AmdVectorGenerator {
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        self.amd.vmovpd_ymm_mem(ϕ(dst), MEM, (idx * REG_SIZE) as i32);
+        self.amd
+            .vmovpd_ymm_mem(ϕ(dst), MEM, (idx * REG_SIZE) as i32);
     }
 
     fn save_mem(&mut self, dst: Reg, idx: u32) {
-        self.amd.vmovpd_mem_ymm(MEM, (idx * REG_SIZE) as i32, ϕ(dst));
+        self.amd
+            .vmovpd_mem_ymm(MEM, (idx * REG_SIZE) as i32, ϕ(dst));
     }
 
     fn save_mem_result(&mut self, idx: u32) {
@@ -323,7 +328,8 @@ impl Generator for AmdVectorGenerator {
         self.last_load = self.amd.a.ip();
 
         if self.config.symbolica() {
-            self.amd.vmovpd_ymm_mem(ϕ(dst), PARAMS, (idx * REG_SIZE) as i32);
+            self.amd
+                .vmovpd_ymm_mem(ϕ(dst), PARAMS, (idx * REG_SIZE) as i32);
         } else {
             self.amd.vbroadcastsd(ϕ(dst), PARAMS, 8 * idx as i32);
         }
@@ -331,11 +337,13 @@ impl Generator for AmdVectorGenerator {
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        self.amd.vmovpd_ymm_mem(ϕ(dst), STACK, (idx * REG_SIZE) as i32);
+        self.amd
+            .vmovpd_ymm_mem(ϕ(dst), STACK, (idx * REG_SIZE) as i32);
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        self.amd.vmovpd_mem_ymm(STACK, (idx * REG_SIZE) as i32, ϕ(dst));
+        self.amd
+            .vmovpd_mem_ymm(STACK, (idx * REG_SIZE) as i32, ϕ(dst));
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
@@ -603,6 +611,14 @@ impl Generator for AmdVectorGenerator {
         Ok(())
     }
 
+    fn call_funclet(&mut self, label: &str) {
+        self.amd.call_relative(label);
+    }
+
+    fn ret(&mut self) {
+        self.amd.ret();
+    }
+
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {
         if true_val == false_val {
             self.fmov(dst, true_val);
@@ -665,8 +681,7 @@ impl Generator for AmdVectorGenerator {
 
     fn epilogue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize, idx_ret: i32) {
         self.vzeroupper();
-        self.amd
-            .movsd_xmm_mem(0, MEM, idx_ret * REG_SIZE as i32);
+        self.amd.movsd_xmm_mem(0, MEM, idx_ret * REG_SIZE as i32);
 
         let total_size = align_stack(cap as u32 * REG_SIZE)
             + align_stack((count_states + count_obs) as u32 * REG_SIZE);

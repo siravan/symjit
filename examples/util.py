@@ -39,6 +39,13 @@ def process_argv():
         dest="fast_complex",
         default=True,
     )
+    parser.add_argument(
+        "--mem_saver",
+        help="Contract compiled code",
+        action="store_true",
+        dest="mem_saver",
+        default=False,
+    )
     parser.add_argument("--dtype", help="data type", default="float64")
     parser.add_argument(
         "--opt_level",

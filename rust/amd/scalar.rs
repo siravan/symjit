@@ -1,6 +1,6 @@
 use crate::code::Func;
 use crate::config::{Config, SPILL_AREA};
-use crate::generator::Generator;
+use crate::generator::{FuncletType, Generator};
 use crate::utils::align_stack;
 use crate::utils::{is_external_func, reg, DataType, Reg};
 use anyhow::Result;
@@ -114,6 +114,10 @@ impl Generator for AmdScalarGenerator {
 
     fn three_address(&self) -> bool {
         true
+    }
+
+    fn support_funclet(&self) -> FuncletType {
+        FuncletType::Complex
     }
 
     fn seal(&mut self) {
@@ -484,6 +488,14 @@ impl Generator for AmdScalarGenerator {
         self.load_stack(Reg::Temp, 5);
 
         Ok(())
+    }
+
+    fn call_funclet(&mut self, label: &str) {
+        self.amd.call_relative(label);
+    }
+
+    fn ret(&mut self) {
+        self.amd.ret();
     }
 
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {

@@ -33,7 +33,7 @@ pub type BinaryFunc = extern "C" fn(f64, f64) -> f64;
 pub type UnaryFuncCplx = extern "C" fn(f64, f64, &mut Complex<f64>);
 pub type BinaryFuncCplx = extern "C" fn(f64, f64, &mut Complex<f64>);
 
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub enum Func {
     Unary(UnaryFunc),
     Binary(BinaryFunc),

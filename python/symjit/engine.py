@@ -335,6 +335,7 @@ class RustyCompiler:
         num_params=1,
         order="fortran",
         simd_branch=False,
+        mem_saver=False,
         fast_complex=True,
     ):
         if convert:
@@ -356,6 +357,7 @@ class RustyCompiler:
             | (0x20 if dtype == "complex128" else 0)
             | (0x40 if order == "c" else 0)
             | (0x80 if simd_branch else 0)
+            | (0x2000 if mem_saver else 0)
             | (0x8000 if fast_complex else 0)
             | ((opt_level & 0x0F) << 8)
         )

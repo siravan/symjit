@@ -1,6 +1,6 @@
 use crate::code::Func;
 use crate::config::{Config, SPILL_AREA};
-use crate::generator::Generator;
+use crate::generator::{FuncletType, Generator};
 use crate::utils::align_stack;
 use crate::utils::{is_external_func, reg, DataType, Reg};
 use anyhow::Result;
@@ -12,12 +12,10 @@ const RET: u8 = 0;
 const REG_SIZE: u32 = 8;
 
 macro_rules! binop {
-    ($self:ident, $sse:ident, $dst:expr, $s1: expr, $s2: expr, $com:ident) => {
-        {
-            let (x, y) = $self.shrink($dst, $s1, $s2, $com);
-            $self.amd.$sse(ϕ(x), ϕ(y));
-        }
-    };
+    ($self:ident, $sse:ident, $dst:expr, $s1: expr, $s2: expr, $com:ident) => {{
+        let (x, y) = $self.shrink($dst, $s1, $s2, $com);
+        $self.amd.$sse(ϕ(x), ϕ(y));
+    }};
 }
 
 macro_rules! uniop {
@@ -91,8 +89,7 @@ impl AmdSSEGenerator {
         let cap = SPILL_AREA as u32;
 
         self.amd.mov_reg_label(ARGS[0], &format!("_env_{}_", op));
-        self.amd
-            .lea_mem(ARGS[1], STACK, (cap * REG_SIZE) as i32);
+        self.amd.lea_mem(ARGS[1], STACK, (cap * REG_SIZE) as i32);
         self.amd.mov_imm(ARGS[2], num_args as u32);
         self.amd.lea_mem(ARGS[3], STACK, 4 * REG_SIZE as i32);
 
@@ -127,6 +124,10 @@ impl Generator for AmdSSEGenerator {
 
     fn three_address(&self) -> bool {
         false
+    }
+
+    fn support_funclet(&self) -> FuncletType {
+        FuncletType::Complex
     }
 
     fn seal(&mut self) {
@@ -203,7 +204,8 @@ impl Generator for AmdSSEGenerator {
         self.last_load = self.amd.a.ip();
 
         if self.config.symbolica() {
-            self.amd.movsd_xmm_mem(ϕ(dst), PARAMS, (idx * REG_SIZE) as i32);
+            self.amd
+                .movsd_xmm_mem(ϕ(dst), PARAMS, (idx * REG_SIZE) as i32);
         } else {
             self.amd.movsd_xmm_mem(ϕ(dst), PARAMS, 8 * idx as i32);
         }
@@ -211,11 +213,13 @@ impl Generator for AmdSSEGenerator {
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        self.amd.movsd_xmm_mem(ϕ(dst), STACK, (idx * REG_SIZE) as i32);
+        self.amd
+            .movsd_xmm_mem(ϕ(dst), STACK, (idx * REG_SIZE) as i32);
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        self.amd.movsd_mem_xmm(STACK, (idx * REG_SIZE) as i32, ϕ(dst));
+        self.amd
+            .movsd_mem_xmm(STACK, (idx * REG_SIZE) as i32, ϕ(dst));
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
@@ -312,11 +316,27 @@ impl Generator for AmdSSEGenerator {
         binop!(self, divsd, dst, s1, s2, false);
     }
 
-    fn times_complex(&mut self, _xd: Reg, _yd: Reg, _x1: Reg, _y1: Reg, _x2: Reg, _y2: Reg) -> bool {
+    fn times_complex(
+        &mut self,
+        _xd: Reg,
+        _yd: Reg,
+        _x1: Reg,
+        _y1: Reg,
+        _x2: Reg,
+        _y2: Reg,
+    ) -> bool {
         false
     }
 
-    fn divide_complex(&mut self, _xd: Reg, _yd: Reg, _x1: Reg, _y1: Reg, _x2: Reg, _y2: Reg) -> bool {
+    fn divide_complex(
+        &mut self,
+        _xd: Reg,
+        _yd: Reg,
+        _x1: Reg,
+        _y1: Reg,
+        _x2: Reg,
+        _y2: Reg,
+    ) -> bool {
         false
     }
 
@@ -447,6 +467,14 @@ impl Generator for AmdSSEGenerator {
         Ok(())
     }
 
+    fn call_funclet(&mut self, label: &str) {
+        self.amd.call_relative(label);
+    }
+
+    fn ret(&mut self) {
+        self.amd.ret();
+    }
+
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {
         if true_val == false_val {
             self.fmov(dst, true_val);
@@ -508,8 +536,7 @@ impl Generator for AmdSSEGenerator {
     }
 
     fn epilogue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize, idx_ret: i32) {
-        self.amd
-            .movsd_xmm_mem(0, MEM, idx_ret * REG_SIZE as i32);
+        self.amd.movsd_xmm_mem(0, MEM, idx_ret * REG_SIZE as i32);
 
         let total_size = align_stack(cap as u32 * REG_SIZE)
             + align_stack((count_states + count_obs) as u32 * REG_SIZE);
