@@ -1,0 +1,21 @@
+ty = "native"
+
+[options]
+use_simd = true
+use_threads = false
+cse = false
+fastmath = false
+complex = false
+symbolica = true
+simd_branch = false
+compact = true
+compress = false
+direct = false
+fast_complex = true
+opt_level = 2
+
+[debug]
+bytecode = false
+scalar = false
+simd = false
+stats = false

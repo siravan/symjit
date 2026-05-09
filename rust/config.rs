@@ -107,15 +107,14 @@ impl Config {
         let c: ConfigToml = toml::from_str(&toml)?;
 
         opt &= COMPLEX | SYMBOLICA;
-
         let mut config = Self::from_name(&c.ty, opt)?;
 
         config.set_simd(c.options.use_simd);
         config.set_threads(c.options.use_threads);
         config.set_cse(c.options.cse);
         config.set_fastmath(c.options.fastmath);
-        config.set_complex(c.options.complex);
-        config.set_symbolica(c.options.symbolica);
+        config.set_complex(c.options.complex | config.is_complex());
+        config.set_symbolica(c.options.symbolica | config.symbolica());
         config.set_simd_branch(c.options.simd_branch);
         config.set_compact(c.options.compact);
         config.set_compress(c.options.compress);

@@ -288,11 +288,6 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
-        /*
-        self.load_const_by_name(Reg::Temp, "_one_");
-        self.divide(dst, Reg::Temp, s1);
-        */
-
         self.amd.vshufdd(T1, ϕ(s1), ϕ(s1), 1);
         self.amd.vxorpd(T2, T2, T2);
         self.amd.vaddsubdd(T1, T2, T1);
@@ -305,7 +300,8 @@ impl Generator for AmdComplexGenerator {
 
     fn half(&mut self, dst: Reg, s1: Reg) {
         self.load_const_by_name(Reg::Temp, "_two_");
-        self.divide(dst, s1, Reg::Temp);
+        self.amd.vunpckldd(ϕ(Reg::Temp), ϕ(Reg::Temp), ϕ(Reg::Temp));
+        self.amd.vdivdd(ϕ(dst), ϕ(s1), ϕ(Reg::Temp));
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {
@@ -347,6 +343,9 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
+        self.amd.vmuldd(T0, ϕ(s2), ϕ(s2));
+        self.amd.vhadddd(T0, T0, T0);
+
         self.amd.vunpckldd(T1, ϕ(s1), ϕ(s1)); // duplicate real
         self.amd.vunpckhdd(T2, ϕ(s1), ϕ(s1)); // duplicate imag
         self.amd.vmuldd(T1, T1, ϕ(s2));
@@ -354,10 +353,7 @@ impl Generator for AmdComplexGenerator {
         self.amd.vshufdd(T1, T1, T1, 1); // exchange real/imag
         self.amd.vaddsubdd(ϕ(dst), T2, T1);
         self.amd.vshufdd(ϕ(dst), ϕ(dst), ϕ(dst), 1);
-
-        self.amd.vmuldd(T1, ϕ(s2), ϕ(s2));
-        self.amd.vhadddd(T1, T1, T1);
-        self.amd.vdivdd(ϕ(dst), ϕ(dst), T1);
+        self.amd.vdivdd(ϕ(dst), ϕ(dst), T0);
     }
 
     fn times_complex(
@@ -369,7 +365,7 @@ impl Generator for AmdComplexGenerator {
         _x2: Reg,
         _y2: Reg,
     ) -> bool {
-        false
+        unreachable!()
     }
 
     fn divide_complex(
@@ -381,7 +377,7 @@ impl Generator for AmdComplexGenerator {
         _x2: Reg,
         _y2: Reg,
     ) -> bool {
-        false
+        unreachable!()
     }
 
     fn real(&mut self, dst: Reg, s1: Reg) {
@@ -407,32 +403,32 @@ impl Generator for AmdComplexGenerator {
 
     fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, vcmpnlesd, dst, s1, s2);
-        self.amd.vunpckldd(ϕ(dst), ϕ(dst), ϕ(dst));
+        binop!(self, vunpckldd, dst, dst, dst);
     }
 
     fn geq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, vcmpnltsd, dst, s1, s2);
-        self.amd.vunpckldd(ϕ(dst), ϕ(dst), ϕ(dst));
+        binop!(self, vunpckldd, dst, dst, dst);
     }
 
     fn lt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, vcmpltsd, dst, s1, s2);
-        self.amd.vunpckldd(ϕ(dst), ϕ(dst), ϕ(dst));
+        binop!(self, vunpckldd, dst, dst, dst);
     }
 
     fn leq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, vcmplesd, dst, s1, s2);
-        self.amd.vunpckldd(ϕ(dst), ϕ(dst), ϕ(dst));
+        binop!(self, vunpckldd, dst, dst, dst);
     }
 
     fn eq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, vcmpeqsd, dst, s1, s2);
-        self.amd.vunpckldd(ϕ(dst), ϕ(dst), ϕ(dst));
+        binop!(self, vunpckldd, dst, dst, dst);
     }
 
     fn neq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, vcmpneqsd, dst, s1, s2);
-        self.amd.vunpckldd(ϕ(dst), ϕ(dst), ϕ(dst));
+        binop!(self, vunpckldd, dst, dst, dst);
     }
 
     fn and(&mut self, dst: Reg, s1: Reg, s2: Reg) {

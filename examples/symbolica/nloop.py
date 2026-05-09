@@ -13,6 +13,8 @@ if len(sys.argv) < 2:
 n = int(sys.argv[1])
 
 INPUT = os.path.join(os.path.dirname(__file__), f"cff_evaluator_inputs_{n}loop.py")
+CONFIG = os.path.join(os.path.dirname(__file__), "symjit.toml")
+
 print(f"Running example from {INPUT}")
 exec(open(INPUT, "r").read())
 
@@ -36,7 +38,7 @@ n = len(input_params)
 
 print("Building symjit evaluator...")
 t_start = time.time()
-symjit_f = compile_evaluator(evaluator, dtype="complex128", ty="symjit.toml")
+symjit_f = compile_evaluator(evaluator, dtype="complex128", ty=CONFIG)
 print(f"completed in {time.time() - t_start:.1f} s.")
 
 print("Compiling symbolica evaluator...")
@@ -44,8 +46,6 @@ t_start = time.time()
 evaluator.compile("test", "./test.cpp", "./test.so", "complex", inline_asm="default")
 print(f"completed in {time.time() - t_start:.1f} s.")
 
-symjit_f.dump("nloop.bin", "scalar")
-print(symjit_f.dumps("stats"))
 symjit_f.save(f"loop.sjb")
 
 N_SAMPLES = 1000
