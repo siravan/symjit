@@ -40,10 +40,10 @@ def process_argv():
         default=True,
     )
     parser.add_argument(
-        "--mem_saver",
+        "--compress",
         help="Contract compiled code",
         action="store_true",
-        dest="mem_saver",
+        dest="compress",
         default=False,
     )
     parser.add_argument("--dtype", help="data type", default="float64")

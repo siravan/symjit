@@ -36,7 +36,7 @@ n = len(input_params)
 
 print("Building symjit evaluator...")
 t_start = time.time()
-symjit_f = compile_evaluator(evaluator, dtype="complex128", mem_saver=True)
+symjit_f = compile_evaluator(evaluator, dtype="complex128", ty="symjit.toml")
 print(f"completed in {time.time() - t_start:.1f} s.")
 
 print("Compiling symbolica evaluator...")
@@ -44,7 +44,8 @@ t_start = time.time()
 evaluator.compile("test", "./test.cpp", "./test.so", "complex", inline_asm="default")
 print(f"completed in {time.time() - t_start:.1f} s.")
 
-# print(symjit_f.dumps("bytecode"))
+symjit_f.dump("nloop.bin", "scalar")
+print(symjit_f.dumps("stats"))
 symjit_f.save(f"loop.sjb")
 
 N_SAMPLES = 1000

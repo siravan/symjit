@@ -617,6 +617,10 @@ impl Application {
                 self.bytecode.dump(name);
                 true
             }
+            "stats" => {
+                self.bytecode.mir.print_stats(name);
+                true
+            }
             _ => false,
         }
     }

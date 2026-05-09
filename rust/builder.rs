@@ -288,7 +288,9 @@ impl Builder {
 
         self.block().compile(mir)?;
 
-        if opt_level >= 1 && !self.config.mem_saver() {
+        if opt_level >= 1
+        /*&& !self.config.compress()*/
+        {
             mir.optimize_peephole();
         }
 

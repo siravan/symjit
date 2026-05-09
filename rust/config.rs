@@ -1,5 +1,6 @@
 use crate::runnable::CompilerType;
 use anyhow::{anyhow, Result};
+use serde::Deserialize;
 use std::io::{Read, Write};
 use std::sync::Arc;
 
@@ -9,16 +10,15 @@ use crate::utils::Storage;
 
 pub const USE_SIMD: u32 = 0x0001;
 pub const USE_THREADS: u32 = 0x0002;
-pub const CSE: u32 = 0x04;
+pub const CSE: u32 = 0x0004;
 pub const FASTMATH: u32 = 0x0008;
-// pub const SANITIZE: u32 = 0x10;
+
 pub const COMPLEX: u32 = 0x0020;
 pub const SYMBOLICA: u32 = 0x0040;
 pub const SIMD_BRANCH: u32 = 0x0080;
 
 pub const COMPACT: u32 = 0x1000;
-pub const MEM_SAVER: u32 = 0x2000;
-pub const PERMISSIVE: u32 = 0x4000;
+pub const COMPRESS: u32 = 0x2000;
 pub const FAST_COMPLEX: u32 = 0x8000;
 
 pub const OPT_LEVEL_MASK: u32 = 0x0f00;
@@ -32,6 +32,29 @@ pub struct Config {
     pub opt: u32,
     pub ty: CompilerType,
     pub df: Option<Arc<Defuns>>,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct ConfigToml {
+    ty: String,
+    options: Options,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct Options {
+    use_simd: bool,
+    use_threads: bool,
+    cse: bool,
+    fastmath: bool,
+    complex: bool,
+    symbolica: bool,
+    simd_branch: bool,
+    compact: bool,
+    compress: bool,
+    fast_complex: bool,
+    opt_level: usize,
 }
 
 impl Config {
@@ -51,9 +74,47 @@ impl Config {
             "amd-sse" => CompilerType::AmdSSE,
             "native" => CompilerType::Native,
             "debug" => CompilerType::Debug,
-            _ => return Err(anyhow!("invalid ty")),
+            _ => {
+                if ty.ends_with(".toml") {
+                    return Self::from_toml(ty, opt);
+                } else {
+                    return Err(anyhow!("invalid ty"));
+                }
+            }
         };
         Self::new(ty, opt)
+    }
+
+    pub fn from_toml(path: &str, mut opt: u32) -> Result<Config> {
+        let toml = std::fs::read_to_string(path)?;
+        let c: ConfigToml = toml::from_str(&toml)?;
+
+        opt &= COMPLEX;
+
+        opt |= if c.options.use_simd { USE_SIMD } else { 0 };
+        opt |= if c.options.use_threads {
+            USE_THREADS
+        } else {
+            0
+        };
+        opt |= if c.options.cse { CSE } else { 0 };
+        opt |= if c.options.fastmath { FASTMATH } else { 0 };
+        opt |= if c.options.complex { COMPLEX } else { 0 };
+        opt |= if c.options.symbolica { SYMBOLICA } else { 0 };
+        opt |= if c.options.simd_branch {
+            SIMD_BRANCH
+        } else {
+            0
+        };
+        opt |= if c.options.compact { COMPACT } else { 0 };
+        opt |= if c.options.compress { COMPRESS } else { 0 };
+        opt |= if c.options.fast_complex {
+            FAST_COMPLEX
+        } else {
+            0
+        };
+
+        Self::from_name(&c.ty, opt)
     }
 
     pub fn from_defuns(df: Defuns) -> Result<Config> {
@@ -147,12 +208,8 @@ impl Config {
         self.test(COMPACT)
     }
 
-    pub fn mem_saver(&self) -> bool {
-        self.test(MEM_SAVER)
-    }
-
-    pub fn permissive(&self) -> bool {
-        self.test(PERMISSIVE)
+    pub fn compress(&self) -> bool {
+        self.test(COMPRESS)
     }
 
     pub fn opt_level(&self) -> u8 {
@@ -266,23 +323,22 @@ impl Config {
     }
 
     /// Memory-saver mode for very large inputs.
-    pub fn set_mem_saver(&mut self, enabled: bool) {
-        self.opt = (self.opt & !MEM_SAVER) | if enabled { MEM_SAVER } else { 0 };
-    }
-
-    /// Permits using SIMD instruction in scalar mode (e.g., for complex multiplication).
-    pub fn set_permissive(&mut self, enabled: bool) {
-        self.opt = (self.opt & !PERMISSIVE) | if enabled { PERMISSIVE } else { 0 };
+    pub fn set_compress(&mut self, enabled: bool) {
+        self.opt = (self.opt & !COMPRESS) | if enabled { COMPRESS } else { 0 };
     }
 }
 
 impl Default for Config {
     fn default() -> Config {
-        Config::new(
-            CompilerType::Native,
-            USE_SIMD | SYMBOLICA | COMPACT | PERMISSIVE | (2 << OPT_LEVEL_SHIFT),
-        )
-        .unwrap()
+        if std::fs::exists("symjit.toml").unwrap() {
+            Self::from_toml("symjit.toml", 0).unwrap()
+        } else {
+            Config::new(
+                CompilerType::Native,
+                USE_SIMD | SYMBOLICA | COMPACT | (2 << OPT_LEVEL_SHIFT),
+            )
+            .unwrap()
+        }
     }
 }
 
