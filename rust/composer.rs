@@ -42,7 +42,7 @@ pub trait Composer {
 }
 
 #[derive(Debug)]
-pub struct Transliterator {
+pub struct DirectTranslator {
     pub mir: Mir,
     pub consts: Vec<f64>,
     pub reals: HashSet<Loc>,
@@ -53,8 +53,8 @@ pub struct Transliterator {
     pub prog: Program,
 }
 
-impl Transliterator {
-    pub fn new(mut config: Config) -> Transliterator {
+impl DirectTranslator {
+    pub fn new(mut config: Config) -> DirectTranslator {
         // opt_level should be 2 for proper register allocation.
         config.set_opt_level(2);
 
@@ -62,7 +62,7 @@ impl Transliterator {
         let mir = Mir::new(config.clone());
         let prog = Program::new(&ml, config).unwrap();
 
-        Transliterator {
+        DirectTranslator {
             mir,
             consts: Vec::new(),
             reals: HashSet::new(),
@@ -305,7 +305,7 @@ impl Transliterator {
     }
 }
 
-impl Composer for Transliterator {
+impl Composer for DirectTranslator {
     fn append_constant(&mut self, z: Complex<f64>) -> Result<usize> {
         self.consts.push(z.re);
         self.consts.push(z.im);

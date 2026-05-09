@@ -149,8 +149,8 @@ pL1 = (m, g, l, iZZ, reibung)
 MM_jit = compile_func((*w1, *v1), MM1, params=pL1, **args)
 force_jit = compile_func((*w1, *v1), force1, params=pL1, **args)
 
-MM_jit.dump("mm.mir", "bytecode")
-force_jit.dump("force.mir", "bytecode")
+# MM_jit.dump("mm.mir", "bytecode")
+# force_jit.dump("force.mir", "bytecode")
 
 # print('w1 = ', w1)
 # print('v1 = ', v1)

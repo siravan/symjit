@@ -1,6 +1,6 @@
 use crate::runnable::CompilerType;
 use anyhow::{anyhow, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::sync::Arc;
 
@@ -8,20 +8,26 @@ use crate::code::VirtualTable;
 use crate::defuns::Defuns;
 use crate::utils::Storage;
 
-pub const USE_SIMD: u32 = 0x0001;
-pub const USE_THREADS: u32 = 0x0002;
-pub const CSE: u32 = 0x0004;
-pub const FASTMATH: u32 = 0x0008;
+pub const USE_SIMD: u32 = 0x00000001;
+pub const USE_THREADS: u32 = 0x00000002;
+pub const CSE: u32 = 0x00000004;
+pub const FASTMATH: u32 = 0x00000008;
 
-pub const COMPLEX: u32 = 0x0020;
-pub const SYMBOLICA: u32 = 0x0040;
-pub const SIMD_BRANCH: u32 = 0x0080;
+pub const COMPLEX: u32 = 0x00000020;
+pub const SYMBOLICA: u32 = 0x00000040;
+pub const SIMD_BRANCH: u32 = 0x00000080;
 
-pub const COMPACT: u32 = 0x1000;
-pub const COMPRESS: u32 = 0x2000;
-pub const FAST_COMPLEX: u32 = 0x8000;
+pub const COMPACT: u32 = 0x00001000;
+pub const COMPRESS: u32 = 0x00002000;
+pub const DIRECT: u32 = 0x00004000;
+pub const FAST_COMPLEX: u32 = 0x00008000;
 
-pub const OPT_LEVEL_MASK: u32 = 0x0f00;
+pub const DEBUG_BYTECODE: u32 = 0x000010000;
+pub const DEBUG_SCALAR: u32 = 0x000020000;
+pub const DEBUG_SIMD: u32 = 0x000040000;
+pub const DEBUG_STATS: u32 = 0x000080000;
+
+pub const OPT_LEVEL_MASK: u32 = 0x00000f00;
 pub const OPT_LEVEL_SHIFT: usize = 8;
 
 pub const SPILL_AREA: usize = 16;
@@ -34,14 +40,15 @@ pub struct Config {
     pub df: Option<Arc<Defuns>>,
 }
 
-#[derive(Default, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct ConfigToml {
     ty: String,
     options: Options,
+    debug: DebugOptions,
 }
 
-#[derive(Default, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct Options {
     use_simd: bool,
@@ -53,8 +60,18 @@ struct Options {
     simd_branch: bool,
     compact: bool,
     compress: bool,
+    direct: bool,
     fast_complex: bool,
-    opt_level: usize,
+    opt_level: u8,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+struct DebugOptions {
+    bytecode: bool,
+    scalar: bool,
+    simd: bool,
+    stats: bool,
 }
 
 impl Config {
@@ -89,32 +106,68 @@ impl Config {
         let toml = std::fs::read_to_string(path)?;
         let c: ConfigToml = toml::from_str(&toml)?;
 
-        opt &= COMPLEX;
+        opt &= COMPLEX | SYMBOLICA;
 
-        opt |= if c.options.use_simd { USE_SIMD } else { 0 };
-        opt |= if c.options.use_threads {
-            USE_THREADS
-        } else {
-            0
-        };
-        opt |= if c.options.cse { CSE } else { 0 };
-        opt |= if c.options.fastmath { FASTMATH } else { 0 };
-        opt |= if c.options.complex { COMPLEX } else { 0 };
-        opt |= if c.options.symbolica { SYMBOLICA } else { 0 };
-        opt |= if c.options.simd_branch {
-            SIMD_BRANCH
-        } else {
-            0
-        };
-        opt |= if c.options.compact { COMPACT } else { 0 };
-        opt |= if c.options.compress { COMPRESS } else { 0 };
-        opt |= if c.options.fast_complex {
-            FAST_COMPLEX
-        } else {
-            0
+        let mut config = Self::from_name(&c.ty, opt)?;
+
+        config.set_simd(c.options.use_simd);
+        config.set_threads(c.options.use_threads);
+        config.set_cse(c.options.cse);
+        config.set_fastmath(c.options.fastmath);
+        config.set_complex(c.options.complex);
+        config.set_symbolica(c.options.symbolica);
+        config.set_simd_branch(c.options.simd_branch);
+        config.set_compact(c.options.compact);
+        config.set_compress(c.options.compress);
+        config.set_dicect(c.options.direct);
+        config.set_fast_complex(c.options.fast_complex);
+
+        config.set_debug_bytecode(c.debug.bytecode);
+        config.set_debug_scalar(c.debug.scalar);
+        config.set_debug_simd(c.debug.simd);
+        config.set_debug_stats(c.debug.stats);
+
+        Ok(config)
+    }
+
+    pub fn to_toml(&self, path: &str) {
+        let ty = match self.ty {
+            CompilerType::ByteCode => "bytecode",
+            CompilerType::Arm => "arm",
+            CompilerType::RiscV => "riscv",
+            CompilerType::Amd => "amd",
+            CompilerType::AmdAVX => "amd-avx",
+            CompilerType::AmdSSE => "amd-sse",
+            CompilerType::Native => "native",
+            CompilerType::Debug => "debug",
+        }
+        .into();
+
+        let options: Options = Options {
+            use_simd: self.use_simd(),
+            use_threads: self.use_threads(),
+            cse: self.cse(),
+            fastmath: self.fastmath(),
+            complex: self.is_complex(),
+            symbolica: self.symbolica(),
+            simd_branch: self.simd_branch(),
+            compact: self.compact(),
+            compress: self.compress(),
+            direct: self.direct(),
+            fast_complex: self.fast_complex(),
+            opt_level: self.opt_level(),
         };
 
-        Self::from_name(&c.ty, opt)
+        let debug: DebugOptions = DebugOptions {
+            bytecode: self.debug_bytedode(),
+            scalar: self.debug_scalar(),
+            simd: self.debug_simd(),
+            stats: self.debug_stats(),
+        };
+
+        let c: ConfigToml = ConfigToml { ty, options, debug };
+        let toml = toml::to_string(&c).unwrap();
+        let _ = std::fs::write(path, toml);
     }
 
     pub fn from_defuns(df: Defuns) -> Result<Config> {
@@ -210,6 +263,26 @@ impl Config {
 
     pub fn compress(&self) -> bool {
         self.test(COMPRESS)
+    }
+
+    pub fn direct(&self) -> bool {
+        self.test(DIRECT)
+    }
+
+    pub fn debug_bytedode(&self) -> bool {
+        self.test(DEBUG_BYTECODE)
+    }
+
+    pub fn debug_scalar(&self) -> bool {
+        self.test(DEBUG_SCALAR)
+    }
+
+    pub fn debug_simd(&self) -> bool {
+        self.test(DEBUG_SIMD)
+    }
+
+    pub fn debug_stats(&self) -> bool {
+        self.test(DEBUG_STATS)
     }
 
     pub fn opt_level(&self) -> u8 {
@@ -326,6 +399,31 @@ impl Config {
     pub fn set_compress(&mut self, enabled: bool) {
         self.opt = (self.opt & !COMPRESS) | if enabled { COMPRESS } else { 0 };
     }
+
+    /// Direct translation from Symbolica IR to Symjit IR.
+    pub fn set_dicect(&mut self, enabled: bool) {
+        self.opt = (self.opt & !DIRECT) | if enabled { DIRECT } else { 0 };
+    }
+
+    /// Dump bytecode for debugging
+    pub fn set_debug_bytecode(&mut self, enabled: bool) {
+        self.opt = (self.opt & !DEBUG_BYTECODE) | if enabled { DEBUG_BYTECODE } else { 0 };
+    }
+
+    /// Dump scalar binary for debugging
+    pub fn set_debug_scalar(&mut self, enabled: bool) {
+        self.opt = (self.opt & !DEBUG_SCALAR) | if enabled { DEBUG_SCALAR } else { 0 };
+    }
+
+    /// Dump simd binary for debugging
+    pub fn set_debug_simd(&mut self, enabled: bool) {
+        self.opt = (self.opt & !DEBUG_SIMD) | if enabled { DEBUG_SIMD } else { 0 };
+    }
+
+    /// Print stats for debugging
+    pub fn set_debug_stats(&mut self, enabled: bool) {
+        self.opt = (self.opt & !DEBUG_STATS) | if enabled { DEBUG_STATS } else { 0 };
+    }
 }
 
 impl Default for Config {
@@ -333,11 +431,13 @@ impl Default for Config {
         if std::fs::exists("symjit.toml").unwrap() {
             Self::from_toml("symjit.toml", 0).unwrap()
         } else {
-            Config::new(
+            let config = Config::new(
                 CompilerType::Native,
-                USE_SIMD | SYMBOLICA | COMPACT | (2 << OPT_LEVEL_SHIFT),
+                USE_SIMD | SYMBOLICA | COMPACT | FAST_COMPLEX | (2 << OPT_LEVEL_SHIFT),
             )
-            .unwrap()
+            .unwrap();
+            config.to_toml("symjit.toml");
+            config
         }
     }
 }
