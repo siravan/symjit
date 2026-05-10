@@ -33,6 +33,7 @@ impl<T: Clone + Default> MachineCode<T> {
         _mem: Vec<T>,
         leaky: bool,
         lanes: usize,
+        huge: bool,
     ) -> MachineCode<T> {
         let valid = (cfg!(target_arch = "x86_64") && arch == "x86_64")
             || (cfg!(target_arch = "aarch64") && arch == "aarch64")
@@ -40,7 +41,7 @@ impl<T: Clone + Default> MachineCode<T> {
 
         let size = machine_code.len();
 
-        let mut code = Memory::new(BranchProtection::None);
+        let mut code = Memory::new(BranchProtection::None, huge);
 
         // alignment is set to 4096 to allow for using adrp instruction in arm64
         let pages: *mut u8 = code.allocate(size, 4096).unwrap();
@@ -90,7 +91,7 @@ impl<T: Clone + Default> MachineCode<T> {
 }
 
 impl<T: Clone + Default> Storage for MachineCode<T> {
-    fn load(stream: &mut impl Read, _config: &Config) -> Result<MachineCode<T>> {
+    fn load(stream: &mut impl Read, config: &Config) -> Result<MachineCode<T>> {
         let mut bytes: [u8; 8] = [0; 8];
 
         stream.read_exact(&mut bytes)?;
@@ -120,7 +121,14 @@ impl<T: Clone + Default> Storage for MachineCode<T> {
         let mut machine_code: Vec<u8> = vec![0; size];
         stream.read_exact(&mut machine_code)?;
 
-        Ok(Self::new(arch, machine_code, _mem, leaky, lanes))
+        Ok(Self::new(
+            arch,
+            machine_code,
+            _mem,
+            leaky,
+            lanes,
+            config.huge(),
+        ))
     }
 
     fn save(&self, stream: &mut impl Write) -> Result<()> {

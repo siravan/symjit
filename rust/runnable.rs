@@ -232,7 +232,14 @@ impl Application {
             prog.count_params,
         )?;
 
-        Ok(MachineCode::new(arch, generator.bytes(), mem, false, lanes))
+        Ok(MachineCode::new(
+            arch,
+            generator.bytes(),
+            mem,
+            false,
+            lanes,
+            prog.config().huge(),
+        ))
     }
 
     fn compile_fast<G: Generator>(
@@ -251,7 +258,14 @@ impl Application {
             idx_ret as i32,
         )?;
 
-        Ok(MachineCode::new(arch, generator.bytes(), mem, true, 1))
+        Ok(MachineCode::new(
+            arch,
+            generator.bytes(),
+            mem,
+            true,
+            1,
+            prog.config().huge(),
+        ))
     }
 
     fn compile_bytecode(mir: Mir, prog: &mut Program) -> Result<CompiledMir> {

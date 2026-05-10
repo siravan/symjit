@@ -27,6 +27,8 @@ pub const DEBUG_SCALAR: u32 = 0x000020000;
 pub const DEBUG_SIMD: u32 = 0x000040000;
 pub const DEBUG_STATS: u32 = 0x000080000;
 
+pub const HUGE: u32 = 0x000100000;
+
 pub const OPT_LEVEL_MASK: u32 = 0x00000f00;
 pub const OPT_LEVEL_SHIFT: usize = 8;
 
@@ -62,6 +64,7 @@ struct Options {
     compress: bool,
     direct: bool,
     fast_complex: bool,
+    huge: bool,
     opt_level: u8,
 }
 
@@ -120,6 +123,7 @@ impl Config {
         config.set_compress(c.options.compress);
         config.set_dicect(c.options.direct);
         config.set_fast_complex(c.options.fast_complex);
+        config.set_huge(c.options.huge);
 
         config.set_debug_bytecode(c.debug.bytecode);
         config.set_debug_scalar(c.debug.scalar);
@@ -155,6 +159,7 @@ impl Config {
             direct: self.direct(),
             fast_complex: self.fast_complex(),
             opt_level: self.opt_level(),
+            huge: self.huge(),
         };
 
         let debug: DebugOptions = DebugOptions {
@@ -266,6 +271,10 @@ impl Config {
 
     pub fn direct(&self) -> bool {
         self.test(DIRECT)
+    }
+
+    pub fn huge(&self) -> bool {
+        self.test(HUGE)
     }
 
     pub fn debug_bytedode(&self) -> bool {
@@ -404,6 +413,11 @@ impl Config {
         self.opt = (self.opt & !DIRECT) | if enabled { DIRECT } else { 0 };
     }
 
+    /// Huge paged to reduce TLB pressure.
+    pub fn set_huge(&mut self, enabled: bool) {
+        self.opt = (self.opt & !HUGE) | if enabled { HUGE } else { 0 };
+    }
+
     /// Dump bytecode for debugging
     pub fn set_debug_bytecode(&mut self, enabled: bool) {
         self.opt = (self.opt & !DEBUG_BYTECODE) | if enabled { DEBUG_BYTECODE } else { 0 };
@@ -432,7 +446,7 @@ impl Default for Config {
         } else {
             let config = Config::new(
                 CompilerType::Native,
-                USE_SIMD | SYMBOLICA | COMPACT | FAST_COMPLEX | (2 << OPT_LEVEL_SHIFT),
+                USE_SIMD | SYMBOLICA | COMPACT | FAST_COMPLEX | DIRECT | (2 << OPT_LEVEL_SHIFT),
             )
             .unwrap();
             config.to_toml("symjit.toml");

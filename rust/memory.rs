@@ -1,7 +1,68 @@
 #![allow(warnings)]
 
+/*
+ * HUGEPAGE_SIZE code is copied and modfied from
+ * https://docs.rs/crate/hugepage-rs/0.1.0/source/src/allocator.rs
+ */
+use lazy_static::lazy_static;
+use std::io::Read;
+
+const MEMINFO_PATH: &str = "/proc/meminfo";
+const TOKEN: &str = "Hugepagesize:";
+
+lazy_static! {
+    static ref HUGEPAGE_SIZE: isize = {
+        if cfg!(target_os = "unix") {
+            let buf = std::fs::File::open(MEMINFO_PATH).map_or("".to_owned(), |mut f| {
+                let mut s = String::new();
+                let _ = f.read_to_string(&mut s);
+                s
+            });
+            parse_hugepage_size(&buf)
+        } else {
+            -1
+        }
+    };
+}
+
+fn parse_hugepage_size(s: &str) -> isize {
+    for line in s.lines() {
+        if line.starts_with(TOKEN) {
+            let mut parts = line[TOKEN.len()..].split_whitespace();
+
+            let p = parts.next().unwrap_or("0");
+            let mut hugepage_size = p.parse::<isize>().unwrap_or(-1);
+
+            hugepage_size *= parts.next().map_or(1, |x| match x {
+                "kB" => 1024,
+                _ => 1,
+            });
+
+            return hugepage_size;
+        }
+    }
+
+    return -1;
+}
+
+fn print_huge_msg(alloc_size: usize, page_size: usize) {
+    let n = alloc_size / page_size;
+
+    println!("-------------------------- Warning! -------------------------------");
+    println!("Cannot allocate huge pages. Make sure huge pages are already pre-allocated.");
+    println!("For example, run the following command on a Linux machine:");
+    println!(
+        "  `echo {} | sudo tee /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages`",
+        n
+    );
+    println!("where {} is the number of desired 2MB pages.", n);
+    println!("requested size = {}", alloc_size);
+    println!("huge page size = {}", page_size);
+    println!();
+}
+
 /*******************************************
-This file is essentially
+The rest of the file is essentially
 
 https://github.com/bytecodealliance/wasmtime/blob/main/cranelift/jit/src/memory.rs
 
@@ -32,6 +93,8 @@ use std::mem;
 use std::ptr;
 use wasmtime_jit_icache_coherence as icache_coherence;
 
+use hugepage_rs;
+
 /// A simple struct consisting of a pointer and length.
 struct PtrLen {
     #[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
@@ -56,7 +119,7 @@ impl PtrLen {
     /// Create a new `PtrLen` pointing to at least `size` bytes of memory,
     /// suitably sized and aligned for memory protection.
     #[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
-    fn with_size(size: usize) -> io::Result<Self> {
+    fn with_size(size: usize, _huge: bool) -> io::Result<Self> {
         let alloc_size = region::page::ceil(size as *const ()) as usize;
         MmapMut::map_anon(alloc_size).map(|mut mmap| {
             // The order here is important; we assign the pointer first to get
@@ -70,13 +133,29 @@ impl PtrLen {
     }
 
     #[cfg(all(not(target_os = "windows"), not(feature = "selinux-fix")))]
-    fn with_size(size: usize) -> io::Result<Self> {
+    fn with_size(size: usize, huge: bool) -> io::Result<Self> {
         assert_ne!(size, 0);
-        let page_size = region::page::size();
-        let alloc_size = region::page::ceil(size as *const ()) as usize;
+
+        let page_size = if huge && *HUGEPAGE_SIZE > 0 {
+            *HUGEPAGE_SIZE as usize
+        } else {
+            region::page::size()
+        };
+
+        let alloc_size = if huge {
+            let mask: usize = page_size - 1;
+            (size + mask) & !mask
+        } else {
+            region::page::ceil(size as *const ()) as usize
+        };
+
         let layout = alloc::Layout::from_size_align(alloc_size, page_size).unwrap();
-        // Safety: We assert that the size is non-zero above.
-        let ptr = unsafe { alloc::alloc(layout) };
+
+        let ptr = if huge {
+            unsafe { hugepage_rs::alloc(layout) }
+        } else {
+            unsafe { alloc::alloc(layout) }
+        };
 
         if !ptr.is_null() {
             Ok(Self {
@@ -84,12 +163,15 @@ impl PtrLen {
                 len: alloc_size,
             })
         } else {
+            if huge {
+                print_huge_msg(alloc_size, page_size);
+            }
             Err(io::Error::from(io::ErrorKind::OutOfMemory))
         }
     }
 
     #[cfg(target_os = "windows")]
-    fn with_size(size: usize) -> io::Result<Self> {
+    fn with_size(size: usize, _huge: bool) -> io::Result<Self> {
         use windows_sys::Win32::System::Memory::{
             VirtualAlloc, MEM_COMMIT, MEM_RESERVE, PAGE_READWRITE,
         };
@@ -107,6 +189,7 @@ impl PtrLen {
             Ok(Self {
                 ptr: ptr as *mut u8,
                 len: region::page::ceil(size as *const ()) as usize,
+                huge: false,
             })
         } else {
             Err(io::Error::last_os_error())
@@ -151,19 +234,21 @@ pub(crate) struct Memory {
     current: PtrLen,
     position: usize,
     branch_protection: BranchProtection,
+    huge: bool,
 }
 
 unsafe impl Send for Memory {}
 unsafe impl Sync for Memory {}
 
 impl Memory {
-    pub(crate) fn new(branch_protection: BranchProtection) -> Self {
+    pub(crate) fn new(branch_protection: BranchProtection, huge: bool) -> Self {
         Self {
             allocations: Vec::new(),
             already_protected: 0,
             current: PtrLen::new(),
             position: 0,
             branch_protection,
+            huge,
         }
     }
 
@@ -190,7 +275,7 @@ impl Memory {
         self.finish_current();
 
         // TODO: Allocate more at a time.
-        self.current = PtrLen::with_size(size)?;
+        self.current = PtrLen::with_size(size, self.huge)?;
         self.position = size;
 
         Ok(self.current.ptr)
