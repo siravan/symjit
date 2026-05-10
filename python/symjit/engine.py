@@ -335,8 +335,8 @@ class RustyCompiler:
         num_params=1,
         order="fortran",
         simd_branch=False,
-        compress=False,
         fast_complex=True,
+        compress=False,
     ):
         if convert:
             model = json.dumps(model)

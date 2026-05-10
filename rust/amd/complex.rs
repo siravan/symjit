@@ -284,7 +284,9 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn real_root(&mut self, dst: Reg, s1: Reg) {
-        self.root(dst, s1);
+        self.amd.vxorpd(T1, T1, T1);
+        self.amd.vsqrtsd(ϕ(dst), ϕ(s1));
+        self.amd.vunpckldd(ϕ(dst), ϕ(dst), T1);
     }
 
     fn recip(&mut self, dst: Reg, s1: Reg) {

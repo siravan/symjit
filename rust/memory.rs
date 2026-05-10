@@ -12,7 +12,7 @@ const TOKEN: &str = "Hugepagesize:";
 
 lazy_static! {
     static ref HUGEPAGE_SIZE: isize = {
-        if cfg!(target_os = "unix") {
+        if cfg!(target_os = "linux") {
             let buf = std::fs::File::open(MEMINFO_PATH).map_or("".to_owned(), |mut f| {
                 let mut s = String::new();
                 let _ = f.read_to_string(&mut s);
@@ -132,11 +132,13 @@ impl PtrLen {
         })
     }
 
-    #[cfg(all(not(target_os = "windows"), not(feature = "selinux-fix")))]
-    fn with_size(size: usize, huge: bool) -> io::Result<Self> {
+    #[cfg(all(target_os = "linux"))]
+    fn with_size(size: usize, mut huge: bool) -> io::Result<Self> {
         assert_ne!(size, 0);
 
-        let page_size = if huge && *HUGEPAGE_SIZE > 0 {
+        huge &= *HUGEPAGE_SIZE > 0;
+
+        let page_size = if huge {
             *HUGEPAGE_SIZE as usize
         } else {
             region::page::size()
@@ -166,6 +168,26 @@ impl PtrLen {
             if huge {
                 print_huge_msg(alloc_size, page_size);
             }
+            Err(io::Error::from(io::ErrorKind::OutOfMemory))
+        }
+    }
+
+    #[cfg(all(target_os = "macos"))]
+    fn with_size(size: usize, mut _huge: bool) -> io::Result<Self> {
+        assert_ne!(size, 0);
+
+        let page_size = region::page::size();
+        let alloc_size = region::page::ceil(size as *const ()) as usize;
+        let layout = alloc::Layout::from_size_align(alloc_size, page_size).unwrap();
+
+        let ptr = unsafe { alloc::alloc(layout) };
+
+        if !ptr.is_null() {
+            Ok(Self {
+                ptr,
+                len: alloc_size,
+            })
+        } else {
             Err(io::Error::from(io::ErrorKind::OutOfMemory))
         }
     }

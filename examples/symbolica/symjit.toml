@@ -10,8 +10,9 @@ symbolica = true
 simd_branch = false
 compact = true
 compress = false
-direct = false
+direct = true
 fast_complex = true
+huge = true
 opt_level = 2
 
 [debug]

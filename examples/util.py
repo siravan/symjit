@@ -37,14 +37,12 @@ def process_argv():
         help="use SIMD instructions for scalar complex functions",
         action="store_true",
         dest="fast_complex",
-        default=True,
     )
     parser.add_argument(
         "--compress",
         help="Contract compiled code",
         action="store_true",
         dest="compress",
-        default=False,
     )
     parser.add_argument("--dtype", help="data type", default="float64")
     parser.add_argument(

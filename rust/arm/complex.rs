@@ -254,7 +254,9 @@ impl Generator for ArmComplexGenerator {
     }
 
     fn real_root(&mut self, dst: Reg, s1: Reg) {
+        self.emit(arm! {eor v(T1).16b, v(T1).16b, v(T1).16b});
         self.emit(arm! {fsqrt q(ϕ(dst)), q(ϕ(s1))});
+        self.emit(arm! {zip1 q(ϕ(dst)), q(ϕ(dst)), q(T1)});
     }
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
