@@ -254,9 +254,9 @@ impl Generator for ArmComplexGenerator {
     }
 
     fn real_root(&mut self, dst: Reg, s1: Reg) {
-        //self.emit(arm! {eor v(T1).16b, v(T1).16b, v(T1).16b});
+        self.emit(arm! {eor v(T1).16b, v(T1).16b, v(T1).16b});
         self.emit(arm! {fsqrt q(ϕ(dst)), q(ϕ(s1))});
-        //self.emit(arm! {zip1 q(ϕ(dst)), q(ϕ(dst)), q(T1)});
+        self.emit(arm! {zip1 q(ϕ(dst)), q(ϕ(dst)), q(T1)});
     }
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
@@ -508,10 +508,10 @@ impl Generator for ArmComplexGenerator {
             self.fmov(dst, true_val);
         } else if dst != true_val && dst != false_val {
             self.load_stack(dst, idx);
-            self.emit(arm! {bsl v(ϕ(dst)).8b, v(ϕ(true_val)).8b, v(ϕ(false_val)).8b});
+            self.emit(arm! {bsl v(ϕ(dst)).16b, v(ϕ(true_val)).16b, v(ϕ(false_val)).16b});
         } else {
             self.load_stack(Reg::Temp, idx);
-            self.emit(arm! {bsl v(ϕ(Reg::Temp)).8b, v(ϕ(true_val)).8b, v(ϕ(false_val)).8b});
+            self.emit(arm! {bsl v(ϕ(Reg::Temp)).16b, v(ϕ(true_val)).16b, v(ϕ(false_val)).16b});
             self.fmov(dst, Reg::Temp);
         }
     }
