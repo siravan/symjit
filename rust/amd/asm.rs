@@ -1261,4 +1261,24 @@ impl Amd {
     pub fn nop(&mut self) {
         self.append_byte(0x90);
     }
+
+    pub fn prefetcht0_ip(&mut self, offset: u32) {
+        self.append_bytes(&[0x0f, 0x18, 0x0d]);
+        self.append_word(offset);
+    }
+
+    pub fn prefetcht1_ip(&mut self, offset: u32) {
+        self.append_bytes(&[0x0f, 0x18, 0x15]);
+        self.append_word(offset);
+    }
+
+    pub fn prefetcht2_ip(&mut self, offset: u32) {
+        self.append_bytes(&[0x0f, 0x18, 0x1d]);
+        self.append_word(offset);
+    }
+
+    pub fn prefetchnta_ip(&mut self, offset: u32) {
+        self.append_bytes(&[0x0f, 0x18, 0x05]);
+        self.append_word(offset);
+    }
 }

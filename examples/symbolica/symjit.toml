@@ -12,7 +12,7 @@ compact = true
 compress = false
 direct = true
 fast_complex = true
-huge = true
+huge = false
 opt_level = 2
 
 [debug]

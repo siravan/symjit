@@ -27,7 +27,7 @@ pub const DEBUG_SCALAR: u32 = 0x000020000;
 pub const DEBUG_SIMD: u32 = 0x000040000;
 pub const DEBUG_STATS: u32 = 0x000080000;
 
-pub const HUGE: u32 = 0x000100000;
+pub const HUGE: u32 = 0x00100000;
 
 pub const OPT_LEVEL_MASK: u32 = 0x00000f00;
 pub const OPT_LEVEL_SHIFT: usize = 8;

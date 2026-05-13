@@ -282,11 +282,12 @@ impl Builder {
     }
 
     pub fn compile_mir(&mut self, mir: &mut Mir) -> Result<()> {
-        let opt_level = self.config.opt_level();
-
         self.block().eliminate();
+        self.block().compile(mir)
+    }
 
-        self.block().compile(mir)?;
+    pub fn optimize_mir(&mut self, mir: &mut Mir) -> Result<()> {
+        let opt_level = self.config.opt_level();
 
         if opt_level >= 1
         /*&& !self.config.compress()*/

@@ -66,8 +66,9 @@ pub struct Application {
 }
 
 impl Application {
-    pub fn new(prog: Program, reals: HashSet<Loc>) -> Result<Application> {
-        let mir = Mir::new(prog.config().clone());
+    pub fn new(mut prog: Program, reals: HashSet<Loc>) -> Result<Application> {
+        let mut mir = Mir::new(prog.config().clone());
+        prog.builder.compile_mir(&mut mir)?;
         Self::with_mir(prog, reals, mir)
     }
 
@@ -84,7 +85,7 @@ impl Application {
 
         let params = vec![0.0; count_params + 1];
 
-        prog.builder.compile_mir(&mut mir)?;
+        prog.builder.optimize_mir(&mut mir)?;
 
         let config = prog.config().clone();
 

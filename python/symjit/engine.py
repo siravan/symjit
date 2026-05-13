@@ -336,7 +336,9 @@ class RustyCompiler:
         order="fortran",
         simd_branch=False,
         fast_complex=True,
+        direct=True,
         compress=False,
+        huge=False,
     ):
         if convert:
             model = json.dumps(model)
@@ -350,15 +352,17 @@ class RustyCompiler:
 
         opt = (
             (0x01 if use_simd else 0)
-            | (0x02 if use_threads else 0)
-            | (0x04 if cse else 0)
-            | (0x08 if fastmath else 0)
-            | (0x10 if sanitize else 0)
-            | (0x20 if dtype == "complex128" else 0)
-            | (0x40 if order == "c" else 0)
-            | (0x80 if simd_branch else 0)
-            | (0x2000 if compress else 0)
-            | (0x8000 if fast_complex else 0)
+            | (0x00000002 if use_threads else 0)
+            | (0x00000004 if cse else 0)
+            | (0x00000008 if fastmath else 0)
+            | (0x00000010 if sanitize else 0)
+            | (0x00000020 if dtype == "complex128" else 0)
+            | (0x00000040 if order == "c" else 0)
+            | (0x00000080 if simd_branch else 0)
+            | (0x00002000 if compress else 0)
+            | (0x00004000 if direct else 0)
+            | (0x00008000 if fast_complex else 0)
+            | (0x00100000 if huge else 0)
             | ((opt_level & 0x0F) << 8)
         )
 
