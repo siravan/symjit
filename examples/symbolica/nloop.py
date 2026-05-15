@@ -47,6 +47,7 @@ evaluator.compile("test", "./test.cpp", "./test.so", "complex", inline_asm="defa
 print(f"completed in {time.time() - t_start:.1f} s.")
 
 symjit_f.save(f"loop.sjb")
+symjit_f.dump("1loop.bytecode.txt", "bytecode")
 
 N_SAMPLES = 1000
 

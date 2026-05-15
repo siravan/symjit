@@ -4,6 +4,7 @@ mod macros;
 use crate::assembler::{Assembler, Jumper};
 use crate::config::Config;
 use crate::generator::{FuncletType, Generator};
+use crate::symbol::Loc;
 use crate::utils::{align_stack, reg, Reg};
 use anyhow::Result;
 
@@ -441,6 +442,14 @@ impl Generator for RiscV {
         _y2: Reg,
     ) -> bool {
         false
+    }
+
+    fn support_times2(&self) -> bool {
+        false
+    }
+
+    fn times2_loc(&mut self, d1: Reg, s1: Reg, l1: Loc, d2: Reg, s2: Reg, l2: Loc) {
+        unreachable!()
     }
 
     fn real(&mut self, dst: Reg, s1: Reg) {

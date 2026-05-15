@@ -1687,7 +1687,9 @@ impl Mir {
     pub fn rerun(&self, ir: &mut dyn Generator) -> Result<()> {
         let mut funclets: HashSet<(FuncletOp, Vec<Reg>)> = HashSet::new();
 
-        for ins in self.code.iter() {
+        let mut iter = self.code.iter().peekable();
+
+        while let Some(ins) = iter.next() {
             if self.try_funclet(ir, &mut funclets, ins) {
                 continue;
             }
@@ -1789,6 +1791,24 @@ impl Mir {
                     is_else,
                 } => ir.branch_if(*cond, label, *is_else),
                 Instruction::LoadMath { op, dst, s1, loc } => {
+                    if matches!(op, ArithOp::Times) && ir.support_times2() {
+                        if let Some(Instruction::LoadMath {
+                            op: ArithOp::Times, ..
+                        }) = iter.peek()
+                        {
+                            if let Some(Instruction::LoadMath {
+                                dst: d2,
+                                s1: s2,
+                                loc: l2,
+                                ..
+                            }) = iter.next()
+                            {
+                                ir.times2_loc(*dst, *s1, *loc, *d2, *s2, *l2);
+                                continue;
+                            }
+                        }
+                    }
+
                     let t = if self.config.is_complex() {
                         Reg::Temp
                     } else {
@@ -2226,6 +2246,36 @@ impl Mir {
         None
     }
 
+    fn fuse_times2(
+        &self,
+        code: &mut Vec<Instruction>,
+        q0: &Instruction,
+        q1: &Instruction,
+        q2: &Instruction,
+    ) -> Option<Instruction> {
+        if let Instruction::LoadMath {
+            op: ArithOp::Times, ..
+        } = *q0
+        {
+            if let Instruction::Load { dst: dst_q1, .. } = *q1 {
+                if let Instruction::LoadMath {
+                    op: ArithOp::Times,
+                    s1: s1_q2,
+                    ..
+                } = *q2
+                {
+                    if dst_q1 == s1_q2 {
+                        code.push(q1.clone());
+                        code.push(q0.clone());
+                        return Some(q2.clone());
+                    }
+                }
+            }
+        };
+
+        None
+    }
+
     fn fuse(
         &self,
         code: &mut Vec<Instruction>,
@@ -2236,6 +2286,8 @@ impl Mir {
         if let Some(v) = self.fuse_save3(code, q0, q1, q2) {
             (v, 3)
         } else if let Some(v) = self.fuse_fma3(code, q0, q1, q2) {
+            (v, 3)
+        } else if let Some(v) = self.fuse_times2(code, q0, q1, q2) {
             (v, 3)
         } else if let Some(v) = self.fuse_fma(code, q0, q1) {
             (v, 2)

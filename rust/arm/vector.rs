@@ -4,6 +4,7 @@ use crate::assembler::{Assembler, Jumper};
 use crate::code::Func;
 use crate::config::{Config, SPILL_AREA};
 use crate::generator::{FuncletType, Generator};
+use crate::symbol::Loc;
 use crate::utils::{align_stack, is_external_func, reg, Reg};
 
 use super::*;
@@ -355,6 +356,14 @@ impl Generator for ArmSimdGenerator {
         self.divide(xd, xt, t);
         self.divide(yd, yt, t);
         true
+    }
+
+    fn support_times2(&self) -> bool {
+        false
+    }
+
+    fn times2_loc(&mut self, d1: Reg, s1: Reg, l1: Loc, d2: Reg, s2: Reg, l2: Loc) {
+        unreachable!()
     }
 
     fn real(&mut self, dst: Reg, s1: Reg) {

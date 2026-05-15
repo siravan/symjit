@@ -1,6 +1,7 @@
 use anyhow::Result;
 
 use crate::code::Func;
+use crate::symbol::Loc;
 use crate::utils::Reg;
 
 pub enum FuncletType {
@@ -63,6 +64,8 @@ pub trait Generator {
     fn divide_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool;
 
     fn fuse_load_math(&mut self);
+    fn support_times2(&self) -> bool;
+    fn times2_loc(&mut self, d1: Reg, s1: Reg, l1: Loc, d2: Reg, s2: Reg, l2: Loc);
 
     fn real(&mut self, dst: Reg, s1: Reg);
     fn imaginary(&mut self, dst: Reg, s1: Reg);

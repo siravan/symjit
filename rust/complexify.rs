@@ -572,6 +572,14 @@ impl Generator for Complexifier {
         unreachable!()
     }
 
+    fn support_times2(&self) -> bool {
+        false
+    }
+
+    fn times2_loc(&mut self, _d1: Reg, _s1: Reg, _l1: Loc, _d2: Reg, _s2: Reg, _l2: Loc) {
+        unreachable!()
+    }
+
     fn real(&mut self, dst: Reg, s1: Reg) {
         self.mir.fmov(re(dst), re(s1));
         self.mir.xor(im(dst), im(dst), im(dst));

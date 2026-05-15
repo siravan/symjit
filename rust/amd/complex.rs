@@ -1,6 +1,7 @@
 use crate::code::Func;
 use crate::config::{Config, SPILL_AREA};
 use crate::generator::{FuncletType, Generator};
+use crate::symbol::Loc;
 use crate::utils::align_stack;
 use crate::utils::{is_external_func, DataType, Reg};
 use anyhow::Result;
@@ -380,6 +381,27 @@ impl Generator for AmdComplexGenerator {
         _y2: Reg,
     ) -> bool {
         unreachable!()
+    }
+
+    fn support_times2(&self) -> bool {
+        true
+    }
+
+    fn times2_loc(&mut self, d1: Reg, s1: Reg, l1: Loc, d2: Reg, s2: Reg, l2: Loc) {
+        // println!("times2!");
+        match l1 {
+            Loc::Mem(idx) => self.load_mem(Reg::Temp, idx),
+            Loc::Param(idx) => self.load_param(Reg::Temp, idx),
+            Loc::Stack(idx) => self.load_stack(Reg::Temp, idx),
+        }
+        self.times(d1, s1, Reg::Temp);
+
+        match l2 {
+            Loc::Mem(idx) => self.load_mem(Reg::Temp, idx),
+            Loc::Param(idx) => self.load_param(Reg::Temp, idx),
+            Loc::Stack(idx) => self.load_stack(Reg::Temp, idx),
+        }
+        self.times(d2, s2, Reg::Temp);
     }
 
     fn real(&mut self, dst: Reg, s1: Reg) {

@@ -125,6 +125,8 @@ impl Config {
         config.set_fast_complex(c.options.fast_complex);
         config.set_huge(c.options.huge);
 
+        config.set_opt_level(c.options.opt_level);
+
         config.set_debug_bytecode(c.debug.bytecode);
         config.set_debug_scalar(c.debug.scalar);
         config.set_debug_simd(c.debug.simd);

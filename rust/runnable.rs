@@ -85,13 +85,13 @@ impl Application {
 
         let params = vec![0.0; count_params + 1];
 
-        prog.builder.optimize_mir(&mut mir)?;
-
         let config = prog.config().clone();
 
         if config.is_complex() && !config.fast_complex() {
             mir = Complexifier::new(&reals, config.clone()).complexify(&mir)?;
         }
+
+        prog.builder.optimize_mir(&mut mir)?;
 
         // let compiled = Self::compile_ty(prog.config().compiler_type(), &mir, &mut prog)?;
         let compiled = match config.compiler_type() {
