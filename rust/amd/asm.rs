@@ -875,6 +875,13 @@ impl Amd {
         self.append_byte(imm8);
     }
 
+    pub fn vinsertf128_mem(&mut self, reg: u8, vreg: u8, rm: u8, offset: i32, imm8: u8) {
+        self.vex3pd(reg, vreg, rm, 0, 3);
+        self.append_byte(0x18);
+        self.modrm_mem(reg, rm, offset);
+        self.append_byte(imm8);
+    }
+
     // imm8 == 0 => rm = reg[0:128]
     // imm8 == 1 => rm = reg[128:256]
     pub fn vextractf128(&mut self, rm: u8, reg: u8, imm8: u8) {

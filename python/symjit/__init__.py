@@ -43,6 +43,7 @@ def compile_func(
     compress=False,
     fast_complex=True,
     huge=False,
+    parallel_mul=True,
     action="compile",
 ):
     """Compile a list of symbolic expression into an executable form.
@@ -77,7 +78,11 @@ def compile_func(
         on numpy arrays.
     cse (default `True`): performs common-subexpression elimination.
     fastmath (default False): use fastmath floating point operations, especially fused multiply-addition.
-    opt_level (default 2): optimization level (0, 1, or 2). Broadly the numbers are parallel to -O0, -O1, -O2
+    fast_complex (default True): use f64x2 SIMD instructions for complex operations.
+    parallel_mul (default True): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
+    huge (default False): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
+    compress (default False): compress binary size by converting inline operations to calls.
+    opt_level (default 2): optimization level (0, 1, 2, or 3). Broadly the numbers are parallel to -O0, -O1, -O2, and -O3
         options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
         Levels 2 and 3 use improved graph-coloring algorithms for better register allocation.
     defuns (default `None`): a dictionary of Symbol => Definition to pass external Python or Symjit-generated functions.
@@ -113,6 +118,7 @@ def compile_func(
             compress=compress,
             fast_complex=fast_complex,
             huge=huge,
+            parallel_mul=parallel_mul,
             action=action,
         )
     elif can_use_python(backend):
@@ -156,6 +162,7 @@ def compile_ode(
     dtype="float64",
     fast_complex=True,
     huge=False,
+    parallel_mul=True,
     compress=False,
 ):
     """Compile a symbolic ODE model into an executable form suitable for
@@ -179,7 +186,11 @@ def compile_ode(
         when called on numpy arrays.
     cse (default `True`): performs common-subexpression elimination.
     fastmath (default `False`): use fastmath floating point operations, especially fused multiply-addition.
-    opt_level (default 2): optimization level (0, 1, or 2). Broadly the numbers are parallel to -O0, -O1, -O2
+    fast_complex (default True): use f64x2 SIMD instructions for complex operations.
+    parallel_mul (default True): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
+    huge (default False): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
+    compress (default False): compress binary size by converting inline operations to calls.
+    opt_level (default 2): optimization level (0, 1, 2, or 3). Broadly the numbers are parallel to -O0, -O1, -O2, and -O3
         options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
         Levels 2 and 3 use improved graph-coloring algorithms for better register allocation.
     defuns (default `None`): a dictionary of Symbol => Definition to pass external Python or
@@ -221,6 +232,7 @@ def compile_ode(
             dtype=dtype,
             fast_complex=fast_complex,
             huge=huge,
+            parallel_mul=parallel_mul,
             compress=compress,
         )
     elif can_use_python(backend):
@@ -252,6 +264,7 @@ def compile_jac(
     dtype="float64",
     fast_complex=True,
     huge=False,
+    parallel_mul=True,
     compress=False,
 ):
     """Genenrates and compiles Jacobian for an ODE system.
@@ -270,7 +283,11 @@ def compile_jac(
             on numpy arrays.
         cse (default `True`): performs common-subexpression elimination.
         fastmath (default `False`): use fastmath floating point operations, especially fused multiply-addition.
-        opt_level (default 2): optimization level (0, 1, or 2). Broadly the numbers are parallel to -O0, -O1, -O2
+        fast_complex (default True): use f64x2 SIMD instructions for complex operations.
+        parallel_mul (default True): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
+        huge (default False): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
+        compress (default False): compress binary size by converting inline operations to calls.
+        opt_level (default 2): optimization level (0, 1, 2, or 3). Broadly the numbers are parallel to -O0, -O1, -O2, and -O3
             options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
             Levels 2 and 3 use improved graph-coloring algorithms for better register allocation.
         defuns (default `None`): a dictionary of Symbol => Definition to pass external Python or
@@ -298,6 +315,7 @@ def compile_jac(
             dtype=dtype,
             fast_complex=fast_complex,
             huge=huge,
+            parallel_mul=parallel_mul,
             compress=compress,
         )
     elif can_use_python(backend):
@@ -342,6 +360,7 @@ def compile_json(
     dtype="float64",
     fast_complex=True,
     huge=False,
+    parallel_mul=True,
     compress=False,
 ):
     """Compiles CellML models
@@ -365,6 +384,7 @@ def compile_json(
             dtype=dtype,
             fast_complex=fast_complex,
             huge=huge,
+            parallel_mul=parallel_mul,
             compress=compress,
         )
 
@@ -400,6 +420,7 @@ def compile_evaluator(
     fast_complex=True,
     direct=True,
     huge=False,
+    parallel_mul=True,
     compress=False,
 ):
     """Compiles an Evaluator object generated by Symbolica.
@@ -423,7 +444,11 @@ def compile_evaluator(
     use_threads (default `False`): currently not supported for the Symbolica bridge.
     cse (default `False`): performs common-subexpression elimination.
     fastmath (default False): use fastmath floating point operations, especially fused multiply-addition.
-    opt_level (default 2): optimization level (0, 1, or 2). Broadly the numbers are parallel to -O0, -O1, -O2
+    fast_complex (default True): use f64x2 SIMD instructions for complex operations.
+    parallel_mul (default True): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
+    huge (default False): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
+    compress (default False): compress binary size by converting inline operations to calls.
+    opt_level (default 2): optimization level (0, 1, 2, or 3). Broadly the numbers are parallel to -O0, -O1, -O2, and -O3
         options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
         Levels 2 and 3 use improved graph-coloring algorithms for better register allocation.
     defuns (default `None`): currently not supported for the Symbolica bridge.
@@ -470,6 +495,7 @@ def compile_evaluator(
             fast_complex=fast_complex,
             direct=direct,
             huge=huge,
+            parallel_mul=parallel_mul,
             compress=compress,
         )
     else:  # order == "fortran"
@@ -492,6 +518,7 @@ def compile_evaluator(
             fast_complex=fast_complex,
             direct=direct,
             huge=huge,
+            parallel_mul=parallel_mul,
             compress=compress,
         )
 

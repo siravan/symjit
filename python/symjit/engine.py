@@ -339,6 +339,7 @@ class RustyCompiler:
         direct=True,
         compress=False,
         huge=False,
+        parallel_mul=True,
     ):
         if convert:
             model = json.dumps(model)
@@ -363,6 +364,7 @@ class RustyCompiler:
             | (0x00004000 if direct else 0)
             | (0x00008000 if fast_complex else 0)
             | (0x00100000 if huge else 0)
+            | (0x00200000 if parallel_mul else 0)
             | ((opt_level & 0x0F) << 8)
         )
 

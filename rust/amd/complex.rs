@@ -384,7 +384,7 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn support_times2(&self) -> bool {
-        true
+        self.config.parallel_mul()
     }
 
     fn times2_loc(&mut self, d1: Reg, s1: Reg, l1: Loc, d2: Reg, s2: Reg, l2: Loc) {
@@ -403,6 +403,7 @@ impl Generator for AmdComplexGenerator {
             }
             self.times(d2, s2, Reg::Temp);
         } else {
+            /*
             match l1 {
                 Loc::Mem(idx) => self.amd.vmovdd_xmm_mem(T1, MEM, (idx * REG_SIZE) as i32),
                 Loc::Param(idx) => self.amd.vmovdd_xmm_mem(T1, PARAMS, (idx * REG_SIZE) as i32),
@@ -416,6 +417,28 @@ impl Generator for AmdComplexGenerator {
             }
 
             self.amd.vinsertf128(T0, T1, T2, 1);
+            */
+
+            match l1 {
+                Loc::Mem(idx) => self.amd.vmovdd_xmm_mem(T0, MEM, (idx * REG_SIZE) as i32),
+                Loc::Param(idx) => self.amd.vmovdd_xmm_mem(T0, PARAMS, (idx * REG_SIZE) as i32),
+                Loc::Stack(idx) => self.amd.vmovdd_xmm_mem(T0, STACK, (idx * REG_SIZE) as i32),
+            }
+
+            match l2 {
+                Loc::Mem(idx) => self
+                    .amd
+                    .vinsertf128_mem(T0, T0, MEM, (idx * REG_SIZE) as i32, 1),
+                Loc::Param(idx) => {
+                    self.amd
+                        .vinsertf128_mem(T0, T0, PARAMS, (idx * REG_SIZE) as i32, 1)
+                }
+                Loc::Stack(idx) => {
+                    self.amd
+                        .vinsertf128_mem(T0, T0, STACK, (idx * REG_SIZE) as i32, 1)
+                }
+            }
+
             self.amd.vinsertf128(ϕ(s1), ϕ(s1), ϕ(s2), 1);
 
             self.amd.vunpcklpd(T1, ϕ(s1), ϕ(s1)); // duplicate real

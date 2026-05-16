@@ -48,6 +48,7 @@ print(f"completed in {time.time() - t_start:.1f} s.")
 
 symjit_f.save(f"loop.sjb")
 symjit_f.dump("1loop.bytecode.txt", "bytecode")
+symjit_f.dump("1loop.stats.txt", "stats")
 
 N_SAMPLES = 1000
 

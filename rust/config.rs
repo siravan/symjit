@@ -28,6 +28,7 @@ pub const DEBUG_SIMD: u32 = 0x000040000;
 pub const DEBUG_STATS: u32 = 0x000080000;
 
 pub const HUGE: u32 = 0x00100000;
+pub const PARALLEL_MUL: u32 = 0x00200000;
 
 pub const OPT_LEVEL_MASK: u32 = 0x00000f00;
 pub const OPT_LEVEL_SHIFT: usize = 8;
@@ -65,6 +66,7 @@ struct Options {
     direct: bool,
     fast_complex: bool,
     huge: bool,
+    parallel_mul: bool,
     opt_level: u8,
 }
 
@@ -124,6 +126,7 @@ impl Config {
         config.set_dicect(c.options.direct);
         config.set_fast_complex(c.options.fast_complex);
         config.set_huge(c.options.huge);
+        config.set_parallel_mul(c.options.parallel_mul);
 
         config.set_opt_level(c.options.opt_level);
 
@@ -162,6 +165,7 @@ impl Config {
             fast_complex: self.fast_complex(),
             opt_level: self.opt_level(),
             huge: self.huge(),
+            parallel_mul: self.parallel_mul(),
         };
 
         let debug: DebugOptions = DebugOptions {
@@ -277,6 +281,10 @@ impl Config {
 
     pub fn huge(&self) -> bool {
         self.test(HUGE)
+    }
+
+    pub fn parallel_mul(&self) -> bool {
+        self.test(PARALLEL_MUL)
     }
 
     pub fn debug_bytedode(&self) -> bool {
@@ -420,6 +428,11 @@ impl Config {
         self.opt = (self.opt & !HUGE) | if enabled { HUGE } else { 0 };
     }
 
+    /// Merge serial complex multiplications into parallel operation.
+    pub fn set_parallel_mul(&mut self, enabled: bool) {
+        self.opt = (self.opt & !PARALLEL_MUL) | if enabled { PARALLEL_MUL } else { 0 };
+    }
+
     /// Dump bytecode for debugging
     pub fn set_debug_bytecode(&mut self, enabled: bool) {
         self.opt = (self.opt & !DEBUG_BYTECODE) | if enabled { DEBUG_BYTECODE } else { 0 };
@@ -448,7 +461,13 @@ impl Default for Config {
         } else {
             let config = Config::new(
                 CompilerType::Native,
-                USE_SIMD | SYMBOLICA | COMPACT | FAST_COMPLEX | DIRECT | (2 << OPT_LEVEL_SHIFT),
+                USE_SIMD
+                    | SYMBOLICA
+                    | COMPACT
+                    | FAST_COMPLEX
+                    | DIRECT
+                    | PARALLEL_MUL
+                    | (2 << OPT_LEVEL_SHIFT),
             )
             .unwrap();
             config.to_toml("symjit.toml");

@@ -633,7 +633,12 @@ impl Application {
                 true
             }
             "stats" => {
-                self.bytecode.mir.print_stats(name);
+                let size = if let Some(f) = &self.compiled {
+                    f.as_machine().unwrap().size
+                } else {
+                    0
+                };
+                self.bytecode.mir.print_stats(name, size);
                 true
             }
             _ => false,

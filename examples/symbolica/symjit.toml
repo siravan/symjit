@@ -13,10 +13,11 @@ compress = false
 direct = true
 fast_complex = true
 huge = false
+parallel_mul = true
 opt_level = 2
 
 [debug]
 bytecode = false
 scalar = false
 simd = false
-stats = false
+stats = true

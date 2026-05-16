@@ -1879,6 +1879,59 @@ impl Mir {
     }
 }
 
+impl Instruction {
+    fn dst(&self) -> Reg {
+        match self {
+            Instruction::Bi { dst, .. } => *dst,
+            Instruction::Uni { dst, .. } => *dst,
+            Instruction::Fused { dst, .. } => *dst,
+            Instruction::IfElse { dst, .. } => *dst,
+            Instruction::Load { dst, .. } => *dst,
+            Instruction::LoadConst { dst, .. } => *dst,
+            Instruction::LoadConstMath { dst, .. } => *dst,
+            Instruction::LoadMath { dst, .. } => *dst,
+            Instruction::Mov { dst, .. } => *dst,
+            _ => panic!("Instruction does not have a dst field."),
+        }
+    }
+
+    fn src(&self) -> Reg {
+        if let Instruction::Save { src, .. } = self {
+            *src
+        } else {
+            panic!("Instruction does not have a src field.")
+        }
+    }
+
+    fn s1(&self) -> Reg {
+        match self {
+            Instruction::Bi { s1, .. } => *s1,
+            Instruction::Uni { s1, .. } => *s1,
+            Instruction::LoadConstMath { s1, .. } => *s1,
+            Instruction::LoadMath { s1, .. } => *s1,
+            Instruction::Mov { s1, .. } => *s1,
+            _ => panic!("Instruction does not have an s1 field."),
+        }
+    }
+
+    fn s2(&self) -> Reg {
+        if let Instruction::Bi { s2, .. } = self {
+            *s2
+        } else {
+            panic!("Instruction does not have an s2 field.")
+        }
+    }
+
+    fn loc(&self) -> Loc {
+        match self {
+            Instruction::Load { loc, .. } => *loc,
+            Instruction::LoadMath { loc, .. } => *loc,
+            Instruction::Save { loc, .. } => *loc,
+            _ => panic!("Instruction does not have a loc field."),
+        }
+    }
+}
+
 impl Mir {
     fn fuse_op_mov(
         &self,
@@ -1895,17 +1948,13 @@ impl Mir {
          *      %l = Root(%2)
          *      call power
          */
-        if let Instruction::Uni { op, dst, s1 } = *q0 {
-            if let Instruction::Mov {
-                dst: dst_q1,
-                s1: s1_q1,
-            } = *q1
-            {
-                if dst == s1_q1 {
+        if let Instruction::Uni { op, .. } = *q0 {
+            if let Instruction::Mov { .. } = *q1 {
+                if q0.dst() == q1.s1() {
                     return Some(Instruction::Uni {
                         op,
-                        dst: dst_q1,
-                        s1,
+                        dst: q1.dst(),
+                        s1: q0.s1(),
                     });
                 }
             }
@@ -1920,18 +1969,14 @@ impl Mir {
          *      %l = %2 Plus %3
          *      call power
          */
-        if let Instruction::Bi { op, dst, s1, s2 } = *q0 {
-            if let Instruction::Mov {
-                dst: dst_q1,
-                s1: s1_q1,
-            } = *q1
-            {
-                if dst == s1_q1 {
+        if let Instruction::Bi { op, .. } = *q0 {
+            if let Instruction::Mov { .. } = *q1 {
+                if q0.dst() == q1.s1() {
                     return Some(Instruction::Bi {
                         op,
-                        dst: dst_q1,
-                        s1,
-                        s2,
+                        dst: q1.dst(),
+                        s1: q0.s1(),
+                        s2: q0.s2(),
                     });
                 }
             }
@@ -1957,37 +2002,28 @@ impl Mir {
          * powi_mod; therefore, we added nop to prevent this rule from firing for those
          * functions.
          */
-        if let Instruction::Load { dst, loc } = *q0 {
-            if let Instruction::Mov {
-                dst: dst_q1,
-                s1: s1_q1,
-            } = *q1
-            {
-                if dst == s1_q1 {
-                    return Some(Instruction::Load { dst: dst_q1, loc });
+        if let Instruction::Load { .. } = *q0 {
+            if let Instruction::Mov { .. } = *q1 {
+                if q0.dst() == q1.s1() {
+                    return Some(Instruction::Load {
+                        dst: q1.dst(),
+                        loc: q0.loc(),
+                    });
                 }
             }
         };
 
-        if let Instruction::LoadConst { dst, idx } = *q0 {
-            if let Instruction::Mov {
-                dst: dst_q1,
-                s1: s1_q1,
-            } = *q1
-            {
-                if dst == s1_q1 {
-                    return Some(Instruction::LoadConst { dst: dst_q1, idx });
+        if let Instruction::LoadConst { idx, .. } = *q0 {
+            if let Instruction::Mov { .. } = *q1 {
+                if q0.dst() == q1.s1() {
+                    return Some(Instruction::LoadConst { dst: q1.dst(), idx });
                 }
             }
         };
 
-        if let Instruction::Load { dst, loc } = *q0 {
-            if let Instruction::Save {
-                src: src_q1,
-                loc: loc_q1,
-            } = *q1
-            {
-                if loc == loc_q1 && dst == src_q1 {
+        if let Instruction::Load { .. } = *q0 {
+            if let Instruction::Save { .. } = *q1 {
+                if q0.loc() == q1.loc() && q0.dst() == q1.src() {
                     return Some(Instruction::Nop);
                 }
             }
@@ -2040,17 +2076,13 @@ impl Mir {
          * note that if we know that Stack[6] is not accessed again, we can remove the
          * first instruction, but this is not yet implemented.
          */
-        if let Instruction::Save { src, loc } = *q0 {
-            if let Instruction::Load {
-                dst: dst_q1,
-                loc: loc_q1,
-            } = *q1
-            {
-                if loc == loc_q1 {
+        if let Instruction::Save { .. } = *q0 {
+            if let Instruction::Load { .. } = *q1 {
+                if q0.loc() == q1.loc() {
                     code.push(q0.clone());
                     return Some(Instruction::Mov {
-                        dst: dst_q1,
-                        s1: src,
+                        dst: q1.dst(),
+                        s1: q0.src(),
                     });
                 }
             }
@@ -2077,21 +2109,13 @@ impl Mir {
          *      call sin
          *      Mem[5] = %$
          */
-        if let Instruction::Save { src, loc } = *q0 {
-            if let Instruction::Load {
-                dst: dst_q1,
-                loc: loc_q1,
-            } = *q1
-            {
-                if let Instruction::Save {
-                    src: dst_q2,
-                    loc: loc_q2,
-                } = *q2
-                {
-                    if src == Reg::Ret && loc == loc_q1 && dst_q1 == dst_q2 {
+        if let Instruction::Save { .. } = *q0 {
+            if let Instruction::Load { .. } = *q1 {
+                if let Instruction::Save { .. } = *q2 {
+                    if q0.src() == Reg::Ret && q0.loc() == q1.loc() && q1.dst() == q2.dst() {
                         return Some(Instruction::Save {
                             src: Reg::Ret,
-                            loc: loc_q2,
+                            loc: q2.loc(),
                         });
                     }
                 }
@@ -2112,51 +2136,61 @@ impl Mir {
             return None;
         }
 
-        if let Instruction::Bi { op, dst, s1, s2 } = *q0 {
+        if let Instruction::Bi {
+            op: BinOp::Times, ..
+        } = *q0
+        {
             if let Instruction::Bi {
-                op: op_q1,
-                dst: dst_q1,
-                s1: s1_q1,
-                s2: s2_q1,
+                op: BinOp::Plus, ..
             } = *q1
             {
-                if op == BinOp::Times && op_q1 == BinOp::Plus && s1_q1 == dst {
+                if q1.s1() == q0.dst() {
                     return Some(Instruction::Fused {
                         op: FusedOp::MulAdd,
-                        dst: dst_q1,
-                        a: s1,
-                        b: s2,
-                        c: s2_q1,
+                        dst: q1.dst(),
+                        a: q0.s1(),
+                        b: q0.s2(),
+                        c: q1.s2(),
                     });
                 }
 
-                if op == BinOp::Times && op_q1 == BinOp::Plus && s2_q1 == dst {
+                if q1.s2() == q0.dst() {
                     return Some(Instruction::Fused {
                         op: FusedOp::MulAdd,
-                        dst: dst_q1,
-                        a: s1,
-                        b: s2,
-                        c: s1_q1,
+                        dst: q1.dst(),
+                        a: q0.s1(),
+                        b: q0.s2(),
+                        c: q1.s1(),
                     });
                 }
+            }
+        }
 
-                if op == BinOp::Times && op_q1 == BinOp::Minus && s1_q1 == dst {
+        if let Instruction::Bi {
+            op: BinOp::Times, ..
+        } = *q0
+        {
+            if let Instruction::Bi {
+                op: BinOp::Minus, ..
+            } = *q1
+            {
+                if q1.s1() == q0.dst() {
                     return Some(Instruction::Fused {
                         op: FusedOp::MulSub,
-                        dst: dst_q1,
-                        a: s1,
-                        b: s2,
-                        c: s2_q1,
+                        dst: q1.dst(),
+                        a: q0.s1(),
+                        b: q0.s2(),
+                        c: q1.s2(),
                     });
                 }
 
-                if op == BinOp::Times && op_q1 == BinOp::Minus && s2_q1 == dst {
+                if q1.s2() == q0.dst() {
                     return Some(Instruction::Fused {
                         op: FusedOp::NegMulAdd,
-                        dst: dst_q1,
-                        a: s1,
-                        b: s2,
-                        c: s1_q1,
+                        dst: q1.dst(),
+                        a: q0.s1(),
+                        b: q0.s2(),
+                        c: q1.s1(),
                     });
                 }
             }
@@ -2177,32 +2211,27 @@ impl Mir {
             return None;
         }
 
-        if let Instruction::Bi { op, dst, s1, s2 } = *q0 {
-            if let Instruction::LoadConst {
-                dst: dst_q1,
-                idx: idx_q1,
-            } = *q1
-            {
+        if let Instruction::Bi {
+            op: BinOp::Times, ..
+        } = *q0
+        {
+            if let Instruction::LoadConst { idx, .. } = *q1 {
                 if let Instruction::Bi {
-                    op: op_q2,
-                    dst: dst_q2,
-                    s1: s1_q2,
-                    s2: s2_q2,
+                    op: BinOp::Plus, ..
                 } = *q2
                 {
-                    if op == BinOp::Times
-                        && op_q2 == BinOp::Plus
-                        && ((s1_q2 == dst && s2_q2 == dst_q1) || (s1_q2 == dst_q1 && s2_q2 == dst))
+                    if (q2.s1() == q0.dst() && q2.s2() == q1.dst())
+                        || (q2.s1() == q1.dst() && q2.s2() == q0.dst())
                     {
                         code.push(Instruction::LoadConst {
                             dst: Reg::Temp,
-                            idx: idx_q1,
+                            idx,
                         });
                         return Some(Instruction::Fused {
                             op: FusedOp::MulAdd,
-                            dst: dst_q2,
-                            a: s1,
-                            b: s2,
+                            dst: q2.dst(),
+                            a: q0.s1(),
+                            b: q0.s2(),
                             c: Reg::Temp,
                         });
                     }
@@ -2210,32 +2239,27 @@ impl Mir {
             }
         }
 
-        if let Instruction::Bi { op, dst, s1, s2 } = *q0 {
-            if let Instruction::Load {
-                dst: dst_q1,
-                loc: loc_q1,
-            } = *q1
-            {
+        if let Instruction::Bi {
+            op: BinOp::Times, ..
+        } = *q0
+        {
+            if let Instruction::Load { .. } = *q1 {
                 if let Instruction::Bi {
-                    op: op_q2,
-                    dst: dst_q2,
-                    s1: s1_q2,
-                    s2: s2_q2,
+                    op: BinOp::Plus, ..
                 } = *q2
                 {
-                    if op == BinOp::Times
-                        && op_q2 == BinOp::Plus
-                        && ((s1_q2 == dst && s2_q2 == dst_q1) || (s1_q2 == dst_q1 && s2_q2 == dst))
+                    if (q2.s1() == q0.dst() && q2.s2() == q1.dst())
+                        || (q2.s1() == q1.dst() && q2.s2() == q0.dst())
                     {
                         code.push(Instruction::Load {
                             dst: Reg::Temp,
-                            loc: loc_q1,
+                            loc: q1.loc(),
                         });
                         return Some(Instruction::Fused {
                             op: FusedOp::MulAdd,
-                            dst: dst_q2,
-                            a: s1,
-                            b: s2,
+                            dst: q2.dst(),
+                            a: q0.s1(),
+                            b: q0.s2(),
                             c: Reg::Temp,
                         });
                     }
@@ -2253,18 +2277,20 @@ impl Mir {
         q1: &Instruction,
         q2: &Instruction,
     ) -> Option<Instruction> {
+        if !self.config.is_complex() {
+            return None;
+        }
+
         if let Instruction::LoadMath {
             op: ArithOp::Times, ..
         } = *q0
         {
-            if let Instruction::Load { dst: dst_q1, .. } = *q1 {
+            if let Instruction::Load { .. } = *q1 {
                 if let Instruction::LoadMath {
-                    op: ArithOp::Times,
-                    s1: s1_q2,
-                    ..
+                    op: ArithOp::Times, ..
                 } = *q2
                 {
-                    if dst_q1 == s1_q2 {
+                    if q1.dst() == q2.s1() {
                         code.push(q1.clone());
                         code.push(q0.clone());
                         return Some(q2.clone());
@@ -2276,14 +2302,74 @@ impl Mir {
         None
     }
 
+    fn fuse_times2_5(
+        &self,
+        code: &mut Vec<Instruction>,
+        q0: &Instruction,
+        q1: &Instruction,
+        q2: &Instruction,
+        q3: &Instruction,
+        q4: &Instruction,
+    ) -> Option<Instruction> {
+        if !self.config.is_complex() {
+            return None;
+        }
+
+        if let Instruction::Load { .. } = *q0 {
+            if let Instruction::LoadMath {
+                op: ArithOp::Times, ..
+            } = *q1
+            {
+                if let Instruction::Save { .. } = *q2 {
+                    if let Instruction::Load { .. } = *q3 {
+                        if let Instruction::LoadMath {
+                            op: ArithOp::Times, ..
+                        } = *q4
+                        {
+                            if q0.dst() == q1.s1()
+                                && q1.dst() == q2.src()
+                                && q3.dst() == q4.s1()
+                                && q2.loc() != q3.loc()
+                                && q2.loc() != q4.loc()
+                            {
+                                code.push(Instruction::Load {
+                                    dst: Reg::Ret,
+                                    loc: q0.loc(),
+                                });
+                                code.push(q3.clone());
+                                code.push(Instruction::LoadMath {
+                                    op: ArithOp::Times,
+                                    dst: Reg::Ret,
+                                    s1: Reg::Ret,
+                                    loc: q1.loc(),
+                                });
+                                code.push(q4.clone());
+                                return Some(Instruction::Save {
+                                    src: Reg::Ret,
+                                    loc: q2.loc(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
     fn fuse(
         &self,
         code: &mut Vec<Instruction>,
         q0: &Instruction,
         q1: &Instruction,
         q2: &Instruction,
+        q3: &Instruction,
+        q4: &Instruction,
     ) -> (Instruction, usize) {
-        if let Some(v) = self.fuse_save3(code, q0, q1, q2) {
+        if let Some(v) = self.fuse_times2_5(code, q0, q1, q2, q3, q4) {
+            (v, 5)
+        } else if let Some(v) = self.fuse_save3(code, q0, q1, q2) {
             (v, 3)
         } else if let Some(v) = self.fuse_fma3(code, q0, q1, q2) {
             (v, 3)
@@ -2310,9 +2396,11 @@ impl Mir {
         let mut q0: Instruction = iter.next().unwrap_or(&Instruction::End).clone();
         let mut q1: Instruction = iter.next().unwrap_or(&Instruction::End).clone();
         let mut q2: Instruction = iter.next().unwrap_or(&Instruction::End).clone();
+        let mut q3: Instruction = iter.next().unwrap_or(&Instruction::End).clone();
+        let mut q4: Instruction = iter.next().unwrap_or(&Instruction::End).clone();
 
         while !matches!(q0, Instruction::End) {
-            let (top, num_consumed) = self.fuse(&mut code, &q0, &q1, &q2);
+            let (top, num_consumed) = self.fuse(&mut code, &q0, &q1, &q2, &q3, &q4);
 
             success |= num_consumed > 1;
 
@@ -2322,19 +2410,41 @@ impl Mir {
                     code.push(q0);
                     q0 = q1;
                     q1 = q2;
-                    q2 = iter.next().unwrap_or(&Instruction::End).clone();
+                    q2 = q3;
+                    q3 = q4;
+                    q4 = iter.next().unwrap_or(&Instruction::End).clone();
                 }
                 // q0 and q1 match.
                 2 => {
                     q0 = top;
                     q1 = q2;
-                    q2 = iter.next().unwrap_or(&Instruction::End).clone();
+                    q2 = q3;
+                    q3 = q4;
+                    q4 = iter.next().unwrap_or(&Instruction::End).clone();
                 }
                 // q0, q1, and q2 match.
                 3 => {
                     q0 = top;
+                    q1 = q3;
+                    q2 = q4;
+                    q3 = iter.next().unwrap_or(&Instruction::End).clone();
+                    q4 = iter.next().unwrap_or(&Instruction::End).clone();
+                }
+                // q0, q1, q2, and q3 match.
+                4 => {
+                    q0 = top;
+                    q1 = q4;
+                    q2 = iter.next().unwrap_or(&Instruction::End).clone();
+                    q3 = iter.next().unwrap_or(&Instruction::End).clone();
+                    q4 = iter.next().unwrap_or(&Instruction::End).clone();
+                }
+                // q0, q1, q2, q3, q4 match.
+                5 => {
+                    q0 = top;
                     q1 = iter.next().unwrap_or(&Instruction::End).clone();
                     q2 = iter.next().unwrap_or(&Instruction::End).clone();
+                    q3 = iter.next().unwrap_or(&Instruction::End).clone();
+                    q4 = iter.next().unwrap_or(&Instruction::End).clone();
                 }
                 _ => unreachable!(),
             }
@@ -2346,10 +2456,25 @@ impl Mir {
 }
 
 impl Mir {
-    pub fn print_stats(&self, name: &str) {
+    pub fn print_stats(&self, name: &str, size: usize) {
         let mut counts: HashMap<String, usize> = HashMap::new();
+        let mut times2: usize = 0;
 
-        for ins in self.code.iter() {
+        let mut iter = self.code.iter().peekable();
+
+        while let Some(ins) = iter.next() {
+            if let Instruction::LoadMath {
+                op: ArithOp::Times, ..
+            } = ins
+            {
+                if let Some(Instruction::LoadMath {
+                    op: ArithOp::Times, ..
+                }) = iter.peek()
+                {
+                    times2 += 1;
+                }
+            }
+
             let desc = ins.desc();
             match counts.get_mut(&desc) {
                 Some(k) => {
@@ -2369,6 +2494,8 @@ impl Mir {
         for (k, v) in counts.iter() {
             let _ = writeln!(fs, "{} x {}", k, v);
         }
+        let _ = writeln!(fs, "times2 x {}", times2);
+        let _ = writeln!(fs, "compiled size {} bytes", size);
     }
 }
 
