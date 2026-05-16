@@ -87,11 +87,11 @@ impl Application {
 
         let config = prog.config().clone();
 
+        prog.builder.optimize_mir(&mut mir)?;
+
         if config.is_complex() && !config.fast_complex() {
             mir = Complexifier::new(&reals, config.clone()).complexify(&mir)?;
         }
-
-        prog.builder.optimize_mir(&mut mir)?;
 
         // let compiled = Self::compile_ty(prog.config().compiler_type(), &mir, &mut prog)?;
         let compiled = match config.compiler_type() {

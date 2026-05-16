@@ -623,13 +623,6 @@ impl Amd {
         self.append_byte(7);
     }
 
-    pub fn vshufpd(&mut self, reg: u8, vreg: u8, rm: u8, imm8: u8) {
-        self.vex_pd(reg, vreg, rm, 0);
-        self.append_byte(0xc6);
-        self.modrm_reg(reg, rm);
-        self.append_byte(imm8);
-    }
-
     /******************* packed double xmm *******************/
 
     pub fn vbroadcastdd(&mut self, reg: u8, rm: u8, offset: i32) {
@@ -846,6 +839,49 @@ impl Amd {
         self.vex_dd(reg, vreg, rm, 0);
         self.append_byte(0xd0);
         self.modrm_reg(reg, rm);
+    }
+
+    pub fn vshufpd(&mut self, reg: u8, vreg: u8, rm: u8, imm8: u8) {
+        self.vex_pd(reg, vreg, rm, 0);
+        self.append_byte(0xc6);
+        self.modrm_reg(reg, rm);
+        self.append_byte(imm8);
+    }
+
+    pub fn vunpckhpd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_pd(reg, vreg, rm, 0);
+        self.append_byte(0x15);
+        self.modrm_reg(reg, rm);
+    }
+
+    pub fn vunpcklpd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_pd(reg, vreg, rm, 0);
+        self.append_byte(0x14);
+        self.modrm_reg(reg, rm);
+    }
+
+    pub fn vaddsubpd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_pd(reg, vreg, rm, 0);
+        self.append_byte(0xd0);
+        self.modrm_reg(reg, rm);
+    }
+
+    // imm8 == 0 => reg = vreg[128:256]:rm[0:128]
+    // imm8 == 1 => reg = rm[128:256]:vreg[0:128]
+    pub fn vinsertf128(&mut self, reg: u8, vreg: u8, rm: u8, imm8: u8) {
+        self.vex3pd(reg, vreg, rm, 0, 3);
+        self.append_byte(0x18);
+        self.modrm_reg(reg, rm);
+        self.append_byte(imm8);
+    }
+
+    // imm8 == 0 => rm = reg[0:128]
+    // imm8 == 1 => rm = reg[128:256]
+    pub fn vextractf128(&mut self, rm: u8, reg: u8, imm8: u8) {
+        self.vex3pd(reg, 0, rm, 0, 3);
+        self.append_byte(0x19);
+        self.modrm_reg(reg, rm);
+        self.append_byte(imm8);
     }
 
     /******************* SSE scalar double ******************/

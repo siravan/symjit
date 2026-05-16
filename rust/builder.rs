@@ -289,8 +289,6 @@ impl Builder {
     pub fn optimize_mir(&mut self, mir: &mut Mir) -> Result<()> {
         let opt_level = self.config.opt_level();
 
-        println!("opt level = {}", opt_level);
-
         if opt_level >= 1 {
             mir.optimize_peephole();
         }

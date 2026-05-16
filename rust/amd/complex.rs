@@ -388,20 +388,45 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn times2_loc(&mut self, d1: Reg, s1: Reg, l1: Loc, d2: Reg, s2: Reg, l2: Loc) {
-        // println!("times2!");
-        match l1 {
-            Loc::Mem(idx) => self.load_mem(Reg::Temp, idx),
-            Loc::Param(idx) => self.load_param(Reg::Temp, idx),
-            Loc::Stack(idx) => self.load_stack(Reg::Temp, idx),
-        }
-        self.times(d1, s1, Reg::Temp);
+        if d1 == s2 {
+            match l1 {
+                Loc::Mem(idx) => self.load_mem(Reg::Temp, idx),
+                Loc::Param(idx) => self.load_param(Reg::Temp, idx),
+                Loc::Stack(idx) => self.load_stack(Reg::Temp, idx),
+            }
+            self.times(d1, s1, Reg::Temp);
 
-        match l2 {
-            Loc::Mem(idx) => self.load_mem(Reg::Temp, idx),
-            Loc::Param(idx) => self.load_param(Reg::Temp, idx),
-            Loc::Stack(idx) => self.load_stack(Reg::Temp, idx),
+            match l2 {
+                Loc::Mem(idx) => self.load_mem(Reg::Temp, idx),
+                Loc::Param(idx) => self.load_param(Reg::Temp, idx),
+                Loc::Stack(idx) => self.load_stack(Reg::Temp, idx),
+            }
+            self.times(d2, s2, Reg::Temp);
+        } else {
+            match l1 {
+                Loc::Mem(idx) => self.amd.vmovdd_xmm_mem(T1, MEM, (idx * REG_SIZE) as i32),
+                Loc::Param(idx) => self.amd.vmovdd_xmm_mem(T1, PARAMS, (idx * REG_SIZE) as i32),
+                Loc::Stack(idx) => self.amd.vmovdd_xmm_mem(T1, STACK, (idx * REG_SIZE) as i32),
+            }
+
+            match l2 {
+                Loc::Mem(idx) => self.amd.vmovdd_xmm_mem(T2, MEM, (idx * REG_SIZE) as i32),
+                Loc::Param(idx) => self.amd.vmovdd_xmm_mem(T2, PARAMS, (idx * REG_SIZE) as i32),
+                Loc::Stack(idx) => self.amd.vmovdd_xmm_mem(T2, STACK, (idx * REG_SIZE) as i32),
+            }
+
+            self.amd.vinsertf128(T0, T1, T2, 1);
+            self.amd.vinsertf128(ϕ(s1), ϕ(s1), ϕ(s2), 1);
+
+            self.amd.vunpcklpd(T1, ϕ(s1), ϕ(s1)); // duplicate real
+            self.amd.vunpckhpd(T2, ϕ(s1), ϕ(s1)); // duplicate imag
+            self.amd.vmulpd(T1, T1, T0);
+            self.amd.vmulpd(T2, T2, T0);
+            self.amd.vshufpd(T2, T2, T2, 5); // exchange real/imag
+            self.amd.vaddsubpd(ϕ(d1), T1, T2);
+
+            self.amd.vextractf128(ϕ(d2), ϕ(d1), 1);
         }
-        self.times(d2, s2, Reg::Temp);
     }
 
     fn real(&mut self, dst: Reg, s1: Reg) {

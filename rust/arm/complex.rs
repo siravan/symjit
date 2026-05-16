@@ -202,15 +202,15 @@ impl Generator for ArmComplexGenerator {
         self.save_q_to_mem(ϕ(dst), SP, idx);
     }
 
-    fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {}
+    fn load_mem_complex(&mut self, _xd: Reg, _yd: Reg, _idx: u32) {}
 
-    fn save_mem_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {}
+    fn save_mem_complex(&mut self, _xs: Reg, _ys: Reg, _idx: u32) {}
 
-    fn load_param_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {}
+    fn load_param_complex(&mut self, _xd: Reg, _yd: Reg, _idx: u32) {}
 
-    fn load_stack_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {}
+    fn load_stack_complex(&mut self, _xd: Reg, _yd: Reg, _idx: u32) {}
 
-    fn save_stack_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {}
+    fn save_stack_complex(&mut self, _xs: Reg, _ys: Reg, _idx: u32) {}
 
     fn save_stack_result(&mut self, idx: u32) {
         self.save_stack(Reg::Ret, idx);
@@ -351,11 +351,27 @@ impl Generator for ArmComplexGenerator {
         self.emit(arm! { fdiv q(ϕ(dst)), q(T0), q(T1) }); // T0 = (x1*x2 + y1*y2)/T1 + (x2*y1 - x1*y2)/T1*im
     }
 
-    fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
+    fn times_complex(
+        &mut self,
+        _xd: Reg,
+        _yd: Reg,
+        _x1: Reg,
+        _y1: Reg,
+        _x2: Reg,
+        _y2: Reg,
+    ) -> bool {
         false
     }
 
-    fn divide_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
+    fn divide_complex(
+        &mut self,
+        _xd: Reg,
+        _yd: Reg,
+        _x1: Reg,
+        _y1: Reg,
+        _x2: Reg,
+        _y2: Reg,
+    ) -> bool {
         false
     }
 
@@ -363,7 +379,7 @@ impl Generator for ArmComplexGenerator {
         false
     }
 
-    fn times2_loc(&mut self, d1: Reg, s1: Reg, l1: Loc, d2: Reg, s2: Reg, l2: Loc) {
+    fn times2_loc(&mut self, _d1: Reg, _s1: Reg, _l1: Loc, _d2: Reg, _s2: Reg, _l2: Loc) {
         unreachable!()
     }
 
