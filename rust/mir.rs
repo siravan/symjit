@@ -1345,6 +1345,11 @@ impl Mir {
                         Self::set(regs, Reg::Ret, z.re);
                         Self::set(regs, Reg::Temp, z.im);
                     }
+                    Func::PairedUnary(p) => {
+                        let pair = p(Self::get(regs, Reg::Ret));
+                        Self::set(regs, Reg::Ret, pair.s);
+                        Self::set(regs, Reg::Temp, pair.c);
+                    }
                     Func::Slice { env, f_scalar, .. } => unsafe {
                         let f: fn(*const std::ffi::c_void, *const f64, usize, *mut f64) -> bool =
                             std::mem::transmute(*f_scalar);
@@ -1763,6 +1768,7 @@ impl Mir {
                     Func::Binary(_) => ir.call(label, *num_args)?,
                     Func::UnaryCplx(_) => ir.call_complex(label, *num_args)?,
                     Func::BinaryCplx(_) => ir.call_complex(label, *num_args)?,
+                    Func::PairedUnary(_) => ir.call(label, *num_args)?,
                     Func::Slice { .. } => ir.call(label, *num_args)?,
                 },
                 Instruction::Fused { op, dst, a, b, c } => match op {
@@ -1891,7 +1897,7 @@ impl Instruction {
             Instruction::LoadConstMath { dst, .. } => *dst,
             Instruction::LoadMath { dst, .. } => *dst,
             Instruction::Mov { dst, .. } => *dst,
-            _ => panic!("Instruction does not have a dst field."),
+            _ => panic!("Instruction {:?} does not have a dst field.", self),
         }
     }
 
@@ -1899,7 +1905,7 @@ impl Instruction {
         if let Instruction::Save { src, .. } = self {
             *src
         } else {
-            panic!("Instruction does not have a src field.")
+            panic!("Instruction {:?} does not have a src field.", self)
         }
     }
 
@@ -1910,7 +1916,7 @@ impl Instruction {
             Instruction::LoadConstMath { s1, .. } => *s1,
             Instruction::LoadMath { s1, .. } => *s1,
             Instruction::Mov { s1, .. } => *s1,
-            _ => panic!("Instruction does not have an s1 field."),
+            _ => panic!("Instruction {:?} does not have an s1 field.", self),
         }
     }
 
@@ -1918,7 +1924,7 @@ impl Instruction {
         if let Instruction::Bi { s2, .. } = self {
             *s2
         } else {
-            panic!("Instruction does not have an s2 field.")
+            panic!("Instruction {:?} does not have an s2 field.", self)
         }
     }
 
@@ -1927,7 +1933,14 @@ impl Instruction {
             Instruction::Load { loc, .. } => *loc,
             Instruction::LoadMath { loc, .. } => *loc,
             Instruction::Save { loc, .. } => *loc,
-            _ => panic!("Instruction does not have a loc field."),
+            _ => panic!("Instruction {:?} does not have a loc field.", self),
+        }
+    }
+
+    fn check_label(&self, s: &str) -> bool {
+        match self {
+            Instruction::Call { label, .. } => s == label,
+            _ => false,
         }
     }
 }
@@ -2112,7 +2125,7 @@ impl Mir {
         if let Instruction::Save { .. } = *q0 {
             if let Instruction::Load { .. } = *q1 {
                 if let Instruction::Save { .. } = *q2 {
-                    if q0.src() == Reg::Ret && q0.loc() == q1.loc() && q1.dst() == q2.dst() {
+                    if q0.src() == Reg::Ret && q0.loc() == q1.loc() && q1.dst() == q2.src() {
                         return Some(Instruction::Save {
                             src: Reg::Ret,
                             loc: q2.loc(),
@@ -2127,7 +2140,7 @@ impl Mir {
 
     fn fuse_fma(
         &self,
-        _code: &mut Vec<Instruction>,
+        code: &mut Vec<Instruction>,
         q0: &Instruction,
         q1: &Instruction,
     ) -> Option<Instruction> {
@@ -2190,6 +2203,82 @@ impl Mir {
                         dst: q1.dst(),
                         a: q0.s1(),
                         b: q0.s2(),
+                        c: q1.s1(),
+                    });
+                }
+            }
+        }
+
+        if let Instruction::LoadMath {
+            op: ArithOp::Times, ..
+        } = *q0
+        {
+            if let Instruction::Bi {
+                op: BinOp::Plus, ..
+            } = *q1
+            {
+                if q1.s1() == q0.dst() {
+                    code.push(Instruction::Load {
+                        dst: Reg::Ret,
+                        loc: q0.loc(),
+                    });
+                    return Some(Instruction::Fused {
+                        op: FusedOp::MulAdd,
+                        dst: q1.dst(),
+                        a: q0.s1(),
+                        b: Reg::Ret,
+                        c: q1.s2(),
+                    });
+                }
+
+                if q1.s2() == q0.dst() {
+                    code.push(Instruction::Load {
+                        dst: Reg::Ret,
+                        loc: q0.loc(),
+                    });
+                    return Some(Instruction::Fused {
+                        op: FusedOp::MulAdd,
+                        dst: q1.dst(),
+                        a: q0.s1(),
+                        b: Reg::Ret,
+                        c: q1.s1(),
+                    });
+                }
+            }
+        }
+
+        if let Instruction::LoadMath {
+            op: ArithOp::Times, ..
+        } = *q0
+        {
+            if let Instruction::Bi {
+                op: BinOp::Minus, ..
+            } = *q1
+            {
+                if q1.s1() == q0.dst() {
+                    code.push(Instruction::Load {
+                        dst: Reg::Ret,
+                        loc: q0.loc(),
+                    });
+                    return Some(Instruction::Fused {
+                        op: FusedOp::MulSub,
+                        dst: q1.dst(),
+                        a: q0.s1(),
+                        b: Reg::Ret,
+                        c: q1.s2(),
+                    });
+                }
+
+                if q1.s2() == q0.dst() {
+                    code.push(Instruction::Load {
+                        dst: Reg::Ret,
+                        loc: q0.loc(),
+                    });
+                    return Some(Instruction::Fused {
+                        op: FusedOp::NegMulAdd,
+                        dst: q1.dst(),
+                        a: q0.s1(),
+                        b: Reg::Ret,
                         c: q1.s1(),
                     });
                 }
@@ -2358,7 +2447,67 @@ impl Mir {
         None
     }
 
-    fn fuse(
+    fn fuse_sin_cos(
+        &self,
+        code: &mut Vec<Instruction>,
+        q0: &Instruction,
+        q1: &Instruction,
+        q2: &Instruction,
+        q3: &Instruction,
+        q4: &Instruction,
+    ) -> Option<Instruction> {
+        if self.config.is_complex() {
+            return None;
+        }
+
+        if let Instruction::Load { dst: Reg::Left, .. } = *q0 {
+            if let Instruction::Call { .. } = *q1 {
+                if let Instruction::Save { src: Reg::Ret, .. } = *q2 {
+                    if let Instruction::Load { dst: Reg::Left, .. } = *q3 {
+                        if let Instruction::Call { .. } = *q4 {
+                            if q1.check_label("cos")
+                                && q4.check_label("sin")
+                                && q0.loc() == q3.loc()
+                            {
+                                code.push(q0.clone());
+                                code.push(Instruction::Call {
+                                    f: self.find_op("sin_cos").unwrap(),
+                                    label: "sin_cos".to_string(),
+                                    num_args: 1,
+                                });
+                                return Some(Instruction::Save {
+                                    src: Reg::Temp,
+                                    loc: q2.loc(),
+                                });
+                            } else if q1.check_label("sin")
+                                && q4.check_label("cos")
+                                && q0.loc() == q3.loc()
+                            {
+                                code.push(q0.clone());
+                                code.push(Instruction::Call {
+                                    f: self.find_op("sin_cos").unwrap(),
+                                    label: "sin_cos".to_string(),
+                                    num_args: 1,
+                                });
+                                code.push(Instruction::Save {
+                                    src: Reg::Ret,
+                                    loc: q2.loc(),
+                                });
+                                return Some(Instruction::Mov {
+                                    dst: Reg::Ret,
+                                    s1: Reg::Temp,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    fn fuse1(
         &self,
         code: &mut Vec<Instruction>,
         q0: &Instruction,
@@ -2388,7 +2537,23 @@ impl Mir {
         }
     }
 
-    pub fn optimize_peephole(&mut self) -> bool {
+    fn fuse2(
+        &self,
+        code: &mut Vec<Instruction>,
+        q0: &Instruction,
+        q1: &Instruction,
+        q2: &Instruction,
+        q3: &Instruction,
+        q4: &Instruction,
+    ) -> (Instruction, usize) {
+        if let Some(v) = self.fuse_sin_cos(code, q0, q1, q2, q3, q4) {
+            (v, 5)
+        } else {
+            (Instruction::Nop, 0)
+        }
+    }
+
+    pub fn optimize_peephole(&mut self, stage: usize) -> bool {
         let mut code: Vec<Instruction> = Vec::new();
         let mut success = false;
 
@@ -2400,7 +2565,11 @@ impl Mir {
         let mut q4: Instruction = iter.next().unwrap_or(&Instruction::End).clone();
 
         while !matches!(q0, Instruction::End) {
-            let (top, num_consumed) = self.fuse(&mut code, &q0, &q1, &q2, &q3, &q4);
+            let (top, num_consumed) = match stage {
+                1 => self.fuse1(&mut code, &q0, &q1, &q2, &q3, &q4),
+                2 => self.fuse2(&mut code, &q0, &q1, &q2, &q3, &q4),
+                _ => unreachable!(),
+            };
 
             success |= num_consumed > 1;
 

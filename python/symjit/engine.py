@@ -324,7 +324,7 @@ class RustyCompiler:
         use_simd=True,
         use_threads=True,
         cse=True,
-        fastmath=False,
+        fastmath=True,
         opt_level=1,
         convert=True,
         defuns=None,

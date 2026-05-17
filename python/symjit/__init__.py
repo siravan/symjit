@@ -34,7 +34,7 @@ def compile_func(
     use_simd=True,
     use_threads=True,
     cse=True,
-    fastmath=False,
+    fastmath=True,
     backend="rust",
     opt_level=2,
     defuns=None,
@@ -154,7 +154,7 @@ def compile_ode(
     use_simd=True,
     use_threads=True,
     cse=True,
-    fastmath=False,
+    fastmath=True,
     backend="rust",
     opt_level=2,
     defuns=None,
@@ -185,7 +185,7 @@ def compile_ode(
     use_threads (default `True`): use multi-threading to speed up parallel operations
         when called on numpy arrays.
     cse (default `True`): performs common-subexpression elimination.
-    fastmath (default `False`): use fastmath floating point operations, especially fused multiply-addition.
+    fastmath (default `True`): use fastmath floating point operations, especially fused multiply-addition.
     fast_complex (default True): use f64x2 SIMD instructions for complex operations.
     parallel_mul (default True): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
     huge (default False): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
@@ -256,7 +256,7 @@ def compile_jac(
     use_simd=True,
     use_threads=True,
     cse=True,
-    fastmath=False,
+    fastmath=True,
     backend="rust",
     opt_level=2,
     defuns=None,
@@ -282,7 +282,7 @@ def compile_jac(
         use_threads (default `True`): use multi-threading to speed up parallel operations when called
             on numpy arrays.
         cse (default `True`): performs common-subexpression elimination.
-        fastmath (default `False`): use fastmath floating point operations, especially fused multiply-addition.
+        fastmath (default `True`): use fastmath floating point operations, especially fused multiply-addition.
         fast_complex (default True): use f64x2 SIMD instructions for complex operations.
         parallel_mul (default True): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
         huge (default False): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
@@ -353,7 +353,7 @@ def compile_json(
     use_simd=True,
     use_threads=True,
     cse=True,
-    fastmath=False,
+    fastmath=True,
     opt_level=2,
     backend="rust",
     sanitize=True,
@@ -408,7 +408,7 @@ def compile_evaluator(
     use_simd=True,
     use_threads=True,
     cse=False,
-    fastmath=False,
+    fastmath=True,
     backend="rust",
     opt_level=2,
     defuns=None,

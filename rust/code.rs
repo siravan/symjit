@@ -28,10 +28,17 @@ use std::fmt;
  *
  */
 
+#[repr(C)]
+pub struct SinCos {
+    pub s: f64,
+    pub c: f64,
+}
+
 pub type UnaryFunc = extern "C" fn(f64) -> f64;
 pub type BinaryFunc = extern "C" fn(f64, f64) -> f64;
 pub type UnaryFuncCplx = extern "C" fn(f64, f64, &mut Complex<f64>);
 pub type BinaryFuncCplx = extern "C" fn(f64, f64, &mut Complex<f64>);
+pub type PairedUnaryFunc = extern "C" fn(f64) -> SinCos;
 
 #[derive(Clone, Hash)]
 pub enum Func {
@@ -39,6 +46,7 @@ pub enum Func {
     Binary(BinaryFunc),
     UnaryCplx(UnaryFuncCplx),
     BinaryCplx(BinaryFuncCplx),
+    PairedUnary(PairedUnaryFunc),
     Slice {
         f_scalar: *const c_void,
         f_simd: *const c_void,
@@ -53,6 +61,7 @@ impl Func {
             Func::Binary(f) => *f as usize as u64,
             Func::UnaryCplx(f) => *f as usize as u64,
             Func::BinaryCplx(f) => *f as usize as u64,
+            Func::PairedUnary(f) => *f as usize as u64,
             Func::Slice { .. } => 0,
         }
     }
@@ -76,6 +85,7 @@ impl VirtualTable {
             "sin" => Func::Unary(Self::sin),
             "sinc" => Func::Unary(Self::sinc),
             "cos" => Func::Unary(Self::cos),
+            "sin_cos" => Func::PairedUnary(Self::sin_cos),
             "tan" => Func::Unary(Self::tan),
             "csc" => Func::Unary(Self::csc),
             "sec" => Func::Unary(Self::sec),
@@ -169,6 +179,11 @@ impl VirtualTable {
 
     pub extern "C" fn cos(x: f64) -> f64 {
         x.cos()
+    }
+
+    pub extern "C" fn sin_cos(x: f64) -> SinCos {
+        let (s, c) = x.sin_cos();
+        SinCos { s, c }
     }
 
     pub extern "C" fn tan(x: f64) -> f64 {

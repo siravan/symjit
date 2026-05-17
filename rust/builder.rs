@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 use std::io::{Read, Write};
+use std::iter;
 
 use crate::allocator::{ColoringAllocator, GreedyAllocator};
 use crate::block::Block;
@@ -290,7 +291,13 @@ impl Builder {
         let opt_level = self.config.opt_level();
 
         if opt_level >= 1 {
-            mir.optimize_peephole();
+            mir.optimize_peephole(1);
+
+            /*
+                combining sin and cos into sin_cos
+                currently inactive because it is in fact slower!
+            */
+            // mir.optimize_peephole(2);
         }
 
         if opt_level >= 2 {
@@ -379,7 +386,7 @@ impl Builder {
     }
 
     fn append_vt_section(&self, mir: &Mir, ir: &mut impl Generator) {
-        for op in self.ft.iter() {
+        for op in self.ft.iter().chain(iter::once(&"sin_cos".to_string())) {
             let p = mir.find_op(op).expect("func not found");
             ir.add_func(op, p);
         }
