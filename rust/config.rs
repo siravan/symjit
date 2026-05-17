@@ -464,6 +464,7 @@ impl Default for Config {
                 USE_SIMD
                     | SYMBOLICA
                     | COMPACT
+                    | FASTMATH
                     | FAST_COMPLEX
                     | DIRECT
                     | PARALLEL_MUL

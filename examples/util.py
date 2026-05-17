@@ -31,12 +31,14 @@ def process_argv():
         help="use fastmath operations",
         action="store_true",
         dest="fastmath",
+        default=True,
     )
     parser.add_argument(
         "--fast_complex",
         help="use SIMD instructions for scalar complex functions",
         action="store_true",
         dest="fast_complex",
+        default=True,
     )
     parser.add_argument(
         "--compress",
