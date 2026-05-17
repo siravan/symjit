@@ -1,3 +1,18 @@
+# Version 2.18.0
+
+* `parallel_mul` option added.
+* Improved peephole optimization.
+
+# Version 2.17.3
+
+* `huge` option to use 2 MB pages added.
+* `compress` mode added.
+* Bug fixes to arm64 code generator.
+
+# Version 2.17.0
+
+* Using SIMD instructions for scalar complex functions.
+
 # Version 2.16.0
 
 * Code cleanup and infra-structure for MIR save/load.

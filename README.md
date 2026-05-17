@@ -3,9 +3,9 @@
 
 **SymJit** is a lightweight just-in-time (JIT) compiler that directly translates *SymPy* expressions into machine code without using a separate library such as LLVM. Its main utility is to generate fast numerical functions to feed into various numerical solvers provided by the NumPy/SciPy ecosystem, including numerical integration routines, ordinary differential equation (ODE) solvers, and image filtering functions. It is also able to generate `LowLevelCallable` functions for better coupling to certain fast Scipy numerical functions.
 
-SymJit has two different code-generating backends. The default is a Rust library with minimum external dependencies. The second backend is written in plain Python, relying solely on the Python standard library and NumPy. The Rust backend generates **AMD64** (also known as x86-64), **ARM64** (also known as aarch64), and 64-bit **RISC-V** (riscv64) machine code on Linux, Windows, and Darwin (MacOS) platforms (RISC-V support is new in version 2.7). The Python backend supports AMD64 and ARM64.
+SymJit has two different code-generating backends. The default is a Rust library with minimum external dependencies. The Rust backend generates **AMD64** (also known as x86-64), **ARM64** (also known as aarch64), and 64-bit **RISC-V** (riscv64) machine code on Linux, Windows, and Darwin (MacOS) platforms. The Python backend is written in plain Python, relies solely on the Python standard library and NumPy, is considered obsolete, and will be moved to a separate package as of version 3.0.
 
-The Rust backend generates AVX-compatible code by default for x86-64/AMD64 processors but can downgrade to SSE2 instructions if the processor does not support AVX or if explicitly requested by passing `ty='amd-sse'` to compile functions (see below). SSE2 instructions were introduced in 2000, meaning that virtually all current 64-bit x86-64 processors support them. Intel introduced the AVX instruction set in 2011; therefore, most processors support it. The Python backend uses only AVX instructions. Note that the Python backend is not actively maintained and may be removed in version 3.
+The Rust backend generates AVX-compatible code by default for x86-64/AMD64 processors but can downgrade to SSE2 instructions if the processor does not support AVX or if explicitly requested by passing `ty='amd-sse'` to compile functions (see below). SSE2 instructions were introduced in 2000, meaning that virtually all current 64-bit x86-64 processors support them. Intel introduced the AVX instruction set in 2011; therefore, most processors support it. 
 
 On ARM64 processors, both the Rust and Python backends generate code for the aarch64 instruction set. ARM32 and IA32 are not supported.
 
@@ -15,7 +15,7 @@ SymJit has three companion packages:
 * [SymJit.jl](https://github.com/siravan/SymJit.jl) is a Julia wrapper around the SymJit's Rust library and works with Julia [Symbolics](https://docs.sciml.ai/Symbolics/stable/).
 * [JitEngine.jl](https://github.com/siravan/JitEngine.jl) is a port of the Symjit's code generator to Julia with no binary dependecy. Similar to SymJit.jl, it works and uses Julia [Symbolics](https://docs.sciml.ai/Symbolics/stable/).
 
-Moreover, as of version 2.9.2, SymJit can process [Symbolica](./docs/SYMBOLICA.md) expressions. 
+Moreover, SymJit can also generate JIT code for the [Symbolica](./docs/SYMBOLICA.md) computer algebra system. 
 
 # Installing symjit
 
@@ -185,7 +185,7 @@ The output is:
 
 ## Complex Numbers
 
-Starting with version 2.11.0, Symjit supports complex numbers by passing `dtype = "complex128"` to `compile` functions:
+Symjit supports complex numbers by passing `dtype = "complex128"` to `compile` functions:
 
 ```python
 import numpy as np
@@ -342,6 +342,7 @@ SymJit also allows calling other simple SymJit or Python functions. Currently, o
 ```python
 import math 
 from sympy import Function 
+from symjit import compile_func
 
 x, y, k = symbols('x y k')
 fact = compile_func([x], Product(y, (y, 1, x)))
@@ -379,7 +380,7 @@ All `compile_*` functions accept an optional parameter `ty`, which defines the t
 
 * `amd`: generates 64-bit AMD64/x86-64 code. If the processor supports AVX, then this is equivalent to passing `amd-avx`; otherwise, it is equal to `amd-sse`.
 * `amd-avx`: generates 64-bit AMD64/x86-64 AVX code.
-* `amd-sse`: generates 64-bit AMD64/x86-64 SSE code. It requires a minimum SSE2.1 specification, which should be easily fulfilled by all except the most ancient processors.
+* `amd-sse`: generates 64-bit AMD64/x86-64 SSE code. It requires a minimum SSE2.1 specification, which should be easily fulfilled by all except the most ancient processors (will be deprecated in version 3.0).
 * `arm` generates 64-bit ARM64/aarch64 code. This option is mainly tested on Apple Silicon.
 * `riscv` generates 64-bit RISC-V code. This option is tested on a computer running XuanTie C910 RISC-V with an RV64GC architecture.
 * `bytecode`: this option uses a generic and simple bytecode evaluator as a fallback option in case of unsupported instruction sets. The utility is to test correctness, not speed.
@@ -390,7 +391,22 @@ Note that `ty='wasm'` is no longer supported in version 2. Also, as discussed ab
 
 # Saving Models
 
-It is possible to save a compiled function using its `save(file_name)` method. To load such a model, use `load_func(file_name)`. 
+It is possible to save a compiled function using its `save(file_name)` method. To load such a model, use `load_func(file_name)`:
+
+```python
+from sympy import *
+from symjit import compile_func, load_func
+
+x, y = symbols('x y')
+ext_fun = lambda x, y: x + y**2
+e = Function('e')
+f = compile_func([x, y], [3 * e(x, y)], defuns={e: ext_fun})
+f.save('test.sjb')
+g = load_func('test.sjb', defuns={e: ext_fun})
+assert(f(2, 3) == g(2, 3))
+```
+
+Note that the list of external functions, if not empty, needs to be passed to `load_func`.
 
 ## Code Inspection
 

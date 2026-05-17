@@ -4,14 +4,13 @@ The Rust backend supports different optimization and parallelization methods, wh
 
 * `use_simd` (default `True`): generates SIMD instructions if possible. It currently supports AVX instructions on x86-64 processors (256-bit f64x4) and NEON instructions on aarch64 (128-bit f64x2). Therefore, SIMD code should improve performance up to 2-4x for certain tasks.
 * `use_threads` (default `True`): use multi-threading to speed up parallel processing of array operations using [Rayon rust crate](https://docs.rs/rayon/latest/rayon/).
-* `cse` (default `True`): New to version 2.4. It performs common-subexpression elimination, i.e., factoring common expressions and sub-expressions.
-* `fastmath` (default `False`): New to version 2.5. It rewrites the code to combine multiplication and addition/substraction into various fused-multiply-add instructions.
-
-Note that SIMD and multi-threading optimizations only apply to vectorized calls, but common-subexpression elimination applies to both scalar and vectorized operations.
-
-## Optimization Level
-
-In version 2.6, the `opt_level` option is added to `compile_*` functions. `opt_level` accepts a value of 0, 1, or 2. The default is 1. Broadly, the levels are parallel to -O0, -O1, -O2 options in gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does basic optimization, such as caching and peephole optimization. Level-2 uses an improved graph-coloring algorithm (based on petgraph crate) for better register allocation. However, level-2 may fail with a warning and revert back to level-1.
+* `cse` (default `True`): It performs common-subexpression elimination, i.e., factoring common expressions and sub-expressions.
+* `fastmath` (default `False`): It rewrites the code to combine multiplication and addition/substraction into various fused-multiply-add instructions.
+* `fast_complex` (default `True`): It uses f64x2 SIMD instructions for complex operations in the scalar mode.
+* `parallel_mul` (default `True`): It tries f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
+* `huge` (default `False`): It tries to use huge (2 MB) memory pages instead of the standard 4 KB ones (available only on Linux x86-64 machines).
+* `compress` (default `False`): It compresses the compiled code to reduce the binary size by converting inline operations to calls. In most cases, this will slow down the code and should be used only for extremely large functions where memory pressure is present. 
+* `opt_level` (default 2): It accepts a value of 0, 1, 2, or 3. Broadly, the levels are parallel to -O0, -O1, -O2, and -O3 options in gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does basic optimization, such as peephole optimization. Level-2 uses an improved graph-coloring algorithm (based on petgraph crate) for better register allocation. However, level-3 may fail silently and revert back to level-2. Level-3 is mainly useful for small functions.
 
 ## Fast Functions
 

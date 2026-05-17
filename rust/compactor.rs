@@ -107,7 +107,7 @@ impl Compactor {
                 let l = self
                     .stack
                     .get(&loc)
-                    .expect(&format!("cannot find {:?}", loc));
+                    .unwrap_or_else(|| panic!("cannot find {:?}", loc));
                 let last = self.live.get(&loc).unwrap();
 
                 // stack slots are not returned to the pool inside loops.

@@ -1055,7 +1055,7 @@ impl Compiler {
     /// assert!(app.evaluate_single(&[2.0, 3.0]) == 11.0);
     /// ```
     pub fn translate(&mut self, json: String, num_params: usize) -> Result<Application> {
-        let mut IndirectTranslator = IndirectTranslator::new(self.config.clone());
+        let mut translator = IndirectTranslator::new(self.config.clone());
 
         let model: SymbolicaModel = if json.starts_with("[[{") {
             serde_json::from_str(json.as_str())?
@@ -1063,11 +1063,11 @@ impl Compiler {
             Parser::new(json).parse()?
         };
 
-        IndirectTranslator.parse_model(&model)?;
-        IndirectTranslator.set_num_params(num_params);
-        let (ml, reals) = IndirectTranslator.translate()?;
+        translator.parse_model(&model)?;
+        translator.set_num_params(num_params);
+        let (ml, reals) = translator.translate()?;
 
-        let prog = Program::new(&ml, IndirectTranslator.config)?;
+        let prog = Program::new(&ml, translator.config)?;
         let mut app = Application::new(prog, reals)?;
 
         app.prepare_simd();

@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 use std::io::{Read, Write};
-use std::iter;
 
 use crate::allocator::{ColoringAllocator, GreedyAllocator};
 use crate::block::Block;
