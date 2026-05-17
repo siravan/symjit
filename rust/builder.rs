@@ -386,10 +386,17 @@ impl Builder {
     }
 
     fn append_vt_section(&self, mir: &Mir, ir: &mut impl Generator) {
-        for op in self.ft.iter().chain(iter::once(&"sin_cos".to_string())) {
+        for op in self.ft.iter() {
             let p = mir.find_op(op).expect("func not found");
             ir.add_func(op, p);
         }
+
+        /*
+        if !self.config.is_complex() {
+            let p = mir.find_op("sin_cos").expect("func not found");
+            ir.add_func("sin_cos", p);
+        }
+        */
     }
 }
 
