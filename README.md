@@ -5,7 +5,7 @@
 
 SymJit has two different code-generating backends. The default is a Rust library with minimum external dependencies. The Rust backend generates **AMD64** (also known as x86-64), **ARM64** (also known as aarch64), and 64-bit **RISC-V** (riscv64) machine code on Linux, Windows, and Darwin (MacOS) platforms. The Python backend is written in plain Python, relies solely on the Python standard library and NumPy, is considered obsolete, and will be moved to a separate package as of version 3.0.
 
-The Rust backend generates AVX-compatible code by default for x86-64/AMD64 processors but can downgrade to SSE2 instructions if the processor does not support AVX or if explicitly requested by passing `ty='amd-sse'` to compile functions (see below). SSE2 instructions were introduced in 2000, meaning that virtually all current 64-bit x86-64 processors support them. Intel introduced the AVX instruction set in 2011; therefore, most processors support it. 
+The Rust backend generates AVX-compatible code by default for x86-64/AMD64 processors but can downgrade to SSE2 instructions if the processor does not support AVX or if explicitly requested by passing `ty='amd-sse'` to compile functions (see below). SSE2 instructions were introduced in 2000, meaning that virtually all current 64-bit x86-64 processors support them. Intel introduced the AVX instruction set in 2011; therefore, most processors support it. In version 3.0, Symjit will move to a minimum of `x86-64-v3` profile.
 
 On ARM64 processors, both the Rust and Python backends generate code for the aarch64 instruction set. ARM32 and IA32 are not supported.
 
