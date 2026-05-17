@@ -211,7 +211,6 @@ impl PtrLen {
             Ok(Self {
                 ptr: ptr as *mut u8,
                 len: region::page::ceil(size as *const ()) as usize,
-                huge: false,
             })
         } else {
             Err(io::Error::last_os_error())

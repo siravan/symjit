@@ -522,7 +522,7 @@ impl Generator for AmdSSEGenerator {
         self.amd.push(Amd::RBP);
 
         let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        sub_rsp(&mut self.amdf, frame_size);
+        sub_rsp(&mut self.amd, frame_size);
         self.amd.mov(MEM, STACK);
         sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
 
