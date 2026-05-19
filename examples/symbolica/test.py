@@ -64,6 +64,7 @@ Z = np.array([[-5 + 12j, 3 - 4j]])
 assert_verbose(ev.evaluate(X), f.evaluate(X))
 assert_verbose(ev.evaluate_complex(Z), f.evaluate_complex(Z))
 
+ev = E("sqrt(x*y)").evaluator({}, {}, [x, y])
 ev.set_real_params([0, 1], sqrt_real=True)
 f = compile_evaluator(ev, dtype="complex128")
 

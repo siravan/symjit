@@ -131,7 +131,6 @@ pub enum Instruction {
     },
     Call {
         label: String,
-        f: Func,
         num_args: usize,
     },
     Fused {
@@ -1060,9 +1059,8 @@ impl Mir {
     }
 
     pub fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
-        let f = self.find_op(op)?;
+        let _ = self.find_op(op)?;
         self.push(Instruction::Call {
-            f,
             label: op.to_string(),
             num_args,
         });
@@ -1318,54 +1316,65 @@ impl Mir {
                 Instruction::LoadConst { dst, idx } => {
                     Self::set(regs, *dst, self.consts[*idx as usize]);
                 }
-                Instruction::Call { f, num_args, .. } => match f {
-                    Func::Unary(p) => Self::set(regs, Reg::Ret, p(Self::get(regs, Reg::Left))),
-                    Func::Binary(p) => Self::set(
-                        regs,
-                        Reg::Ret,
-                        p(Self::get(regs, Reg::Left), Self::get(regs, Reg::Right)),
-                    ),
-                    Func::UnaryCplx(p) => {
-                        let x =
-                            Complex::new(Self::get(regs, Reg::Left), Self::get(regs, Reg::Right));
-                        let mut z = Complex::ZERO;
-                        p(x.re, x.im, &mut z);
-                        Self::set(regs, Reg::Ret, z.re);
-                        Self::set(regs, Reg::Temp, z.im);
-                    }
-                    Func::BinaryCplx(p) => {
-                        let x =
-                            Complex::new(Self::get(regs, Reg::Left), Self::get(regs, Reg::Right));
-                        let y = Complex::new(
-                            Self::get(regs, Reg::Gen(0)),
-                            Self::get(regs, Reg::Gen(1)),
-                        );
-                        let mut z = y;
-                        p(x.re, x.im, &mut z);
-                        Self::set(regs, Reg::Ret, z.re);
-                        Self::set(regs, Reg::Temp, z.im);
-                    }
-                    Func::PairedUnary(p) => {
-                        let pair = p(Self::get(regs, Reg::Ret));
-                        Self::set(regs, Reg::Ret, pair.s);
-                        Self::set(regs, Reg::Temp, pair.c);
-                    }
-                    Func::Slice { env, f_scalar, .. } => unsafe {
-                        let f: fn(*const std::ffi::c_void, *const f64, usize, *mut f64) -> bool =
-                            std::mem::transmute(*f_scalar);
+                Instruction::Call { label, num_args } => {
+                    let f = self.find_op(label).unwrap();
+                    match &f {
+                        Func::Unary(p) => Self::set(regs, Reg::Ret, p(Self::get(regs, Reg::Left))),
+                        Func::Binary(p) => Self::set(
+                            regs,
+                            Reg::Ret,
+                            p(Self::get(regs, Reg::Left), Self::get(regs, Reg::Right)),
+                        ),
+                        Func::UnaryCplx(p) => {
+                            let x = Complex::new(
+                                Self::get(regs, Reg::Left),
+                                Self::get(regs, Reg::Right),
+                            );
+                            let mut z = Complex::ZERO;
+                            p(x.re, x.im, &mut z);
+                            Self::set(regs, Reg::Ret, z.re);
+                            Self::set(regs, Reg::Temp, z.im);
+                        }
+                        Func::BinaryCplx(p) => {
+                            let x = Complex::new(
+                                Self::get(regs, Reg::Left),
+                                Self::get(regs, Reg::Right),
+                            );
+                            let y = Complex::new(
+                                Self::get(regs, Reg::Gen(0)),
+                                Self::get(regs, Reg::Gen(1)),
+                            );
+                            let mut z = y;
+                            p(x.re, x.im, &mut z);
+                            Self::set(regs, Reg::Ret, z.re);
+                            Self::set(regs, Reg::Temp, z.im);
+                        }
+                        Func::PairedUnary(p) => {
+                            let pair = p(Self::get(regs, Reg::Ret));
+                            Self::set(regs, Reg::Ret, pair.s);
+                            Self::set(regs, Reg::Temp, pair.c);
+                        }
+                        Func::Slice { env, f_scalar, .. } => unsafe {
+                            let f: fn(
+                                *const std::ffi::c_void,
+                                *const f64,
+                                usize,
+                                *mut f64,
+                            ) -> bool = std::mem::transmute(*f_scalar);
 
-                        let mut val: Complex<f64> = Complex::default();
-                        f(
-                            *env,
-                            stack.as_ptr().add(SPILL_AREA),
-                            *num_args,
-                            &mut val as *mut _ as *mut f64,
-                        );
+                            let mut val: Complex<f64> = Complex::default();
+                            f(
+                                *env,
+                                stack.as_ptr().add(SPILL_AREA),
+                                *num_args,
+                                &mut val as *mut _ as *mut f64,
+                            );
 
-                        Self::set(regs, Reg::Ret, val.re);
-                        Self::set(regs, Reg::Temp, val.im);
-                    },
-                },
+                            Self::set(regs, Reg::Ret, val.re);
+                            Self::set(regs, Reg::Temp, val.im);
+                        },
+                    }
+                }
                 Instruction::Fused { op, dst, a, b, c } => {
                     Self::exec_fused(regs, *op, *dst, *a, *b, *c);
                 }
@@ -1763,14 +1772,17 @@ impl Mir {
                 Instruction::LoadConst { dst, idx } => {
                     ir.load_const(*dst, *idx);
                 }
-                Instruction::Call { label, f, num_args } => match f {
-                    Func::Unary(_) => ir.call(label, *num_args)?,
-                    Func::Binary(_) => ir.call(label, *num_args)?,
-                    Func::UnaryCplx(_) => ir.call_complex(label, *num_args)?,
-                    Func::BinaryCplx(_) => ir.call_complex(label, *num_args)?,
-                    Func::PairedUnary(_) => ir.call(label, *num_args)?,
-                    Func::Slice { .. } => ir.call(label, *num_args)?,
-                },
+                Instruction::Call { label, num_args } => {
+                    let f = self.find_op(label).unwrap();
+                    match f {
+                        Func::Unary(_) => ir.call(label, *num_args)?,
+                        Func::Binary(_) => ir.call(label, *num_args)?,
+                        Func::UnaryCplx(_) => ir.call_complex(label, *num_args)?,
+                        Func::BinaryCplx(_) => ir.call_complex(label, *num_args)?,
+                        Func::PairedUnary(_) => ir.call(label, *num_args)?,
+                        Func::Slice { .. } => ir.call(label, *num_args)?,
+                    }
+                }
                 Instruction::Fused { op, dst, a, b, c } => match op {
                     FusedOp::MulAdd => ir.fused_mul_add(*dst, *a, *b, *c),
                     FusedOp::MulSub => ir.fused_mul_sub(*dst, *a, *b, *c),
@@ -2471,7 +2483,6 @@ impl Mir {
                             {
                                 code.push(q0.clone());
                                 code.push(Instruction::Call {
-                                    f: self.find_op("sin_cos").unwrap(),
                                     label: "sin_cos".to_string(),
                                     num_args: 1,
                                 });
@@ -2485,7 +2496,6 @@ impl Mir {
                             {
                                 code.push(q0.clone());
                                 code.push(Instruction::Call {
-                                    f: self.find_op("sin_cos").unwrap(),
                                     label: "sin_cos".to_string(),
                                     num_args: 1,
                                 });

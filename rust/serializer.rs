@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use std::io::{Read, Write};
 
 use crate::config::Config;
-use crate::mir::{BinOp, Instruction, Mir, UniOp};
+use crate::mir::{ArithOp, BinOp, FusedOp, Instruction, Mir, UniOp};
 use crate::symbol::Loc;
 use crate::utils::*;
 
@@ -110,167 +110,181 @@ impl MirWriter {
         MirWriter { buf: Vec::new() }
     }
 
-    fn push(&mut self, b: u8) {
+    pub fn push(&mut self, ins: &Instruction) {
+        match ins {
+            Instruction::Nop => self.append_byte(NOP),
+            Instruction::End => self.append_byte(END),
+            Instruction::Uni { op, dst, s1 } => {
+                let op = *op as u8;
+                assert!(op < 64);
+                self.append_byte(UNI_OP | op);
+                self.reg(*dst);
+                self.reg(*s1);
+            }
+            Instruction::Bi { op, dst, s1, s2 } => {
+                let op = *op as u8;
+                assert!(op < 64);
+                self.append_byte(BIN_OP | op);
+                self.reg(*dst);
+                self.reg(*s1);
+                self.reg(*s2);
+            }
+            Instruction::Mov { dst, s1 } => {
+                self.append_byte(MOV);
+                self.reg(*dst);
+                self.reg(*s1);
+            }
+            Instruction::Load { dst, loc } => {
+                self.append_byte(LOAD);
+                self.reg(*dst);
+                self.loc(*loc);
+            }
+            Instruction::LoadMath { op, dst, s1, loc } => {
+                let op = *op as u8;
+                assert!(op < 4);
+                self.append_byte(LOAD_MATH_PLUS + op);
+                self.reg(*dst);
+                self.reg(*s1);
+                self.loc(*loc);
+            }
+            Instruction::Save { src, loc } => {
+                self.append_byte(SAVE);
+                self.reg(*src);
+                self.loc(*loc);
+            }
+            Instruction::LoadConst { dst, idx } => {
+                self.append_byte(LOAD_CONST);
+                self.reg(*dst);
+                self.num(0, *idx);
+            }
+            Instruction::LoadComplex { xd, yd, loc } => {
+                self.append_byte(LOAD_COMPLEX);
+                self.reg(*xd);
+                self.reg(*yd);
+                self.loc(*loc);
+            }
+            Instruction::SaveComplex { xs, ys, loc } => {
+                self.append_byte(SAVE_COMPLEX);
+                self.reg(*xs);
+                self.reg(*ys);
+                self.loc(*loc);
+            }
+            Instruction::LoadConstMath { op, dst, s1, idx } => {
+                let op = *op as u8;
+                assert!(op < 4);
+                self.append_byte(LOAD_CONST_MATH_PLUS + op);
+                self.reg(*dst);
+                self.reg(*s1);
+                self.num(0, *idx);
+            }
+            Instruction::Branch { label } => {
+                self.append_byte(BRANCH);
+                self.string(label);
+            }
+            Instruction::BranchIf {
+                cond,
+                label,
+                is_else,
+            } => {
+                if *is_else {
+                    self.append_byte(BRANCH_ELSE);
+                } else {
+                    self.append_byte(BRANCH_IF);
+                }
+                self.reg(*cond);
+                self.string(label);
+            }
+            Instruction::IfElse {
+                dst,
+                true_val,
+                false_val,
+                cond,
+            } => {
+                self.append_byte(IFELSE);
+                self.reg(*dst);
+                self.reg(*true_val);
+                self.reg(*false_val);
+                self.loc(*cond);
+            }
+            Instruction::Call {
+                label, num_args, ..
+            } => {
+                self.append_byte(CALL);
+                assert!(*num_args < 256);
+                self.append_byte(*num_args as u8);
+                self.string(label);
+            }
+            Instruction::Label { label } => {
+                self.append_byte(LABEL);
+                self.string(label);
+            }
+            Instruction::Fused { op, dst, a, b, c } => {
+                let op = *op as u8;
+                assert!(op < 4);
+                self.append_byte(FUSED_MUL_ADD + op);
+                self.reg(*dst);
+                self.reg(*a);
+                self.reg(*b);
+                self.reg(*c);
+            }
+            Instruction::ComplexBi {
+                op,
+                xd,
+                yd,
+                x1,
+                y1,
+                x2,
+                y2,
+            } => {
+                let op = *op as u8;
+                assert!(op < 8);
+                self.append_byte(COMPLEX_BI_PLUS + op);
+                self.reg(*xd);
+                self.reg(*yd);
+                self.reg(*x1);
+                self.reg(*y1);
+                self.reg(*x2);
+                self.reg(*y2);
+            }
+        }
+    }
+
+    pub fn iter_mut(&mut self) -> MirIterator {
+        let buf = std::mem::take(&mut self.buf);
+        MirIterator { buf, pos: 0 }
+    }
+
+    pub fn iter(&self) -> MirIterator {
+        let buf = self.buf.clone();
+        MirIterator { buf, pos: 0 }
+    }
+
+    fn append_byte(&mut self, b: u8) {
         self.buf.push(b);
     }
 
     pub fn serialize(&mut self, mir: &Mir) {
         for ins in mir.code.iter() {
-            match ins {
-                Instruction::Nop => self.push(NOP),
-                Instruction::End => self.push(END),
-                Instruction::Uni { op, dst, s1 } => {
-                    let op = *op as u8;
-                    assert!(op < 64);
-                    self.push(UNI_OP | op);
-                    self.reg(*dst);
-                    self.reg(*s1);
-                }
-                Instruction::Bi { op, dst, s1, s2 } => {
-                    let op = *op as u8;
-                    assert!(op < 64);
-                    self.push(BIN_OP | op);
-                    self.reg(*dst);
-                    self.reg(*s1);
-                    self.reg(*s2);
-                }
-                Instruction::Mov { dst, s1 } => {
-                    self.push(MOV);
-                    self.reg(*dst);
-                    self.reg(*s1);
-                }
-                Instruction::Load { dst, loc } => {
-                    self.push(LOAD);
-                    self.reg(*dst);
-                    self.loc(*loc);
-                }
-                Instruction::LoadMath { op, dst, s1, loc } => {
-                    let op = *op as u8;
-                    assert!(op < 4);
-                    self.push(LOAD_MATH_PLUS + op);
-                    self.reg(*dst);
-                    self.reg(*s1);
-                    self.loc(*loc);
-                }
-                Instruction::Save { src, loc } => {
-                    self.push(SAVE);
-                    self.reg(*src);
-                    self.loc(*loc);
-                }
-                Instruction::LoadConst { dst, idx } => {
-                    self.push(LOAD_CONST);
-                    self.reg(*dst);
-                    self.num(0, *idx);
-                }
-                Instruction::LoadComplex { xd, yd, loc } => {
-                    self.push(LOAD_COMPLEX);
-                    self.reg(*xd);
-                    self.reg(*yd);
-                    self.loc(*loc);
-                }
-                Instruction::SaveComplex { xs, ys, loc } => {
-                    self.push(SAVE_COMPLEX);
-                    self.reg(*xs);
-                    self.reg(*ys);
-                    self.loc(*loc);
-                }
-                Instruction::LoadConstMath { op, dst, s1, idx } => {
-                    let op = *op as u8;
-                    assert!(op < 4);
-                    self.push(LOAD_CONST_MATH_PLUS + op);
-                    self.reg(*dst);
-                    self.reg(*s1);
-                    self.num(0, *idx);
-                }
-                Instruction::Branch { label } => {
-                    self.push(BRANCH);
-                    self.string(label);
-                }
-                Instruction::BranchIf {
-                    cond,
-                    label,
-                    is_else,
-                } => {
-                    if *is_else {
-                        self.push(BRANCH_ELSE);
-                    } else {
-                        self.push(BRANCH_IF);
-                    }
-                    self.reg(*cond);
-                    self.string(label);
-                }
-                Instruction::IfElse {
-                    dst,
-                    true_val,
-                    false_val,
-                    cond,
-                } => {
-                    self.push(IFELSE);
-                    self.reg(*dst);
-                    self.reg(*true_val);
-                    self.reg(*false_val);
-                    self.loc(*cond);
-                }
-                Instruction::Call {
-                    label, num_args, ..
-                } => {
-                    self.push(CALL);
-                    assert!(*num_args < 256);
-                    self.push(*num_args as u8);
-                    self.string(label);
-                }
-                Instruction::Label { label } => {
-                    self.push(LABEL);
-                    self.string(label);
-                }
-                Instruction::Fused { op, dst, a, b, c } => {
-                    let op = *op as u8;
-                    assert!(op < 4);
-                    self.push(FUSED_MUL_ADD + op);
-                    self.reg(*dst);
-                    self.reg(*a);
-                    self.reg(*b);
-                    self.reg(*c);
-                }
-                Instruction::ComplexBi {
-                    op,
-                    xd,
-                    yd,
-                    x1,
-                    y1,
-                    x2,
-                    y2,
-                } => {
-                    let op = *op as u8;
-                    assert!(op < 8);
-                    self.push(COMPLEX_BI_PLUS + op);
-                    self.reg(*xd);
-                    self.reg(*yd);
-                    self.reg(*x1);
-                    self.reg(*y1);
-                    self.reg(*x2);
-                    self.reg(*y2);
-                }
-            }
+            self.push(ins);
         }
     }
 
     fn num(&mut self, prefix: u8, mut n: u32) {
         let num_bytes: u8 = 1 + ((32 - n.leading_zeros()) >> 3) as u8;
-        self.push(prefix | num_bytes);
+        self.append_byte(prefix | num_bytes);
         for _ in 0..num_bytes {
-            self.push((n & 0xff) as u8);
+            self.append_byte((n & 0xff) as u8);
             n >>= 8;
         }
     }
 
     fn reg(&mut self, r: Reg) {
         match r {
-            Reg::Ret => self.push(REG_RET),
-            Reg::Temp => self.push(REG_TEMP),
-            Reg::Left => self.push(REG_LEFT),
-            Reg::Right => self.push(REG_RIGHT),
-            Reg::Gen(r) => self.push(REG_GENERAL | r),
+            Reg::Ret => self.append_byte(REG_RET),
+            Reg::Temp => self.append_byte(REG_TEMP),
+            Reg::Left => self.append_byte(REG_LEFT),
+            Reg::Right => self.append_byte(REG_RIGHT),
+            Reg::Gen(r) => self.append_byte(REG_GENERAL | r),
             Reg::Static(s) => self.num(REG_STATIC, s),
         }
     }
@@ -288,9 +302,9 @@ impl MirWriter {
         let len = bytes.len();
         assert!(len < 256);
 
-        self.push(len as u8);
+        self.append_byte(len as u8);
         for b in bytes {
-            self.push(*b);
+            self.append_byte(*b);
         }
     }
 }
@@ -696,5 +710,580 @@ impl Storage for Mir {
         mir.populate_labels();
 
         Ok(mir)
+    }
+}
+
+/* ********************************************** */
+
+pub struct MirIterator {
+    buf: Vec<u8>,
+    pos: usize,
+}
+
+impl Iterator for MirIterator {
+    type Item = Instruction;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if !self.eof() {
+            let header = self.pop().unwrap();
+
+            match header & 0xc0 {
+                UNI_OP => self.uniop(header).ok(),
+                BIN_OP => self.binop(header).ok(),
+                _ => self.other(header).ok(),
+            }
+        } else {
+            None
+        }
+    }
+}
+
+impl MirIterator {
+    pub fn new(writer: &mut MirWriter) -> MirIterator {
+        let buf = std::mem::take(&mut writer.buf);
+        MirIterator { buf, pos: 0 }
+    }
+
+    fn pop(&mut self) -> Result<u8> {
+        if self.pos < self.buf.len() {
+            let c = self.buf[self.pos];
+            self.pos += 1;
+            Ok(c)
+        } else {
+            Err(anyhow!("unexpected EOF"))
+        }
+    }
+
+    fn eof(&self) -> bool {
+        self.pos >= self.buf.len()
+    }
+
+    fn uniop(&mut self, header: u8) -> Result<Instruction> {
+        let dst = self.reg()?;
+        let s1 = self.reg()?;
+
+        match header & 0x3f {
+            UNIOP_NEG => Ok(Instruction::Uni {
+                op: UniOp::Neg,
+                dst,
+                s1,
+            }),
+            UNIOP_NOT => Ok(Instruction::Uni {
+                op: UniOp::Not,
+                dst,
+                s1,
+            }),
+            UNIOP_ABS => Ok(Instruction::Uni {
+                op: UniOp::Abs,
+                dst,
+                s1,
+            }),
+            UNIOP_ROOT => Ok(Instruction::Uni {
+                op: UniOp::Root,
+                dst,
+                s1,
+            }),
+            UNIOP_REALROOT => Ok(Instruction::Uni {
+                op: UniOp::RealRoot,
+                dst,
+                s1,
+            }),
+            UNIOP_RECIP => Ok(Instruction::Uni {
+                op: UniOp::Recip,
+                dst,
+                s1,
+            }),
+            UNIOP_ROUND => Ok(Instruction::Uni {
+                op: UniOp::Round,
+                dst,
+                s1,
+            }),
+            UNIOP_FLOOR => Ok(Instruction::Uni {
+                op: UniOp::Floor,
+                dst,
+                s1,
+            }),
+            UNIOP_CEILING => Ok(Instruction::Uni {
+                op: UniOp::Ceiling,
+                dst,
+                s1,
+            }),
+            UNIOP_TRUNC => Ok(Instruction::Uni {
+                op: UniOp::Trunc,
+                dst,
+                s1,
+            }),
+            UNIOP_REAL => Ok(Instruction::Uni {
+                op: UniOp::Real,
+                dst,
+                s1,
+            }),
+            UNIOP_IMAGINARY => Ok(Instruction::Uni {
+                op: UniOp::Imaginary,
+                dst,
+                s1,
+            }),
+            UNIOP_CONJUGATE => Ok(Instruction::Uni {
+                op: UniOp::Conjugate,
+                dst,
+                s1,
+            }),
+            UNIOP_HALF => Ok(Instruction::Uni {
+                op: UniOp::Half,
+                dst,
+                s1,
+            }),
+            _ => Err(anyhow!("undefined UnaryOp")),
+        }
+    }
+
+    fn binop(&mut self, header: u8) -> Result<Instruction> {
+        let dst = self.reg()?;
+        let s1 = self.reg()?;
+        let s2 = self.reg()?;
+
+        match header & 0x3f {
+            BINOP_PLUS => Ok(Instruction::Bi {
+                op: BinOp::Plus,
+                dst,
+                s1,
+                s2,
+            }),
+            BINOP_MINUS => Ok(Instruction::Bi {
+                op: BinOp::Minus,
+                dst,
+                s1,
+                s2,
+            }),
+            BINOP_TIMES => Ok(Instruction::Bi {
+                op: BinOp::Times,
+                dst,
+                s1,
+                s2,
+            }),
+            BINOP_DIVIDE => Ok(Instruction::Bi {
+                op: BinOp::Divide,
+                dst,
+                s1,
+                s2,
+            }),
+            BINOP_GREATER_THAN => Ok(Instruction::Bi {
+                op: BinOp::GreaterThan,
+                dst,
+                s1,
+                s2,
+            }),
+            BINOP_GREATER_THAN_EQUAL => Ok(Instruction::Bi {
+                op: BinOp::GreaterThanEqual,
+                dst,
+                s1,
+                s2,
+            }),
+            BINOP_LITTLE_THAN => Ok(Instruction::Bi {
+                op: BinOp::LittleThan,
+                dst,
+                s1,
+                s2,
+            }),
+            BINOP_LITTLE_THAN_EQUAL => Ok(Instruction::Bi {
+                op: BinOp::LittleThanEqual,
+                dst,
+                s1,
+                s2,
+            }),
+            BINOP_EQUAL => Ok(Instruction::Bi {
+                op: BinOp::Equal,
+                dst,
+                s1,
+                s2,
+            }),
+            BINOP_NOT_EQUAL => Ok(Instruction::Bi {
+                op: BinOp::NotEqual,
+                dst,
+                s1,
+                s2,
+            }),
+            BINOP_AND => Ok(Instruction::Bi {
+                op: BinOp::And,
+                dst,
+                s1,
+                s2,
+            }),
+            BINOP_AND_NOT => Ok(Instruction::Bi {
+                op: BinOp::AndNot,
+                dst,
+                s1,
+                s2,
+            }),
+            BINOP_OR => Ok(Instruction::Bi {
+                op: BinOp::Or,
+                dst,
+                s1,
+                s2,
+            }),
+            BINOP_XOR => Ok(Instruction::Bi {
+                op: BinOp::Xor,
+                dst,
+                s1,
+                s2,
+            }),
+            BINOP_COMPLEX => Ok(Instruction::Bi {
+                op: BinOp::Complex,
+                dst,
+                s1,
+                s2,
+            }),
+            _ => Err(anyhow!("undefined BinaryOp")),
+        }
+    }
+
+    pub fn other(&mut self, header: u8) -> Result<Instruction> {
+        match header & 0x3f {
+            NOP => Ok(Instruction::Nop),
+            END => Ok(Instruction::End),
+            MOV => {
+                let dst = self.reg()?;
+                let s1 = self.reg()?;
+                Ok(Instruction::Mov { dst, s1 })
+            }
+            LOAD => {
+                let dst = self.reg()?;
+                let loc = self.loc()?;
+                Ok(Instruction::Load { dst, loc })
+            }
+            SAVE => {
+                let src = self.reg()?;
+                let loc = self.loc()?;
+                Ok(Instruction::Save { src, loc })
+            }
+            LOAD_CONST => {
+                let dst = self.reg()?;
+                let num_bytes = self.pop()?;
+                let idx = self.num(num_bytes)?;
+                Ok(Instruction::LoadConst { dst, idx })
+            }
+            LOAD_COMPLEX => {
+                let xd = self.reg()?;
+                let yd = self.reg()?;
+                let loc = self.loc()?;
+                Ok(Instruction::LoadComplex { xd, yd, loc })
+            }
+            SAVE_COMPLEX => {
+                let xs = self.reg()?;
+                let ys = self.reg()?;
+                let loc = self.loc()?;
+                Ok(Instruction::SaveComplex { xs, ys, loc })
+            }
+            BRANCH => {
+                let label = self.string()?;
+                Ok(Instruction::Label { label })
+            }
+            BRANCH_IF => {
+                let cond = self.reg()?;
+                let label = self.string()?;
+                Ok(Instruction::BranchIf {
+                    cond,
+                    label,
+                    is_else: false,
+                })
+            }
+            BRANCH_ELSE => {
+                let cond = self.reg()?;
+                let label = self.string()?;
+                Ok(Instruction::BranchIf {
+                    cond,
+                    label,
+                    is_else: true,
+                })
+            }
+            CALL => {
+                let num_args = self.pop()? as usize;
+                let op = self.string()?;
+                Ok(Instruction::Call {
+                    label: op.to_string(),
+                    num_args,
+                })
+            }
+            LABEL => {
+                let label = self.string()?;
+                Ok(Instruction::Label { label })
+            }
+            IFELSE => {
+                let dst = self.reg()?;
+                let true_val = self.reg()?;
+                let false_val = self.reg()?;
+                let cond = self.loc()?;
+                Ok(Instruction::IfElse {
+                    dst,
+                    true_val,
+                    false_val,
+                    cond,
+                })
+            }
+            FUSED_MUL_ADD => {
+                let dst = self.reg()?;
+                let a = self.reg()?;
+                let b = self.reg()?;
+                let c = self.reg()?;
+                Ok(Instruction::Fused {
+                    op: FusedOp::MulAdd,
+                    dst,
+                    a,
+                    b,
+                    c,
+                })
+            }
+            FUSED_MUL_SUB => {
+                let dst = self.reg()?;
+                let a = self.reg()?;
+                let b = self.reg()?;
+                let c = self.reg()?;
+                Ok(Instruction::Fused {
+                    op: FusedOp::MulSub,
+                    dst,
+                    a,
+                    b,
+                    c,
+                })
+            }
+            FUSED_NEG_MUL_ADD => {
+                let dst = self.reg()?;
+                let a = self.reg()?;
+                let b = self.reg()?;
+                let c = self.reg()?;
+                Ok(Instruction::Fused {
+                    op: FusedOp::NegMulAdd,
+                    dst,
+                    a,
+                    b,
+                    c,
+                })
+            }
+            FUSED_NEG_MUL_SUB => {
+                let dst = self.reg()?;
+                let a = self.reg()?;
+                let b = self.reg()?;
+                let c = self.reg()?;
+                Ok(Instruction::Fused {
+                    op: FusedOp::NegMulSub,
+                    dst,
+                    a,
+                    b,
+                    c,
+                })
+            }
+            LOAD_MATH_PLUS => {
+                let dst = self.reg()?;
+                let s1 = self.reg()?;
+                let loc = self.loc()?;
+                Ok(Instruction::LoadMath {
+                    op: ArithOp::Plus,
+                    dst,
+                    s1,
+                    loc,
+                })
+            }
+            LOAD_MATH_MINUS => {
+                let dst = self.reg()?;
+                let s1 = self.reg()?;
+                let loc = self.loc()?;
+                Ok(Instruction::LoadMath {
+                    op: ArithOp::Minus,
+                    dst,
+                    s1,
+                    loc,
+                })
+            }
+            LOAD_MATH_TIMES => {
+                let dst = self.reg()?;
+                let s1 = self.reg()?;
+                let loc = self.loc()?;
+                Ok(Instruction::LoadMath {
+                    op: ArithOp::Times,
+                    dst,
+                    s1,
+                    loc,
+                })
+            }
+            LOAD_MATH_DIVIDE => {
+                let dst = self.reg()?;
+                let s1 = self.reg()?;
+                let loc = self.loc()?;
+                Ok(Instruction::LoadMath {
+                    op: ArithOp::Divide,
+                    dst,
+                    s1,
+                    loc,
+                })
+            }
+            LOAD_CONST_MATH_PLUS => {
+                let dst = self.reg()?;
+                let s1 = self.reg()?;
+                let num_bytes = self.pop()?;
+                let idx = self.num(num_bytes)?;
+                Ok(Instruction::LoadConstMath {
+                    op: ArithOp::Plus,
+                    dst,
+                    s1,
+                    idx,
+                })
+            }
+            LOAD_CONST_MATH_MINUS => {
+                let dst = self.reg()?;
+                let s1 = self.reg()?;
+                let num_bytes = self.pop()?;
+                let idx = self.num(num_bytes)?;
+                Ok(Instruction::LoadConstMath {
+                    op: ArithOp::Minus,
+                    dst,
+                    s1,
+                    idx,
+                })
+            }
+            LOAD_CONST_MATH_TIMES => {
+                let dst = self.reg()?;
+                let s1 = self.reg()?;
+                let num_bytes = self.pop()?;
+                let idx = self.num(num_bytes)?;
+                Ok(Instruction::LoadConstMath {
+                    op: ArithOp::Times,
+                    dst,
+                    s1,
+                    idx,
+                })
+            }
+            LOAD_CONST_MATH_DIVIDE => {
+                let dst = self.reg()?;
+                let s1 = self.reg()?;
+                let num_bytes = self.pop()?;
+                let idx = self.num(num_bytes)?;
+                Ok(Instruction::LoadConstMath {
+                    op: ArithOp::Divide,
+                    dst,
+                    s1,
+                    idx,
+                })
+            }
+            COMPLEX_BI_PLUS => {
+                let xd = self.reg()?;
+                let yd = self.reg()?;
+                let x1 = self.reg()?;
+                let y1 = self.reg()?;
+                let x2 = self.reg()?;
+                let y2 = self.reg()?;
+                Ok(Instruction::ComplexBi {
+                    op: ArithOp::Plus,
+                    xd,
+                    yd,
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                })
+            }
+            COMPLEX_BI_MINUS => {
+                let xd = self.reg()?;
+                let yd = self.reg()?;
+                let x1 = self.reg()?;
+                let y1 = self.reg()?;
+                let x2 = self.reg()?;
+                let y2 = self.reg()?;
+                Ok(Instruction::ComplexBi {
+                    op: ArithOp::Minus,
+                    xd,
+                    yd,
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                })
+            }
+            COMPLEX_BI_TIMES => {
+                let xd = self.reg()?;
+                let yd = self.reg()?;
+                let x1 = self.reg()?;
+                let y1 = self.reg()?;
+                let x2 = self.reg()?;
+                let y2 = self.reg()?;
+                Ok(Instruction::ComplexBi {
+                    op: ArithOp::Times,
+                    xd,
+                    yd,
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                })
+            }
+            COMPLEX_BI_DIVIDE => {
+                let xd = self.reg()?;
+                let yd = self.reg()?;
+                let x1 = self.reg()?;
+                let y1 = self.reg()?;
+                let x2 = self.reg()?;
+                let y2 = self.reg()?;
+                Ok(Instruction::ComplexBi {
+                    op: ArithOp::Divide,
+                    xd,
+                    yd,
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                })
+            }
+            _ => Err(anyhow!("undefined op code")),
+        }
+    }
+
+    fn num(&mut self, b: u8) -> Result<u32> {
+        let num_bytes: u8 = b & 15;
+        let mut val: u32 = 0;
+        for i in 0..num_bytes {
+            val += (self.pop()? as u32) << (8 * i);
+        }
+        Ok(val)
+    }
+
+    fn reg(&mut self) -> Result<Reg> {
+        let b = self.pop()?;
+
+        let r = match b & 0xc0 {
+            REG_GENERAL => Reg::Gen(b & 0x3f),
+            REG_STATIC => Reg::Static(self.num(b)?),
+            REG_SPECIAL => match b {
+                REG_RET => Reg::Ret,
+                REG_TEMP => Reg::Temp,
+                REG_LEFT => Reg::Left,
+                REG_RIGHT => Reg::Right,
+                _ => return Err(anyhow!("undefined Reg type")),
+            },
+            _ => return Err(anyhow!("undefined Reg type")),
+        };
+
+        Ok(r)
+    }
+
+    fn loc(&mut self) -> Result<Loc> {
+        let b = self.pop()?;
+
+        let loc = match b & 0xc0 {
+            LOC_MEM => Loc::Mem(self.num(b)?),
+            LOC_PARAM => Loc::Param(self.num(b)?),
+            LOC_STACK => Loc::Stack(self.num(b)?),
+            _ => return Err(anyhow!("undefined Loc type")),
+        };
+
+        Ok(loc)
+    }
+
+    fn string(&mut self) -> Result<String> {
+        let len = self.pop()? as usize;
+        let mut b: Vec<u8> = Vec::with_capacity(len);
+        for _ in 0..len {
+            b.push(self.pop()?)
+        }
+
+        Ok(String::from_utf8(b)?)
     }
 }
