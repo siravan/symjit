@@ -8,6 +8,7 @@ use petgraph::graph::{NodeIndex, UnGraph};
 
 use crate::config::{Config, SLICE_CAP, SPILL_AREA};
 use crate::mir::{Instruction, Mir};
+use crate::serializer::{MirIterator, MirWriter};
 use crate::symbol::Loc;
 use crate::utils::Reg;
 
@@ -18,9 +19,9 @@ struct Vertex {
     reg: Reg,
 }
 
-#[derive(Clone)]
+// #[derive(Clone)]
 pub struct ColoringAllocator {
-    pub code: Vec<Instruction>, // the revised mir
+    pub code: MirWriter, // the revised mir
     regs: Vec<Reg>,
     locs: HashMap<Loc, Reg>,
     loads: HashSet<Loc>,
@@ -47,7 +48,7 @@ impl ColoringAllocator {
         let count_scratch = config.count_scratch();
 
         ColoringAllocator {
-            code: Vec::new(),
+            code: MirWriter::new(),
             regs: vec![Reg::Ret; count_scratch as usize],
             count_statics: 0,
             graph: UnGraph::new_undirected(),
@@ -79,11 +80,11 @@ impl ColoringAllocator {
     }
 
     fn push(&mut self, ins: Instruction) {
-        self.code.push(ins);
+        self.code.push(&ins);
     }
 
     fn ip(&self) -> u32 {
-        self.code.len() as u32
+        self.code.ip as u32
     }
 
     // resets cache on call boundaries to account for cobbled registers
@@ -209,7 +210,7 @@ impl ColoringAllocator {
 
     pub fn create(&mut self, mir: &Mir) {
         for ins in mir.code.iter() {
-            match *ins {
+            match ins {
                 Instruction::Nop => self.push(Instruction::Nop),
                 Instruction::End => self.push(Instruction::End),
                 Instruction::Uni { op, dst, s1 } => {
@@ -354,7 +355,7 @@ impl ColoringAllocator {
 
         // replace all static regs with the corresponding logical ones
         for ins in code.iter() {
-            match *ins {
+            match ins {
                 Instruction::Nop => self.push(Instruction::Nop),
                 Instruction::End => self.push(Instruction::End),
                 Instruction::Uni { op, dst, s1 } => self.push(Instruction::Uni {
@@ -510,14 +511,14 @@ impl Alloc {
     }
 }
 
-#[derive(Clone)]
+// #[derive(Clone)]
 pub struct GreedyAllocator {
-    pub code: Vec<Instruction>, // the revised mir
-    regs: Vec<Option<usize>>,   // map of logical registers to static ones
-    locs: HashMap<Loc, usize>,  // map between locs and statics
-    count_statics: usize,       // number of statis registers
-    statics: Vec<Static>,       // the list of static registers
-    allocs: Vec<Alloc>,         // allocation for logical registers
+    pub code: MirWriter,       // the revised mir
+    regs: Vec<Option<usize>>,  // map of logical registers to static ones
+    locs: HashMap<Loc, usize>, // map between locs and statics
+    count_statics: usize,      // number of statis registers
+    statics: Vec<Static>,      // the list of static registers
+    allocs: Vec<Alloc>,        // allocation for logical registers
     config: Config,
 }
 
@@ -542,7 +543,7 @@ impl GreedyAllocator {
         let count_scratch = config.count_scratch();
 
         GreedyAllocator {
-            code: Vec::new(),
+            code: MirWriter::new(),
             regs: vec![None; count_scratch as usize],
             count_statics: 0,
             locs: HashMap::new(),
@@ -568,7 +569,7 @@ impl GreedyAllocator {
     }
 
     fn push(&mut self, ins: Instruction) {
-        self.code.push(ins);
+        self.code.push(&ins);
     }
 
     // reset for the first pass (logical -> static pass)
@@ -650,7 +651,7 @@ impl GreedyAllocator {
     // converts logical to static (SSA-form) registers
     pub fn create(&mut self, mir: &Mir) {
         for (ip, ins) in mir.code.iter().enumerate() {
-            match *ins {
+            match ins {
                 Instruction::Nop => self.push(Instruction::Nop),
                 Instruction::End => self.push(Instruction::End),
                 Instruction::Uni { op, dst, s1 } => {
@@ -831,7 +832,7 @@ impl GreedyAllocator {
 
         // replace all static regs with the corresponding logical ones
         for (ip, ins) in code.iter().enumerate() {
-            match *ins {
+            match ins {
                 Instruction::Nop => self.push(Instruction::Nop),
                 Instruction::End => self.push(Instruction::End),
                 Instruction::Uni { op, dst, s1 } => {
@@ -1061,7 +1062,7 @@ impl GreedyAllocator {
             (SLICE_CAP + SPILL_AREA) as u32
         };
 
-        for ins in code {
+        for ins in code.iter() {
             match ins {
                 // This rule is commented out to prevent eliding Args during
                 // external calls. If needed, we can restore this rule as long

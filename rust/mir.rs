@@ -17,6 +17,7 @@ use crate::config::SPILL_AREA;
 use crate::generator::FuncletType;
 use crate::generator::Generator;
 use crate::machine::MachineCode;
+use crate::serializer::{MirIterator, MirWriter};
 use crate::symbol::Loc;
 use crate::utils::is_external_func;
 use crate::utils::{bool_to_f64, Compiled, CompiledFunc, Reg};
@@ -297,7 +298,7 @@ impl Instruction {
 
 #[derive(Default)]
 pub struct Mir {
-    pub code: Vec<Instruction>,
+    pub code: MirWriter,
     pub consts: Vec<f64>,
     pub labels: HashMap<String, usize>,
     pub config: Config,
@@ -322,7 +323,7 @@ impl Mir {
 
     pub fn new(config: Config) -> Mir {
         Mir {
-            code: Vec::new(),
+            code: MirWriter::new(),
             consts: Vec::new(),
             labels: HashMap::new(),
             config,
@@ -330,7 +331,7 @@ impl Mir {
     }
 
     fn push(&mut self, ins: Instruction) {
-        self.code.push(ins)
+        self.code.push(&ins)
     }
 
     pub fn get_dst(ins: &Instruction) -> Option<u8> {
@@ -365,7 +366,7 @@ impl Mir {
         let mut mask: u32 = 0;
 
         for ins in self.code.iter() {
-            let r = Self::get_dst(ins);
+            let r = Self::get_dst(&ins);
 
             if let Some(r) = r {
                 mask |= 1 << r;
@@ -1248,10 +1249,11 @@ impl Mir {
         params: &[f64],
     ) {
         let mut ip: usize = 0;
-        let n = self.code.len();
+        let prog: Vec<Instruction> = self.code.iter().collect();
+        let n = prog.len();
 
         while ip < n {
-            let ins = &self.code[ip];
+            let ins = &prog[ip];
 
             match ins {
                 Instruction::Nop | Instruction::End => {}
@@ -1704,11 +1706,11 @@ impl Mir {
         let mut iter = self.code.iter().peekable();
 
         while let Some(ins) = iter.next() {
-            if self.try_funclet(ir, &mut funclets, ins) {
+            if self.try_funclet(ir, &mut funclets, &ins) {
                 continue;
             }
 
-            match ins {
+            match &ins {
                 Instruction::Nop | Instruction::End => {}
                 Instruction::Uni { op, dst, s1 } => {
                     Self::rerun_uniop(ir, *op, *dst, *s1);
@@ -1821,7 +1823,7 @@ impl Mir {
                                 ..
                             }) = iter.next()
                             {
-                                ir.times2_loc(*dst, *s1, *loc, *d2, *s2, *l2);
+                                ir.times2_loc(*dst, *s1, *loc, d2, s2, l2);
                                 continue;
                             }
                         }
@@ -1960,7 +1962,7 @@ impl Instruction {
 impl Mir {
     fn fuse_op_mov(
         &self,
-        _code: &mut Vec<Instruction>,
+        _code: &mut MirWriter,
         q0: &Instruction,
         q1: &Instruction,
     ) -> Option<Instruction> {
@@ -2012,7 +2014,7 @@ impl Mir {
 
     fn fuse_load(
         &self,
-        _code: &mut Vec<Instruction>,
+        _code: &mut MirWriter,
         q0: &Instruction,
         q1: &Instruction,
     ) -> Option<Instruction> {
@@ -2059,7 +2061,7 @@ impl Mir {
 
     fn fuse_save(
         &self,
-        code: &mut Vec<Instruction>,
+        code: &mut MirWriter,
         q0: &Instruction,
         q1: &Instruction,
     ) -> Option<Instruction> {
@@ -2104,7 +2106,7 @@ impl Mir {
         if let Instruction::Save { .. } = *q0 {
             if let Instruction::Load { .. } = *q1 {
                 if q0.loc() == q1.loc() {
-                    code.push(q0.clone());
+                    code.push(q0);
                     return Some(Instruction::Mov {
                         dst: q1.dst(),
                         s1: q0.src(),
@@ -2118,7 +2120,7 @@ impl Mir {
 
     fn fuse_save3(
         &self,
-        _code: &mut Vec<Instruction>,
+        _code: &mut MirWriter,
         q0: &Instruction,
         q1: &Instruction,
         q2: &Instruction,
@@ -2152,7 +2154,7 @@ impl Mir {
 
     fn fuse_fma(
         &self,
-        code: &mut Vec<Instruction>,
+        code: &mut MirWriter,
         q0: &Instruction,
         q1: &Instruction,
     ) -> Option<Instruction> {
@@ -2230,7 +2232,7 @@ impl Mir {
             } = *q1
             {
                 if q1.s1() == q0.dst() {
-                    code.push(Instruction::Load {
+                    code.push(&Instruction::Load {
                         dst: Reg::Ret,
                         loc: q0.loc(),
                     });
@@ -2244,7 +2246,7 @@ impl Mir {
                 }
 
                 if q1.s2() == q0.dst() {
-                    code.push(Instruction::Load {
+                    code.push(&Instruction::Load {
                         dst: Reg::Ret,
                         loc: q0.loc(),
                     });
@@ -2268,7 +2270,7 @@ impl Mir {
             } = *q1
             {
                 if q1.s1() == q0.dst() {
-                    code.push(Instruction::Load {
+                    code.push(&Instruction::Load {
                         dst: Reg::Ret,
                         loc: q0.loc(),
                     });
@@ -2282,7 +2284,7 @@ impl Mir {
                 }
 
                 if q1.s2() == q0.dst() {
-                    code.push(Instruction::Load {
+                    code.push(&Instruction::Load {
                         dst: Reg::Ret,
                         loc: q0.loc(),
                     });
@@ -2302,7 +2304,7 @@ impl Mir {
 
     fn fuse_fma3(
         &self,
-        code: &mut Vec<Instruction>,
+        code: &mut MirWriter,
         q0: &Instruction,
         q1: &Instruction,
         q2: &Instruction,
@@ -2324,7 +2326,7 @@ impl Mir {
                     if (q2.s1() == q0.dst() && q2.s2() == q1.dst())
                         || (q2.s1() == q1.dst() && q2.s2() == q0.dst())
                     {
-                        code.push(Instruction::LoadConst {
+                        code.push(&Instruction::LoadConst {
                             dst: Reg::Temp,
                             idx,
                         });
@@ -2352,7 +2354,7 @@ impl Mir {
                     if (q2.s1() == q0.dst() && q2.s2() == q1.dst())
                         || (q2.s1() == q1.dst() && q2.s2() == q0.dst())
                     {
-                        code.push(Instruction::Load {
+                        code.push(&Instruction::Load {
                             dst: Reg::Temp,
                             loc: q1.loc(),
                         });
@@ -2373,7 +2375,7 @@ impl Mir {
 
     fn fuse_times2(
         &self,
-        code: &mut Vec<Instruction>,
+        code: &mut MirWriter,
         q0: &Instruction,
         q1: &Instruction,
         q2: &Instruction,
@@ -2392,8 +2394,8 @@ impl Mir {
                 } = *q2
                 {
                     if q1.dst() == q2.s1() {
-                        code.push(q1.clone());
-                        code.push(q0.clone());
+                        code.push(q1);
+                        code.push(q0);
                         return Some(q2.clone());
                     }
                 }
@@ -2405,7 +2407,7 @@ impl Mir {
 
     fn fuse_times2_5(
         &self,
-        code: &mut Vec<Instruction>,
+        code: &mut MirWriter,
         q0: &Instruction,
         q1: &Instruction,
         q2: &Instruction,
@@ -2433,18 +2435,18 @@ impl Mir {
                                 && q2.loc() != q3.loc()
                                 && q2.loc() != q4.loc()
                             {
-                                code.push(Instruction::Load {
+                                code.push(&Instruction::Load {
                                     dst: Reg::Ret,
                                     loc: q0.loc(),
                                 });
-                                code.push(q3.clone());
-                                code.push(Instruction::LoadMath {
+                                code.push(q3);
+                                code.push(&Instruction::LoadMath {
                                     op: ArithOp::Times,
                                     dst: Reg::Ret,
                                     s1: Reg::Ret,
                                     loc: q1.loc(),
                                 });
-                                code.push(q4.clone());
+                                code.push(q4);
                                 return Some(Instruction::Save {
                                     src: Reg::Ret,
                                     loc: q2.loc(),
@@ -2461,7 +2463,7 @@ impl Mir {
 
     fn fuse_sin_cos(
         &self,
-        code: &mut Vec<Instruction>,
+        code: &mut MirWriter,
         q0: &Instruction,
         q1: &Instruction,
         q2: &Instruction,
@@ -2481,8 +2483,8 @@ impl Mir {
                                 && q4.check_label("sin")
                                 && q0.loc() == q3.loc()
                             {
-                                code.push(q0.clone());
-                                code.push(Instruction::Call {
+                                code.push(q0);
+                                code.push(&Instruction::Call {
                                     label: "sin_cos".to_string(),
                                     num_args: 1,
                                 });
@@ -2494,12 +2496,12 @@ impl Mir {
                                 && q4.check_label("cos")
                                 && q0.loc() == q3.loc()
                             {
-                                code.push(q0.clone());
-                                code.push(Instruction::Call {
+                                code.push(q0);
+                                code.push(&Instruction::Call {
                                     label: "sin_cos".to_string(),
                                     num_args: 1,
                                 });
-                                code.push(Instruction::Save {
+                                code.push(&Instruction::Save {
                                     src: Reg::Ret,
                                     loc: q2.loc(),
                                 });
@@ -2519,7 +2521,7 @@ impl Mir {
 
     fn fuse1(
         &self,
-        code: &mut Vec<Instruction>,
+        code: &mut MirWriter,
         q0: &Instruction,
         q1: &Instruction,
         q2: &Instruction,
@@ -2549,7 +2551,7 @@ impl Mir {
 
     fn fuse2(
         &self,
-        code: &mut Vec<Instruction>,
+        code: &mut MirWriter,
         q0: &Instruction,
         q1: &Instruction,
         q2: &Instruction,
@@ -2564,15 +2566,15 @@ impl Mir {
     }
 
     pub fn optimize_peephole(&mut self, stage: usize) -> bool {
-        let mut code: Vec<Instruction> = Vec::new();
         let mut success = false;
 
-        let mut iter = self.code.iter();
-        let mut q0: Instruction = iter.next().unwrap_or(&Instruction::End).clone();
-        let mut q1: Instruction = iter.next().unwrap_or(&Instruction::End).clone();
-        let mut q2: Instruction = iter.next().unwrap_or(&Instruction::End).clone();
-        let mut q3: Instruction = iter.next().unwrap_or(&Instruction::End).clone();
-        let mut q4: Instruction = iter.next().unwrap_or(&Instruction::End).clone();
+        let mut code = MirWriter::new();
+        let mut iter = self.code.iter_mut();
+        let mut q0: Instruction = iter.next().unwrap_or(Instruction::End).clone();
+        let mut q1: Instruction = iter.next().unwrap_or(Instruction::End).clone();
+        let mut q2: Instruction = iter.next().unwrap_or(Instruction::End).clone();
+        let mut q3: Instruction = iter.next().unwrap_or(Instruction::End).clone();
+        let mut q4: Instruction = iter.next().unwrap_or(Instruction::End).clone();
 
         while !matches!(q0, Instruction::End) {
             let (top, num_consumed) = match stage {
@@ -2586,12 +2588,12 @@ impl Mir {
             match num_consumed {
                 // no matches. move to the next item.
                 0 => {
-                    code.push(q0);
+                    code.push(&q0);
                     q0 = q1;
                     q1 = q2;
                     q2 = q3;
                     q3 = q4;
-                    q4 = iter.next().unwrap_or(&Instruction::End).clone();
+                    q4 = iter.next().unwrap_or(Instruction::End).clone();
                 }
                 // q0 and q1 match.
                 2 => {
@@ -2599,31 +2601,31 @@ impl Mir {
                     q1 = q2;
                     q2 = q3;
                     q3 = q4;
-                    q4 = iter.next().unwrap_or(&Instruction::End).clone();
+                    q4 = iter.next().unwrap_or(Instruction::End).clone();
                 }
                 // q0, q1, and q2 match.
                 3 => {
                     q0 = top;
                     q1 = q3;
                     q2 = q4;
-                    q3 = iter.next().unwrap_or(&Instruction::End).clone();
-                    q4 = iter.next().unwrap_or(&Instruction::End).clone();
+                    q3 = iter.next().unwrap_or(Instruction::End).clone();
+                    q4 = iter.next().unwrap_or(Instruction::End).clone();
                 }
                 // q0, q1, q2, and q3 match.
                 4 => {
                     q0 = top;
                     q1 = q4;
-                    q2 = iter.next().unwrap_or(&Instruction::End).clone();
-                    q3 = iter.next().unwrap_or(&Instruction::End).clone();
-                    q4 = iter.next().unwrap_or(&Instruction::End).clone();
+                    q2 = iter.next().unwrap_or(Instruction::End).clone();
+                    q3 = iter.next().unwrap_or(Instruction::End).clone();
+                    q4 = iter.next().unwrap_or(Instruction::End).clone();
                 }
                 // q0, q1, q2, q3, q4 match.
                 5 => {
                     q0 = top;
-                    q1 = iter.next().unwrap_or(&Instruction::End).clone();
-                    q2 = iter.next().unwrap_or(&Instruction::End).clone();
-                    q3 = iter.next().unwrap_or(&Instruction::End).clone();
-                    q4 = iter.next().unwrap_or(&Instruction::End).clone();
+                    q1 = iter.next().unwrap_or(Instruction::End).clone();
+                    q2 = iter.next().unwrap_or(Instruction::End).clone();
+                    q3 = iter.next().unwrap_or(Instruction::End).clone();
+                    q4 = iter.next().unwrap_or(Instruction::End).clone();
                 }
                 _ => unreachable!(),
             }
@@ -2667,7 +2669,7 @@ impl Mir {
 
         let mut fs = fs::File::create(name).unwrap();
         let _ = writeln!(fs, "#! stats");
-        let _ = writeln!(fs, "{} instructions", self.code.len());
+        let _ = writeln!(fs, "{} instructions", self.code.ip);
         let _ = writeln!(fs, "---------------------------------");
 
         for (k, v) in counts.iter() {

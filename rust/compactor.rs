@@ -3,12 +3,13 @@ use std::collections::HashMap;
 
 use crate::config::{Config, SLICE_CAP, SPILL_AREA};
 use crate::mir::{Instruction, Mir};
+use crate::serializer::{MirIterator, MirWriter};
 use crate::symbol::Loc;
 
-#[derive(Clone, Debug)]
+// #[derive(Debug)]
 pub struct Compactor {
     config: Config,
-    code: Vec<Instruction>,    // the revised mir
+    code: MirWriter,           // the revised mir
     live: HashMap<Loc, usize>, // the map of live Stack slots and their last used position
     stack: HashMap<Loc, Loc>,  // the map of old Stack slots to new Stack slots
     pool: Vec<Loc>,            // the pool of Stack slots available to reuse
@@ -27,7 +28,7 @@ impl Compactor {
 
         Compactor {
             config,
-            code: Vec::new(),
+            code: MirWriter::new(),
             live: HashMap::new(),
             stack: HashMap::new(),
             pool: Vec::new(),
@@ -45,12 +46,12 @@ impl Compactor {
     }
 
     fn push(&mut self, ins: Instruction) {
-        self.code.push(ins);
+        self.code.push(&ins);
     }
 
     fn collect_last(&mut self, mir: &Mir) {
         for (ip, ins) in mir.code.iter().enumerate() {
-            match *ins {
+            match ins {
                 Instruction::Load { loc, .. }
                 | Instruction::IfElse { cond: loc, .. }
                 | Instruction::LoadMath { loc, .. }
@@ -125,7 +126,7 @@ impl Compactor {
 
     fn compact_stack(&mut self, mir: &Mir) {
         for (ip, ins) in mir.code.iter().enumerate() {
-            match ins {
+            match &ins {
                 Instruction::Load { dst, loc } => {
                     let l = self.load(*loc, ip);
                     self.push(Instruction::Load { dst: *dst, loc: l });

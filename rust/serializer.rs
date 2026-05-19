@@ -97,6 +97,7 @@ const BINOP_COMPLEX: u8 = BinOp::Complex as u8;
 
 pub struct MirWriter {
     buf: Vec<u8>,
+    pub ip: usize,
 }
 
 impl Default for MirWriter {
@@ -107,10 +108,14 @@ impl Default for MirWriter {
 
 impl MirWriter {
     pub fn new() -> MirWriter {
-        MirWriter { buf: Vec::new() }
+        MirWriter {
+            buf: Vec::new(),
+            ip: 0,
+        }
     }
 
     pub fn push(&mut self, ins: &Instruction) {
+        self.ip += 1;
         match ins {
             Instruction::Nop => self.append_byte(NOP),
             Instruction::End => self.append_byte(END),
@@ -255,6 +260,7 @@ impl MirWriter {
     }
 
     pub fn iter(&self) -> MirIterator {
+        // println!("{} instructions, {} bytes", self.ip, self.buf.len());
         let buf = self.buf.clone();
         MirIterator { buf, pos: 0 }
     }
@@ -265,7 +271,7 @@ impl MirWriter {
 
     pub fn serialize(&mut self, mir: &Mir) {
         for ins in mir.code.iter() {
-            self.push(ins);
+            self.push(&ins);
         }
     }
 
