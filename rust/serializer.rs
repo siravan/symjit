@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use std::collections::HashMap;
 use std::io::{Read, Write};
 
 use crate::config::Config;
@@ -315,363 +316,12 @@ impl MirWriter {
     }
 }
 
-pub struct MirReader {
-    buf: Vec<u8>,
-    pos: usize,
-}
-
-impl MirReader {
-    pub fn new(buf: Vec<u8>) -> MirReader {
-        MirReader { buf, pos: 0 }
-    }
-
-    fn pop(&mut self) -> Result<u8> {
-        if self.pos < self.buf.len() {
-            let c = self.buf[self.pos];
-            self.pos += 1;
-            Ok(c)
-        } else {
-            Err(anyhow!("unexpected EOF"))
-        }
-    }
-
-    fn eof(&self) -> bool {
-        self.pos >= self.buf.len()
-    }
-
-    pub fn deserialize(&mut self, mir: &mut Mir) -> Result<()> {
-        while !self.eof() {
-            let header = self.pop()?;
-
-            match header & 0xc0 {
-                UNI_OP => self.uniop(mir, header)?,
-                BIN_OP => self.binop(mir, header)?,
-                _ => self.other(mir, header)?,
-            }
-        }
-
-        Ok(())
-    }
-
-    fn uniop(&mut self, mir: &mut Mir, header: u8) -> Result<()> {
-        let dst = self.reg()?;
-        let s1 = self.reg()?;
-
-        match header & 0x3f {
-            UNIOP_NEG => mir.neg(dst, s1),
-            UNIOP_NOT => mir.not(dst, s1),
-            UNIOP_ABS => mir.abs(dst, s1),
-            UNIOP_ROOT => mir.root(dst, s1),
-            UNIOP_REALROOT => mir.real_root(dst, s1),
-            UNIOP_RECIP => mir.recip(dst, s1),
-            UNIOP_ROUND => mir.round(dst, s1),
-            UNIOP_FLOOR => mir.floor(dst, s1),
-            UNIOP_CEILING => mir.ceiling(dst, s1),
-            UNIOP_TRUNC => mir.trunc(dst, s1),
-            UNIOP_REAL => mir.real(dst, s1),
-            UNIOP_IMAGINARY => mir.imaginary(dst, s1),
-            UNIOP_CONJUGATE => mir.conjugate(dst, s1),
-            UNIOP_HALF => mir.half(dst, s1),
-            _ => return Err(anyhow!("undefined UniOp {:x}", header)),
-        }
-
-        Ok(())
-    }
-
-    fn binop(&mut self, mir: &mut Mir, header: u8) -> Result<()> {
-        let dst = self.reg()?;
-        let s1 = self.reg()?;
-        let s2 = self.reg()?;
-
-        match header & 0x3f {
-            BINOP_PLUS => mir.plus(dst, s1, s2),
-            BINOP_MINUS => mir.minus(dst, s1, s2),
-            BINOP_TIMES => mir.times(dst, s1, s2),
-            BINOP_DIVIDE => mir.divide(dst, s1, s2),
-            BINOP_GREATER_THAN => mir.gt(dst, s1, s2),
-            BINOP_GREATER_THAN_EQUAL => mir.geq(dst, s1, s2),
-            BINOP_LITTLE_THAN => mir.lt(dst, s1, s2),
-            BINOP_LITTLE_THAN_EQUAL => mir.leq(dst, s1, s2),
-            BINOP_EQUAL => mir.eq(dst, s1, s2),
-            BINOP_NOT_EQUAL => mir.neq(dst, s1, s2),
-            BINOP_AND => mir.and(dst, s1, s2),
-            BINOP_AND_NOT => mir.andnot(dst, s1, s2),
-            BINOP_OR => mir.or(dst, s1, s2),
-            BINOP_XOR => mir.xor(dst, s1, s2),
-            BINOP_COMPLEX => mir.complex(dst, s1, s2),
-            _ => return Err(anyhow!("undefined BinOp {:x}", header)),
-        }
-
-        Ok(())
-    }
-
-    pub fn other(&mut self, mir: &mut Mir, header: u8) -> Result<()> {
-        match header & 0x3f {
-            NOP => mir.nop(),
-            END => mir.nop(),
-            MOV => {
-                let dst = self.reg()?;
-                let s1 = self.reg()?;
-                mir.fmov(dst, s1);
-            }
-            LOAD => {
-                let dst = self.reg()?;
-                let loc = self.loc()?;
-                match loc {
-                    Loc::Mem(idx) => mir.load_mem(dst, idx),
-                    Loc::Param(idx) => mir.load_param(dst, idx),
-                    Loc::Stack(idx) => mir.load_stack(dst, idx),
-                }
-            }
-            SAVE => {
-                let src = self.reg()?;
-                let loc = self.loc()?;
-                match loc {
-                    Loc::Mem(idx) => mir.save_mem(src, idx),
-                    Loc::Stack(idx) => mir.save_stack(src, idx),
-                    _ => {}
-                }
-            }
-            LOAD_CONST => {
-                let dst = self.reg()?;
-                let num_bytes = self.pop()?;
-                let idx = self.num(num_bytes)?;
-                mir.load_const(dst, idx);
-            }
-            LOAD_COMPLEX => {
-                let xd = self.reg()?;
-                let yd = self.reg()?;
-                let loc = self.loc()?;
-                match loc {
-                    Loc::Mem(idx) => mir.load_mem_complex(xd, yd, idx),
-                    Loc::Param(idx) => mir.load_param_complex(xd, yd, idx),
-                    Loc::Stack(idx) => mir.load_stack_complex(xd, yd, idx),
-                }
-            }
-            SAVE_COMPLEX => {
-                let xs = self.reg()?;
-                let ys = self.reg()?;
-                let loc = self.loc()?;
-                match loc {
-                    Loc::Mem(idx) => mir.save_mem_complex(xs, ys, idx),
-                    Loc::Stack(idx) => mir.save_stack_complex(xs, ys, idx),
-                    _ => {}
-                }
-            }
-            BRANCH => {
-                let label = self.string()?;
-                mir.branch(&label);
-            }
-            BRANCH_IF => {
-                let cond = self.reg()?;
-                let label = self.string()?;
-                mir.branch_if(cond, &label, false);
-            }
-            BRANCH_ELSE => {
-                let cond = self.reg()?;
-                let label = self.string()?;
-                mir.branch_if(cond, &label, true);
-            }
-            CALL => {
-                let num_args = self.pop()? as usize;
-                let op = self.string()?;
-                mir.call(&op, num_args)
-                    .unwrap_or_else(|_| panic!("op code {:?} not found.", &op));
-            }
-            LABEL => {
-                let label = self.string()?;
-                mir.set_label(&label);
-            }
-            IFELSE => {
-                let dst = self.reg()?;
-                let true_val = self.reg()?;
-                let false_val = self.reg()?;
-                let cond = self.loc()?;
-                mir.ifelse(dst, true_val, false_val, cond);
-            }
-            FUSED_MUL_ADD => {
-                let dst = self.reg()?;
-                let a = self.reg()?;
-                let b = self.reg()?;
-                let c = self.reg()?;
-                mir.fused_mul_add(dst, a, b, c);
-            }
-            FUSED_MUL_SUB => {
-                let dst = self.reg()?;
-                let a = self.reg()?;
-                let b = self.reg()?;
-                let c = self.reg()?;
-                mir.fused_mul_sub(dst, a, b, c);
-            }
-            FUSED_NEG_MUL_ADD => {
-                let dst = self.reg()?;
-                let a = self.reg()?;
-                let b = self.reg()?;
-                let c = self.reg()?;
-                mir.fused_neg_mul_add(dst, a, b, c);
-            }
-            FUSED_NEG_MUL_SUB => {
-                let dst = self.reg()?;
-                let a = self.reg()?;
-                let b = self.reg()?;
-                let c = self.reg()?;
-                mir.fused_neg_mul_sub(dst, a, b, c);
-            }
-            LOAD_MATH_PLUS => {
-                let dst = self.reg()?;
-                let s1 = self.reg()?;
-                let loc = self.loc()?;
-                mir.plus_load(dst, s1, loc);
-            }
-            LOAD_MATH_MINUS => {
-                let dst = self.reg()?;
-                let s1 = self.reg()?;
-                let loc = self.loc()?;
-                mir.minus_load(dst, s1, loc);
-            }
-            LOAD_MATH_TIMES => {
-                let dst = self.reg()?;
-                let s1 = self.reg()?;
-                let loc = self.loc()?;
-                mir.times_load(dst, s1, loc);
-            }
-            LOAD_MATH_DIVIDE => {
-                let dst = self.reg()?;
-                let s1 = self.reg()?;
-                let loc = self.loc()?;
-                mir.divide_load(dst, s1, loc);
-            }
-            LOAD_CONST_MATH_PLUS => {
-                let dst = self.reg()?;
-                let s1 = self.reg()?;
-                let num_bytes = self.pop()?;
-                let idx = self.num(num_bytes)?;
-                mir.plus_load_const(dst, s1, idx);
-            }
-            LOAD_CONST_MATH_MINUS => {
-                let dst = self.reg()?;
-                let s1 = self.reg()?;
-                let num_bytes = self.pop()?;
-                let idx = self.num(num_bytes)?;
-                mir.minus_load_const(dst, s1, idx);
-            }
-            LOAD_CONST_MATH_TIMES => {
-                let dst = self.reg()?;
-                let s1 = self.reg()?;
-                let num_bytes = self.pop()?;
-                let idx = self.num(num_bytes)?;
-                mir.times_load_const(dst, s1, idx);
-            }
-            LOAD_CONST_MATH_DIVIDE => {
-                let dst = self.reg()?;
-                let s1 = self.reg()?;
-                let num_bytes = self.pop()?;
-                let idx = self.num(num_bytes)?;
-                mir.divide_load_const(dst, s1, idx);
-            }
-            COMPLEX_BI_PLUS => {
-                let xd = self.reg()?;
-                let yd = self.reg()?;
-                let x1 = self.reg()?;
-                let y1 = self.reg()?;
-                let x2 = self.reg()?;
-                let y2 = self.reg()?;
-                mir.plus_complex(xd, yd, x1, y1, x2, y2);
-            }
-            COMPLEX_BI_MINUS => {
-                let xd = self.reg()?;
-                let yd = self.reg()?;
-                let x1 = self.reg()?;
-                let y1 = self.reg()?;
-                let x2 = self.reg()?;
-                let y2 = self.reg()?;
-                mir.minus_complex(xd, yd, x1, y1, x2, y2);
-            }
-            COMPLEX_BI_TIMES => {
-                let xd = self.reg()?;
-                let yd = self.reg()?;
-                let x1 = self.reg()?;
-                let y1 = self.reg()?;
-                let x2 = self.reg()?;
-                let y2 = self.reg()?;
-                mir.times_complex(xd, yd, x1, y1, x2, y2);
-            }
-            COMPLEX_BI_DIVIDE => {
-                let xd = self.reg()?;
-                let yd = self.reg()?;
-                let x1 = self.reg()?;
-                let y1 = self.reg()?;
-                let x2 = self.reg()?;
-                let y2 = self.reg()?;
-                mir.divide_complex(xd, yd, x1, y1, x2, y2);
-            }
-            _ => return Err(anyhow!("undefined header {:x}", header)),
-        }
-
-        Ok(())
-    }
-
-    fn num(&mut self, b: u8) -> Result<u32> {
-        let num_bytes: u8 = b & 15;
-        let mut val: u32 = 0;
-        for i in 0..num_bytes {
-            val += (self.pop()? as u32) << (8 * i);
-        }
-        Ok(val)
-    }
-
-    fn reg(&mut self) -> Result<Reg> {
-        let b = self.pop()?;
-
-        let r = match b & 0xc0 {
-            REG_GENERAL => Reg::Gen(b & 0x3f),
-            REG_STATIC => Reg::Static(self.num(b)?),
-            REG_SPECIAL => match b {
-                REG_RET => Reg::Ret,
-                REG_TEMP => Reg::Temp,
-                REG_LEFT => Reg::Left,
-                REG_RIGHT => Reg::Right,
-                _ => return Err(anyhow!("undefined Reg type")),
-            },
-            _ => return Err(anyhow!("undefined Reg type")),
-        };
-
-        Ok(r)
-    }
-
-    fn loc(&mut self) -> Result<Loc> {
-        let b = self.pop()?;
-
-        let loc = match b & 0xc0 {
-            LOC_MEM => Loc::Mem(self.num(b)?),
-            LOC_PARAM => Loc::Param(self.num(b)?),
-            LOC_STACK => Loc::Stack(self.num(b)?),
-            _ => return Err(anyhow!("undefined Loc type")),
-        };
-
-        Ok(loc)
-    }
-
-    fn string(&mut self) -> Result<String> {
-        let len = self.pop()? as usize;
-        let mut b: Vec<u8> = Vec::with_capacity(len);
-        for _ in 0..len {
-            b.push(self.pop()?)
-        }
-
-        Ok(String::from_utf8(b)?)
-    }
-}
-
 impl Storage for Mir {
     fn save(&self, stream: &mut impl Write) -> Result<()> {
         stream.write_all(&Self::MAGIC.to_le_bytes())?;
 
-        let mut writer = MirWriter::new();
-        writer.serialize(self);
-
-        stream.write_all(&writer.buf.len().to_le_bytes())?;
-        stream.write_all(&writer.buf)?;
+        stream.write_all(&self.code.buf.len().to_le_bytes())?;
+        stream.write_all(&self.code.buf)?;
 
         stream.write_all(&self.consts.len().to_le_bytes())?;
 
@@ -697,22 +347,24 @@ impl Storage for Mir {
         let mut buf: Vec<u8> = vec![0; num_bytes];
         stream.read_exact(&mut buf)?;
 
-        let mut mir = Mir::new(config.clone());
-        let mut reader: MirReader = MirReader::new(buf);
-        reader.deserialize(&mut mir)?;
-
         stream.read_exact(&mut bytes)?;
         let num_consts = usize::from_le_bytes(bytes);
 
-        let mut buf = [0; 8];
         let mut consts: Vec<f64> = Vec::new();
 
         for _ in 0..num_consts {
-            stream.read_exact(&mut buf)?;
-            consts.push(f64::from_le_bytes(buf));
+            stream.read_exact(&mut bytes)?;
+            consts.push(f64::from_le_bytes(bytes));
         }
 
-        mir.add_consts(&consts);
+        let mut mir = Mir {
+            code: MirWriter { buf, ip: 0 },
+            consts,
+            labels: HashMap::new(),
+            config: config.clone(),
+        };
+
+        // mir.add_consts(&consts);
         mir.populate_labels();
 
         Ok(mir)

@@ -401,9 +401,11 @@ impl VirtualTable {
         *z = Complex::new(xr, xi).atanh();
     }
 
+    /*
     pub extern "C" fn cplx_root(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).sqrt();
     }
+    */
 
     pub extern "C" fn cplx_cbrt(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).cbrt();
