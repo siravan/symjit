@@ -520,6 +520,7 @@ pub struct GreedyAllocator {
     statics: Vec<Static>,      // the list of static registers
     allocs: Vec<Alloc>,        // allocation for logical registers
     config: Config,
+    count_regs: usize,
 }
 
 impl fmt::Debug for GreedyAllocator {
@@ -539,17 +540,16 @@ impl fmt::Debug for GreedyAllocator {
 }
 
 impl GreedyAllocator {
-    pub fn new(config: Config) -> GreedyAllocator {
-        let count_scratch = config.count_scratch();
-
+    pub fn new(config: Config, count_regs: usize) -> GreedyAllocator {
         GreedyAllocator {
             code: MirWriter::new(),
-            regs: vec![None; count_scratch as usize],
+            regs: vec![None; count_regs],
             count_statics: 0,
             locs: HashMap::new(),
             statics: Vec::new(),
-            allocs: vec![Alloc::new(); count_scratch as usize],
+            allocs: vec![Alloc::new(); count_regs],
             config,
+            count_regs,
         }
     }
 
@@ -574,12 +574,12 @@ impl GreedyAllocator {
 
     // reset for the first pass (logical -> static pass)
     fn reset_regs(&mut self) {
-        self.regs = vec![None; self.config.count_scratch() as usize];
+        self.regs = vec![None; self.count_regs];
     }
 
     // reset for the second pass (static -> logical pass)
     fn reset_allocs(&mut self) {
-        self.allocs = vec![Alloc::new(); self.config.count_scratch() as usize];
+        self.allocs = vec![Alloc::new(); self.count_regs];
     }
 
     fn create_static(&mut self, ip: usize, r: Reg) -> usize {

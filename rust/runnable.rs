@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 use std::io::{Read, Write};
 
+use crate::allocator::GreedyAllocator;
 use crate::amd::{AmdComplexGenerator, AmdSSEGenerator, AmdScalarGenerator, AmdVectorGenerator};
 use crate::applet::Applet;
 use crate::arm::{ArmComplexGenerator, ArmGenerator, ArmSimdGenerator};
@@ -90,29 +91,23 @@ impl Application {
 
         let config = prog.config().clone();
         let mut original: Option<Mir> = None;
+        let compiled: Option<MachineCode<f64>>;
 
-        if config.is_complex() && !config.fast_complex() {
+        if config.is_complex() {
             original = Some(mir.clone());
-            mir = Complexifier::new(&reals, config.clone()).complexify(&mir)?;
-        }
+            let complexified = Complexifier::new(&reals, config.clone()).complexify(&mir)?;
 
-        // let compiled = Self::compile_ty(prog.config().compiler_type(), &mir, &mut prog)?;
-        let compiled = match config.compiler_type() {
-            CompilerType::AmdAVX => Some(Self::compile_avx(&mir, &mut prog)?),
-            CompilerType::AmdSSE => Some(Self::compile_sse(&mir, &mut prog)?),
-            CompilerType::Arm => Some(Self::compile_arm(&mir, &mut prog)?),
-            CompilerType::RiscV => Some(Self::compile_riscv(&mir, &mut prog)?),
-            CompilerType::ByteCode => None,
-            CompilerType::Debug => {
-                println!("`ty = debug` is deprecated");
-                None
+            if config.fast_complex() {
+                GreedyAllocator::new(config.clone(), config.available_registers() as usize - 4)
+                    .optimize(&mut mir)?;
+                compiled = Self::compile_ty(&config, &mir, &mut prog)?;
+            } else {
+                compiled = Self::compile_ty(&config, &complexified, &mut prog)?;
             }
-            _ => return Err(anyhow!("unrecognized `ty`")),
-        };
 
-        if config.is_complex() && config.fast_complex() {
-            original = Some(mir.clone());
-            mir = Complexifier::new(&reals, config.clone()).complexify(&mir)?;
+            mir = complexified;
+        } else {
+            compiled = Self::compile_ty(&config, &mir, &mut prog)?;
         }
 
         let use_simd = config.use_simd() && prog.count_loops == 0;
@@ -149,6 +144,27 @@ impl Application {
             reals,
             original,
         })
+    }
+
+    fn compile_ty(
+        config: &Config,
+        mir: &Mir,
+        prog: &mut Program,
+    ) -> Result<Option<MachineCode<f64>>> {
+        let compiled = match config.compiler_type() {
+            CompilerType::AmdAVX => Some(Self::compile_avx(mir, prog)?),
+            CompilerType::AmdSSE => Some(Self::compile_sse(mir, prog)?),
+            CompilerType::Arm => Some(Self::compile_arm(mir, prog)?),
+            CompilerType::RiscV => Some(Self::compile_riscv(mir, prog)?),
+            CompilerType::ByteCode => None,
+            CompilerType::Debug => {
+                println!("`ty = debug` is deprecated");
+                None
+            }
+            _ => return Err(anyhow!("unrecognized `ty`")),
+        };
+
+        Ok(compiled)
     }
 
     pub fn seal(self) -> Result<Applet> {

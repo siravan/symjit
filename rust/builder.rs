@@ -300,7 +300,8 @@ impl Builder {
         }
 
         if opt_level >= 2 {
-            GreedyAllocator::new(self.config.clone()).optimize(mir)?;
+            GreedyAllocator::new(self.config.clone(), self.config.count_scratch() as usize)
+                .optimize(mir)?;
         }
 
         if opt_level >= 3 {

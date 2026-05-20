@@ -648,7 +648,7 @@ impl MirIterator {
             }
             BRANCH => {
                 let label = self.string()?;
-                Ok(Instruction::Label { label })
+                Ok(Instruction::Branch { label })
             }
             BRANCH_IF => {
                 let cond = self.reg()?;

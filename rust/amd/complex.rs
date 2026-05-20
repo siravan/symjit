@@ -248,9 +248,9 @@ impl Generator for AmdComplexGenerator {
     fn abs(&mut self, dst: Reg, s1: Reg) {
         self.amd.vmuldd(T1, ϕ(s1), ϕ(s1));
         self.amd.vhadddd(T1, T1, T1);
-        self.amd.vsqrtsd(ϕ(s1), T1);
+        self.amd.vsqrtsd(T2, T1);
         self.amd.vxorpd(T1, T1, T1);
-        self.amd.vunpckldd(ϕ(dst), ϕ(s1), T1);
+        self.amd.vunpckldd(ϕ(dst), T2, T1);
     }
 
     fn root(&mut self, dst: Reg, s1: Reg) {

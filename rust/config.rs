@@ -336,7 +336,7 @@ impl Config {
         config.compiler_type()
     }
 
-    fn available_registers(&self) -> u8 {
+    pub fn available_registers(&self) -> u8 {
         16
     }
 
