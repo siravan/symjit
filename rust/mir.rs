@@ -296,7 +296,7 @@ impl Instruction {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Mir {
     pub code: MirWriter,
     pub consts: Vec<f64>,

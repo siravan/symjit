@@ -96,6 +96,7 @@ const BINOP_OR: u8 = BinOp::Or as u8;
 const BINOP_XOR: u8 = BinOp::Xor as u8;
 const BINOP_COMPLEX: u8 = BinOp::Complex as u8;
 
+#[derive(Clone)]
 pub struct MirWriter {
     buf: Vec<u8>,
     pub ip: usize,
@@ -318,7 +319,6 @@ impl MirWriter {
 
 impl Storage for Mir {
     fn save(&self, stream: &mut impl Write) -> Result<()> {
-        println!("saving {:?}", &self);
         stream.write_all(&Self::MAGIC.to_le_bytes())?;
 
         stream.write_all(&self.code.buf.len().to_le_bytes())?;
@@ -373,8 +373,6 @@ impl Storage for Mir {
 
         // mir.add_consts(&consts);
         mir.populate_labels();
-
-        println!("loading {:?}", &mir);
 
         Ok(mir)
     }

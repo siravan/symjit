@@ -63,12 +63,15 @@ pub struct Application {
     pub first_param: usize,
     pub first_obs: usize,
     pub first_diff: usize,
+    pub reals: HashSet<Loc>,
+    pub original: Option<Mir>,
 }
 
 impl Application {
     pub fn new(mut prog: Program, reals: HashSet<Loc>) -> Result<Application> {
         let mut mir = Mir::new(prog.config().clone());
         prog.builder.compile_mir(&mut mir)?;
+        prog.builder.optimize_mir(&mut mir)?;
         Self::with_mir(prog, reals, mir)
     }
 
@@ -86,10 +89,10 @@ impl Application {
         let params = vec![0.0; count_params + 1];
 
         let config = prog.config().clone();
-
-        prog.builder.optimize_mir(&mut mir)?;
+        let mut original: Option<Mir> = None;
 
         if config.is_complex() && !config.fast_complex() {
+            original = Some(mir.clone());
             mir = Complexifier::new(&reals, config.clone()).complexify(&mir)?;
         }
 
@@ -107,73 +110,13 @@ impl Application {
             _ => return Err(anyhow!("unrecognized `ty`")),
         };
 
-        let use_simd = config.use_simd() && prog.count_loops == 0 && !config.fast_complex();
-        let use_threads = config.use_threads() && prog.mem_size() < 128;
-
-        let can_fast = config.may_fast()
-            && count_states <= 8
-            && count_params == 0
-            && count_obs == 1
-            && count_diffs == 0;
-
-        // bytecode takes the ownership of mir
-        let bytecode = Self::compile_bytecode(mir, &mut prog)?;
-
-        Ok(Application {
-            prog,
-            compiled,
-            compiled_simd: None,
-            compiled_fast: None,
-            bytecode,
-            params,
-            use_simd,
-            use_threads,
-            can_fast,
-            first_state,
-            first_param,
-            first_obs,
-            first_diff,
-            count_states,
-            count_params,
-            count_obs,
-            count_diffs,
-            config,
-        })
-    }
-
-    pub fn with_loaded_mir(mut prog: Program, mir: Mir) -> Result<Application> {
-        let first_state = 0;
-        let first_param = 0;
-        let first_obs = first_state + prog.count_states;
-        let first_diff = first_obs + prog.count_obs;
-
-        let count_states = prog.count_states;
-        let count_params = prog.count_params;
-        let count_obs = prog.count_obs;
-        let count_diffs = prog.count_diffs;
-
-        let params = vec![0.0; count_params + 1];
-
-        // prog.builder.compile_mir(&mut mir)?;
-
-        let config = prog.config().clone();
-
-        // let compiled = Self::compile_ty(prog.config().compiler_type(), &mir, &mut prog)?;
-        let compiled = match config.compiler_type() {
-            CompilerType::AmdAVX => Some(Self::compile_avx(&mir, &mut prog)?),
-            CompilerType::AmdSSE => Some(Self::compile_sse(&mir, &mut prog)?),
-            CompilerType::Arm => Some(Self::compile_arm(&mir, &mut prog)?),
-            CompilerType::RiscV => Some(Self::compile_riscv(&mir, &mut prog)?),
-            CompilerType::ByteCode => None,
-            CompilerType::Debug => {
-                println!("`ty = debug` is deprecated");
-                None
-            }
-            _ => return Err(anyhow!("unrecognized `ty`")),
-        };
+        if config.is_complex() && config.fast_complex() {
+            original = Some(mir.clone());
+            mir = Complexifier::new(&reals, config.clone()).complexify(&mir)?;
+        }
 
         let use_simd = config.use_simd() && prog.count_loops == 0;
-        let use_threads = config.use_threads() && prog.mem_size() < 128;
+        let use_threads = config.use_threads();
 
         let can_fast = config.may_fast()
             && count_states <= 8
@@ -203,6 +146,8 @@ impl Application {
             count_obs,
             count_diffs,
             config,
+            reals,
+            original,
         })
     }
 
@@ -658,11 +603,51 @@ impl Application {
     const MAGIC: usize = 0x40568795410d08e9;
 }
 
+fn save_reals(stream: &mut impl Write, reals: &HashSet<Loc>) -> Result<()> {
+    let num_elems = reals.len();
+    stream.write_all(&num_elems.to_le_bytes())?;
+
+    for r in reals.iter() {
+        let b = match r {
+            Loc::Mem(idx) => 0x100000000 | (*idx as usize),
+            Loc::Stack(idx) => 0x200000000 | (*idx as usize),
+            Loc::Param(idx) => 0x300000000 | (*idx as usize),
+        };
+        stream.write_all(&b.to_le_bytes())?;
+    }
+
+    Ok(())
+}
+
+fn load_reals(stream: &mut impl Read) -> Result<HashSet<Loc>> {
+    let mut bytes: [u8; 8] = [0; 8];
+
+    stream.read_exact(&mut bytes)?;
+    let num_elems = usize::from_le_bytes(bytes);
+
+    let mut reals: HashSet<Loc> = HashSet::new();
+
+    for _ in 0..num_elems {
+        stream.read_exact(&mut bytes)?;
+        let b = usize::from_le_bytes(bytes);
+
+        let r = match b >> 32 {
+            1 => Loc::Mem((b & 0xffffffff) as u32),
+            2 => Loc::Stack((b & 0xffffffff) as u32),
+            3 => Loc::Param((b & 0xffffffff) as u32),
+            _ => return Err(anyhow!("invalid loc")),
+        };
+        reals.insert(r);
+    }
+
+    Ok(reals)
+}
+
 impl Storage for Application {
     fn save(&self, stream: &mut impl Write) -> Result<()> {
         stream.write_all(&Self::MAGIC.to_le_bytes())?;
 
-        let version: usize = 2;
+        let version: usize = 3;
         stream.write_all(&version.to_le_bytes())?;
 
         self.prog.save(stream)?;
@@ -687,21 +672,12 @@ impl Storage for Application {
 
         stream.write_all(&mask.to_le_bytes())?;
 
-        /*
-        if let Some(compiled) = &self.compiled {
-            compiled.as_machine().unwrap().save(stream)?;
+        match &self.original {
+            Some(mir) => mir.save(stream)?,
+            None => self.bytecode.mir.save(stream)?,
         }
 
-        if let Some(compiled) = &self.compiled_fast {
-            compiled.as_machine().unwrap().save(stream)?;
-        }
-
-        if let Some(compiled) = &self.compiled_simd {
-            compiled.as_machine().unwrap().save(stream)?;
-        }
-        */
-
-        self.bytecode.mir.save(stream)?;
+        save_reals(stream, &self.reals)?;
 
         Ok(())
     }
@@ -717,7 +693,7 @@ impl Storage for Application {
 
         stream.read_exact(&mut bytes)?;
 
-        if usize::from_le_bytes(bytes) != 2 {
+        if usize::from_le_bytes(bytes) != 3 {
             return Err(anyhow!("invalid sjb version"));
         }
 
@@ -728,7 +704,9 @@ impl Storage for Application {
 
         let mir = Mir::load(stream, prog.config())?;
 
-        let mut app = Application::with_loaded_mir(prog, mir)?;
+        let reals = load_reals(stream)?;
+
+        let mut app = Application::with_mir(prog, reals, mir)?;
 
         if mask & 2 != 0 {
             app.prepare_fast();
