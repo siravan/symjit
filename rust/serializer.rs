@@ -318,6 +318,7 @@ impl MirWriter {
 
 impl Storage for Mir {
     fn save(&self, stream: &mut impl Write) -> Result<()> {
+        println!("saving {:?}", &self);
         stream.write_all(&Self::MAGIC.to_le_bytes())?;
 
         stream.write_all(&self.code.buf.len().to_le_bytes())?;
@@ -357,8 +358,14 @@ impl Storage for Mir {
             consts.push(f64::from_le_bytes(bytes));
         }
 
+        let mut iter = MirIterator::from_buf(&buf);
+        let mut ip = 0;
+        while iter.next().is_some() {
+            ip += 1;
+        }
+
         let mut mir = Mir {
-            code: MirWriter { buf, ip: 0 },
+            code: MirWriter { buf, ip },
             consts,
             labels: HashMap::new(),
             config: config.clone(),
@@ -366,6 +373,8 @@ impl Storage for Mir {
 
         // mir.add_consts(&consts);
         mir.populate_labels();
+
+        println!("loading {:?}", &mir);
 
         Ok(mir)
     }
@@ -400,6 +409,13 @@ impl MirIterator {
     pub fn new(writer: &mut MirWriter) -> MirIterator {
         let buf = std::mem::take(&mut writer.buf);
         MirIterator { buf, pos: 0 }
+    }
+
+    pub fn from_buf(buf: &[u8]) -> MirIterator {
+        MirIterator {
+            buf: buf.to_vec(),
+            pos: 0,
+        }
     }
 
     fn pop(&mut self) -> Result<u8> {

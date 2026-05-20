@@ -8,7 +8,7 @@ use petgraph::graph::{NodeIndex, UnGraph};
 
 use crate::config::{Config, SLICE_CAP, SPILL_AREA};
 use crate::mir::{Instruction, Mir};
-use crate::serializer::{MirIterator, MirWriter};
+use crate::serializer::MirWriter;
 use crate::symbol::Loc;
 use crate::utils::Reg;
 

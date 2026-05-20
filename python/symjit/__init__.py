@@ -8,6 +8,8 @@ from . import engine, pyengine, structure
 from .func import *
 from .ode import *
 
+TRY_SAVE_LOAD = False
+
 
 def can_use_rust(backend):
     if backend not in ["python", "rust"]:
@@ -132,11 +134,13 @@ def compile_func(
     else:
         f = Func(compiler, eqs)
 
-    return f
-
-    if isinstance(compiler, engine.RustyCompiler) and action != "load":
+    if (
+        TRY_SAVE_LOAD
+        and isinstance(compiler, engine.RustyCompiler)
+        and action != "load"
+    ):
         # print(f.dumps("bytecode"))
-        print("save/load", end="\t")
+        print("\033[31msave/load\033[0m")
         f.save("tmp.sjb")
         g = load_func("tmp.sjb", defuns=defuns)
         # print(g.dumps("bytecode"))
@@ -527,10 +531,12 @@ def compile_evaluator(
         else:
             f = Func(compiler, [])
 
-        return f
-
-        if isinstance(compiler, engine.RustyCompiler) and action != "load":
-            print("save/load")
+        if (
+            TRY_SAVE_LOAD
+            and isinstance(compiler, engine.RustyCompiler)
+            and action != "load"
+        ):
+            print("\033[31msave/load\033[0m")
             f.save("tmp.sjb")
             return load_func("tmp.sjb", defuns=defuns)
         else:

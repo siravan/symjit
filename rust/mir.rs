@@ -17,7 +17,7 @@ use crate::config::SPILL_AREA;
 use crate::generator::FuncletType;
 use crate::generator::Generator;
 use crate::machine::MachineCode;
-use crate::serializer::{MirIterator, MirWriter};
+use crate::serializer::MirWriter;
 use crate::symbol::Loc;
 use crate::utils::is_external_func;
 use crate::utils::{bool_to_f64, Compiled, CompiledFunc, Reg};
@@ -306,6 +306,9 @@ pub struct Mir {
 
 impl fmt::Debug for Mir {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "config: {:?}", &self.config)?;
+        writeln!(f, "ip: {}", &self.code.ip)?;
+
         for (i, ins) in self.code.iter().enumerate() {
             writeln!(f, "{:05}\t{:?}", i, ins)?;
         }

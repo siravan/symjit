@@ -16,14 +16,14 @@ const T2: u8 = 26;
 
 pub struct ArmComplexGenerator {
     a: Assembler,
-    config: Config,
+    // config: Config,
 }
 
 impl ArmComplexGenerator {
-    pub fn new(config: Config) -> ArmComplexGenerator {
+    pub fn new(_config: Config) -> ArmComplexGenerator {
         ArmComplexGenerator {
             a: Assembler::new(),
-            config,
+            // config,
         }
     }
 

@@ -3,10 +3,11 @@ import util
 args = util.process_argv()
 
 import time
-import numpy as np
+
 import matplotlib.pyplot as plt
-from sympy import symbols
+import numpy as np
 from symjit import compile_func
+from sympy import symbols
 
 x, y, a, b = symbols("x y a b")
 
@@ -18,7 +19,7 @@ t0 = time.perf_counter_ns()
 
 f = compile_func([a, b, x, y], [x**2 - y**2 + a, 2 * x * y + b], **args)
 
-# print(f.dumps())
+# print(f.dumps("bytecode"))
 
 t1 = time.perf_counter_ns()
 
