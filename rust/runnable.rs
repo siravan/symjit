@@ -2,7 +2,6 @@ use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 use std::io::{Read, Write};
 
-use crate::allocator::GreedyAllocator;
 use crate::amd::{AmdComplexGenerator, AmdSSEGenerator, AmdScalarGenerator, AmdVectorGenerator};
 use crate::applet::Applet;
 use crate::arm::{ArmComplexGenerator, ArmGenerator, ArmSimdGenerator};
@@ -98,8 +97,10 @@ impl Application {
             let complexified = Complexifier::new(&reals, config.clone()).complexify(&mir)?;
 
             if config.fast_complex() {
-                GreedyAllocator::new(config.clone(), config.available_registers() as usize - 4)
+                /*
+                crate::allocator::GreedyAllocator::new(config.clone(), config.available_registers() as usize - 4)
                     .optimize(&mut mir)?;
+                */
                 compiled = Self::compile_ty(&config, &mir, &mut prog)?;
             } else {
                 compiled = Self::compile_ty(&config, &complexified, &mut prog)?;
