@@ -82,10 +82,6 @@ impl AmdSSEGenerator {
         self.amd.movsd_xmm_label(ϕ(dst), label);
     }
 
-    fn vzeroupper(&mut self) {
-        unreachable!();
-    }
-
     fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
         let cap = SPILL_AREA as u32;
 

@@ -20,11 +20,13 @@ macro_rules! binop {
     };
 }
 
+/*
 macro_rules! uniop {
     ($self:ident, $avx:ident, $dst:expr, $s1: expr) => {
         $self.amd.$avx(ϕ($dst), ϕ($s1));
     };
 }
+*/
 
 macro_rules! roundop {
     ($self:ident, $dst:expr, $s1: expr, $mode: expr) => {

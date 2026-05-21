@@ -461,7 +461,7 @@ impl Default for Config {
         if std::fs::exists("symjit.toml").unwrap() {
             Self::from_toml("symjit.toml", 0).unwrap()
         } else {
-            let config = Config::new(
+            Config::new(
                 CompilerType::Native,
                 USE_SIMD
                     | SYMBOLICA
@@ -472,9 +472,8 @@ impl Default for Config {
                     | PARALLEL_MUL
                     | (2 << OPT_LEVEL_SHIFT),
             )
-            .unwrap();
-            config.to_toml("symjit.toml");
-            config
+            .unwrap()
+            // config.to_toml("symjit.toml");
         }
     }
 }
