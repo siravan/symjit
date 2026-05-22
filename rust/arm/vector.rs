@@ -10,6 +10,7 @@ use crate::utils::{align_stack, is_external_func, reg, Reg};
 use super::*;
 
 const REG_SIZE: u32 = 16;
+const T0: u8 = 24;
 
 pub struct ArmSimdGenerator {
     a: Assembler,
@@ -428,30 +429,33 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.times(Reg::Temp, s1, s2);
-        self.plus(dst, Reg::Temp, s3);
+        self.emit(arm! {fmov q(T0), q(ϕ(s3))});
+        self.emit(arm! {fmla q(T0), q(ϕ(s1)), q(ϕ(s2))});
+        self.emit(arm! {fmov q(ϕ(dst)), q(T0)});
     }
 
     // fused_mul_sub is s1 * s2 - s3, corresponding to fnmsub in aarch64
     // and vmsub... in amd64
     fn fused_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.times(Reg::Temp, s1, s2);
-        self.minus(dst, Reg::Temp, s3);
+        self.emit(arm! {fmov q(T0), q(ϕ(s3))});
+        self.emit(arm! {fmls q(T0), q(ϕ(s1)), q(ϕ(s2))});
+        self.emit(arm! {fneg q(ϕ(dst)), q(T0)});
     }
 
     // fused_neg_mul_add is s3 - s1 * s2, corresponding to fmsub in aarch64
     // and vnmadd... in amd64
     fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.times(Reg::Temp, s1, s2);
-        self.minus(dst, s3, Reg::Temp);
+        self.emit(arm! {fmov q(T0), q(ϕ(s3))});
+        self.emit(arm! {fmls q(T0), q(ϕ(s1)), q(ϕ(s2))});
+        self.emit(arm! {fmov q(ϕ(dst)), q(T0)});
     }
 
     // fused_neg_mul_sub is -s3 - s1 * s2, corresponding to fnmadd in aarch64
     // and vnmsub... in amd64
     fn fused_neg_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.times(Reg::Temp, s1, s2);
-        self.plus(dst, Reg::Temp, s3);
-        self.neg(dst, dst);
+        self.emit(arm! {fmov q(T0), q(ϕ(s3))});
+        self.emit(arm! {fmla q(T0), q(ϕ(s1)), q(ϕ(s2))});
+        self.emit(arm! {fneg q(ϕ(dst)), q(T0)});
     }
 
     fn add_consts(&mut self, consts: &[f64]) {
