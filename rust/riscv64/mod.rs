@@ -173,8 +173,8 @@ impl RiscV {
         if offset < 2048 {
             self.emit(rvv! {fld f(d), x(base), offset});
         } else {
-            self.emit(rvv! {lui x(Self::t0), hi(offset)});
-            self.emit(rvv! {addi x(Self::t0), x(base), lo(offset)});
+            self.li(Self::t0, offset as i32);
+            self.emit(rvv! {add x(Self::t0), x(Self::t0), x(base)});
             self.emit(rvv! {fld f(d), x(Self::t0), 0});
         }
     }
@@ -183,70 +183,42 @@ impl RiscV {
         if offset < 2048 {
             self.emit(rvv! {fsd f(d), x(base), offset});
         } else {
-            self.emit(rvv! {lui x(Self::t0), hi(offset)});
-            self.emit(rvv! {addi x(Self::t0), x(base), lo(offset)});
+            self.li(Self::t0, offset as i32);
+            self.emit(rvv! {add x(Self::t0), x(Self::t0), x(base)});
             self.emit(rvv! {fsd f(d), x(Self::t0), 0});
         }
     }
 
     fn load_complex(&mut self, xd: Reg, yd: Reg, base: u8, offset: u32) {
-        assert!(offset & 0x0f == 0);
-        let page = offset >> 11;
-        if page != 0 {
-            self.emit(rvv! {addi x(Self::t0), x(Self::zero), page});
-            self.emit(rvv! {slli x(Self::t0), x(Self::t0), 11});
+        if offset < 2040 {
+            self.emit(rvv! {fld f(ϕ(xd)), x(base), offset});
+            self.emit(rvv! {fld f(ϕ(yd)), x(base), offset + 8});
+        } else {
+            self.li(Self::t0, offset as i32);
             self.emit(rvv! {add x(Self::t0), x(Self::t0), x(base)});
-            self.emit(rvv! {fld f(ϕ(xd)), x(Self::t0), (offset & 0x7f0)});
-            self.emit(rvv! {fld f(ϕ(yd)), x(Self::t0), (offset & 0x7f0) + 8});
-        } else {
-            self.emit(rvv! {fld f(ϕ(xd)), x(base), offset});
-            self.emit(rvv! {fld f(ϕ(yd)), x(base), offset + 8});
-        }
-        /*
-        if offset < 2048 {
-            self.emit(rvv! {fld f(ϕ(xd)), x(base), offset});
-            self.emit(rvv! {fld f(ϕ(yd)), x(base), offset + 8});
-        } else {
-            self.emit(rvv! {lui x(Self::t0), hi(offset)});
-            self.emit(rvv! {addi x(Self::t0), x(base), lo(offset)});
             self.emit(rvv! {fld f(ϕ(xd)), x(Self::t0), 0});
             self.emit(rvv! {fld f(ϕ(yd)), x(Self::t0), 8});
         }
-        */
     }
 
     fn save_complex(&mut self, xs: Reg, ys: Reg, base: u8, offset: u32) {
-        assert!(offset & 0x0f == 0);
-        let page = offset >> 11;
-        if page != 0 {
-            self.emit(rvv! {addi x(Self::t0), x(Self::zero), page});
-            self.emit(rvv! {slli x(Self::t0), x(Self::t0), 11});
+        if offset < 2040 {
+            self.emit(rvv! {fsd f(ϕ(xs)), x(base), offset});
+            self.emit(rvv! {fsd f(ϕ(ys)), x(base), offset + 8});
+        } else {
+            self.li(Self::t0, offset as i32);
             self.emit(rvv! {add x(Self::t0), x(Self::t0), x(base)});
-            self.emit(rvv! {fld f(ϕ(xd)), x(Self::t0), (offset & 0x7f0)});
-            self.emit(rvv! {fld f(ϕ(yd)), x(Self::t0), (offset & 0x7f0) + 8});
-        } else {
-            self.emit(rvv! {fsd f(ϕ(xs)), x(base), offset});
-            self.emit(rvv! {fsd f(ϕ(ys)), x(base), offset + 8});
-        }
-        /*
-        if offset < 2048 {
-            self.emit(rvv! {fsd f(ϕ(xs)), x(base), offset});
-            self.emit(rvv! {fsd f(ϕ(ys)), x(base), offset + 8});
-        } else {
-            self.emit(rvv! {lui x(Self::t0), hi(offset)});
-            self.emit(rvv! {addi x(Self::t0), x(base), lo(offset)});
             self.emit(rvv! {fsd f(ϕ(xs)), x(Self::t0), 0});
             self.emit(rvv! {fsd f(ϕ(ys)), x(Self::t0), 8});
         }
-        */
     }
 
     fn load_int(&mut self, d: u8, base: u8, offset: u32) {
         if offset < 2048 {
             self.emit(rvv! {ld x(d), x(base), offset});
         } else {
-            self.emit(rvv! {lui x(Self::t0), hi(offset)});
-            self.emit(rvv! {addi x(Self::t0), x(base), lo(offset)});
+            self.li(Self::t0, offset as i32);
+            self.emit(rvv! {add x(Self::t0), x(Self::t0), x(base)});
             self.emit(rvv! {ld x(d), x(Self::t0), 0});
         }
     }
