@@ -10,8 +10,8 @@ from symjit import compile_func
 # The point is to stress the compiler by generating large expression
 # trees with easily verifiable results.
 
-N = 7
-K = 4
+N = 14
+K = 6
 
 
 def binom(x, y, n, k):

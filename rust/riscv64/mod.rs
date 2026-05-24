@@ -189,6 +189,44 @@ impl RiscV {
         }
     }
 
+    fn load_complex(&mut self, xd: Reg, yd: Reg, base: u8, offset: u32) {
+        self.emit(rvv! {addi x(Self::t0), x(Self::zero), offset >> 3});
+        self.emit(rvv! {slli x(Self::t0), x(Self::t0), 3});
+        self.emit(rvv! {add x(Self::t0), x(Self::t0), x(base)});
+        self.emit(rvv! {fld f(ϕ(xd)), x(Self::t0), 0});
+        self.emit(rvv! {fld f(ϕ(yd)), x(Self::t0), 8});
+        /*
+        if offset < 2048 {
+            self.emit(rvv! {fld f(ϕ(xd)), x(base), offset});
+            self.emit(rvv! {fld f(ϕ(yd)), x(base), offset + 8});
+        } else {
+            self.emit(rvv! {lui x(Self::t0), hi(offset)});
+            self.emit(rvv! {addi x(Self::t0), x(base), lo(offset)});
+            self.emit(rvv! {fld f(ϕ(xd)), x(Self::t0), 0});
+            self.emit(rvv! {fld f(ϕ(yd)), x(Self::t0), 8});
+        }
+        */
+    }
+
+    fn save_complex(&mut self, xs: Reg, ys: Reg, base: u8, offset: u32) {
+        self.emit(rvv! {addi x(Self::t0), x(Self::zero), offset >> 3});
+        self.emit(rvv! {slli x(Self::t0), x(Self::t0), 3});
+        self.emit(rvv! {add x(Self::t0), x(Self::t0), x(base)});
+        self.emit(rvv! {fsd f(ϕ(xd)), x(Self::t0), 0});
+        self.emit(rvv! {fsd f(ϕ(yd)), x(Self::t0), 8});
+        /*
+        if offset < 2048 {
+            self.emit(rvv! {fsd f(ϕ(xs)), x(base), offset});
+            self.emit(rvv! {fsd f(ϕ(ys)), x(base), offset + 8});
+        } else {
+            self.emit(rvv! {lui x(Self::t0), hi(offset)});
+            self.emit(rvv! {addi x(Self::t0), x(base), lo(offset)});
+            self.emit(rvv! {fsd f(ϕ(xs)), x(Self::t0), 0});
+            self.emit(rvv! {fsd f(ϕ(ys)), x(Self::t0), 8});
+        }
+        */
+    }
+
     fn load_int(&mut self, d: u8, base: u8, offset: u32) {
         if offset < 2048 {
             self.emit(rvv! {ld x(d), x(base), offset});
@@ -325,68 +363,23 @@ impl Generator for RiscV {
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        let offset = 8 * idx;
-        if offset < 2048 {
-            self.emit(rvv! {fld f(ϕ(xd)), x(MEM), offset});
-            self.emit(rvv! {fld f(ϕ(yd)), x(MEM), offset + 8});
-        } else {
-            self.emit(rvv! {lui x(Self::t0), hi(offset)});
-            self.emit(rvv! {addi x(Self::t0), x(MEM), lo(offset)});
-            self.emit(rvv! {fld f(ϕ(xd)), x(Self::t0), 0});
-            self.emit(rvv! {fld f(ϕ(yd)), x(Self::t0), 8});
-        }
+        self.load_complex(xd, yd, MEM, 8 * idx);
     }
 
     fn save_mem_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
-        let offset = 8 * idx;
-        if offset < 2048 {
-            self.emit(rvv! {fsd f(ϕ(xs)), x(MEM), offset});
-            self.emit(rvv! {fsd f(ϕ(ys)), x(MEM), offset + 8});
-        } else {
-            self.emit(rvv! {lui x(Self::t0), hi(offset)});
-            self.emit(rvv! {addi x(Self::t0), x(MEM), lo(offset)});
-            self.emit(rvv! {fsd f(ϕ(xs)), x(Self::t0), 0});
-            self.emit(rvv! {fsd f(ϕ(ys)), x(Self::t0), 8});
-        }
+        self.save_complex(xs, ys, MEM, 8 * idx);
     }
 
     fn load_param_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        let offset = 8 * idx;
-        if offset < 2048 {
-            self.emit(rvv! {fld f(ϕ(xd)), x(PARAMS), offset});
-            self.emit(rvv! {fld f(ϕ(yd)), x(PARAMS), offset + 8});
-        } else {
-            self.emit(rvv! {lui x(Self::t0), hi(offset)});
-            self.emit(rvv! {addi x(Self::t0), x(PARAMS), lo(offset)});
-            self.emit(rvv! {fld f(ϕ(xd)), x(Self::t0), 0});
-            self.emit(rvv! {fld f(ϕ(yd)), x(Self::t0), 8});
-        }
+        self.load_complex(xd, yd, PARAMS, 8 * idx);
     }
 
     fn load_stack_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        let offset = 8 * idx;
-        if offset < 2048 {
-            self.emit(rvv! {fld f(ϕ(xd)), x(STACK), offset});
-            self.emit(rvv! {fld f(ϕ(yd)), x(STACK), offset + 8});
-        } else {
-            self.emit(rvv! {lui x(Self::t0), hi(offset)});
-            self.emit(rvv! {addi x(Self::t0), x(STACK), lo(offset)});
-            self.emit(rvv! {fld f(ϕ(xd)), x(Self::t0), 0});
-            self.emit(rvv! {fld f(ϕ(yd)), x(Self::t0), 8});
-        }
+        self.load_complex(xd, yd, STACK, 8 * idx);
     }
 
     fn save_stack_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
-        let offset = 8 * idx;
-        if offset < 2048 {
-            self.emit(rvv! {fsd f(ϕ(xs)), x(STACK), offset});
-            self.emit(rvv! {fsd f(ϕ(ys)), x(STACK), offset + 8});
-        } else {
-            self.emit(rvv! {lui x(Self::t0), hi(offset)});
-            self.emit(rvv! {addi x(Self::t0), x(STACK), lo(offset)});
-            self.emit(rvv! {fsd f(ϕ(xs)), x(Self::t0), 0});
-            self.emit(rvv! {fsd f(ϕ(ys)), x(Self::t0), 8});
-        }
+        self.load_complex(xs, ys, STACK, 8 * idx);
     }
 
     fn save_stack_result(&mut self, idx: u32) {

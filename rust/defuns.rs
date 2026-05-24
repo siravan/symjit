@@ -28,6 +28,9 @@ type NativeSimd = f64x2;
 #[cfg(target_arch = "x86_64")]
 type NativeSimd = f64x4;
 
+#[cfg(target_arch = "riscv64")]
+type NativeSimd = f64;
+
 pub unsafe extern "C" fn trampoline_homogenous<T>(
     env: *const c_void,
     slice_ptr: *const T,
