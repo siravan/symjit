@@ -264,8 +264,7 @@ impl Config {
     }
 
     pub fn fastmath(&self) -> bool {
-        self.test(FASTMATH)
-            && (self.has_avx() || (self.is_arm64() && !self.use_simd()) || self.is_riscv64())
+        self.test(FASTMATH) && (self.has_avx() || self.is_arm64() || self.is_riscv64())
     }
 
     pub fn compact(&self) -> bool {

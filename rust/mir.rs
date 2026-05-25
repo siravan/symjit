@@ -2401,6 +2401,82 @@ impl Mir {
             }
         }
 
+        if let Instruction::Bi {
+            op: BinOp::Times, ..
+        } = *q0
+        {
+            if let Instruction::LoadConst { idx, .. } = *q1 {
+                if let Instruction::Bi {
+                    op: BinOp::Minus, ..
+                } = *q2
+                {
+                    if q2.s1() == q0.dst() && q2.s2() == q1.dst() {
+                        code.push(&Instruction::LoadConst {
+                            dst: Reg::Temp,
+                            idx,
+                        });
+                        return Some(Instruction::Fused {
+                            op: FusedOp::MulSub,
+                            dst: q2.dst(),
+                            a: q0.s1(),
+                            b: q0.s2(),
+                            c: Reg::Temp,
+                        });
+                    } else if q2.s1() == q1.dst() && q2.s2() == q0.dst() {
+                        code.push(&Instruction::LoadConst {
+                            dst: Reg::Temp,
+                            idx,
+                        });
+                        return Some(Instruction::Fused {
+                            op: FusedOp::NegMulAdd,
+                            dst: q2.dst(),
+                            a: q0.s1(),
+                            b: q0.s2(),
+                            c: Reg::Temp,
+                        });
+                    }
+                }
+            }
+        }
+
+        if let Instruction::Bi {
+            op: BinOp::Times, ..
+        } = *q0
+        {
+            if let Instruction::Load { .. } = *q1 {
+                if let Instruction::Bi {
+                    op: BinOp::Minus, ..
+                } = *q2
+                {
+                    if q2.s1() == q0.dst() && q2.s2() == q1.dst() {
+                        code.push(&Instruction::Load {
+                            dst: Reg::Temp,
+                            loc: q1.loc(),
+                        });
+                        return Some(Instruction::Fused {
+                            op: FusedOp::MulSub,
+                            dst: q2.dst(),
+                            a: q0.s1(),
+                            b: q0.s2(),
+                            c: Reg::Temp,
+                        });
+                    } else if q2.s1() == q1.dst() && q2.s2() == q0.dst() {
+                        code.push(&Instruction::Load {
+                            dst: Reg::Temp,
+                            loc: q1.loc(),
+                        });
+                        return Some(Instruction::Fused {
+                            op: FusedOp::NegMulAdd,
+                            dst: q2.dst(),
+                            a: q0.s1(),
+                            b: q0.s2(),
+                            c: Reg::Temp,
+                        });
+                    }
+                }
+            }
+        }
+
         None
     }
 
