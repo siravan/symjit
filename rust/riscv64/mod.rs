@@ -94,6 +94,7 @@ impl RiscV {
 }
 
 const FMAP: [u8; 30] = [
+    // used:
     RiscV::fa2,
     RiscV::fa3,
     RiscV::fa4,
@@ -108,10 +109,11 @@ const FMAP: [u8; 30] = [
     RiscV::ft5,
     RiscV::ft6,
     RiscV::ft7,
+    // available:
     RiscV::ft8,
-    RiscV::ft9,
-    RiscV::ft10,
-    RiscV::ft11,
+    RiscV::ft9,  // t
+    RiscV::ft10, // xt
+    RiscV::ft11, // yt
     RiscV::fs0,
     RiscV::fs1,
     RiscV::fs2,
@@ -441,28 +443,34 @@ impl Generator for RiscV {
         self.emit(rvv! {fdiv.d f(ϕ(dst)), f(ϕ(s1)), f(ϕ(s2))});
     }
 
-    fn times_complex(
-        &mut self,
-        _xd: Reg,
-        _yd: Reg,
-        _x1: Reg,
-        _y1: Reg,
-        _x2: Reg,
-        _y2: Reg,
-    ) -> bool {
-        false
+    fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
+        let xt = Self::ft10;
+        let yt = Self::ft11;
+
+        self.emit(rvv! {fmul.d f(xt), f(ϕ(y1)), f(ϕ(y2))});
+        self.emit(rvv! {fmsub.d f(xt), f(ϕ(x1)), f(ϕ(x2)), f(xt)});
+        self.emit(rvv! {fmul.d f(yt), f(ϕ(x1)), f(ϕ(y2))});
+        self.emit(rvv! {fmadd.d f(ϕ(yd)), f(ϕ(x2)), f(ϕ(y1)), f(yt)});
+        self.emit(rvv! {fmv.d f(ϕ(xd)), f(xt)});
+
+        true
     }
 
-    fn divide_complex(
-        &mut self,
-        _xd: Reg,
-        _yd: Reg,
-        _x1: Reg,
-        _y1: Reg,
-        _x2: Reg,
-        _y2: Reg,
-    ) -> bool {
-        false
+    fn divide_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
+        let t = Self::ft9;
+        let xt = Self::ft10;
+        let yt = Self::ft11;
+
+        self.emit(rvv! {fmul.d f(xt), f(ϕ(x1)), f(ϕ(x2))});
+        self.emit(rvv! {fmadd.d f(xt), f(ϕ(y1)), f(ϕ(y2)), f(xt)});
+        self.emit(rvv! {fmul.d f(yt), f(ϕ(x1)), f(ϕ(y2))});
+        self.emit(rvv! {fmsub.d f(yt), f(ϕ(x2)), f(ϕ(y1)), f(yt)});
+        self.emit(rvv! {fmul.d f(t), f(ϕ(x2)), f(ϕ(x2))});
+        self.emit(rvv! {fmadd.d f(t), f(ϕ(y2)), f(ϕ(y2)), f(t)});
+        self.emit(rvv! {fdiv.d f(ϕ(xd)), f(xt), f(t)});
+        self.emit(rvv! {fdiv.d f(ϕ(yd)), f(yt), f(t)});
+
+        true
     }
 
     fn support_times2(&self) -> bool {

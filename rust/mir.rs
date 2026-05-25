@@ -1954,9 +1954,20 @@ impl Instruction {
         }
     }
 
+    fn label(&self) -> Option<String> {
+        match self {
+            Instruction::Label { label } => Some(label.to_string()),
+            Instruction::Branch { label } => Some(label.to_string()),
+            Instruction::BranchIf { label, .. } => Some(label.to_string()),
+            Instruction::Call { label, .. } => Some(label.to_string()),
+            _ => None,
+        }
+    }
+
     fn check_label(&self, s: &str) -> bool {
         match self {
             Instruction::Call { label, .. } => s == label,
+            Instruction::Label { label } => s == label,
             _ => false,
         }
     }
@@ -2008,6 +2019,23 @@ impl Mir {
                         s1: q0.s1(),
                         s2: q0.s2(),
                     });
+                }
+            }
+        };
+
+        None
+    }
+
+    fn fuse_goto(
+        &self,
+        _code: &mut MirWriter,
+        q0: &Instruction,
+        q1: &Instruction,
+    ) -> Option<Instruction> {
+        if let Instruction::Branch { .. } = *q0 {
+            if let Instruction::Label { .. } = *q1 {
+                if q0.label().unwrap() == q1.label().unwrap() {
+                    return Some(q1.clone());
                 }
             }
         };
@@ -2546,6 +2574,8 @@ impl Mir {
         } else if let Some(v) = self.fuse_load(code, q0, q1) {
             (v, 2)
         } else if let Some(v) = self.fuse_save(code, q0, q1) {
+            (v, 2)
+        } else if let Some(v) = self.fuse_goto(code, q0, q1) {
             (v, 2)
         } else {
             (Instruction::Nop, 0)
