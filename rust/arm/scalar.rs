@@ -297,8 +297,8 @@ impl Generator for ArmGenerator {
         let xt = Reg::Gen(2);
         let yt = Reg::Gen(3);
 
-        self.times(xt, x1, x2);
-        self.fused_mul_sub(xt, y1, y2, xt);
+        self.times(xt, y1, y2);
+        self.fused_mul_sub(xt, x1, x2, xt);
         self.times(yt, x1, y2);
         self.fused_mul_add(yd, x2, y1, yt);
         self.fmov(xd, xt);
