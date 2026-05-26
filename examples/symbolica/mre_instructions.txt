@@ -1,0 +1,14 @@
+([
+('add', ('temp', 9), [('param', 4), ('param', 6)], 2),
+('if_else', ('param', 48), 348),
+('add', ('temp', 10), [('param', 5), ('temp', 9)], 2),
+('goto', 349),
+('label', 348),
+('label', 349),
+('join', ('temp', 10), ('param', 48), ('temp', 10), ('const', 2)),
+('pow', ('temp', 10), ('temp', 10), -1, True),
+('mul', ('temp', 11), [('param', 3), ('const', 3)], 2),
+('add', ('temp', 12), [('param', 9), ('temp', 11)], 2),
+('mul', ('out', 0), [('const', 1), ('temp', 10)], 0)],
+69,
+[1𝑖/256, 1/2, 1, -1, -1𝑖, 1𝑖])
