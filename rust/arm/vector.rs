@@ -156,14 +156,23 @@ impl Generator for ArmSimdGenerator {
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
         self.emit(arm! {umov x(0), v(ϕ(cond)).d[0]});
         self.emit(arm! {umov x(1), v(ϕ(cond)).d[1]});
-        // self.emit(arm! {fcmp d(ϕ(cond)), #0.0});
+
+        self.emit(arm! {ands x(0), x(0), x(1)});
+
+        if !is_else {
+            self.emit(arm! {subs x(0), x(0), #3});
+        }
+
+        self.jump(label, 0, |offset, _| arm! {b.eq label(offset)});
+
+        /*
         self.emit(arm! {tst x(0), x(1)});
 
         if is_else {
             self.jump(label, 0, |offset, _| arm! {b.eq label(offset)});
         } else {
             self.jump(label, 0, |offset, _| arm! {b.ne label(offset)});
-        }
+        }*/
 
         if !self.config.simd_branch() {
             self.emit(arm! {orr x(0), x(0), x(1)});

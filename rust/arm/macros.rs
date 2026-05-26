@@ -206,6 +206,9 @@ macro_rules! arm {
     (sub x($rd:expr), x($rn:expr), #$imm:expr) => {
         0xd1000000 | rd!($rd) | rn!($rn) | imm!($imm)
     };
+    (subs x($rd:expr), x($rn:expr), #$imm:expr) => {
+        0xf1000000 | rd!($rd) | rn!($rn) | imm!($imm)
+    };
 
     // logical shift right
     (lsr x($rd:expr), x($rn:expr), #$imm:expr) => {{
@@ -361,6 +364,10 @@ macro_rules! arm {
 
     (and x($rd:expr), x($rn:expr), x($rm:expr)) => {
         0x8a000000 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
+    (ands x($rd:expr), x($rn:expr), x($rm:expr)) => {
+        0xea000000 | rd!($rd) | rn!($rn) | rm!($rm)
     };
 
     (orr x($rd:expr), x($rn:expr), x($rm:expr)) => {
