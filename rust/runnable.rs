@@ -69,6 +69,14 @@ pub struct Application {
 
 impl Application {
     pub fn new(mut prog: Program, reals: HashSet<Loc>) -> Result<Application> {
+        /*
+         * Stop-gap measure. A better solution would be to add `times_real`,
+         * `divide_real`, and `load_param_real` to generators.
+         */
+        if !reals.is_empty() {
+            prog.builder.config.set_fast_complex(false);
+        }
+
         let mut mir = Mir::new(prog.config().clone());
         prog.builder.compile_mir(&mut mir)?;
         prog.builder.optimize_mir(&mut mir)?;

@@ -4,7 +4,7 @@ import numpy as np
 from symbolica import E, Expression, S
 from symjit import compile_evaluator
 
-file = os.path.join(os.path.dirname(__file__), "1loop_instructions.txt")
+file = os.path.join(os.path.dirname(__file__), "mre_instructions_noreal.txt")
 
 with open(file) as fd:
     one_loop_instructions = fd.read()

@@ -20,4 +20,4 @@ opt_level = 2
 bytecode = false
 scalar = false
 simd = false
-stats = true
+stats = false
