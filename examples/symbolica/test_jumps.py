@@ -15,7 +15,7 @@ f_without_simd = compile_evaluator(
 
 count_params = f_without_simd.complex_compiler.count_params // 2
 
-N = 10000
+N = 10007
 
 X = np.random.rand(N, count_params) + np.random.rand(N, count_params) * 1j
 
