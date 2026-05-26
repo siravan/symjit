@@ -157,13 +157,13 @@ impl Generator for ArmSimdGenerator {
         self.emit(arm! {umov x(0), v(ϕ(cond)).d[0]});
         self.emit(arm! {umov x(1), v(ϕ(cond)).d[1]});
 
-        self.emit(arm! {ands x(0), x(0), x(1)});
-
         if !is_else {
-            self.emit(arm! {subs x(0), x(0), #3});
+            self.emit(arm! {tst x(0), x(1)});
+            self.jump(label, 0, |offset, _| arm! {b.ne label(offset)});
+        } else {
+            self.emit(arm! {adds x(0), x(0), x(1)});
+            self.jump(label, 0, |offset, _| arm! {b.eq label(offset)});
         }
-
-        self.jump(label, 0, |offset, _| arm! {b.eq label(offset)});
 
         /*
         self.emit(arm! {tst x(0), x(1)});
