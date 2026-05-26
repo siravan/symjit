@@ -7,14 +7,14 @@ x, a = S("x"), S("a")
 
 
 def c(u):
-    return sum((-1) ** (i // 2) * u**i / math.factorial(i) for i in range(0, 20, 2))
+    return sum((-1) ** (i // 2) * u**i / math.factorial(i) for i in range(0, 16, 2))
 
 
 def s(u):
     return (1 - c(u) ** 2).sqrt()
 
 
-def expr(x, a, n=6):
+def expr(x, a, n=5):
     u = x
     for _ in range(n):
         u = u - (s(u) - a) / c(u)

@@ -165,15 +165,6 @@ impl Generator for ArmSimdGenerator {
             self.jump(label, 0, |offset, _| arm! {b.eq label(offset)});
         }
 
-        /*
-        self.emit(arm! {tst x(0), x(1)});
-
-        if is_else {
-            self.jump(label, 0, |offset, _| arm! {b.eq label(offset)});
-        } else {
-            self.jump(label, 0, |offset, _| arm! {b.ne label(offset)});
-        }*/
-
         if !self.config.simd_branch() {
             self.emit(arm! {orr x(0), x(0), x(1)});
             self.emit(arm! {tst x(0), x(0)});
@@ -195,9 +186,9 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn fxchg(&mut self, s1: Reg, s2: Reg) {
-        self.emit(arm! {eor v(ϕ(s1)).8b, v(ϕ(s1)).8b, v(ϕ(s2)).8b});
-        self.emit(arm! {eor v(ϕ(s2)).8b, v(ϕ(s1)).8b, v(ϕ(s2)).8b});
-        self.emit(arm! {eor v(ϕ(s1)).8b, v(ϕ(s1)).8b, v(ϕ(s2)).8b});
+        self.emit(arm! {eor v(ϕ(s1)).16b, v(ϕ(s1)).16b, v(ϕ(s2)).16b});
+        self.emit(arm! {eor v(ϕ(s2)).16b, v(ϕ(s1)).16b, v(ϕ(s2)).16b});
+        self.emit(arm! {eor v(ϕ(s1)).16b, v(ϕ(s1)).16b, v(ϕ(s2)).16b});
     }
 
     fn load_const(&mut self, dst: Reg, idx: u32) {

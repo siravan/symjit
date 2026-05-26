@@ -10,7 +10,10 @@ with open(file) as fd:
     one_loop_instructions = fd.read()
 
 f_without_simd = compile_evaluator(
-    one_loop_instructions, dtype="complex128", use_simd=False, use_threads=False
+    one_loop_instructions,
+    dtype="complex128",
+    use_simd=False,
+    use_threads=False,
 )
 
 count_params = f_without_simd.complex_compiler.count_params // 2
