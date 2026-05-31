@@ -54,6 +54,14 @@ macro_rules! imm16 {
     }};
 }
 
+macro_rules! imm14 {
+    ($x:expr) => {{
+        let x = $x as i32;
+        assert!(x < 32768 && x >= -32768);
+        ((x as u32) & 0x000fff30) << 3
+    }};
+}
+
 macro_rules! ofs_pc {
     ($x:expr) => {{
         let x = $x;
@@ -210,6 +218,7 @@ macro_rules! arm {
         0xf1000000 | rd!($rd) | rn!($rn) | imm!($imm)
     };
 
+
     // logical shift right
     (lsr x($rd:expr), x($rn:expr), #$imm:expr) => {{
         let shift: u32 = $imm;
@@ -361,6 +370,16 @@ macro_rules! arm {
     (tst x($rn:expr), x($rm:expr)) => {
         0xea00001f | rn!($rn) | rm!($rm)
     };
+
+    (tbnz x($rd:expr), #($bit:expr), label($imm:expr)) => {{
+        let bit = $bit as u32;
+        0x37000000 | imm14!($imm) | rd!($rd) | ((bit & 0x1f) << 19) | ((bit & 0x20) << 26)
+    }};
+
+    (tbz x($rd:expr), #($bit:expr), label($imm:expr)) => {{
+        let bit = $bit as u32;
+        0x36000000 | imm14!($imm) | rd!($rd) | ((bit & 0x1f) << 19) | ((bit & 0x20) << 26)
+    }};
 
     (and x($rd:expr), x($rn:expr), x($rm:expr)) => {
         0x8a000000 | rd!($rd) | rn!($rn) | rm!($rm)

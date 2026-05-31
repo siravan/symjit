@@ -154,22 +154,36 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
-        self.emit(arm! {umov x(0), v(ϕ(cond)).d[0]});
-        self.emit(arm! {umov x(1), v(ϕ(cond)).d[1]});
-
-        if !is_else {
-            self.emit(arm! {tst x(0), x(1)});
-            self.jump(label, 0, |offset, _| arm! {b.ne label(offset)});
-        } else {
-            self.emit(arm! {adds x(0), x(0), x(1)});
-            self.jump(label, 0, |offset, _| arm! {b.eq label(offset)});
-        }
+        self.emit(arm! {fcmp q(ϕ(cond)), #0.0});
+        self.emit(arm! {umov x(1), v(ϕ(cond)).d[0]});
+        self.emit(arm! {umov x(2), v(ϕ(cond)).d[1]});
+        self.emit(arm! {eor x(0), x(1), x(2)});
 
         if !self.config.simd_branch() {
-            self.emit(arm! {orr x(0), x(0), x(1)});
-            self.emit(arm! {tst x(0), x(0)});
-            self.jump("@epilogue", 0, |offset, _| arm! {b.ne label(offset)});
+            // throw an exception if the lanes are not coincidental (x0 == 1)
+            let l1 = self.a.create_label();
+            self.jump(&l1, 0, |offset, _| arm! {tbz x(0), #0, label(offset)});
+            self.branch("@epilogue");
+            self.set_label(&l1);
         }
+
+        let l = self.a.create_label();
+
+        if is_else {
+            // skip the else-clause if both lanes are coincidental (x0 == 0)
+            // and x1 == 0 (both lanes are non-zero).
+            self.emit(arm! {orr x(0), x(0), x(1)});
+            self.jump(&l, 0, |offset, _| arm! {tbnz x(0), #0, label(offset)});
+        } else {
+            // skip the then-clause if both lanes are coincidental (x0 == 0)
+            // and x1 == 1 (both lanes are zero).
+            self.emit(arm! {not x(1), x(1)});
+            self.emit(arm! {orr x(0), x(0), x(1)});
+            self.jump(&l, 0, |offset, _| arm! {tbnz x(0), #0, label(offset)});
+        }
+
+        self.branch(label);
+        self.set_label(&l);
     }
 
     fn fuse_load_math(&mut self) {}
