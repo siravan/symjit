@@ -371,12 +371,12 @@ macro_rules! arm {
         0xea00001f | rn!($rn) | rm!($rm)
     };
 
-    (tbnz x($rd:expr), #($bit:expr), label($imm:expr)) => {{
+    (tbnz x($rd:expr), #$bit:expr, label($imm:expr)) => {{
         let bit = $bit as u32;
         0x37000000 | imm14!($imm) | rd!($rd) | ((bit & 0x1f) << 19) | ((bit & 0x20) << 26)
     }};
 
-    (tbz x($rd:expr), #($bit:expr), label($imm:expr)) => {{
+    (tbz x($rd:expr), #$bit:expr, label($imm:expr)) => {{
         let bit = $bit as u32;
         0x36000000 | imm14!($imm) | rd!($rd) | ((bit & 0x1f) << 19) | ((bit & 0x20) << 26)
     }};
@@ -391,6 +391,10 @@ macro_rules! arm {
 
     (orr x($rd:expr), x($rn:expr), x($rm:expr)) => {
         0xaa000000 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
+    (orn x($rd:expr), x($rn:expr), x($rm:expr)) => {
+        0xaa200000 | rd!($rd) | rn!($rn) | rm!($rm)
     };
 
     (eor x($rd:expr), x($rn:expr), x($rm:expr)) => {

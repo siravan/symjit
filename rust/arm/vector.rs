@@ -154,7 +154,6 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
-        self.emit(arm! {fcmp q(ϕ(cond)), #0.0});
         self.emit(arm! {umov x(1), v(ϕ(cond)).d[0]});
         self.emit(arm! {umov x(2), v(ϕ(cond)).d[1]});
         self.emit(arm! {eor x(0), x(1), x(2)});
@@ -177,8 +176,8 @@ impl Generator for ArmSimdGenerator {
         } else {
             // skip the then-clause if both lanes are coincidental (x0 == 0)
             // and x1 == 1 (both lanes are zero).
-            self.emit(arm! {not x(1), x(1)});
-            self.emit(arm! {orr x(0), x(0), x(1)});
+            // self.emit(arm! {not x(1), x(1)});
+            self.emit(arm! {orn x(0), x(0), x(1)});
             self.jump(&l, 0, |offset, _| arm! {tbnz x(0), #0, label(offset)});
         }
 
