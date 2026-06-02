@@ -169,14 +169,15 @@ impl Generator for ArmSimdGenerator {
         let l = self.a.create_label();
 
         if is_else {
-            // skip the else-clause if both lanes are coincidental (x0 == 0)
-            // and x1 == 0 (both lanes are non-zero).
+            // run the else-clasue if
+            // 1. the lanes are not coincidental (x0 == 1), or,
+            // 2. the lanes are coincidental but non-zero (x0 == 0, x1 == 1, x2 == 1).
             self.emit(arm! {orr x(0), x(0), x(1)});
             self.jump(&l, 0, |offset, _| arm! {tbnz x(0), #0, label(offset)});
         } else {
-            // skip the then-clause if both lanes are coincidental (x0 == 0)
-            // and x1 == 1 (both lanes are zero).
-            // self.emit(arm! {not x(1), x(1)});
+            // run the then-clasue if
+            // 1. the lanes are not coincidental (x0 == 1), or,
+            // 2. the lanes are coincidental but zero (x0 == 0, x1 == 0, x2 == 0).
             self.emit(arm! {orn x(0), x(0), x(1)});
             self.jump(&l, 0, |offset, _| arm! {tbnz x(0), #0, label(offset)});
         }
