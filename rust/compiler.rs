@@ -522,7 +522,11 @@ pub struct IndirectTranslator {
 impl Composer for IndirectTranslator {
     fn append_constant(&mut self, z: Complex<f64>) -> Result<usize> {
         self.consts.push(z);
-        Ok(self.consts.len() - 1)
+        if self.config.is_complex() {
+            Ok((self.consts.len() - 1) / 2)
+        } else {
+            Ok(self.consts.len() - 1)
+        }
     }
 
     fn append_add(&mut self, lhs: &Slot, args: &[Slot], num_reals: usize) -> Result<()> {

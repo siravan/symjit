@@ -137,9 +137,9 @@ impl Generator for ArmGenerator {
         let l = self.a.create_label();
 
         if is_else {
-            self.jump(&l, 0, |offset, _| arm! {tbz x(0), #0, label(offset)});
-        } else {
             self.jump(&l, 0, |offset, _| arm! {tbnz x(0), #0, label(offset)});
+        } else {
+            self.jump(&l, 0, |offset, _| arm! {tbz x(0), #0, label(offset)});
         }
 
         self.branch(label);

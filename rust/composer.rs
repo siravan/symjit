@@ -309,7 +309,12 @@ impl Composer for DirectTranslator {
     fn append_constant(&mut self, z: Complex<f64>) -> Result<usize> {
         self.consts.push(z.re);
         self.consts.push(z.im);
-        Ok(self.consts.len() - 1)
+
+        if self.mir.config.is_complex() {
+            Ok((self.consts.len() - 1) / 2)
+        } else {
+            Ok(self.consts.len() - 1)
+        }
     }
 
     fn append_add(&mut self, lhs: &Slot, args: &[Slot], num_reals: usize) -> Result<()> {
