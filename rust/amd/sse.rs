@@ -151,12 +151,13 @@ impl Generator for AmdSSEGenerator {
     }
 
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
-        self.amd.vucomisd(ϕ(cond), ϕ(cond));
+        self.amd.xorpd(ϕ(Reg::Ret), ϕ(Reg::Ret));
+        self.amd.ucomisd(ϕ(cond), ϕ(Reg::Ret));
 
         if is_else {
-            self.amd.jpo(label);
+            self.amd.jnz(label);
         } else {
-            self.amd.jpe(label);
+            self.amd.jz(label);
         }
     }
 

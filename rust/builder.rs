@@ -169,12 +169,18 @@ impl Builder {
 
         self.add_assign(accum_var.clone(), p)?;
         let one = self.create_const(1.0)?;
-        let q = self.create_binary("plus", var.clone(), one)?;
+        let q = self.create_binary("plus", var.clone(), one.clone())?;
         self.add_assign(var.clone(), q)?;
-        let cond = self.create_binary("leq", var, end)?;
+        let cond = self.create_binary("gt", var, end)?;
+
+        // note: we need this `and` to convert `true` (all-1 mask, NaN) to
+        // a regular floating point number
+        let cond2 = self.create_binary("and", cond, one)?;
 
         let label = format!(".L{}", loop_id);
-        self.block().add_branch_if(cond, &label, false);
+
+        // jump to label if `cond2 == false`
+        self.block().add_branch_if(cond2, &label, false);
 
         Ok(accum_var)
     }
