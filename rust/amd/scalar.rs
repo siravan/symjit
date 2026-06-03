@@ -145,12 +145,16 @@ impl Generator for AmdScalarGenerator {
     }
 
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
-        self.amd.vucomisd(ϕ(cond), ϕ(cond));
+        self.amd.vxorpd(ϕ(Reg::Ret), ϕ(Reg::Ret), ϕ(Reg::Ret));
+        self.amd.vucomisd(ϕ(cond), ϕ(Reg::Ret));
+        // self.amd.vucomisd(ϕ(cond), ϕ(cond));
 
         if is_else {
-            self.amd.jpo(label);
+            // self.amd.jpo(label);
+            self.amd.jnz(label);
         } else {
-            self.amd.jpe(label);
+            // self.amd.jpe(label);
+            self.amd.jz(label);
         }
     }
 

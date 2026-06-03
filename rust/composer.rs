@@ -405,8 +405,8 @@ impl Composer for DirectTranslator {
     fn append_if_else(&mut self, cond: &Slot, id: usize) -> Result<()> {
         let label = format!(".S{}", id);
         self.load(reg(0), cond)?;
-        self.mir.xor(Reg::Ret, reg(0), reg(0));
-        self.mir.eq(reg(1), reg(0), Reg::Ret);
+        // self.mir.xor(Reg::Ret, reg(0), reg(0));
+        // self.mir.eq(reg(1), reg(0), Reg::Ret);
         self.mir.branch_if(reg(1), &label, false);
         Ok(())
     }

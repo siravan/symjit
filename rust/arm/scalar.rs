@@ -132,7 +132,8 @@ impl Generator for ArmGenerator {
     }
 
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
-        self.emit(arm! {umov x(0), v(ϕ(cond)).d[0]});
+        self.emit(arm! {fcmeq d(ϕ(Reg::Ret)), d(ϕ(cond)), #0.0});
+        self.emit(arm! {umov x(0), v(ϕ(Reg::Ret)).d[0]});
 
         let l = self.a.create_label();
 

@@ -271,7 +271,9 @@ impl Generator for AmdVectorGenerator {
     }
 
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
-        self.amd.vmovmskpd(Amd::RAX, ϕ(cond));
+        self.amd.vxorpd(ϕ(Reg::Ret), ϕ(Reg::Ret), ϕ(Reg::Ret));
+        self.amd.vcmpeqpd(ϕ(Reg::Ret), ϕ(Reg::Ret), ϕ(cond));
+        self.amd.vmovmskpd(Amd::RAX, ϕ(Reg::Ret));
         self.amd.and_imm(Amd::RAX, 15);
 
         if !is_else {

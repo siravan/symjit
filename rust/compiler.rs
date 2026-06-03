@@ -994,7 +994,8 @@ impl IndirectTranslator {
         // );
 
         self.conds.push(*cond);
-        let if_clause = Expr::binary("eq", &self.expr(cond, false), &Expr::from(0.0));
+        // let if_clause = Expr::binary("eq", &self.expr(cond, false), &Expr::from(0.0));
+        let if_clause = self.expr(&cond, false);
         self.eqs.push(Expr::special(&Expr::BranchIf {
             cond: Box::new(if_clause),
             id,
@@ -1011,7 +1012,8 @@ impl IndirectTranslator {
 
             let cond = self.conds.pop().unwrap();
             self.conds.push(cond);
-            let if_clause = Expr::binary("eq", &self.expr(&cond, false), &Expr::from(0.0));
+            // let if_clause = Expr::binary("eq", &self.expr(&cond, false), &Expr::from(0.0));
+            let if_clause = self.expr(&cond, false);
             self.eqs.push(Expr::special(&Expr::BranchIf {
                 cond: Box::new(if_clause),
                 id,

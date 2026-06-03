@@ -348,6 +348,10 @@ macro_rules! arm {
         0x7e60e400 | rd!($rd) | rn!($rn) | rm!($rm)
     };
 
+    (fcmeq d($rd:expr), d($rn:expr), #0.0) => {
+        0x5ee0d800 | rd!($rd) | rn!($rn)
+    };
+
     // compare d(..) with 0.0 and set the flags (NZCV)
     (fcmp d($rn:expr), #0.0) => {
         0x1e602008 | rn!($rn)
@@ -602,6 +606,10 @@ macro_rules! arm {
     };
     (fcmge q($rd:expr), q($rn:expr), q($rm:expr)) => {
         0x6e60e400 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
+    (fcmeq q($rd:expr), q($rn:expr), #0.0) => {
+        0x4ee0d800 | rd!($rd) | rn!($rn)
     };
 
     // logical ops

@@ -1411,7 +1411,7 @@ impl Mir {
                     label,
                     is_else,
                 } => {
-                    if (Self::get(regs, *cond) != 0.0) ^ is_else {
+                    if (Self::get(regs, *cond) == 0.0) ^ is_else {
                         ip = *self.labels.get(label).unwrap() - 1
                     }
                 }
