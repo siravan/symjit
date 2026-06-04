@@ -150,14 +150,20 @@ impl Generator for AmdSSEGenerator {
         self.amd.jz(label);
     }
 
+    /// jump to label if cond == is_else
+    /// note that `is_else` is not the correct name anymore and should be
+    /// changed to `expectation`
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
-        self.amd.xorpd(ϕ(Reg::Ret), ϕ(Reg::Ret));
-        self.amd.ucomisd(ϕ(cond), ϕ(Reg::Ret));
-
+        self.amd.vucomisd(ϕ(cond), ϕ(cond));
+        /*
+         * if is_else (expectation) is true, jump if cond is true (all-1, NaN).
+         * In this situation, vucomisd returns an unordered result, setting
+         * PF = 1 (jpe)
+         */
         if is_else {
-            self.amd.jnz(label);
+            self.amd.jpe(label);
         } else {
-            self.amd.jz(label);
+            self.amd.jpo(label);
         }
     }
 

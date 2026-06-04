@@ -39,6 +39,7 @@ pub enum UniOp {
     Imaginary,
     Conjugate,
     Half,
+    IsZero,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Hash)]
@@ -665,6 +666,14 @@ impl Mir {
         self.minus(dst, s1, Reg::Temp);
     }
 
+    pub fn iszero(&mut self, dst: Reg, s1: Reg) {
+        self.push(Instruction::Uni {
+            op: UniOp::IsZero,
+            dst,
+            s1,
+        });
+    }
+
     pub fn fmod(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         assert!(dst != Reg::Ret && s1 != Reg::Ret && s2 != Reg::Ret);
         self.divide(Reg::Ret, s1, s2);
@@ -1134,6 +1143,7 @@ impl Mir {
             UniOp::Imaginary => 0.0,
             UniOp::Conjugate => s1,
             UniOp::Half => s1 / 2.0,
+            UniOp::IsZero => bool_to_f64(s1 == 0.0),
         };
 
         Self::set(regs, dst, val);
@@ -1680,6 +1690,10 @@ impl Mir {
             UniOp::Imaginary => ir.imaginary(dst, s1),
             UniOp::Conjugate => ir.conjugate(dst, s1),
             UniOp::Half => ir.half(dst, s1),
+            UniOp::IsZero => {
+                ir.xor(Reg::Temp, Reg::Temp, Reg::Temp);
+                ir.eq(dst, s1, Reg::Temp);
+            }
         };
     }
 

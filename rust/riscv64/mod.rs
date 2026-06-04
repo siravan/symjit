@@ -285,8 +285,7 @@ impl Generator for RiscV {
     }
 
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
-        self.emit(rvv! {fmv.d.x f(ϕ(Reg::Ret)), x(Self::zero)});
-        self.emit(rvv! {feq.d x(Self::t0), f(ϕ(cond)), f(ϕ(Reg::Ret))});
+        self.emit(rvv! {fmv.x.d x(Self::t0), f(ϕ(cond))});
 
         if is_else {
             self.emit(rvv! {bne x(Self::t0), x(Self::zero), 8});

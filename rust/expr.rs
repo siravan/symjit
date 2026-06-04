@@ -324,6 +324,11 @@ impl Expr {
         Expr::unary("frac", self)
     }
 
+    /// returns true if self is 0
+    pub fn iszero(&self) -> Expr {
+        Expr::unary("iszero", self)
+    }
+
     /// Heaviside functions. It returns 1 if self is >=0;
     /// otherwise returns 0.
     ///

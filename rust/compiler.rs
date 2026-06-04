@@ -994,31 +994,31 @@ impl IndirectTranslator {
         // );
 
         self.conds.push(*cond);
-        // let if_clause = Expr::binary("eq", &self.expr(cond, false), &Expr::from(0.0));
-        let if_clause = self.expr(&cond, false);
+        let if_clause = Expr::unary("iszero", &self.expr(cond, false));
         self.eqs.push(Expr::special(&Expr::BranchIf {
             cond: Box::new(if_clause),
             id,
-            is_else: false,
+            is_else: true,
         }));
         Ok(())
     }
 
     fn translate_goto(&mut self, id: usize) -> Result<()> {
-        if self.config.simd_branch() {
+        if self.config.simd_branch() && self.config.symbolica() {
             // TODO: the commented out area should be uncommented, except it causes
             // a bug in some programs. The effects are not local and likely related
             // to instruction movements.
 
+            /*
             let cond = self.conds.pop().unwrap();
             self.conds.push(cond);
-            // let if_clause = Expr::binary("eq", &self.expr(&cond, false), &Expr::from(0.0));
-            let if_clause = self.expr(&cond, false);
+            let if_clause = Expr::unary("iszero", &self.expr(&cond, false));
             self.eqs.push(Expr::special(&Expr::BranchIf {
                 cond: Box::new(if_clause),
                 id,
-                is_else: true,
+                is_else: false,
             }));
+            */
         } else {
             self.eqs.push(Expr::special(&Expr::Branch { id }));
         }

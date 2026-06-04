@@ -154,10 +154,8 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
-        self.emit(arm! {eor v(ϕ(Reg::Ret)).16b, v(ϕ(Reg::Ret)).16b, v(ϕ(Reg::Ret)).16b});
-        self.emit(arm! {fcmeq q(ϕ(Reg::Ret)), q(ϕ(Reg::Ret)), q(ϕ(cond))});
-        self.emit(arm! {umov x(1), v(ϕ(Reg::Ret)).d[0]});
-        self.emit(arm! {umov x(2), v(ϕ(Reg::Ret)).d[1]});
+        self.emit(arm! {umov x(1), v(ϕ(cond)).d[0]});
+        self.emit(arm! {umov x(2), v(ϕ(cond)).d[1]});
         self.emit(arm! {eor x(0), x(1), x(2)});
 
         if !self.config.simd_branch() {
@@ -174,13 +172,13 @@ impl Generator for ArmSimdGenerator {
             // run the else-clasue if
             // 1. the lanes are not coincidental (x0 == 1), or,
             // 2. the lanes are coincidental but non-zero (x0 == 0, x1 == 1, x2 == 1).
-            self.emit(arm! {orr x(0), x(0), x(1)});
+            self.emit(arm! {orn x(0), x(0), x(1)});
             self.jump(&l, 0, |offset, _| arm! {tbnz x(0), #0, label(offset)});
         } else {
             // run the then-clasue if
             // 1. the lanes are not coincidental (x0 == 1), or,
             // 2. the lanes are coincidental but zero (x0 == 0, x1 == 0, x2 == 0).
-            self.emit(arm! {orn x(0), x(0), x(1)});
+            self.emit(arm! {orr x(0), x(0), x(1)});
             self.jump(&l, 0, |offset, _| arm! {tbnz x(0), #0, label(offset)});
         }
 

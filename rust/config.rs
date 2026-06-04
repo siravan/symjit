@@ -499,6 +499,7 @@ const UNARY: &[&str] = &[
     "real",
     "imaginary",
     "conjugate",
+    "iszero",
 ];
 
 // the list of intrinsic binary ops, i.e., operations that can be implemented directly in

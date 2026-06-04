@@ -218,6 +218,7 @@ impl DirectTranslator {
             "real" => self.mir.real(dst, r),
             "imaginary" => self.mir.imaginary(dst, r),
             "conjugate" => self.mir.conjugate(dst, r),
+            "iszero" => self.mir.iszero(dst, r),
             _ => return Err(anyhow!("unary operator {:?} is not recognized", op)),
         };
 
@@ -405,15 +406,16 @@ impl Composer for DirectTranslator {
     fn append_if_else(&mut self, cond: &Slot, id: usize) -> Result<()> {
         let label = format!(".S{}", id);
         self.load(reg(0), cond)?;
-        // self.mir.xor(Reg::Ret, reg(0), reg(0));
-        // self.mir.eq(reg(1), reg(0), Reg::Ret);
-        self.mir.branch_if(reg(1), &label, false);
+        self.mir.iszero(reg(1), reg(0));
+        self.mir.branch_if(reg(1), &label, true);
         Ok(())
     }
 
     fn append_goto(&mut self, id: usize) -> Result<()> {
-        let label = format!(".S{}", id);
-        self.mir.branch(&label);
+        if !self.mir.config.simd_branch() || !self.mir.config.symbolica() {
+            let label = format!(".S{}", id);
+            self.mir.branch(&label);
+        }
         Ok(())
     }
 

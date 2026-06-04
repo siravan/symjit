@@ -270,13 +270,12 @@ impl Generator for AmdVectorGenerator {
         self.amd.jz(label);
     }
 
+    /// jump to label if all bits of cond == is_else
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
-        self.amd.vxorpd(ϕ(Reg::Ret), ϕ(Reg::Ret), ϕ(Reg::Ret));
-        self.amd.vcmpeqpd(ϕ(Reg::Ret), ϕ(Reg::Ret), ϕ(cond));
-        self.amd.vmovmskpd(Amd::RAX, ϕ(Reg::Ret));
+        self.amd.vmovmskpd(Amd::RAX, ϕ(cond));
         self.amd.and_imm(Amd::RAX, 15);
 
-        if !is_else {
+        if is_else {
             self.amd.cmp_imm(Amd::RAX, 15);
         }
 

@@ -288,6 +288,7 @@ impl Node {
                 "real" => mir.real(reg(dst), reg(r)),
                 "imaginary" => mir.imaginary(reg(dst), reg(r)),
                 "conjugate" => mir.conjugate(reg(dst), reg(r)),
+                "iszero" => mir.iszero(reg(dst), reg(r)),
                 _ => return Err(anyhow!("unary operator {:?} is not recognized", op)),
             };
 

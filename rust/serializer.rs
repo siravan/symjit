@@ -79,6 +79,7 @@ const UNIOP_REAL: u8 = UniOp::Real as u8;
 const UNIOP_IMAGINARY: u8 = UniOp::Imaginary as u8;
 const UNIOP_CONJUGATE: u8 = UniOp::Conjugate as u8;
 const UNIOP_HALF: u8 = UniOp::Half as u8;
+const UNIOP_ISZERO: u8 = UniOp::IsZero as u8;
 
 const BINOP_PLUS: u8 = BinOp::Plus as u8;
 const BINOP_MINUS: u8 = BinOp::Minus as u8;
@@ -502,6 +503,11 @@ impl MirIterator {
             }),
             UNIOP_HALF => Ok(Instruction::Uni {
                 op: UniOp::Half,
+                dst,
+                s1,
+            }),
+            UNIOP_ISZERO => Ok(Instruction::Uni {
+                op: UniOp::IsZero,
                 dst,
                 s1,
             }),
