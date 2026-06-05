@@ -10,15 +10,16 @@ from symjit import compile_evaluator, load_func
 if len(sys.argv) < 2:
     print("use nloop n; where n=1, 2, or 3")
 
-n = int(sys.argv[1])
-
-INPUT = os.path.join(os.path.dirname(__file__), f"cff_evaluator_inputs_{n}loop.py")
+INPUT = os.path.join(
+    os.path.dirname(__file__), f"cff_evaluator_inputs_{sys.argv[1]}loop.py"
+)
 CONFIG = os.path.join(os.path.dirname(__file__), "symjit.toml")
+INSTRUCTIONS = os.path.join(
+    os.path.dirname(__file__), f"{sys.argv[1]}loop_instructions_2.txt"
+)
 
 print(f"Running example from {INPUT}")
 exec(open(INPUT, "r").read())
-
-print(constants)
 
 print("Building symbolica evaluator...")
 t_start = time.time()
@@ -35,8 +36,10 @@ evaluator = expression.evaluator(
 )
 print(f"completed in {time.time() - t_start:.1f} s.")
 
+with open(INSTRUCTIONS, "w") as fd:
+    fd.write(str(evaluator.get_instructions()))
+
 n = len(input_params)
-# evaluator.set_real_params(random.sample(range(n), n // 2))
 
 print("Building symjit evaluator...")
 t_start = time.time()
@@ -75,4 +78,4 @@ print(symjit_f.evaluate_complex(samples[None, :]).sum())
 g = load_func(f"loop.sjb")
 
 print(g.evaluate_complex(samples[None, :]).sum())
-# os.remove(f"loop.sjb")
+os.remove(f"loop.sjb")
