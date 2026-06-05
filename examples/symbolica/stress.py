@@ -33,7 +33,7 @@ def time_evaluator(f, k):
 
 
 for i in range(15):
-    ev = stress_fun(i).evaluator({}, {}, [x])
+    ev = stress_fun(i).evaluator([x])
     compiled_f = ev.compile("stress", "stress.cpp", "stress.so", "complex")
     symjit_f = compile_evaluator(ev, dtype="complex128", direct=True)
 

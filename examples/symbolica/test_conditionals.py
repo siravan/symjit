@@ -2,9 +2,7 @@ import numpy as np
 from symbolica import E, S
 from symjit import compile_evaluator
 
-ev = E("if(y, x + 1, x + 2)").evaluator(
-    {}, {}, [S("x"), S("y")], conditionals=[S("if")]
-)
+ev = E("if(y, x + 1, x + 2)").evaluator([S("x"), S("y")])
 
 X = np.random.rand(1000, 2)
 X[:, 1] = X[:, 1] > 0.8

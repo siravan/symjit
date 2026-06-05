@@ -26,7 +26,7 @@ p = poly()
 
 print(p)
 
-e = p.evaluator({}, {}, vars)
+e = p.evaluator(vars)
 
 f1 = compile_evaluator(e, dtype="complex128", opt_level=1)
 f2 = compile_evaluator(e, dtype="complex128", opt_level=2)

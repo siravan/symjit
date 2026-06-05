@@ -301,6 +301,11 @@ impl Parser {
         let mut tags: Vec<String> = Vec::new();
 
         loop {
+            if self.lex.head() == ']' {
+                self.lex.advance();
+                break;
+            }
+
             tags.push(self.parse_ident()?);
 
             match self.next() {
@@ -364,28 +369,29 @@ impl Parser {
         let name = self.parse_ident()?;
         self.expects(Token::Comma)?;
 
+        let args;
+        let b;
+
         if self.lex.head() == '[' {
             // v2
             let _tags = self.parse_tags()?;
             self.expects(Token::Comma)?;
-            let args = self.parse_slots()?;
+            args = self.parse_slots()?;
             self.expects(Token::Comma)?;
-            let b = self.parse_bool()?;
-
-            Ok(Instruction::Fun(dst, name, args, b))
+            b = self.parse_bool()?;
         } else {
             // v1
-            let arg = self.parse_slot()?;
+            args = vec![self.parse_slot()?];
             self.expects(Token::Comma)?;
-            let b = self.parse_bool()?;
-
-            Ok(Instruction::Fun(
-                dst,
-                format!("symbolica_{}", name),
-                vec![arg],
-                b,
-            ))
+            b = self.parse_bool()?;
         }
+
+        Ok(Instruction::Fun(
+            dst,
+            format!("symbolica_{}", name),
+            args,
+            b,
+        ))
     }
 
     fn parse_external_fun(&mut self) -> Result<Instruction> {

@@ -18,6 +18,8 @@ CONFIG = os.path.join(os.path.dirname(__file__), "symjit.toml")
 print(f"Running example from {INPUT}")
 exec(open(INPUT, "r").read())
 
+print(constants)
+
 print("Building symbolica evaluator...")
 t_start = time.time()
 evaluator = expression.evaluator(
