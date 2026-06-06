@@ -5,6 +5,7 @@ import warnings
 from sympy import Symbol, lambdify
 
 from . import engine, pyengine, structure
+from .composer import *
 from .func import *
 from .ode import *
 
