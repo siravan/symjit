@@ -404,6 +404,53 @@ impl Translator {
 
         Translator { composer, config }
     }
+
+    pub fn parse_model(&mut self, model: &SymbolicaModel) -> Result<()> {
+        for c in model.2.iter() {
+            let val = Complex::new(c.value().re, c.value().im);
+            //self.consts.push(val);
+            self.append_constant(val)?;
+        }
+
+        self.convert(model)?;
+        Ok(())
+    }
+
+    /// The first pass by converting Symbolica IR into
+    /// Static-Single-Assingment (SSA) Form
+    fn convert(&mut self, model: &SymbolicaModel) -> Result<()> {
+        for line in model.0.iter() {
+            match line {
+                Instruction::Add(lhs, args, num_reals) => self.append_add(lhs, args, *num_reals)?,
+                Instruction::Mul(lhs, args, num_reals) => self.append_mul(lhs, args, *num_reals)?,
+                Instruction::Pow(lhs, arg, p, is_real) => {
+                    self.append_pow(lhs, arg, *p, *is_real)?
+                }
+                Instruction::Powf(lhs, arg, p, is_real) => {
+                    self.append_powf(lhs, arg, p, *is_real)?
+                }
+                Instruction::Assign(lhs, rhs) => self.append_assign(lhs, rhs)?,
+                Instruction::Fun(lhs, fun, args, is_real) => {
+                    self.append_fun(lhs, fun, args, *is_real)?
+                }
+                Instruction::Join(lhs, cond, true_val, false_val) => {
+                    // self.depth -= 1;
+                    self.append_join(lhs, cond, true_val, false_val)?
+                }
+                Instruction::Label(id) => self.append_label(*id)?,
+                Instruction::IfElse(cond, id) => {
+                    self.append_if_else(cond, *id)?;
+                    // self.depth += 1;
+                }
+                Instruction::Goto(id) => self.append_goto(*id)?,
+                Instruction::ExternalFun(lhs, op, args) => {
+                    self.append_external_fun(lhs, op, args)?
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl Composer for Translator {
@@ -574,6 +621,7 @@ impl Composer for IndirectTranslator {
         self.has_jump = true;
         let cond = self.consume(cond)?;
         self.ssa.push(Instruction::IfElse(cond, id));
+        self.depth += 1;
         Ok(())
     }
 
@@ -633,6 +681,7 @@ impl Composer for IndirectTranslator {
         let lhs = self.produce(lhs)?;
         self.ssa
             .push(Instruction::Join(lhs, cond, true_val, false_val));
+        self.depth -= 1;
         Ok(())
     }
 
@@ -669,52 +718,6 @@ impl IndirectTranslator {
             depth: 0,
             conds: Vec::new(),
         }
-    }
-
-    pub fn parse_model(&mut self, model: &SymbolicaModel) -> Result<()> {
-        for c in model.2.iter() {
-            let val = Complex::new(c.value().re, c.value().im);
-            self.consts.push(val);
-        }
-
-        self.convert(model)?;
-        Ok(())
-    }
-
-    /// The first pass by converting Symbolica IR into
-    /// Static-Single-Assingment (SSA) Form
-    fn convert(&mut self, model: &SymbolicaModel) -> Result<()> {
-        for line in model.0.iter() {
-            match line {
-                Instruction::Add(lhs, args, num_reals) => self.append_add(lhs, args, *num_reals)?,
-                Instruction::Mul(lhs, args, num_reals) => self.append_mul(lhs, args, *num_reals)?,
-                Instruction::Pow(lhs, arg, p, is_real) => {
-                    self.append_pow(lhs, arg, *p, *is_real)?
-                }
-                Instruction::Powf(lhs, arg, p, is_real) => {
-                    self.append_powf(lhs, arg, p, *is_real)?
-                }
-                Instruction::Assign(lhs, rhs) => self.append_assign(lhs, rhs)?,
-                Instruction::Fun(lhs, fun, args, is_real) => {
-                    self.append_fun(lhs, fun, args, *is_real)?
-                }
-                Instruction::Join(lhs, cond, true_val, false_val) => {
-                    self.depth -= 1;
-                    self.append_join(lhs, cond, true_val, false_val)?
-                }
-                Instruction::Label(id) => self.append_label(*id)?,
-                Instruction::IfElse(cond, id) => {
-                    self.append_if_else(cond, *id)?;
-                    self.depth += 1;
-                }
-                Instruction::Goto(id) => self.append_goto(*id)?,
-                Instruction::ExternalFun(lhs, op, args) => {
-                    self.append_external_fun(lhs, op, args)?
-                }
-            }
-        }
-
-        Ok(())
     }
 
     fn create_static(&mut self) -> Result<Slot> {
@@ -987,13 +990,7 @@ impl IndirectTranslator {
     }
 
     fn translate_ifelse(&mut self, cond: &Slot, id: usize) -> Result<()> {
-        // let cond = Expr::binary(
-        //     "lt",
-        //     &Expr::unary("abs", &self.expr(cond, false)),
-        //     &Expr::from(f64::EPSILON),
-        // );
-
-        self.conds.push(*cond);
+        // self.conds.push(*cond);
         let if_clause = Expr::unary("iszero", &self.expr(cond, false));
         self.eqs.push(Expr::special(&Expr::BranchIf {
             cond: Box::new(if_clause),
@@ -1029,16 +1026,15 @@ impl IndirectTranslator {
     fn translate_join(
         &mut self,
         lhs: &Slot,
-        _cond: &Slot,
+        cond: &Slot,
         true_val: &Slot,
         false_val: &Slot,
     ) -> Result<()> {
         // Join is essentially a Φ-function.
         let t = self.expr(true_val, false);
         let f = self.expr(false_val, false);
-        let cond = self.conds.pop().unwrap();
-        let mask = Expr::binary("eq", &self.expr(&cond, false), &Expr::from(0.0));
-        self.assign(lhs, mask.ifelse(&f, &t))?;
+        let if_clause = Expr::unary("iszero", &self.expr(cond, false));
+        self.assign(lhs, if_clause.ifelse(&f, &t))?;
         Ok(())
     }
 }
@@ -1061,7 +1057,7 @@ impl Compiler {
     /// assert!(app.evaluate_single(&[2.0, 3.0]) == 11.0);
     /// ```
     pub fn translate(&mut self, json: String, num_params: usize) -> Result<Application> {
-        let mut translator = IndirectTranslator::new(self.config.clone());
+        let mut translator = Translator::new(self.config.clone());
 
         let model: SymbolicaModel = if json.starts_with("[[{") {
             serde_json::from_str(json.as_str())?
@@ -1071,12 +1067,13 @@ impl Compiler {
 
         translator.parse_model(&model)?;
         translator.set_num_params(num_params);
-        let (ml, reals) = translator.translate()?;
+        //let (ml, reals) = translator.translate()?;
 
-        let prog = Program::new(&ml, translator.config)?;
-        let mut app = Application::new(prog, reals)?;
+        //let prog = Program::new(&ml, translator.config)?;
+        //let mut app = Application::new(prog, reals)?;
+        let app = translator.compile()?;
 
-        app.prepare_simd();
+        //app.prepare_simd();
         Ok(app)
     }
 }

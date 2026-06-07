@@ -57,7 +57,7 @@ macro_rules! imm16 {
 macro_rules! imm14 {
     ($x:expr) => {{
         let x = $x as i32;
-        assert!(x < 32768 && x >= -32768);
+        assert!((-32768..32768).contains(&x));
         ((x as u32) & 0x0000fffc) << 3
     }};
 }

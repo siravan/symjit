@@ -244,6 +244,7 @@ class SymbolicaFunc:
         self.model = model
         self.args = args
         self.samples = None
+        self.is_complex = dtype == "complex128"
 
         if model is None:
             self.compiler = None
@@ -270,6 +271,7 @@ class SymbolicaFunc:
         if self.compiler is None:
             self.compile_real()
 
+        inputs = np.asarray(inputs)
         c = self.compiler
         outs = np.zeros((inputs.shape[0], c.count_obs), dtype=np.float64)
 
@@ -281,8 +283,8 @@ class SymbolicaFunc:
         if self.complex_compiler is None:
             self.compile_complex()
 
+        inputs = np.asarray(inputs)
         c = self.complex_compiler
-        assert inputs.shape[1] == c.count_params // 2
         outs = np.zeros((inputs.shape[0], c.count_obs // 2), dtype=np.complex128)
 
         args = np.ascontiguousarray(inputs, dtype=np.complex128)
@@ -308,3 +310,9 @@ class SymbolicaFunc:
         else:
             self.compile_real()
             self.compiler.save(file)
+
+    def __call__(self, *args):
+        if self.is_complex:
+            return self.evaluate_complex(np.asarray([args], dtype=np.complex128))
+        else:
+            return self.evaluate(np.asarray([args], dtype=np.float64))

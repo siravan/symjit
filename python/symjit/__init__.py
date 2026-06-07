@@ -423,7 +423,7 @@ def compile_evaluator(
     order="c",
     simd_branch=False,
     fast_complex=False,
-    direct=True,
+    direct=False,
     huge=False,
     parallel_mul=True,
     compress=False,
@@ -542,6 +542,94 @@ def compile_evaluator(
             return load_func("tmp.sjb", defuns=defuns)
         else:
             return f
+
+
+def compile_composer(
+    composer,
+    ty="native",
+    use_simd=True,
+    use_threads=True,
+    cse=False,
+    fastmath=True,
+    backend="rust",
+    opt_level=2,
+    defuns=None,
+    simd_branch=True,
+    fast_complex=True,
+    huge=False,
+    parallel_mul=True,
+    compress=False,
+):
+    """Compiles a Composer object.
+
+    Parameters
+    ==========
+
+    ty: target architecture. Options are:
+        * "amd": generates x86-64 instructions (amd-sse or amd-avx) depending on the processor.
+        * "amd-sse": generates x86-64 SSE2 instructions.
+        * "amd-avx": generates x86-64 AVX instrcutions.
+        * "arm": generates arm aarch64 instructions.
+        * "riscv": generates 64-bit RISC-V instructions.
+        * "native" (default): selects the correct mode based on the processor.
+        * "bytecode": not supported by the Symbolica bridge.
+        * "debug": : not supported by the Symbolica bridge.
+    backend (default `rust`): should be `rust`.
+    dtype (default `float64`): the data type. Possibilities are `float64` and `complex128`.
+    use_simd (default `True`): generates SIMD code for vectorized operations. Currently supports
+        AVX on x86-64 and NEON on aarch64 systems.
+    use_threads (default `False`): currently not supported for the Symbolica bridge.
+    cse (default `False`): performs common-subexpression elimination.
+    fastmath (default False): use fastmath floating point operations, especially fused multiply-addition.
+    fast_complex (default True): use f64x2 SIMD instructions for complex operations.
+    parallel_mul (default True): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
+    huge (default False): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
+    compress (default False): compress binary size by converting inline operations to calls.
+    opt_level (default 2): optimization level (0, 1, 2, or 3). Broadly the numbers are parallel to -O0, -O1, -O2, and -O3
+        options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
+        Levels 2 and 3 use improved graph-coloring algorithms for better register allocation.
+    defuns (default `None`): currently not supported for the Symbolica bridge.
+
+    ==> returns a `SymbolicaFunc` object. The user can use `evaluate` and `evaluate_complex` functions to
+        call the compiled code.
+
+    >>> import numpy as np
+    >>> from symbolica import *
+    >>> from symjit import compile_evaluator
+    >>>
+    >>> x, y = S("x"), S("y")
+    >>> e = E("x + y^2").evaluator({}, {}, [x, y])
+    >>> f = compile_evaluator(e)
+    >>>
+    >>> X = np.array([[4.0, 10.0]])
+    >>> assert e.evaluate(X) == f.evaluate(X)
+    """
+    if not can_use_rust(backend):
+        raise ValueError("unsupported platform")
+
+    model = str(composer.get_instructions())
+
+    return SymbolicaFunc(
+        model,
+        ty=ty,
+        use_simd=use_simd,
+        use_threads=use_threads,
+        cse=cse,
+        fastmath=fastmath,
+        opt_level=opt_level,
+        defuns=defuns,
+        dtype=composer.dtype,
+        action="translate",
+        convert=False,
+        num_params=composer.num_params,
+        order="c",
+        simd_branch=simd_branch,
+        fast_complex=fast_complex,
+        direct=True,
+        huge=huge,
+        parallel_mul=parallel_mul,
+        compress=compress,
+    )
 
 
 def load_func(file, eqs=[], defuns=None):
