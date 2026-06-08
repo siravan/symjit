@@ -101,18 +101,17 @@ class Composer:
         return t
 
     def fsub(self, x, y):
-        t1 = self.new_temp()
-        t2 = self.new_temp()
-        self.ir.append(("mul", t1, [y, self.constant(-1)], 0))
-        self.ir.append(("add", t2, [x, t1], 0))
-        return t2
+        return self.fadd(x, self.neg(y))
 
     def fdiv(self, x, y):
-        t1 = self.new_temp()
-        t2 = self.new_temp()
-        self.ir.append(("pow", t1, y, -1, False))
-        self.ir.append(("mul", t2, [x, t1], 0))
-        return t2
+        return self.fmul(x, self.recip(y))
+
+    def idiv(self, x, y):
+        q = self.fdiv(x, y)
+        return self.floor(q)
+
+    def mod(self, x, y):
+        return self.fsub(x, self.fmul(y, self.idiv(x, y)))
 
     def neg(self, arg):
         return self.function("neg", arg)

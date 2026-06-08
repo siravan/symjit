@@ -12,6 +12,18 @@ def test_simple():
     print(f(3, 4))
 
 
+def test_recip():
+    cp = Composer(2, 1)
+    s1 = cp.fsub(cp.arg(0), cp.arg(1))
+    s2 = cp.fadd(cp.arg(0), cp.arg(1))
+    s2 = cp.fdiv(s1, s2)
+    cp.assign(cp.out(0), s1)
+
+    f = compile_composer(cp)
+
+    print(f(5, 3))
+
+
 def test_if_else():
     cp = Composer(2, 1)
 
@@ -28,6 +40,9 @@ def test_if_else():
     cp.assign(cp.out(0), t)
 
     f = compile_composer(cp)
+
+    print(f.dumps("bytecode"))
+
     print(f(3, 4))
     print(f(5, 4))
 
@@ -86,11 +101,9 @@ def test_sum(dtype="float64"):
     cp.append_for_loop(x, 1, 100, b)
     cp.assign(cp.out(0), s)
 
-    print(cp.get_instructions())
+    # print(cp.get_instructions())
 
     f = compile_composer(cp, opt_level=0)
-
-    print(f.dumps("bytecode"))
 
     print(f(0)[0][0])
 
@@ -98,6 +111,7 @@ def test_sum(dtype="float64"):
 #######################################################################
 
 test_simple()
+test_recip()
 test_if_else()
 test_complex()
 test_pi_viete("float64")

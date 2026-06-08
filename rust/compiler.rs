@@ -563,7 +563,6 @@ pub struct IndirectTranslator {
     has_jump: bool,
     last_label: usize,
     depth: usize,
-    conds: Vec<Slot>,
 }
 
 impl Composer for IndirectTranslator {
@@ -716,7 +715,6 @@ impl IndirectTranslator {
             has_jump: false,
             last_label: 0,
             depth: 0,
-            conds: Vec::new(),
         }
     }
 
@@ -990,7 +988,6 @@ impl IndirectTranslator {
     }
 
     fn translate_ifelse(&mut self, cond: &Slot, id: usize) -> Result<()> {
-        // self.conds.push(*cond);
         let if_clause = Expr::unary("iszero", &self.expr(cond, false));
         self.eqs.push(Expr::special(&Expr::BranchIf {
             cond: Box::new(if_clause),
@@ -1001,22 +998,7 @@ impl IndirectTranslator {
     }
 
     fn translate_goto(&mut self, id: usize) -> Result<()> {
-        if self.config.simd_branch() && self.config.symbolica() {
-            // TODO: the commented out area should be uncommented, except it causes
-            // a bug in some programs. The effects are not local and likely related
-            // to instruction movements.
-
-            /*
-            let cond = self.conds.pop().unwrap();
-            self.conds.push(cond);
-            let if_clause = Expr::unary("iszero", &self.expr(&cond, false));
-            self.eqs.push(Expr::special(&Expr::BranchIf {
-                cond: Box::new(if_clause),
-                id,
-                is_else: false,
-            }));
-            */
-        } else {
+        if !self.config.simd_branch() || !self.config.symbolica() {
             self.eqs.push(Expr::special(&Expr::Branch { id }));
         }
 

@@ -17,6 +17,7 @@ use crate::config::SPILL_AREA;
 use crate::generator::FuncletType;
 use crate::generator::Generator;
 use crate::machine::MachineCode;
+use crate::mir::UniOp::IsZero;
 use crate::serializer::MirWriter;
 use crate::symbol::Loc;
 use crate::utils::is_external_func;
@@ -40,6 +41,7 @@ pub enum UniOp {
     Conjugate,
     Half,
     IsZero,
+    IsNotZero,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Hash)]
@@ -674,6 +676,14 @@ impl Mir {
         });
     }
 
+    pub fn isnotzero(&mut self, dst: Reg, s1: Reg) {
+        self.push(Instruction::Uni {
+            op: UniOp::IsNotZero,
+            dst,
+            s1,
+        });
+    }
+
     pub fn fmod(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         assert!(dst != Reg::Ret && s1 != Reg::Ret && s2 != Reg::Ret);
         self.divide(Reg::Ret, s1, s2);
@@ -1144,6 +1154,7 @@ impl Mir {
             UniOp::Conjugate => s1,
             UniOp::Half => s1 / 2.0,
             UniOp::IsZero => bool_to_f64(s1 == 0.0),
+            UniOp::IsNotZero => bool_to_f64(s1 != 0.0),
         };
 
         Self::set(regs, dst, val);
@@ -1694,6 +1705,10 @@ impl Mir {
                 ir.xor(Reg::Temp, Reg::Temp, Reg::Temp);
                 ir.eq(dst, s1, Reg::Temp);
             }
+            UniOp::IsNotZero => {
+                ir.xor(Reg::Temp, Reg::Temp, Reg::Temp);
+                ir.neq(dst, s1, Reg::Temp);
+            }
         };
     }
 
@@ -1985,6 +2000,38 @@ impl Instruction {
             _ => false,
         }
     }
+
+    fn regs(&self) -> Vec<Reg> {
+        match self {
+            Instruction::Bi { dst, s1, s2, .. } => vec![*dst, *s1, *s2],
+            Instruction::Uni { dst, s1, .. } => vec![*dst, *s1],
+            Instruction::Mov { dst, s1 } => vec![*dst, *s1],
+            Instruction::BranchIf { cond, .. } => vec![*cond],
+            Instruction::Load { dst, .. } | Instruction::LoadConst { dst, .. } => vec![*dst],
+            Instruction::LoadComplex { xd, yd, .. } => vec![*xd, *yd],
+            Instruction::LoadMath { dst, s1, .. } => vec![*dst, *s1],
+            Instruction::LoadConstMath { dst, s1, .. } => vec![*dst, *s1],
+            Instruction::Save { src, .. } => vec![*src],
+            Instruction::SaveComplex { xs, ys, .. } => vec![*xs, *ys],
+            Instruction::Fused { dst, a, b, c, .. } => vec![*dst, *a, *b, *c],
+            Instruction::ComplexBi {
+                xd,
+                yd,
+                x1,
+                y1,
+                x2,
+                y2,
+                ..
+            } => vec![*xd, *yd, *x1, *y1, *x2, *y2],
+            Instruction::IfElse {
+                dst,
+                true_val,
+                false_val,
+                ..
+            } => vec![*dst, *true_val, *false_val],
+            _ => Vec::new(),
+        }
+    }
 }
 
 impl Mir {
@@ -2193,6 +2240,170 @@ impl Mir {
                 }
             }
         };
+
+        None
+    }
+
+    fn fuse_recip(
+        &self,
+        _code: &mut MirWriter,
+        q0: &Instruction,
+        q1: &Instruction,
+    ) -> Option<Instruction> {
+        if let Instruction::Uni {
+            op: UniOp::Recip, ..
+        } = *q0
+        {
+            if let Instruction::Bi {
+                op: BinOp::Times, ..
+            } = *q1
+            {
+                if q0.dst() == q1.s2() {
+                    return Some(Instruction::Bi {
+                        op: BinOp::Divide,
+                        dst: q1.dst(),
+                        s1: q1.s1(),
+                        s2: q0.s1(),
+                    });
+                } else if q0.dst() == q1.s1() {
+                    return Some(Instruction::Bi {
+                        op: BinOp::Divide,
+                        dst: q1.dst(),
+                        s1: q1.s2(),
+                        s2: q0.s1(),
+                    });
+                }
+            }
+        }
+
+        if let Instruction::Uni { op: UniOp::Neg, .. } = *q0 {
+            if let Instruction::Bi {
+                op: BinOp::Plus, ..
+            } = *q1
+            {
+                if q0.dst() == q1.s2() {
+                    return Some(Instruction::Bi {
+                        op: BinOp::Minus,
+                        dst: q1.dst(),
+                        s1: q1.s1(),
+                        s2: q0.s1(),
+                    });
+                } else if q0.dst() == q1.s1() {
+                    return Some(Instruction::Bi {
+                        op: BinOp::Minus,
+                        dst: q1.dst(),
+                        s1: q1.s2(),
+                        s2: q0.s1(),
+                    });
+                }
+            }
+        }
+
+        None
+    }
+
+    fn fuse_recip3(
+        &self,
+        code: &mut MirWriter,
+        q0: &Instruction,
+        q1: &Instruction,
+        q2: &Instruction,
+    ) -> Option<Instruction> {
+        if let Instruction::Uni {
+            op: UniOp::Recip, ..
+        } = *q0
+        {
+            if !q1.regs().contains(&q0.dst()) {
+                if let Instruction::Bi {
+                    op: BinOp::Times, ..
+                } = *q2
+                {
+                    if q0.dst() == q2.s2() {
+                        code.push(q1);
+                        return Some(Instruction::Bi {
+                            op: BinOp::Divide,
+                            dst: q2.dst(),
+                            s1: q2.s1(),
+                            s2: q0.s1(),
+                        });
+                    } else if q0.dst() == q2.s1() {
+                        code.push(q1);
+                        return Some(Instruction::Bi {
+                            op: BinOp::Divide,
+                            dst: q2.dst(),
+                            s1: q2.s2(),
+                            s2: q0.s1(),
+                        });
+                    }
+                }
+            }
+        }
+
+        if let Instruction::Uni { op: UniOp::Neg, .. } = *q0 {
+            if let Instruction::Bi {
+                op: BinOp::Plus, ..
+            } = *q2
+            {
+                if !q1.regs().contains(&q0.dst()) {
+                    if q0.dst() == q2.s2() {
+                        code.push(q1);
+                        return Some(Instruction::Bi {
+                            op: BinOp::Minus,
+                            dst: q2.dst(),
+                            s1: q2.s1(),
+                            s2: q0.s1(),
+                        });
+                    } else if q0.dst() == q2.s1() {
+                        code.push(q1);
+                        return Some(Instruction::Bi {
+                            op: BinOp::Minus,
+                            dst: q2.dst(),
+                            s1: q2.s2(),
+                            s2: q0.s1(),
+                        });
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    fn fuse_zero(
+        &self,
+        _code: &mut MirWriter,
+        q0: &Instruction,
+        q1: &Instruction,
+    ) -> Option<Instruction> {
+        if let Instruction::Uni {
+            op: UniOp::IsZero, ..
+        } = *q0
+        {
+            if let Instruction::Uni { op: UniOp::Neg, .. } = *q1 {
+                if q0.dst() == q1.s1() {
+                    return Some(Instruction::Uni {
+                        op: UniOp::IsNotZero,
+                        dst: q1.dst(),
+                        s1: q0.s1(),
+                    });
+                }
+            }
+        }
+
+        if let Instruction::Uni { op: UniOp::Not, .. } = *q0 {
+            if let Instruction::Uni {
+                op: UniOp::IsZero, ..
+            } = *q1
+            {
+                if q0.dst() == q1.s1() {
+                    return Some(Instruction::Uni {
+                        op: UniOp::IsNotZero,
+                        dst: q1.dst(),
+                        s1: q0.s1(),
+                    });
+                }
+            }
+        }
 
         None
     }
@@ -2657,6 +2868,8 @@ impl Mir {
             (v, 3)
         } else if let Some(v) = self.fuse_times2(code, q0, q1, q2) {
             (v, 3)
+        } else if let Some(v) = self.fuse_recip3(code, q0, q1, q2) {
+            (v, 3)
         } else if let Some(v) = self.fuse_fma(code, q0, q1) {
             (v, 2)
         } else if let Some(v) = self.fuse_op_mov(code, q0, q1) {
@@ -2664,6 +2877,10 @@ impl Mir {
         } else if let Some(v) = self.fuse_load(code, q0, q1) {
             (v, 2)
         } else if let Some(v) = self.fuse_save(code, q0, q1) {
+            (v, 2)
+        } else if let Some(v) = self.fuse_recip(code, q0, q1) {
+            (v, 2)
+        } else if let Some(v) = self.fuse_zero(code, q0, q1) {
             (v, 2)
         } else if let Some(v) = self.fuse_goto(code, q0, q1) {
             (v, 2)
