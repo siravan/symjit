@@ -17,7 +17,6 @@ use crate::config::SPILL_AREA;
 use crate::generator::FuncletType;
 use crate::generator::Generator;
 use crate::machine::MachineCode;
-use crate::mir::UniOp::IsZero;
 use crate::serializer::MirWriter;
 use crate::symbol::Loc;
 use crate::utils::is_external_func;

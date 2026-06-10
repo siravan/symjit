@@ -547,6 +547,7 @@ def compile_evaluator(
 def compile_composer(
     composer,
     ty="native",
+    dtype="float64",
     use_simd=True,
     use_threads=True,
     cse=False,
@@ -618,7 +619,7 @@ def compile_composer(
         fastmath=fastmath,
         opt_level=opt_level,
         defuns=defuns,
-        dtype=composer.dtype,
+        dtype=dtype,
         action="translate",
         convert=False,
         num_params=composer.num_params,

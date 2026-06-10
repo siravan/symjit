@@ -41,28 +41,26 @@ def test_if_else():
 
     f = compile_composer(cp)
 
-    print(f.dumps("bytecode"))
-
     print(f(3, 4))
     print(f(5, 4))
 
 
 def test_complex():
-    cp = Composer(3, 1, dtype="complex128")
+    cp = Composer(3, 1)
 
     s1 = cp.fmul(cp.arg(1), cp.arg(2))
     s2 = cp.fadd(cp.arg(0), s1)
     s3 = cp.sin(s2)
     cp.assign(cp.out(0), s3)
 
-    f = compile_composer(cp)
+    f = compile_composer(cp, dtype="complex128")
     print(f(-5, 2, 3))
     print(f(-24 + 0j, 4 - 3j, 4 + 3j))
 
 
 def test_pi_viete(dtype="float64"):
     N = 21
-    cp = Composer(1, 1, dtype=dtype)
+    cp = Composer(1, 1)
 
     x = cp.arg(0)
     p = cp.new_temp()
@@ -85,12 +83,12 @@ def test_pi_viete(dtype="float64"):
     s6 = cp.fdiv(cp.constant(2.0), p)
     cp.assign(cp.out(0), s6)
 
-    f = compile_composer(cp)
+    f = compile_composer(cp, dtype=dtype)
     print(f(1 / 2)[0][0])
 
 
 def test_sum(dtype="float64"):
-    cp = Composer(1, 1, dtype=dtype)
+    cp = Composer(1, 1)
     x = cp.new_temp()
     s = cp.new_temp()
     cp.assign(s, cp.arg(0))
@@ -103,7 +101,7 @@ def test_sum(dtype="float64"):
 
     # print(cp.get_instructions())
 
-    f = compile_composer(cp, opt_level=0)
+    f = compile_composer(cp, dtype=dtype)
 
     print(f(0)[0][0])
 

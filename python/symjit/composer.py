@@ -1,4 +1,18 @@
+import numbers
 from fractions import Fraction
+from typing import NamedTuple, Self
+
+
+class Slot(NamedTuple):
+    loc: str
+    idx: int
+
+    def __repr__(self):
+        return f"('{self.loc}', {self.idx})"
+
+
+class Label(NamedTuple):
+    id: int
 
 
 class ComposerNumber:
@@ -14,227 +28,230 @@ class ComposerNumber:
 
 
 class Composer:
-    def __init__(self, num_params, num_outs, dtype="float64"):
-        assert dtype == "float64" or dtype == "complex128"
-        self.dtype = dtype
+    def __init__(self, num_params: int, num_outs: int):
         self.num_params = num_params
         self.num_outs = num_outs
         self.count_temp = 0
         self.count_label = 0
         self.constants = []
+        self.const_indices = {}
         self.parent = None
         self.ir = []
 
     def new_block(self):
-        block = Composer(self.num_params, self.num_outs, dtype=self.dtype)
+        block = Composer(self.num_params, self.num_outs)
         block.parent = self
         return block
 
-    def arg(self, id):
+    def arg(self, id: int) -> Slot:
         if self.parent is None:
             if id < self.num_params:
-                return ("param", id)
+                return Slot("param", id)
             else:
                 raise ValueError(f"param id {id} out of range")
         else:
             return self.parent.arg(id)
 
-    def out(self, id):
+    def out(self, id: int) -> Slot:
         if self.parent is None:
             if id < self.num_outs:
-                return ("out", id)
+                return Slot("out", id)
             else:
                 raise ValueError(f"out id {id} out of range")
         else:
             return self.parent.out(id)
 
-    def constant(self, val):
+    def constant(self, val: numbers.Number) -> Slot:
         if self.parent is None:
-            if self.dtype == "float64" or val.imag == 0:
-                try:
-                    return ("const", self.constants.index(val))
-                except ValueError:
-                    self.constants.append(ComposerNumber(val.real))
-                    return ("const", len(self.constants) - 1)
+            if val in self.const_indices:
+                return self.const_indices[val]
+            elif isinstance(val, numbers.Real):
+                x = Slot("const", len(self.constants))
+                self.constants.append(ComposerNumber(val))
+                self.const_indices[val] = x
+                return x
+            elif isinstance(val, numbers.Complex):
+                idx = len(self.constants)
+                x = self.complex(Slot("const", idx), Slot("const", idx + 1))
+                self.constants.append(ComposerNumber(val.real))
+                self.constants.append(ComposerNumber(val.imag))
+                self.const_indices[val] = x
+                return x
             else:
-                x = self.constant(val.real)
-                y = self.constant(val.imag)
-                return self.function("complex", x, y)
+                raise ValueError(f"{val} is not an acceptable constant.")
         else:
             return self.parent.constant(val)
 
-    def new_temp(self):
+    def new_temp(self) -> Slot:
         if self.parent is None:
             t = self.count_temp
             self.count_temp += 1
-            return ("temp", t)
+            return Slot("temp", t)
         else:
             return self.parent.new_temp()
 
-    def new_label(self):
+    def new_label(self) -> Label:
         if self.parent is None:
             self.count_label += 1
-            return self.count_label
+            return Label(self.count_label)
         else:
             return self.parent.new_label()
 
     def get_instructions(self):
         return (self.ir, self.count_temp, self.constants)
 
-    def function(self, fun, *arg):
+    def function(self, fun: str, *arg: Slot) -> Slot:
         t = self.new_temp()
         self.ir.append(("fun", t, fun, [], [*arg], False))
         return t
 
-    def assign(self, lhs, rhs):
+    def assign(self, lhs: Slot, rhs: Slot) -> Slot:
         self.ir.append(("assign", lhs, rhs))
         return lhs
 
-    def fadd(self, x, y):
+    def fadd(self, x: Slot, y: Slot) -> Slot:
         t = self.new_temp()
         self.ir.append(("add", t, [x, y], 0))
         return t
 
-    def fmul(self, x, y):
+    def fmul(self, x: Slot, y: Slot) -> Slot:
         t = self.new_temp()
         self.ir.append(("mul", t, [x, y], 0))
         return t
 
-    def fsub(self, x, y):
+    def fsub(self, x: Slot, y: Slot) -> Slot:
         return self.fadd(x, self.neg(y))
 
-    def fdiv(self, x, y):
+    def fdiv(self, x: Slot, y: Slot) -> Slot:
         return self.fmul(x, self.recip(y))
 
-    def idiv(self, x, y):
+    def idiv(self, x: Slot, y: Slot) -> Slot:
         q = self.fdiv(x, y)
         return self.floor(q)
 
-    def mod(self, x, y):
+    def mod(self, x: Slot, y: Slot) -> Slot:
         return self.fsub(x, self.fmul(y, self.idiv(x, y)))
 
-    def neg(self, arg):
+    def neg(self, arg: Slot) -> Slot:
         return self.function("neg", arg)
 
-    def abs(self, arg):
+    def abs(self, arg: Slot) -> Slot:
         return self.function("abs", arg)
 
-    def sqrt(self, arg):
+    def sqrt(self, arg: Slot) -> Slot:
         return self.function("root", arg)
 
-    def real_sqrt(self, arg):
+    def real_sqrt(self, arg: Slot) -> Slot:
         return self.function("real_root", arg)
 
-    def square(self, arg):
+    def square(self, arg: Slot) -> Slot:
         return self.function("square", arg)
 
-    def cube(self, arg):
+    def cube(self, arg: Slot) -> Slot:
         return self.function("cube", arg)
 
-    def recip(self, arg):
+    def recip(self, arg: Slot) -> Slot:
         return self.function("recip", arg)
 
-    def round(self, arg):
+    def round(self, arg: Slot) -> Slot:
         return self.function("round", arg)
 
-    def floor(self, arg):
+    def floor(self, arg: Slot) -> Slot:
         return self.function("floor", arg)
 
-    def ceiling(self, arg):
+    def ceiling(self, arg: Slot) -> Slot:
         return self.function("ceiling", arg)
 
-    def trunc(self, arg):
+    def trunc(self, arg: Slot) -> Slot:
         return self.function("trunc", arg)
 
-    def frac(self, arg):
+    def frac(self, arg: Slot) -> Slot:
         return self.function("frac", arg)
 
-    def powi(self, x, power):
+    def powi(self, x: Slot, power: int) -> Slot:
         t = self.new_temp()
         self.ir.append(("pow", t, x, power, False))
         return t
 
-    def powf(self, x, y):
+    def powf(self, x: Slot, y: Slot) -> Slot:
         t = self.new_temp()
         self.ir.append(("powf", t, x, y, False))
         return t
 
-    def real(self, arg):
+    def real(self, arg: Slot) -> Slot:
         return self.function("real", arg)
 
-    def imag(self, arg):
+    def imag(self, arg: Slot) -> Slot:
         return self.function("imaginary", arg)
 
-    def conjugate(self, arg):
+    def conjugate(self, arg: Slot) -> Slot:
         return self.function("conjugate", arg)
+
+    def complex(self, x: Slot, y: Slot) -> Slot:
+        return self.function("complex", x, y)
 
     # Comparisons
 
-    def lt(self, *args):
-        return self.function("lt", *args)
+    def lt(self, x: Slot, y: Slot) -> Slot:
+        return self.function("lt", x, y)
 
-    def leq(self, *args):
-        return self.function("leq", *args)
+    def leq(self, x: Slot, y: Slot) -> Slot:
+        return self.function("leq", x, y)
 
-    def gt(self, *args):
-        return self.function("gt", *args)
+    def gt(self, x: Slot, y: Slot) -> Slot:
+        return self.function("gt", x, y)
 
-    def geq(self, *args):
-        return self.function("geq", *args)
+    def geq(self, x: Slot, y: Slot) -> Slot:
+        return self.function("geq", x, y)
 
-    def eq(self, *args):
-        return self.function("eq", *args)
+    def eq(self, x: Slot, y: Slot) -> Slot:
+        return self.function("eq", x, y)
 
-    def neq(self, *args):
-        return self.function("neq", *args)
+    def neq(self, x: Slot, y: Slot) -> Slot:
+        return self.function("neq", x, y)
 
     # Logical
 
-    def and_(self, *args):
-        return self.function("and", *args)
+    def and_(self, x: Slot, y: Slot) -> Slot:
+        return self.function("and", x, y)
 
-    def or_(self, *args):
-        return self.function("or", *args)
+    def or_(self, x: Slot, y: Slot) -> Slot:
+        return self.function("or", x, y)
 
-    def xor(self, *args):
-        return self.function("xor", *args)
+    def xor(self, x: Slot, y: Slot) -> Slot:
+        return self.function("xor", x, y)
 
-    def not_(self, arg):
+    def not_(self, arg: Slot) -> Slot:
         return self.function("not", arg)
 
-    def iszero(self, arg):
+    def iszero(self, arg: Slot) -> Slot:
         return self.function("iszero", arg)
 
-    def set_label(self, label):
-        self.ir.append(("label", label))
+    def set_label(self, label: Label):
+        self.ir.append(("label", label.id))
 
-    def branch(self, label):
+    def branch(self, label: Label):
         # self.ir.append(("goto", label))
         # note: we use `if_else` instead of `goto` because `goto` can
         # be elided
-        self.ir.append(("if_else", self.constant(0), label))
+        self.ir.append(("if_else", self.constant(0), label.id))
 
-    def branch_if(self, cond, label):
-        self.ir.append(("if_else", self.not_(cond), label))
+    def branch_if(self, cond: Slot, label: Label):
+        self.ir.append(("if_else", self.not_(cond), label.id))
 
-    def branch_else(self, cond, label):
-        self.ir.append(("if_else", cond, label))
+    def branch_else(self, cond, label: Label):
+        self.ir.append(("if_else", cond, label.id))
 
-    def join(self, cond, true_val, false_val):
+    def join(self, cond: Slot, true_val: Slot, false_val: Slot) -> Slot:
         t = self.new_temp()
         self.ir.append(("join", t, cond, true_val, false_val))
         return t
 
-    def select(self, cond, true_val, false_val):
-        t = self.new_temp()
-        self.ir.append(("join", t, cond, false_val, true_val))
-        return t
-
-    def append_block(self, block):
+    def append_block(self, block: Self):
         assert block.parent == self
         self.ir.extend(block.ir)
 
-    def append_if_else(self, cond, block_if, block_else):
+    def append_if_else(self, cond: Slot, block_if: Self, block_else: Self):
         label_else = self.new_label()
         label_done = self.new_label()
 
@@ -245,115 +262,109 @@ class Composer:
         self.append_block(block_else)
         self.set_label(label_done)
 
-    def append_for_loop(self, for_var, start, end, block):
+    def append_for_loop(
+        self, for_var: Slot, start: numbers.Number, end: numbers.Number, block: Self
+    ):
         loop = self.new_label()
 
         self.assign(for_var, self.constant(start))
         self.set_label(loop)
         self.append_block(block)
-        s1 = self.fadd(for_var, self.constant(1))
-        self.assign(for_var, s1)
+        self.assign(for_var, self.fadd(for_var, self.constant(1)))
         cond = self.geq(for_var, self.constant(end))
         self.branch_else(cond, loop)
 
     # Transcendental Functions
 
-    def sin(self, arg):
+    def sin(self, arg: Slot) -> Slot:
         return self.function("sin", arg)
 
-    def cos(self, arg):
+    def cos(self, arg: Slot) -> Slot:
         return self.function("cos", arg)
 
-    def tan(self, arg):
+    def tan(self, arg: Slot) -> Slot:
         return self.function("tan", arg)
 
-    def csc(self, arg):
+    def csc(self, arg: Slot) -> Slot:
         return self.function("csc", arg)
 
-    def sec(self, arg):
+    def sec(self, arg: Slot) -> Slot:
         return self.function("sec", arg)
 
-    def cot(self, arg):
+    def cot(self, arg: Slot) -> Slot:
         return self.function("cot", arg)
 
-    def sinc(self, arg):
+    def sinc(self, arg: Slot) -> Slot:
         return self.function("sinc", arg)
 
-    def sinh(self, arg):
+    def sinh(self, arg: Slot) -> Slot:
         return self.function("sinh", arg)
 
-    def cosh(self, arg):
+    def cosh(self, arg: Slot) -> Slot:
         return self.function("cosh", arg)
 
-    def tanh(self, arg):
+    def tanh(self, arg: Slot) -> Slot:
         return self.function("tanh", arg)
 
-    def csch(self, arg):
+    def csch(self, arg: Slot) -> Slot:
         return self.function("csch", arg)
 
-    def sech(self, arg):
+    def sech(self, arg: Slot) -> Slot:
         return self.function("sech", arg)
 
-    def coth(self, arg):
+    def coth(self, arg: Slot) -> Slot:
         return self.function("coth", arg)
 
-    def asin(self, arg):
+    def asin(self, arg: Slot) -> Slot:
         return self.function("arcsin", arg)
 
-    def acos(self, arg):
+    def acos(self, arg: Slot) -> Slot:
         return self.function("arccos", arg)
 
-    def atan(self, arg):
+    def atan(self, arg: Slot) -> Slot:
         return self.function("arctan", arg)
 
-    def asinh(self, arg):
+    def asinh(self, arg: Slot) -> Slot:
         return self.function("arcsinh", arg)
 
-    def acosh(self, arg):
+    def acosh(self, arg: Slot) -> Slot:
         return self.function("arccosh", arg)
 
-    def atanh(self, arg):
+    def atanh(self, arg: Slot) -> Slot:
         return self.function("arctanh", arg)
 
-    def cbrt(self, arg):
+    def cbrt(self, arg: Slot) -> Slot:
         return self.function("cbrt", arg)
 
-    def exp(self, arg):
+    def exp(self, arg: Slot) -> Slot:
         return self.function("exp", arg)
 
-    def exp2(self, arg):
+    def exp2(self, arg: Slot) -> Slot:
         return self.function("exp2", arg)
 
-    def log(self, arg):
+    def log(self, arg: Slot) -> Slot:
         return self.function("ln", arg)
 
-    def log10(self, arg):
+    def log10(self, arg: Slot) -> Slot:
         return self.function("log", arg)
 
-    def log2(self, arg):
-        assert self.dtype == "float64"
+    def log2(self, arg: Slot) -> Slot:
         return self.function("log2", arg)
 
-    def expm1(self, arg):
-        assert self.dtype == "float64"
+    def expm1(self, arg: Slot) -> Slot:
         return self.function("expm1", arg)
 
-    def log1p(self, arg):
-        assert self.dtype == "float64"
+    def log1p(self, arg: Slot) -> Slot:
         return self.function("log1p", arg)
 
-    def erf(self, arg):
-        assert self.dtype == "float64"
+    def erf(self, arg: Slot) -> Slot:
         return self.function("erf", arg)
 
-    def erfc(self, arg):
-        assert self.dtype == "float64"
+    def erfc(self, arg: Slot) -> Slot:
         return self.function("erfc", arg)
 
-    def gamma(self, arg):
-        assert self.dtype == "float64"
+    def gamma(self, arg: Slot) -> Slot:
         return self.function("gamma", arg)
 
-    def loggamma(self, arg):
-        assert self.dtype == "float64"
+    def loggamma(self, arg: Slot) -> Slot:
         return self.function("loggamma", arg)

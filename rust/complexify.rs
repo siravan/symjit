@@ -231,6 +231,16 @@ impl Generator for Complexifier {
     }
 
     fn save_stack(&mut self, s1: Reg, idx: u32) {
+        /*
+         * the reason to use `ensure_complex` here is to correctly
+         * handle slots which are updated using `assign`.
+         * The problem was discovered on testing
+         * `composer/mandelbrot.py`.
+         */
+        self.ensure_complex(s1);
+        self.mir.save_stack_complex(re(s1), im(s1), idx);
+        self.set_loc_complex(Loc::Stack(idx));
+        /*
         if self.is_real_reg(s1) {
             self.mir.save_stack(re(s1), idx);
             self.set_loc_real(Loc::Stack(idx));
@@ -240,6 +250,7 @@ impl Generator for Complexifier {
             self.mir.save_stack_complex(re(s1), im(s1), idx);
             self.set_loc_complex(Loc::Stack(idx));
         }
+        */
     }
 
     fn load_mem_complex(&mut self, _xd: Reg, _yd: Reg, _idx: u32) {

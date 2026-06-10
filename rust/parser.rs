@@ -11,8 +11,8 @@ enum Token {
     LeftBracket,
     RightBracket,
     Comma,
-    Number(i64, i64),
-    Imaginary(i64, i64),
+    Number(i128, i128),
+    Imaginary(i128, i128),
     Ident(String),
     True,
     False,
@@ -64,10 +64,10 @@ impl Tokenizer {
             1
         };
 
-        let mut num = 0;
+        let mut num: i128 = 0;
 
         while self.head().is_ascii_digit() && !self.eof() {
-            num = num * 10 + self.head().to_digit(10).unwrap() as i64;
+            num = num * 10 + self.head().to_digit(10).unwrap() as i128;
             self.advance();
         }
 
@@ -78,11 +78,11 @@ impl Tokenizer {
             false
         };
 
-        let den = if self.head() == '/' {
+        let den: i128 = if self.head() == '/' {
             self.advance();
             let mut d = 0;
             while self.head().is_ascii_digit() && !self.eof() {
-                d = d * 10 + self.head().to_digit(10).unwrap() as i64;
+                d = d * 10 + self.head().to_digit(10).unwrap() as i128;
                 self.advance();
             }
             d
@@ -181,7 +181,7 @@ impl Parser {
         Err(anyhow!("cannot find {:?} at {:?}", pat, self.pos()))
     }
 
-    fn parse_num(&mut self) -> Result<i64> {
+    fn parse_num(&mut self) -> Result<i128> {
         if let Some(Token::Number(num, 1)) = self.next() {
             Ok(num)
         } else {
@@ -347,7 +347,7 @@ impl Parser {
         let n = self.parse_num()?;
         self.expects(Token::Comma)?;
         let b = self.parse_bool()?;
-        Ok(Instruction::Pow(dst, arg, n, b))
+        Ok(Instruction::Pow(dst, arg, n as i64, b))
     }
 
     fn parse_powf(&mut self) -> Result<Instruction> {
