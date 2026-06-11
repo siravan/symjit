@@ -273,6 +273,9 @@ class SymbolicaFunc:
 
         inputs = np.asarray(inputs)
         c = self.compiler
+
+        assert inputs.shape[1] == c.count_params
+
         outs = np.zeros((inputs.shape[0], c.count_obs), dtype=np.float64)
 
         args = np.ascontiguousarray(inputs[:, : c.count_params].real, dtype=np.float64)
@@ -285,6 +288,9 @@ class SymbolicaFunc:
 
         inputs = np.asarray(inputs)
         c = self.complex_compiler
+
+        assert inputs.shape[1] == c.count_params // 2
+
         outs = np.zeros((inputs.shape[0], c.count_obs // 2), dtype=np.complex128)
 
         args = np.ascontiguousarray(inputs, dtype=np.complex128)

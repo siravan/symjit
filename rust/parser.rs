@@ -366,7 +366,7 @@ impl Parser {
         self.expects(Token::Comma)?;
         let dst = self.parse_slot()?;
         self.expects(Token::Comma)?;
-        let name = self.parse_ident()?;
+        let mut name = self.parse_ident()?;
         self.expects(Token::Comma)?;
 
         let args;
@@ -386,12 +386,11 @@ impl Parser {
             b = self.parse_bool()?;
         }
 
-        Ok(Instruction::Fun(
-            dst,
-            format!("symbolica_{}", name),
-            args,
-            b,
-        ))
+        if !name.starts_with("composer_") {
+            name = format!("symbolica_{}", name);
+        }
+
+        Ok(Instruction::Fun(dst, name, args, b))
     }
 
     fn parse_external_fun(&mut self) -> Result<Instruction> {

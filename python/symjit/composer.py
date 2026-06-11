@@ -35,6 +35,7 @@ class Composer:
         self.count_label = 0
         self.constants = []
         self.const_indices = {}
+        self.defuns = None
         self.parent = None
         self.ir = []
 
@@ -61,7 +62,7 @@ class Composer:
         else:
             return self.parent.out(id)
 
-    def constant(self, val: numbers.Number) -> Slot:
+    def constant(self, val) -> Slot:
         if self.parent is None:
             if val in self.const_indices:
                 return self.const_indices[val]
@@ -100,9 +101,21 @@ class Composer:
     def get_instructions(self):
         return (self.ir, self.count_temp, self.constants)
 
-    def function(self, fun: str, *arg: Slot) -> Slot:
+    def function(self, name: str, *arg: Slot) -> Slot:
         t = self.new_temp()
-        self.ir.append(("fun", t, fun, [], [*arg], False))
+        self.ir.append(("fun", t, name, [], [*arg], False))
+        return t
+
+    def call(self, fun, *arg: Slot) -> Slot:
+        if self.defuns is None:
+            name = "composer_func0"
+            self.defuns = {name: fun}
+        else:
+            name = f"composer_func{len(self.defuns)}"
+            self.defuns[name] = fun
+
+        t = self.new_temp()
+        self.ir.append(("fun", t, name, [], [*arg], True))
         return t
 
     def assign(self, lhs: Slot, rhs: Slot) -> Slot:
@@ -229,6 +242,17 @@ class Composer:
 
     def set_label(self, label: Label):
         self.ir.append(("label", label.id))
+
+    def min(self, x: Slot, y: Slot) -> Slot:
+        return self.join(self.lt(x, y), x, y)
+
+    def max(self, x: Slot, y: Slot) -> Slot:
+        return self.join(self.gt(x, y), x, y)
+
+    def heaviside(self, x: Slot) -> Slot:
+        return self.join(
+            self.geq(x, self.constant(0)), self.constant(1), self.constant(0)
+        )
 
     def branch(self, label: Label):
         # self.ir.append(("goto", label))

@@ -9,6 +9,7 @@ def test_simple():
     cp.assign(cp.out(1), s2)
 
     f = compile_composer(cp)
+
     print(f(3, 4))
 
 
@@ -17,7 +18,7 @@ def test_recip():
     s1 = cp.fsub(cp.arg(0), cp.arg(1))
     s2 = cp.fadd(cp.arg(0), cp.arg(1))
     s2 = cp.fdiv(s1, s2)
-    cp.assign(cp.out(0), s1)
+    cp.assign(cp.out(0), s2)
 
     f = compile_composer(cp)
 
@@ -106,6 +107,18 @@ def test_sum(dtype="float64"):
     print(f(0)[0][0])
 
 
+def test_call(dtype="float64", direct=True):
+    cp = Composer(2, 1)
+
+    s1 = cp.call(lambda x: x**2 + 5, cp.arg(0))
+    s2 = cp.call(lambda x, y: x**3 - y, cp.arg(0), cp.arg(1))
+    cp.assign(cp.out(0), cp.fadd(s1, s2))
+
+    f = compile_composer(cp, dtype=dtype, direct=direct)
+
+    print(f(4, 7)[0][0])
+
+
 #######################################################################
 
 test_simple()
@@ -115,3 +128,8 @@ test_complex()
 test_pi_viete("float64")
 test_pi_viete("complex128")
 test_sum("float64")
+test_sum("complex128")
+test_call("float64")
+test_call("complex128")
+test_call("float64", direct=False)
+test_call("complex128", direct=False)

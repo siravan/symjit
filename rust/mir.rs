@@ -1091,6 +1091,12 @@ impl Mir {
     }
 
     pub fn find_op(&self, op: &str) -> Result<Func> {
+        if let Some(df) = &self.config.df {
+            if let Some(f) = df.funcs.get(op) {
+                return Ok(f.clone());
+            }
+        }
+
         let op = if self.config.is_complex() && !is_external_func(op) {
             &format!("cplx_{}", &op)
         } else {

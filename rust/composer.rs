@@ -264,7 +264,7 @@ impl DirectTranslator {
             }
         }
 
-        if VirtualTable::from_str(op).is_ok() {
+        if VirtualTable::from_str(op).is_ok() || op.starts_with("composer_") {
             if n == 1 {
                 self.load(reg(0), &args[0])?;
                 self.mir.setup_call_unary(reg(0));
@@ -493,7 +493,7 @@ impl Composer for DirectTranslator {
 
         let mut prog: Program = self.prog.clone();
 
-        prog.count_params = k * self.count_params;
+        prog.count_params = k * self.count_params.max(self.num_params);
         prog.count_obs = k * self.count_outs;
         prog.builder.consts = self.consts.clone();
         prog.builder.ft = self.ft.clone();

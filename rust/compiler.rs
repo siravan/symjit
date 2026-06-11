@@ -946,7 +946,7 @@ impl IndirectTranslator {
             args.iter().map(|a| self.expr(a, false)).collect()
         };
 
-        if VirtualTable::from_str(op).is_ok() {
+        if VirtualTable::from_str(op).is_ok() || op.starts_with("composer_") {
             if n == 1 {
                 self.assign(lhs, Expr::unary(op, &args[0]))?;
             } else if n == 2 {
