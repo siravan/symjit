@@ -97,7 +97,7 @@ def test_sum(dtype="float64"):
     b = cp.new_block()
     b.assign(s, b.fadd(s, x))
 
-    cp.append_for_loop(x, 1, 100, b)
+    cp.append_for(x, 1, 100, b)
     cp.assign(cp.out(0), s)
 
     # print(cp.get_instructions())

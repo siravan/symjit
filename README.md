@@ -329,7 +329,7 @@ assert(my_exp(2.0) == math.exp(2.0))
 
 Note that for `Sum` and `Product`, the range follows the mathematical convention of including the last expression, i.e., `(x, 1, 3)` means `x` assumes values of `1, 2, 3`.
 
-## Calling Other Functions
+## Calling External Functions
 
 SymJit also allows calling other simple SymJit or Python functions. Currently, only functions that accept one or two double arguments and return a double result are supported; therefore, only SymJit functions defined as *fast* as allowed, see [Optimization](./docs/OPTIMIZATION.md). To pass a function, we need to define a placeholder symbol using SymPy's `Function` constructor. Then, we pass a dictionary of `Function`s and their definitions as an argument `defuns` to `compile_*` functions. For example, we can rewrite `my_exp` function above as
 

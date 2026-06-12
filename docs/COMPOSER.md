@@ -30,8 +30,6 @@ First, we create a `Composer` object as `cp = Composer(2, 1)` with 2 input argum
 Symjit supports `float64`, `complex128`, and various SIMD versions of these two main types. `Composer` is mostly type-agnostic. The same composer can be compiled for `float64` (default) and `complex128`. For example,
 
 ```python
-from symjit import Composer, compile_composer
-
 cp = Composer(2, 1)
 s1 = cp.fmul(cp.arg(0), cp.arg(1))
 cp.assign(cp.out(0), s1)
@@ -71,6 +69,10 @@ There are four main types of slot:
 
 In addition to slots, some Composer methods expect a label as an argument. The user can create a new label using `cp.new_label()`. Labels are used to create loops and jumps.
 
+## Assignment
+
+The majority of `Composer` operations return the result in a new temporary variable in accordance with the Static Single Assignment (SSA) form. On the other hand, `assign(lhs, rhs)` assigns the right-hand-side (rhs) to a previosely defined left-hand-side (lhs) variable. This is akin to the φ-block in compiler theory. 
+
 ## Operations
 
 This is a list of operations defined for Composer:
@@ -88,6 +90,23 @@ This is a list of operations defined for Composer:
 * Inverse Hyperbolic functions: `asinh`, `acosh`, and `atanh`.
 * Miscellaneous functions: `min`, `max`, `heaviside`, `cbrt`, `exp`, `exp2`, `log`, `log10`, `log2`, `expm1`, and `log1p`,
 * Advanced functions: `erf`, `erfc`, `gamma`, and `loggamma`.
+
+## External Functions
+
+Similar to Symjit, you can pass external Python functions to `Composer`. Currently, only functions that accept one or two `float64` arguments and return a single `float64` are supported. Specifically, the function should be converted to one of the two following forms:
+
+* `ctypes.CFUNCTYPE(ctypes.c_double, ctypes.c_double)`
+* `ctypes.CFUNCTYPE(ctypes.c_double, ctypes.c_double, ctypes.c_double)`
+
+Let `g` be such a function or lambda expression. You can call it by using `Composer.call(g, arg0)` or `Composer.call(g, arg0, arg1)`. For example,
+
+```python
+    cp = Composer(1, 1)
+    s = cp.call(lambda x: x**2 + 1, cp.arg(0))
+    cp.assign(cp.out(0), s)
+    f = compile_composer(cp)
+    print(f(4)[0][0] == 17)
+```
 
 ## Branching and SIMD
 
@@ -118,7 +137,7 @@ f = compile_composer(cp)
 assert(f(3, 5)[0] == 3)
 ```
 
-This works! However, if we apply the same function to a matrix input using `evaluate`, the result could be wrong. This is because different SIMD lanes are not necessarily convergent (all true or all false). An easy solution is to turn off automatic SIMD generation by passing `use_simd = False` to `compile_composer`. This works but would deny us a major optimization. A better option is to modify the code to make it work in case it is vectorized. The key is that both branches of `if` can be taken. In fact, for SIMD instructions, `branch_if` jumps only if all the lanes are true. Conversely, `branch_else` jumps only if all the lanes are false. For a mix of true and false lanes, both branch instructions are inactive. In this situation, we cannot overwrite `out(0)` in the else-branch, because it will erase whatever was written in the then-branch. The solution is to use temporary variables and then cap if-then-else with a `join` instructions to merge the results of the two branches. It is easier to see the code that to describe it. Here is the correct code:
+This works! However, if we apply the same function to a matrix input using `evaluate`, the result could be wrong. This is because different SIMD lanes are not necessarily convergent (all true or all false). An easy solution is to turn off automatic SIMD generation by passing `use_simd = False` to `compile_composer`. This works but would deny us a major optimization. A better option is to modify the code to make it work in case it is vectorized. The key is that both branches of `if` can be taken. In fact, for SIMD instructions, `branch_if` jumps only if all the lanes are true. Conversely, `branch_else` jumps only if all the lanes are false. For a mix of true and false lanes, both branch instructions are inactive. In this situation, we cannot overwrite `out(0)` in the else-branch, because it will erase whatever was written in the then-branch. The solution is to use temporary variables and then cap if-then-else with a `join` instructions to merge the results of the two branches. It is easier to see the code that to describe it! Here is the correct code:
 
 ```python
 from symjit import Composer, compile_composer
@@ -149,4 +168,45 @@ cp.assign(cp.out(0), t)
 f = compile_composer(cp)
 
 assert(f(3, 5)[0] == 3)
+```
+
+Because the example above has lots of boilerplate code, `Composer` has helper functions to make it easier to write such code. For if-else code, the helper function is `append_if_else(cond, block_if, block_else)`, where `cond` is the condtion and `block_if` and `block_else` are code blocks. The utility function `Composer.new_block()` creates new empty blocks, which are then populated with the desired code before being passed to `append_if`. The above example becomes:
+
+```python
+from symjit import Composer, compile_composer
+
+cp = Composer(2, 1)
+
+b1 = cp.new_block()
+t1 = cp.new_temp()
+b1.assign(t1, cp.arg(0))
+
+b2 = cp.new_block()
+t2 = cp.new_temp()
+b2.assign(t2, cp.arg(1))
+
+cond = cp.lt(cp.arg(0), cp.arg(1))
+cp.append_if_else(code, b1, b2)
+t = cp.join(cond, t1, t2)
+cp.assign(cp.out(0), t)
+
+f = compile_composer(cp)
+
+assert(f(5, 1)[0] == 1)
+```
+
+You can also directly insert a block into the current code stream using `Composer.append_block(block)`. Another helper function is `Composer.append_for(for_var, start, end, block)`, where `for_var` is the loop variable defined using `new_temp()`, `start` and `end` are constants marking the range of the for-loop, and `block` is a block defining the body of the loop. Finally, the following code shows the general pattern of a while-loop:
+
+```python
+label_while = cp.new_label()
+label_done = cp.new_label()
+
+cp.set_label(label_while)
+cond = ...  # calculating the while condition
+cp.branch_else(cond, label_done)
+... # body of the while loop
+t = cp.join(cond, ...)    # join instruction to make sure different lanes are updated correctly
+cp.assign(..., t)
+cp.branch(label_while)
+set_label(label_done)
 ```

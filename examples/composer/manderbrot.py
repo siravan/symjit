@@ -11,7 +11,7 @@ def manderbrot():
 
     bl = cp.new_block()
     bl.assign(z, bl.fadd(bl.square(z), c))
-    cp.append_for_loop(cp.new_temp(), 1, 20, bl)
+    cp.append_for(cp.new_temp(), 1, 20, bl)
 
     cp.assign(z, cp.abs(z))
     t = cp.join(cp.lt(z, cp.constant(4.0)), cp.sqrt(z), cp.constant(0))

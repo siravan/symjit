@@ -1,6 +1,6 @@
 import numbers
 from fractions import Fraction
-from typing import NamedTuple, Self
+from typing import Callable, NamedTuple, Self
 
 
 class Slot(NamedTuple):
@@ -106,7 +106,7 @@ class Composer:
         self.ir.append(("fun", t, name, [], [*arg], False))
         return t
 
-    def call(self, fun, *arg: Slot) -> Slot:
+    def call(self, fun: Callable, *arg: Slot) -> Slot:
         if self.defuns is None:
             name = "composer_func0"
             self.defuns = {name: fun}
@@ -286,7 +286,7 @@ class Composer:
         self.append_block(block_else)
         self.set_label(label_done)
 
-    def append_for_loop(
+    def append_for(
         self, for_var: Slot, start: numbers.Number, end: numbers.Number, block: Self
     ):
         loop = self.new_label()
