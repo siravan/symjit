@@ -271,11 +271,11 @@ class Composer:
         self.ir.append(("join", t, cond, true_val, false_val))
         return t
 
-    def append_block(self, block: Self):
+    def append_block(self, block: "Composer"):
         assert block.parent == self
         self.ir.extend(block.ir)
 
-    def append_if_else(self, cond: Slot, block_if: Self, block_else: Self):
+    def append_if_else(self, cond: Slot, block_if: "Composer", block_else: "Composer"):
         label_else = self.new_label()
         label_done = self.new_label()
 
@@ -287,7 +287,11 @@ class Composer:
         self.set_label(label_done)
 
     def append_for(
-        self, for_var: Slot, start: numbers.Number, end: numbers.Number, block: Self
+        self,
+        for_var: Slot,
+        start: numbers.Number,
+        end: numbers.Number,
+        block: "Composer",
     ):
         loop = self.new_label()
 
