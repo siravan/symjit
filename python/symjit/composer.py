@@ -1,6 +1,6 @@
 import numbers
 from fractions import Fraction
-from typing import Callable, NamedTuple, Self
+from typing import Callable, NamedTuple  # , Self
 
 
 class Slot(NamedTuple):
