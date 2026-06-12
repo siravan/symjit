@@ -6,7 +6,7 @@ from symjit import compile_evaluator
 
 file = os.path.join(os.path.dirname(__file__), "mre_instructions_noreal.txt")
 
-with open(file) as fd:
+with open(file, "rt", encoding="utf-8") as fd:
     one_loop_instructions = fd.read()
 
 f_normal = compile_evaluator(

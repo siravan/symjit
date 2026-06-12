@@ -13,7 +13,7 @@ INSTRUCTIONS = os.path.join(
     os.path.dirname(__file__), f"{sys.argv[1]}loop_instructions_2.txt"
 )
 
-with open(INSTRUCTIONS, "r") as fd:
+with open(INSTRUCTIONS, "rt", encoding="utf-8") as fd:
     evaluator = fd.read()
 
 print("Building symjit evaluator...")

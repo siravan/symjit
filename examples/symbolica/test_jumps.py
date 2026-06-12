@@ -6,7 +6,7 @@ from symjit import compile_evaluator
 
 file = os.path.join(os.path.dirname(__file__), "1loop_instructions.txt")
 
-with open(file) as fd:
+with open(file, "rt", encoding="utf-8") as fd:
     one_loop_instructions = fd.read()
 
 f_without_simd = compile_evaluator(
