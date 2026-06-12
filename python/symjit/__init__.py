@@ -366,6 +366,7 @@ def compile_json(
     huge=False,
     parallel_mul=True,
     compress=False,
+    backend="rust",
 ):
     """Compiles CellML models
     CellML json files are extracted using CellMLToolkit.jl
