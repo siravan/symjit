@@ -56,13 +56,13 @@ np.testing.assert_array_almost_equal(f.evaluate_complex(X).ravel(), (X[:,0] + X[
 
 ## Slots
 
-A slot is a memory location or a constant. Most `Composer` methods expect one or more slots are arguments and return a slot. For example, the type annotation for `fadd is def fadd(self, x: Slot, y: Slot) -> Slot`.
+A slot is a memory location or a constant. Most `Composer` methods expect one or more slots as arguments and return a slot. For example, the type annotation for `fadd is def fadd(self, x: Slot, y: Slot) -> Slot`.
 
 There are four main types of slot:
 
 1. `cp.arg(i)`: the `i`th input argument.
 2. `cp.out(i)`: the `i`th output variable.
-3. `cp.temp(i)`: the `i`th temoprary/stack variable. These slots are generally returned from Composer methods and created by calling cp.new_temp().
+3. `cp.temp(i)`: the `i`th tempprary/stack variable. These slots are generally returned from Composer methods and created by calling cp.new_temp().
 4. `cp.conatant(val)`: a numerical contact, either `float64` or `complex128`.
 
 ## Labels
@@ -71,7 +71,7 @@ In addition to slots, some Composer methods expect a label as an argument. The u
 
 ## Assignment
 
-The majority of `Composer` operations return the result in a new temporary variable in accordance with the Static Single Assignment (SSA) form. On the other hand, `assign(lhs, rhs)` assigns the right-hand-side (rhs) to a previosely defined left-hand-side (lhs) variable. This is akin to the φ-block in compiler theory. 
+The majority of `Composer` operations return the result in a new temporary variable in accordance with the Static Single Assignment (SSA) form. On the other hand, `assign(lhs, rhs)` assigns the right-hand side (rhs) to a previously defined left-hand side (lhs) variable. This is akin to the φ-block in compiler theory. 
 
 ## Operations
 
@@ -117,7 +117,7 @@ def min(self, x: Slot, y: Slot) -> Slot:
         return self.join(self.lt(x, y), x, y)
 ```
 
-Here, `join` handles SIMD instructions correctly and this method would work whether it is called with scalar or vectorized (SIMD) instructions. However, let's say we want to have a `min` operation which does short circuiting. We use branchin instructions to get
+Here, `join` handles SIMD instructions correctly. This method would work whether it is called with scalar or vectorized (SIMD) instructions. However, let's say we want a `min` operation that does short-circuiting. We use branching instructions to get
 
 ```python
 from symjit import Composer, compile_composer
@@ -137,7 +137,7 @@ f = compile_composer(cp)
 assert(f(3, 5)[0] == 3)
 ```
 
-This works! However, if we apply the same function to a matrix input using `evaluate`, the result could be wrong. This is because different SIMD lanes are not necessarily convergent (all true or all false). An easy solution is to turn off automatic SIMD generation by passing `use_simd = False` to `compile_composer`. This works but would deny us a major optimization. A better option is to modify the code to make it work in case it is vectorized. The key is that both branches of `if` can be taken. In fact, for SIMD instructions, `branch_if` jumps only if all the lanes are true. Conversely, `branch_else` jumps only if all the lanes are false. For a mix of true and false lanes, both branch instructions are inactive. In this situation, we cannot overwrite `out(0)` in the else-branch, because it will erase whatever was written in the then-branch. The solution is to use temporary variables and then cap if-then-else with a `join` instructions to merge the results of the two branches. It is easier to see the code that to describe it! Here is the correct code:
+This works! However, if we apply the same function to a matrix input with `evaluate`, the result may be wrong. This is because different SIMD lanes are not necessarily convergent (all true or all false). An easy solution is to turn off automatic SIMD generation by passing `use_simd = False` to `compile_composer`. This works, but would deny us a major optimization. A better option is to modify the code to make it work in case it is vectorized. The key is that both branches of the `if` can be taken. In fact, for SIMD instructions, `branch_if` jumps only if all the lanes are true. Conversely, `branch_else` jumps only if all the lanes are false. For a mix of true and false lanes, both branch instructions are inactive. In this situation, we cannot overwrite `out(0)` in the else-branch, because it will erase whatever was written in the then-branch. The solution is to use temporary variables and then cap if-then-else with a `join` to merge the results of the two branches. It is easier to see the code than to describe it! Here is the correct code:
 
 ```python
 from symjit import Composer, compile_composer
@@ -170,7 +170,7 @@ f = compile_composer(cp)
 assert(f(3, 5)[0] == 3)
 ```
 
-Because the example above has lots of boilerplate code, `Composer` has helper functions to make it easier to write such code. For if-else code, the helper function is `append_if_else(cond, block_if, block_else)`, where `cond` is the condtion and `block_if` and `block_else` are code blocks. The utility function `Composer.new_block()` creates new empty blocks, which are then populated with the desired code before being passed to `append_if`. The above example becomes:
+Because the example above has lots of boilerplate code, `Composer` has helper functions to make it easier to write such code. For if-else code, the helper function is `append_if_else(cond, block_if, block_else)`, where `cond` is the condition and `block_if` and `block_else` are code blocks. The utility function `Composer.new_block()` creates new empty blocks, which are then populated with the desired code before being passed to `append_if`. The above example becomes:
 
 ```python
 from symjit import Composer, compile_composer
