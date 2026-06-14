@@ -288,9 +288,9 @@ impl Generator for RiscV {
         self.emit(rvv! {fmv.x.d x(Self::t0), f(ϕ(cond))});
 
         if is_else {
-            self.emit(rvv! {bne x(Self::t0), x(Self::zero), 8});
-        } else {
             self.emit(rvv! {beq x(Self::t0), x(Self::zero), 8});
+        } else {
+            self.emit(rvv! {bne x(Self::t0), x(Self::zero), 8});
         }
 
         self.jump(label, 0, |offset, _| rvv! {j offset});
