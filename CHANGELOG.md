@@ -1,3 +1,14 @@
+# Version 2.19.2
+
+* Real log/ln bug fixed.
+* Deprecation warnings added.
+* Risc V branch bug fixed.
+
+# Version 2.19.0
+
+* Composer interface added.
+* Documentation improvement.
+
 # Version 2.18.0
 
 * `parallel_mul` option added.
