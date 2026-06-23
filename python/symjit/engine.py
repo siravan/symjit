@@ -3,6 +3,7 @@ import json
 import os
 import platform
 import sys
+import warnings
 
 import numpy as np
 
@@ -350,6 +351,12 @@ class RustyCompiler:
 
         if order not in ["c", "fortran"]:
             raise ValueError("`order` should be either `c` or `fortran`")
+
+        if ty == "amd-sse":
+            warnings.warn(
+                "`ty = amd-sse` (using x86-64 SSE instructions) is deprecated and will be removed in a future version.",
+                DeprecationWarning,
+            )
 
         opt = (
             (0x01 if use_simd else 0)

@@ -317,6 +317,8 @@ impl Config {
         if self.has_avx() {
             CompilerType::AmdAVX
         } else if self.is_amd64() {
+            println!("warning: fallback to SSE instructions is deprecated and will be removed in a future version.");
+            println!("warning (cont.): the minimum x86-64 profile will be raised to x86-64-v3.");
             CompilerType::AmdSSE
         } else if self.is_arm64() {
             CompilerType::Arm
@@ -547,6 +549,7 @@ impl Config {
             }
         } else if let Some(op) = fun.strip_prefix("symbolica_") {
             let op = match op {
+                "log" => "ln", // because of discrepency between real/complex log/ln
                 "asin" => "arcsin",
                 "acos" => "arccos",
                 "atan" => "arctan",
