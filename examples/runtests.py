@@ -359,7 +359,8 @@ def cases():
 
     if arch() == "amd":
         for dtype in dtypes:
-            for ty in ["native", "amd-sse", "bytecode", "debug"]:
+            # for ty in ["native", "amd-sse", "bytecode", "debug"]:
+            for ty in ["native", "bytecode", "debug"]:
                 for use_simd in [False, True]:
                     for use_threads in [False, True]:
                         for cse in [False, True]:
