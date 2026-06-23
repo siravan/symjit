@@ -2987,6 +2987,7 @@ impl Mir {
         let mut times2: usize = 0;
 
         let mut iter = self.code.iter().peekable();
+        let mut num_temps = 0;
 
         while let Some(ins) = iter.next() {
             if let Instruction::LoadMath {
@@ -2999,6 +3000,30 @@ impl Mir {
                 {
                     times2 += 1;
                 }
+            }
+
+            if let Instruction::Load {
+                loc: Loc::Stack(idx),
+                ..
+            } = ins
+            {
+                num_temps = num_temps.max(idx);
+            }
+
+            if let Instruction::LoadComplex {
+                loc: Loc::Stack(idx),
+                ..
+            } = ins
+            {
+                num_temps = num_temps.max(idx);
+            }
+
+            if let Instruction::LoadMath {
+                loc: Loc::Stack(idx),
+                ..
+            } = ins
+            {
+                num_temps = num_temps.max(idx);
             }
 
             let desc = ins.desc();
@@ -3015,6 +3040,7 @@ impl Mir {
         let mut fs = fs::File::create(name).unwrap();
         let _ = writeln!(fs, "#! stats");
         let _ = writeln!(fs, "{} instructions", self.code.ip);
+        let _ = writeln!(fs, "{} temporary slots", num_temps);
         let _ = writeln!(fs, "---------------------------------");
 
         for (k, v) in counts.iter() {

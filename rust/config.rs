@@ -547,6 +547,7 @@ impl Config {
             }
         } else if let Some(op) = fun.strip_prefix("symbolica_") {
             let op = match op {
+                "log" => "ln", // because of the discrepency in the meaning of ln and log between real/complex
                 "asin" => "arcsin",
                 "acos" => "arccos",
                 "atan" => "arctan",
