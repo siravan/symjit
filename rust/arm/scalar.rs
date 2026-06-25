@@ -602,16 +602,16 @@ impl Generator for ArmGenerator {
 
     fn save_used_registers(&mut self, used: &[u8]) {
         for r in used {
-            if *r >= 22 {
-                self.save_stack(reg(*r), *r as u32 - 14);
+            if *r >= 22 - 3 {
+                self.save_stack(reg(*r), *r as u32 - 14 + 3);
             }
         }
     }
 
     fn load_used_registers(&mut self, used: &[u8]) {
         for r in used {
-            if *r >= 22 {
-                self.load_stack(reg(*r), *r as u32 - 14);
+            if *r >= 22 - 3 {
+                self.load_stack(reg(*r), *r as u32 - 14 + 3);
             }
         }
     }

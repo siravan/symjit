@@ -339,7 +339,11 @@ impl Config {
     }
 
     pub fn available_registers(&self) -> u8 {
-        16
+        if self.is_arm64() && self.opt_level() == 3 {
+            32 - 3
+        } else {
+            16
+        }
     }
 
     pub fn count_scratch(&self) -> u8 {

@@ -10,9 +10,9 @@ use crate::utils::{align_stack, is_external_func, reg, Reg};
 use super::*;
 
 const REG_SIZE: u32 = 8;
-const T0: u8 = 24;
-const T1: u8 = 25;
-const T2: u8 = 26;
+const T0: u8 = 29;
+const T1: u8 = 30;
+const T2: u8 = 31;
 
 pub struct ArmComplexGenerator {
     a: Assembler,

@@ -339,31 +339,49 @@ impl Mir {
         self.code.push(&ins)
     }
 
-    pub fn get_dst(ins: &Instruction) -> Option<u8> {
+    pub fn get_dst(ins: &Instruction) -> u32 {
         match *ins {
             Instruction::Uni {
                 dst: Reg::Gen(r), ..
-            } => Some(r),
+            } => 1 << r,
             Instruction::Bi {
                 dst: Reg::Gen(r), ..
-            } => Some(r),
+            } => 1 << r,
+            Instruction::ComplexBi {
+                xd: Reg::Gen(x),
+                yd: Reg::Gen(y),
+                ..
+            } => (1 << x) | (1 << y),
             Instruction::Mov {
                 dst: Reg::Gen(r), ..
-            } => Some(r),
+            } => 1 << r,
             Instruction::Load {
                 dst: Reg::Gen(r), ..
-            } => Some(r),
+            } => 1 << r,
             Instruction::LoadConst {
                 dst: Reg::Gen(r), ..
-            } => Some(r),
+            } => 1 << r,
+            Instruction::LoadComplex {
+                xd: Reg::Gen(x),
+                yd: Reg::Gen(y),
+                ..
+            } => (1 << x) | (1 << y),
+            Instruction::LoadMath {
+                dst: Reg::Gen(r), ..
+            } => 1 << r,
+            Instruction::LoadConstMath {
+                dst: Reg::Gen(r), ..
+            } => 1 << r,
             Instruction::Fused {
                 dst: Reg::Gen(r), ..
-            } => Some(r),
-            Instruction::Save { .. } => None,
+            } => 1 << r,
             Instruction::IfElse {
                 dst: Reg::Gen(r), ..
-            } => Some(r),
-            _ => None,
+            } => 1 << r,
+            Instruction::BranchIf {
+                cond: Reg::Gen(r), ..
+            } => 1 << r,
+            _ => 0,
         }
     }
 
@@ -371,11 +389,7 @@ impl Mir {
         let mut mask: u32 = 0;
 
         for ins in self.code.iter() {
-            let r = Self::get_dst(&ins);
-
-            if let Some(r) = r {
-                mask |= 1 << r;
-            }
+            mask |= Self::get_dst(&ins);
         }
 
         let mut used: Vec<u8> = Vec::new();
