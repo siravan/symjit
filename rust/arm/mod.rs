@@ -17,6 +17,10 @@ const SCRATCH1: u8 = 9;
 const SCRATCH2: u8 = 10;
 const TEMP: u8 = 1;
 
+const T0: u8 = 29;
+const T1: u8 = 30;
+const T2: u8 = 31;
+
 mod complex;
 mod scalar;
 mod vector;

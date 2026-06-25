@@ -10,7 +10,6 @@ use crate::utils::{align_stack, is_external_func, reg, Reg};
 use super::*;
 
 const REG_SIZE: u32 = 16;
-const T0: u8 = 24;
 
 pub struct ArmSimdGenerator {
     a: Assembler,
