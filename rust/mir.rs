@@ -2231,7 +2231,7 @@ impl Mir {
 
     fn fuse_save3(
         &self,
-        _code: &mut MirWriter,
+        code: &mut MirWriter,
         q0: &Instruction,
         q1: &Instruction,
         q2: &Instruction,
@@ -2255,6 +2255,21 @@ impl Mir {
                             src: Reg::Ret,
                             loc: q2.loc(),
                         });
+                    }
+                }
+            }
+        };
+
+        if let Instruction::Save { .. } = *q0 {
+            if let Instruction::Load { .. } = *q1 {
+                if let Instruction::Load { .. } = *q2 {
+                    if q0.loc() == q2.loc() && q1.dst() != q2.dst() {
+                        code.push(q0);
+                        code.push(&Instruction::Mov {
+                            dst: q2.dst(),
+                            s1: q0.src(),
+                        });
+                        return Some(q1.clone());
                     }
                 }
             }
