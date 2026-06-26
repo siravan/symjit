@@ -2226,6 +2226,25 @@ impl Mir {
             }
         };
 
+        if let Instruction::Save { .. } = *q0 {
+            if let Instruction::LoadMath { op, .. } = *q1 {
+                if q0.loc() == q1.loc() {
+                    code.push(q0);
+                    return Some(Instruction::Bi {
+                        op: match op {
+                            ArithOp::Plus => BinOp::Plus,
+                            ArithOp::Minus => BinOp::Minus,
+                            ArithOp::Times => BinOp::Times,
+                            ArithOp::Divide => BinOp::Divide,
+                        },
+                        dst: q1.dst(),
+                        s1: q1.s1(),
+                        s2: q0.src(),
+                    });
+                }
+            }
+        }
+
         None
     }
 
@@ -2274,6 +2293,31 @@ impl Mir {
                 }
             }
         };
+
+        if let Instruction::Save { .. } = *q0 {
+            if let Instruction::Load { .. } = *q1 {
+                if let Instruction::LoadMath { op, .. } = *q2 {
+                    if q0.loc() == q2.loc() && q2.s1() == q1.dst() && q0.src() != Reg::Ret {
+                        code.push(q0);
+                        code.push(&Instruction::Load {
+                            dst: Reg::Ret,
+                            loc: q1.loc(),
+                        });
+                        return Some(Instruction::Bi {
+                            op: match op {
+                                ArithOp::Plus => BinOp::Plus,
+                                ArithOp::Minus => BinOp::Minus,
+                                ArithOp::Times => BinOp::Times,
+                                ArithOp::Divide => BinOp::Divide,
+                            },
+                            dst: q2.dst(),
+                            s1: Reg::Ret,
+                            s2: q0.src(),
+                        });
+                    }
+                }
+            }
+        }
 
         None
     }

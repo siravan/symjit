@@ -859,10 +859,19 @@ impl IndirectTranslator {
                     Expr::from(self.consts[*idx].re)
                 }
             }
-            Slot::Static(idx) => self
-                .cache
-                .remove(idx)
-                .unwrap_or(Expr::var(&format!("__Static{}", idx))),
+            Slot::Static(idx) => {
+                let s = format!("__Static{}", idx);
+                self.cache.remove(idx).unwrap_or(Expr::var(&s))
+
+                /*
+                let p = if let Some(v) = self.cache.get(idx) {
+                    v.clone()
+                } else {
+                    Expr::var(&s)
+                };
+                p
+                */
+            }
             Slot::Arg(idx) => Expr::var(&format!("__Arg{}", idx)),
         }
     }

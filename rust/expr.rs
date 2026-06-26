@@ -150,6 +150,21 @@ impl Expr {
         }
     }
 
+    pub fn is_small_tree(&self) -> bool {
+        if let Expr::Tree { op, args } = self {
+            if ["plus", "minus", "times", "divide"].contains(&op.as_str()) {
+                let l = &args[0];
+                let r = &args[1];
+                if (matches!(l, Expr::Var { .. }) || matches!(l, Expr::Const { .. }))
+                    && (matches!(r, Expr::Var { .. }) || matches!(r, Expr::Const { .. }))
+                {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     // overloaded binary operations
 
     pub fn add(&self, other: &Expr) -> Expr {
