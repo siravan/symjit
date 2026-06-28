@@ -317,6 +317,12 @@ impl Amd {
         self.modrm_reg(reg, rm);
     }
 
+    pub fn vmovadd(&mut self, reg: u8, rm: u8) {
+        self.vex_dd(reg, 0, rm, 0);
+        self.append_byte(0x28);
+        self.modrm_reg(reg, rm);
+    }
+
     /******************* scalar double ******************/
     pub fn vmovsd_xmm_mem(&mut self, reg: u8, rm: u8, offset: i32) {
         self.vex_sd(reg, 0, rm, 0);
@@ -1324,4 +1330,286 @@ impl Amd {
         self.append_bytes(&[0x0f, 0x18, 0x05]);
         self.append_word(offset);
     }
+}
+
+#[macro_export]
+macro_rules! amd {
+    (vmovsd xmm($dst:expr), [r($base:expr) + r($index:expr) * $scale:literal]; $a:expr) => {
+        $a.vmovsd_xmm_indexed($dst, $base, $index, $scale);
+    };
+
+    (vmovsd xmm($dst:expr), [r($rm:expr) + $offset:expr]; $a:expr) => {
+        $a.vmovsd_xmm_mem($dst, $rm, $offset as i32);
+    };
+
+    (vmovsd xmm($reg:expr), $label:expr; $a:expr) => {
+        $a.vmovsd_xmm_label($reg, $label);
+    };
+
+    (vmovsd [r($base:expr) + r($index:expr) * $scale:literal], xmm($reg:expr); $a:expr) => {
+        $a.vmovsd_indexed_xmm($base, $index, $scale, $reg);
+    };
+
+    (vmovsd [r($rm:expr) + $offset:expr], xmm($reg:expr); $a:expr) => {
+        $a.vmovsd_mem_xmm($rm, $offset as i32, $reg);
+    };
+
+    (vaddsd xmm($dst:expr), xmm($s1:expr), xmm($s2:expr); $a:expr) => {
+        $a.vaddsd($dst, $s1, $s2);
+    };
+
+    (vsubsd xmm($dst:expr), xmm($s1:expr), xmm($s2:expr); $a:expr) => {
+        $a.vsubsd($dst, $s1, $s2);
+    };
+
+    (vmulsd xmm($dst:expr), xmm($s1:expr), xmm($s2:expr); $a:expr) => {
+        $a.vmulsd($dst, $s1, $s2);
+    };
+
+    (vdivsd xmm($dst:expr), xmm($s1:expr), xmm($s2:expr); $a:expr) => {
+        $a.vdivsd($dst, $s1, $s2);
+    };
+
+    (vsqrtsd xmm($reg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vsqrtsd($reg, $rm);
+    };
+
+    (vroundsd xmm($reg:expr), xmm($rm:expr), $mode:literal; $a:expr) => {
+        $a.vroundsd($reg, $rm, $mode);
+    };
+
+    (vcmpeqsd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vcmpeqsd($reg, $vreg, $rm);
+    };
+
+    (vcmpltsd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vcmpltsd($reg, $vreg, $rm);
+    };
+
+    (vcmplesd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vcmplesd($reg, $vreg, $rm);
+    };
+
+    (vcmpunordsd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vcmpunordsd($reg, $vreg, $rm);
+    };
+
+    (vcmpneqsd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vcmpneqsd($reg, $vreg, $rm);
+    };
+
+    (vcmpnltsd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vcmpnltsd($reg, $vreg, $rm);
+    };
+
+    (vcmpnlesd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vcmpnlesd($reg, $vreg, $rm);
+    };
+
+    (vcmpordsd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vcmpordsd($reg, $vreg, $rm);
+    };
+
+    (vucomisd xmm($reg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vucomisd($reg, $rm);
+    };
+
+    (vmovapd xmm($reg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vmovadd($reg, $rm);
+    };
+
+    (vandpd xmm($dst:expr), xmm($s1:expr), xmm($s2:expr); $a:expr) => {
+        $a.vanddd($dst, $s1, $s2);
+    };
+
+    (vandnpd xmm($dst:expr), xmm($s1:expr), xmm($s2:expr); $a:expr) => {
+        $a.vandndd($dst, $s1, $s2);
+    };
+
+    (vorpd xmm($dst:expr), xmm($s1:expr), xmm($s2:expr); $a:expr) => {
+        $a.vordd($dst, $s1, $s2);
+    };
+
+    (vxorpd xmm($dst:expr), xmm($s1:expr), xmm($s2:expr); $a:expr) => {
+        $a.vxordd($dst, $s1, $s2);
+    };
+
+    /* General Registers */
+    (mov r($reg:expr), r($rm:expr); $a:expr) => {
+        $a.mov($reg, $rm);
+    };
+
+    (mov r($reg:expr), [r($rm:expr) + $offset:expr]; $a:expr) => {
+        $a.mov_reg_mem($reg, $rm, $offset);
+    };
+
+    (lea r($reg:expr), [r($rm:expr) + $offset:expr]; $a:expr) => {
+        $a.lea_mem($reg, $rm, $offset as i32);
+    };
+
+    (mov r($reg:expr), [$label:expr]; $a:expr) => {
+        $a.mov_reg_label($reg, $label);
+    };
+
+    (mov [r($rm:expr) + $offset:expr], r($reg:expr); $a:expr) => {
+        $a.mov_mem_reg($rm, $offset, $reg);
+    };
+
+    (lea r($reg:expr), [r($base:expr) + r($index:expr) * $scale:literal]; $a:expr) => {
+        $a.lea_indexed($reg, $base, $index, $scale);
+    };
+
+    (movabs r($rm:expr), $imm64:expr; $a:expr) => {
+        $a.movabs($rm, $imm64 as u64);
+    };
+
+    (call r($reg:expr); $a:expr) => {
+        $a.call($reg);
+    };
+
+    (call [rip + $label:expr]; $a:expr) => {
+        $a.call_relative($label);
+    };
+
+    (call $label:expr; $a:expr) => {
+        $a.call_indirect($label);
+    };
+
+    (push r($reg:expr); $a:expr) => {
+        $a.push($reg);
+    };
+
+    (pop r($reg:expr); $a:expr) => {
+        $a.pop($reg);
+    };
+
+    (ret; $a:expr) => {
+        $a.ret();
+    };
+
+    (add rsp, $imm:expr; $a:expr) => {{
+        let imm = $imm;
+        if imm > 0 {
+            $a.add_rsp(imm as u32);
+        }
+    }};
+
+    (sub rsp, $imm:expr; $a:expr) => {{
+        let imm = $imm;
+        if imm > 0 {
+            $a.sub_rsp(imm as u32);
+        }
+    }};
+
+    (or r($reg:expr), r($rm:expr); $a:expr) => {
+        $a.or($reg, $rm);
+    };
+
+    (xor r($reg:expr), r($rm:expr); $a:expr) => {
+        $a.xor($reg, $rm);
+    };
+
+    (add r($reg:expr), r($rm:expr); $a:expr) => {
+        $a.add($reg, $rm);
+    };
+
+    (mov r($reg:expr), $imm:expr; $a:expr) => {
+        $a.mov_imm($reg, $imm as u32);
+    };
+
+    (add r($reg:expr), imm:expr; $a:expr) => {
+        $a.add_imm($reg, $imm as u32);
+    };
+
+    (sub r($reg:expr), imm:expr; $a:expr) => {
+        $a.sub_imm($reg, $imm as u32);
+    };
+
+    (or r($reg:expr), imm:expr; $a:expr) => {
+        $a.or_imm($reg, $imm as u32);
+    };
+
+    (and r($reg:expr), imm:expr; $a:expr) => {
+        $a.and_imm($reg, $imm as u32);
+    };
+
+    (xor r($reg:expr), imm:expr; $a:expr) => {
+        $a.xor_imm($reg, $imm as u32);
+    };
+
+    (cmp r($reg:expr), imm:expr; $a:expr) => {
+        $a.cmp_imm($reg, $imm as u32);
+    };
+
+    (inc r($reg:expr); $a:expr) => {
+        $a.inc($reg);
+    };
+
+    (dec r($reg:expr); $a:expr) => {
+        $a.dec($reg);
+    };
+
+    (jmp $label:expr; $a:expr) => {
+        $a.jmp($label);
+    };
+
+    (jz $label:expr; $a:expr) => {
+        $a.jz($label);
+    };
+
+    (jnz $label:expr; $a:expr) => {
+        $a.jnz($label);
+    };
+
+    (jpe $label:expr; $a:expr) => {
+        $a.jpe($label);
+    };
+
+    (jpo $label:expr; $a:expr) => {
+        $a.jpo($label);
+    };
+
+    (js $label:expr; $a:expr) => {
+        $a.js($label);
+    };
+
+    (movq r($rm:expr), xmm($reg:expr); $a:expr) => {
+        $a.movq_reg_xmm($rm, $reg);
+    };
+
+    (movq xmm($reg:expr), r($rm:expr); $a:expr) => {
+        $a.movq_xmm_reg($reg, $rm);
+    };
+
+    (vmovq r($rm:expr), xmm($reg:expr); $a:expr) => {
+        $a.vmovq_reg_xmm($rm, $reg);
+    };
+
+    (vmovq xmm($reg:expr), r($rm:expr); $a:expr) => {
+        $a.vmovq_xmm_reg($reg, $rm);
+    };
+
+    (nop; $a:expr) => {
+        $a.nop();
+    };
+
+    (vzeroupper; $a:expr) => {
+        $a.vzeroupper();
+    };
+
+    (prefetcht0_ip $offset:expr; $a:expr) => {
+        $a.prefetcht0_ip($offset as u32);
+    };
+
+    (prefetcht1_ip $offset:expr; $a:expr) => {
+        $a.prefetcht0_ip($offset as u32);
+    };
+
+    (prefetcht2_ip $offset:expr; $a:expr) => {
+        $a.prefetcht0_ip($offset as u32);
+    };
+
+    (prefetchtnta_ip $offset:expr; $a:expr) => {
+        $a.prefetcht0_ip($offset as u32);
+    };
 }

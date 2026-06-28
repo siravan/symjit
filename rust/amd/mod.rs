@@ -1,10 +1,12 @@
 use crate::code::Func;
 use crate::utils::Reg;
 
+#[macro_use]
 mod asm;
+
 mod fused;
 
-use asm::Amd;
+use asm::*;
 
 mod complex;
 mod scalar;
