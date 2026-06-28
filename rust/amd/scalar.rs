@@ -11,6 +11,7 @@ use super::*;
 
 const REG_SIZE: u32 = 8;
 
+/*
 macro_rules! binop {
     ($self:ident, $avx:ident, $dst:expr, $s1: expr, $s2: expr) => {
         $self.amd.$avx(ϕ($dst), ϕ($s1), ϕ($s2));
@@ -28,6 +29,7 @@ macro_rules! roundop {
         $self.amd.vroundsd(ϕ($dst), ϕ($s1), $mode);
     };
 }
+*/
 
 macro_rules! fuseop {
     ($self:ident, $f132:ident, $f213:ident, $f231:ident, $dst: expr, $a: expr, $b: expr, $c:ident) => {{
@@ -69,10 +71,6 @@ impl AmdScalarGenerator {
 
     fn load_const_by_name(&mut self, dst: Reg, label: &str) {
         self.amd.vmovsd_xmm_label(ϕ(dst), label);
-    }
-
-    fn vzeroupper(&mut self) {
-        self.amd.vzeroupper();
     }
 
     fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
@@ -236,31 +234,43 @@ impl Generator for AmdScalarGenerator {
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        self.amd.vmovdd_xmm_mem(ϕ(xd), MEM, (idx * REG_SIZE) as i32);
-        self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
+        // self.amd.vmovdd_xmm_mem(ϕ(xd), MEM, (idx * REG_SIZE) as i32);
+        // self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
+
+        amd! {vmovupd xmm(ϕ(xd)), [r(MEM) + idx * REG_SIZE]; self.amd};
+        amd! {vshufpd xmm(ϕ(yd)), xmm(ϕ(xd)), xmm(ϕ(xd)), 1; self.amd};
     }
 
     fn save_mem_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
-        self.amd.vunpckldd(ϕ(xs), ϕ(xs), ϕ(ys));
-        self.amd.vmovdd_mem_xmm(MEM, (idx * REG_SIZE) as i32, ϕ(xs));
+        // self.amd.vunpckldd(ϕ(xs), ϕ(xs), ϕ(ys));
+        // self.amd.vmovdd_mem_xmm(MEM, (idx * REG_SIZE) as i32, ϕ(xs));
+
+        amd! {vunpcklpd xmm(ϕ(xs)), xmm(ϕ(xs)), xmm(ϕ(ys)); self.amd};
+        amd! {vmovupd [r(MEM) + idx * REG_SIZE], xmm(ϕ(xs)); self.amd};
     }
 
     fn load_param_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        self.amd
-            .vmovdd_xmm_mem(ϕ(xd), PARAMS, (idx * REG_SIZE) as i32);
-        self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
+        // self.amd.vmovdd_xmm_mem(ϕ(xd), PARAMS, (idx * REG_SIZE) as i32);
+        // self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
+
+        amd! {vmovupd xmm(ϕ(xd)), [r(PARAMS) + idx * REG_SIZE]; self.amd};
+        amd! {vshufpd xmm(ϕ(yd)), xmm(ϕ(xd)), xmm(ϕ(xd)), 1; self.amd};
     }
 
     fn load_stack_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        self.amd
-            .vmovdd_xmm_mem(ϕ(xd), STACK, (idx * REG_SIZE) as i32);
-        self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
+        // self.amd.vmovdd_xmm_mem(ϕ(xd), STACK, (idx * REG_SIZE) as i32);
+        // self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
+
+        amd! {vmovupd xmm(ϕ(xd)), [r(STACK) + idx * REG_SIZE]; self.amd};
+        amd! {vshufpd xmm(ϕ(yd)), xmm(ϕ(xd)), xmm(ϕ(xd)), 1; self.amd};
     }
 
     fn save_stack_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
-        self.amd.vunpckldd(ϕ(xs), ϕ(xs), ϕ(ys));
-        self.amd
-            .vmovdd_mem_xmm(STACK, (idx * REG_SIZE) as i32, ϕ(xs));
+        // self.amd.vunpckldd(ϕ(xs), ϕ(xs), ϕ(ys));
+        // self.amd.vmovdd_mem_xmm(STACK, (idx * REG_SIZE) as i32, ϕ(xs));
+
+        amd! {vunpcklpd xmm(ϕ(xs)), xmm(ϕ(xs)), xmm(ϕ(ys)); self.amd};
+        amd! {vmovupd [r(STACK) + idx * REG_SIZE], xmm(ϕ(xs)); self.amd};
     }
 
     fn save_stack_result(&mut self, idx: u32) {
@@ -297,19 +307,23 @@ impl Generator for AmdScalarGenerator {
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {
-        roundop!(self, dst, s1, RoundingMode::Round);
+        // roundop!(self, dst, s1, RoundingMode::Round);
+        amd! {vroundsd xmm(ϕ(dst)), xmm(ϕ(s1)), RoundingMode::Round; self.amd};
     }
 
     fn floor(&mut self, dst: Reg, s1: Reg) {
-        roundop!(self, dst, s1, RoundingMode::Floor);
+        // roundop!(self, dst, s1, RoundingMode::Floor);
+        amd! {vroundsd xmm(ϕ(dst)), xmm(ϕ(s1)), RoundingMode::Floor; self.amd};
     }
 
     fn ceiling(&mut self, dst: Reg, s1: Reg) {
-        roundop!(self, dst, s1, RoundingMode::Ceiling);
+        // roundop!(self, dst, s1, RoundingMode::Ceiling);
+        amd! {vroundsd xmm(ϕ(dst)), xmm(ϕ(s1)), RoundingMode::Ceiling; self.amd};
     }
 
     fn trunc(&mut self, dst: Reg, s1: Reg) {
-        roundop!(self, dst, s1, RoundingMode::Trunc);
+        // roundop!(self, dst, s1, RoundingMode::Trunc);
+        amd! {vroundsd xmm(ϕ(dst)), xmm(ϕ(s1)), RoundingMode::Trunc; self.amd};
     }
 
     fn frac(&mut self, dst: Reg, s1: Reg) {
@@ -506,7 +520,9 @@ impl Generator for AmdScalarGenerator {
 
         let label = format!("_func_{}_", op);
         amd! {vzeroupper; self.amd};
-        self.amd.call_indirect(&label);
+
+        // self.amd.call_indirect(&label);
+        amd! {call &label; self.amd};
 
         Ok(())
     }
@@ -522,12 +538,15 @@ impl Generator for AmdScalarGenerator {
         amd! {vzeroupper; self.amd};
 
         if cfg!(target_family = "windows") {
-            self.amd.lea_mem(Amd::R8, STACK, 32);
+            // self.amd.lea_mem(Amd::R8, STACK, 32);
+            amd! {lea r(Amd::R8), [r(STACK) + 32]; self.amd};
         } else {
-            self.amd.lea_mem(Amd::RDI, STACK, 32);
+            // self.amd.lea_mem(Amd::RDI, STACK, 32);
+            amd! {lea r(Amd::RDI), [r(STACK) + 32]; self.amd};
         }
 
-        self.amd.call_indirect(&label);
+        // self.amd.call_indirect(&label);
+        amd! {call &label; self.amd};
 
         self.load_stack(Reg::Ret, 4);
         self.load_stack(Reg::Temp, 5);
@@ -536,11 +555,13 @@ impl Generator for AmdScalarGenerator {
     }
 
     fn call_funclet(&mut self, label: &str) {
-        self.amd.call_relative(label);
+        // self.amd.call_relative(label);
+        amd! {call [rip + &label]; self.amd};
     }
 
     fn ret(&mut self) {
-        self.amd.ret();
+        // self.amd.ret();
+        amd! {ret; self.amd};
     }
 
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {
@@ -763,8 +784,8 @@ impl Generator for AmdScalarGenerator {
         amd! {vzeroupper; self.amd};
 
         load_nonvolatile_regs(&mut self.amd);
-        self.amd.pop(Amd::RBP);
-        self.amd.ret();
+        // self.amd.pop(Amd::RBP);
+        // self.amd.ret();
 
         amd! {pop r(Amd::RBP) ; self.amd};
         amd! {ret ; self.amd};
