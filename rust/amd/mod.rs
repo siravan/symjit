@@ -105,8 +105,8 @@ fn predefined_consts(amd: &mut Amd) {
     amd.a.set_label("_one_");
     amd.a.append_quad(1.0f64.to_bits());
 
-    amd.a.set_label("_two_");
-    amd.a.append_quad(2.0f64.to_bits());
+    amd.a.set_label("_half_");
+    amd.a.append_quad(0.5f64.to_bits());
 
     amd.a.set_label("_all_ones_");
     amd.a.append_quad(0xffffffffffffffff);

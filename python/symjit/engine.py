@@ -337,7 +337,7 @@ class RustyCompiler:
         order="fortran",
         simd_branch=False,
         fast_complex=True,
-        direct=True,
+        direct=False,
         compress=False,
         huge=False,
         parallel_mul=True,

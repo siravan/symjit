@@ -272,13 +272,13 @@ impl Generator for AmdComplexGenerator {
         self.amd.vmovsd_xmm_label(T0, "_minus_zero_");
         self.amd.vandnpd(T2, T0, ϕ(s1));
         self.amd.vaddsd(T1, T1, T2);
-        self.amd.vmovsd_xmm_label(T0, "_two_");
-        self.amd.vdivsd(T1, T1, T0);
+        self.amd.vmovsd_xmm_label(T0, "_half_");
+        self.amd.vmulsd(T1, T1, T0);
         self.amd.vsqrtsd(T1, T1);
 
         self.amd.vunpckhdd(T2, ϕ(s1), ϕ(s1));
         self.amd.vdivsd(T2, T2, T1);
-        self.amd.vdivsd(T2, T2, T0);
+        self.amd.vmulsd(T2, T2, T0);
 
         self.amd.vcmpeqsd(T0, T2, T2);
         self.amd.vandpd(T2, T2, T0);
@@ -311,9 +311,9 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn half(&mut self, dst: Reg, s1: Reg) {
-        self.load_const_by_name(Reg::Temp, "_two_");
+        self.load_const_by_name(Reg::Temp, "_half_");
         self.amd.vunpckldd(ϕ(Reg::Temp), ϕ(Reg::Temp), ϕ(Reg::Temp));
-        self.amd.vdivdd(ϕ(dst), ϕ(s1), ϕ(Reg::Temp));
+        self.amd.vmuldd(ϕ(dst), ϕ(s1), ϕ(Reg::Temp));
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {

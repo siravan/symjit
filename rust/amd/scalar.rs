@@ -273,8 +273,8 @@ impl Generator for AmdScalarGenerator {
     }
 
     fn half(&mut self, dst: Reg, s1: Reg) {
-        self.load_const_by_name(Reg::Temp, "_two_");
-        self.divide(dst, s1, Reg::Temp);
+        self.load_const_by_name(Reg::Temp, "_half_");
+        self.times(dst, s1, Reg::Temp);
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {

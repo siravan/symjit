@@ -470,7 +470,7 @@ impl Default for Config {
                     | COMPACT
                     | FASTMATH
                     | FAST_COMPLEX
-                    | DIRECT
+                    // | DIRECT
                     | PARALLEL_MUL
                     | (2 << OPT_LEVEL_SHIFT),
             )

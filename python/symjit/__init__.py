@@ -556,7 +556,7 @@ def compile_composer(
     opt_level=2,
     simd_branch=True,
     fast_complex=True,
-    direct=True,
+    direct=False,
     huge=False,
     parallel_mul=True,
     compress=False,
