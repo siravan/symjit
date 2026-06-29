@@ -1460,6 +1460,10 @@ macro_rules! amd {
         $a.vadddd($dst, $s1, $s2);
     };
 
+    (vhaddpd xmm($dst:expr), xmm($s1:expr), xmm($s2:expr); $a:expr) => {
+        $a.vhadddd($dst, $s1, $s2);
+    };
+
     (vsubpd xmm($dst:expr), xmm($s1:expr), xmm($s2:expr); $a:expr) => {
         $a.vsubdd($dst, $s1, $s2);
     };
@@ -1705,5 +1709,189 @@ macro_rules! amd {
 
     (prefetchtnta_ip $offset:expr; $a:expr) => {
         $a.prefetcht0_ip($offset as u32);
+    };
+
+    // Fused Ops
+
+    // reg = reg * rm + vreg
+    (vfmadd132sd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfmadd132sd($reg, $vreg, $rm);
+    };
+
+    // reg = vreg * reg + rm
+    (vfmadd213sd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfmadd213sd($reg, $vreg, $rm);
+    };
+
+    // reg = vreg * rm + reg
+    (vfmadd231sd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfmadd231sd($reg, $vreg, $rm);
+    };
+
+    // reg = reg * rm - vreg
+    (vfmsub132sd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfmsub132sd($reg, $vreg, $rm);
+    };
+
+    // reg = vreg * reg - rm
+    (vfmsub213sd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfmsub213sd($reg, $vreg, $rm);
+    };
+
+    // reg = vreg * rm - reg
+    (vfmsub231sd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfmsub231sd($reg, $vreg, $rm);
+    };
+
+    // reg = - reg * rm - vreg
+    (vfnmadd132sd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfnmadd132sd($reg, $vreg, $rm);
+    };
+
+    // reg = - vreg * reg + rm
+    (vfnmadd213sd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfnmadd213sd($reg, $vreg, $rm);
+    };
+
+    // reg = - vreg * rm + reg
+    (vfnmadd231sd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfnmadd231sd($reg, $vreg, $rm);
+    };
+
+    // reg = - reg * rm - vreg
+    (vfnmsub132sd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfnmsub132sd($reg, $vreg, $rm);
+    };
+
+    // reg = - vreg * reg - rm
+    (vfnmsub213sd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfnmsub213sd($reg, $vreg, $rm);
+    };
+
+    // reg = - vreg * rm - reg
+    (vfnmsub231sd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfnmsub231sd($reg, $vreg, $rm);
+    };
+
+    // packed xmm
+    // reg = reg * rm + vreg
+    (vfmadd132pd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfmadd132dd($reg, $vreg, $rm);
+    };
+
+    // reg = vreg * reg + rm
+    (vfmadd213pd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfmadd213dd($reg, $vreg, $rm);
+    };
+
+    // reg = vreg * rm + reg
+    (vfmadd231pd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfmadd231dd($reg, $vreg, $rm);
+    };
+
+    // reg = reg * rm - vreg
+    (vfmsub132pd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfmsub132dd($reg, $vreg, $rm);
+    };
+
+    // reg = vreg * reg - rm
+    (vfmsub213pd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfmsub213dd($reg, $vreg, $rm);
+    };
+
+    // reg = vreg * rm - reg
+    (vfmsub231pd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfmsub231dd($reg, $vreg, $rm);
+    };
+
+    // reg = - reg * rm - vreg
+    (vfnmadd132pd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfnmadd132dd($reg, $vreg, $rm);
+    };
+
+    // reg = - vreg * reg + rm
+    (vfnmadd213pd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfnmadd213dd($reg, $vreg, $rm);
+    };
+
+    // reg = - vreg * rm + reg
+    (vfnmadd231pd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfnmadd231dd($reg, $vreg, $rm);
+    };
+
+    // reg = - reg * rm - vreg
+    (vfnmsub132pd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfnmsub132dd($reg, $vreg, $rm);
+    };
+
+    // reg = - vreg * reg - rm
+    (vfnmsub213pd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfnmsub213dd($reg, $vreg, $rm);
+    };
+
+    // reg = - vreg * rm - reg
+    (vfnmsub231pd xmm($reg:expr), xmm($vreg:expr), xmm($rm:expr); $a:expr) => {
+        $a.vfnmsub231dd($reg, $vreg, $rm);
+    };
+
+    // packed ymm
+    // reg = reg * rm + vreg
+    (vfmadd132pd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vfmadd132pd($reg, $vreg, $rm);
+    };
+
+    // reg = vreg * reg + rm
+    (vfmadd213pd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vfmadd213pd($reg, $vreg, $rm);
+    };
+
+    // reg = vreg * rm + reg
+    (vfmadd231pd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vfmadd231pd($reg, $vreg, $rm);
+    };
+
+    // reg = reg * rm - vreg
+    (vfmsub132pd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vfmsub132pd($reg, $vreg, $rm);
+    };
+
+    // reg = vreg * reg - rm
+    (vfmsub213pd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vfmsub213pd($reg, $vreg, $rm);
+    };
+
+    // reg = vreg * rm - reg
+    (vfmsub231pd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vfmsub231pd($reg, $vreg, $rm);
+    };
+
+    // reg = - reg * rm - vreg
+    (vfnmadd132pd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vfnmadd132pd($reg, $vreg, $rm);
+    };
+
+    // reg = - vreg * reg + rm
+    (vfnmadd213pd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vfnmadd213pd($reg, $vreg, $rm);
+    };
+
+    // reg = - vreg * rm + reg
+    (vfnmadd231pd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vfnmadd231pd($reg, $vreg, $rm);
+    };
+
+    // reg = - reg * rm - vreg
+    (vfnmsub132pd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vfnmsub132pd($reg, $vreg, $rm);
+    };
+
+    // reg = - vreg * reg - rm
+    (vfnmsub213pd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vfnmsub213pd($reg, $vreg, $rm);
+    };
+
+    // reg = - vreg * rm - reg
+    (vfnmsub231pd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vfnmsub231pd($reg, $vreg, $rm);
     };
 }
