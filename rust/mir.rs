@@ -2493,7 +2493,9 @@ impl Mir {
         q1: &Instruction,
     ) -> Option<Instruction> {
         // TODO: fix the FMA bug for complex noted on `runtests complex`
-        if !self.config.fastmath() || self.config.is_complex() {
+        if !self.config.fastmath()
+        /*|| self.config.is_complex()*/
+        {
             return None;
         }
 
@@ -2644,7 +2646,9 @@ impl Mir {
         q2: &Instruction,
     ) -> Option<Instruction> {
         // TODO: fix the FMA bug for complex noted on `runtests complex`
-        if !self.config.fastmath() || self.config.is_complex() {
+        if !self.config.fastmath()
+        /*|| self.config.is_complex()*/
+        {
             return None;
         }
 

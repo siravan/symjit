@@ -1532,6 +1532,139 @@ macro_rules! amd {
         $a.vaddsubdd($reg, $vreg, $rm);
     };
 
+    // Packed-Double (ymm)
+    (vmovapd ymm($reg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vmovapd($reg, $rm);
+    };
+
+    (vmovupd ymm($dst:expr), [r($base:expr) + r($index:expr) * $scale:literal]; $a:expr) => {
+        $a.vmovpd_ymm_indexed($dst, $base, $index, $scale);
+    };
+
+    (vmovupd ymm($dst:expr), [r($rm:expr) + $offset:expr]; $a:expr) => {
+        $a.vmovpd_ymm_mem($dst, $rm, $offset as i32);
+    };
+
+    (vmovupd ymm($reg:expr), $label:expr; $a:expr) => {
+        $a.vmovpd_ymm_label($reg, $label);
+    };
+
+    (vmovupd [r($base:expr) + r($index:expr) * $scale:literal], ymm($reg:expr); $a:expr) => {
+        $a.vmovpd_indexed_ymm($base, $index, $scale, $reg);
+    };
+
+    (vmovupd [r($rm:expr) + $offset:expr], ymm($reg:expr); $a:expr) => {
+        $a.vmovpd_mem_ymm($rm, $offset as i32, $reg);
+    };
+
+    (vandpd ymm($dst:expr), ymm($s1:expr), ymm($s2:expr); $a:expr) => {
+        $a.vandpd($dst, $s1, $s2);
+    };
+
+    (vandnpd ymm($dst:expr), ymm($s1:expr), ymm($s2:expr); $a:expr) => {
+        $a.vandnpd($dst, $s1, $s2);
+    };
+
+    (vorpd ymm($dst:expr), ymm($s1:expr), ymm($s2:expr); $a:expr) => {
+        $a.vorpd($dst, $s1, $s2);
+    };
+
+    (vxorpd ymm($dst:expr), ymm($s1:expr), ymm($s2:expr); $a:expr) => {
+        $a.vxorpd($dst, $s1, $s2);
+    };
+
+    (vaddpd ymm($dst:expr), ymm($s1:expr), ymm($s2:expr); $a:expr) => {
+        $a.vaddpd($dst, $s1, $s2);
+    };
+
+    (vhaddpd ymm($dst:expr), ymm($s1:expr), ymm($s2:expr); $a:expr) => {
+        $a.vhaddpd($dst, $s1, $s2);
+    };
+
+    (vsubpd ymm($dst:expr), ymm($s1:expr), ymm($s2:expr); $a:expr) => {
+        $a.vsubpd($dst, $s1, $s2);
+    };
+
+    (vmulpd ymm($dst:expr), ymm($s1:expr), ymm($s2:expr); $a:expr) => {
+        $a.vmulpd($dst, $s1, $s2);
+    };
+
+    (vdivpd ymm($dst:expr), ymm($s1:expr), ymm($s2:expr); $a:expr) => {
+        $a.vdivpd($dst, $s1, $s2);
+    };
+
+    (vsqrtpd ymm($reg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vsqrtpd($reg, $rm);
+    };
+
+    (vroundpd ymm($reg:expr), ymm($rm:expr), $mode:expr; $a:expr) => {
+        $a.vroundpd($reg, $rm, $mode);
+    };
+
+    (vcmpeqpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vcmpeqpd($reg, $vreg, $rm);
+    };
+
+    (vcmpltpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vcmpltpd($reg, $vreg, $rm);
+    };
+
+    (vcmplepd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vcmplepd($reg, $vreg, $rm);
+    };
+
+    (vcmpunorpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vcmpunordpd($reg, $vreg, $rm);
+    };
+
+    (vcmpneqpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vcmpneqpd($reg, $vreg, $rm);
+    };
+
+    (vcmpnltpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vcmpnltpd($reg, $vreg, $rm);
+    };
+
+    (vcmpnlepd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vcmpnlepd($reg, $vreg, $rm);
+    };
+
+    (vcmpordpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vcmpordpd($reg, $vreg, $rm);
+    };
+
+    (vshufpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr), $imm8:literal; $a:expr) => {
+        $a.vshufpd($reg, $vreg, $rm, $imm8 as u8);
+    };
+
+    (vunpckhpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vunpckhpd($reg, $vreg, $rm);
+    };
+
+    (vunpcklpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vunpcklpd($reg, $vreg, $rm);
+    };
+
+    (vaddsubpd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vaddsubpd($reg, $vreg, $rm);
+    };
+
+    // imm8 == 0 => reg = vreg[128:256]:rm[0:128]
+    // imm8 == 1 => reg = rm[128:256]:vreg[0:128]
+    (vinsertf128 ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr), $imm:literal; $a:expr) => {
+        $a.vinsertf128($reg, $vreg, $rm, $imm as u8);
+    };
+
+    (vinsertf128 ymm($reg:expr), ymm($vreg:expr), [r($rm:expr) + $offset:expr], $imm:literal; $a:expr) => {
+        $a.vinsertf128_mem($reg, $vreg, $rm, $offset, $imm as u8);
+    };
+
+    // imm8 == 0 => rm = reg[0:128]
+    // imm8 == 1 => rm = reg[128:256]
+    (vextractf128 ymm($rm:expr), ymm($reg:expr), $imm:literal; $a:expr) => {
+        $a.vextractf128($rm, $reg, $imm);
+    };
+
     /* General Registers */
     (mov r($reg:expr), r($rm:expr); $a:expr) => {
         $a.mov($reg, $rm);

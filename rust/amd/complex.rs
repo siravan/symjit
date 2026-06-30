@@ -665,55 +665,41 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        if dst == s1 {
-            amd! {vfmadd132pd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else if dst == s2 {
-            amd! {vfmadd213pd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else if dst == s3 {
-            amd! {vfmadd231pd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else {
-            amd! {vmovapd xmm(ϕ(dst)), xmm(ϕ(s1)); self.amd};
-            amd! {vfmadd132pd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        }
+        amd! {vunpcklpd xmm(T1), xmm(ϕ(s1)), xmm(ϕ(s1)); self.amd}; // duplicate real
+        amd! {vunpckhpd xmm(T2), xmm(ϕ(s1)), xmm(ϕ(s1)); self.amd}; // duplicate imag
+        amd! {vfmadd132pd xmm(T1), xmm(ϕ(s3)), xmm(ϕ(s2)); self.amd};
+        amd! {vmulpd xmm(T2), xmm(T2), xmm(ϕ(s2)); self.amd};
+        amd! {vshufpd xmm(T2), xmm(T2), xmm(T2), 1; self.amd}; // exchange real/imag
+        amd! {vaddsubpd xmm(ϕ(dst)), xmm(T1), xmm(T2); self.amd};
     }
 
     fn fused_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        if dst == s1 {
-            amd! {vfmsub132pd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else if dst == s2 {
-            amd! {vfmsub213pd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else if dst == s3 {
-            amd! {vfmsub231pd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else {
-            amd! {vmovapd xmm(ϕ(dst)), xmm(ϕ(s1)); self.amd};
-            amd! {vfmsub132pd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        }
+        amd! {vunpcklpd xmm(T1), xmm(ϕ(s1)), xmm(ϕ(s1)); self.amd}; // duplicate real
+        amd! {vunpckhpd xmm(T2), xmm(ϕ(s1)), xmm(ϕ(s1)); self.amd}; // duplicate imag
+        amd! {vfmsub132pd xmm(T1), xmm(ϕ(s3)), xmm(ϕ(s2)); self.amd};
+        amd! {vmulpd xmm(T2), xmm(T2), xmm(ϕ(s2)); self.amd};
+        amd! {vshufpd xmm(T2), xmm(T2), xmm(T2), 1; self.amd}; // exchange real/imag
+        amd! {vaddsubpd xmm(ϕ(dst)), xmm(T1), xmm(T2); self.amd};
     }
 
     fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        if dst == s1 {
-            amd! {vfnmadd132pd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else if dst == s2 {
-            amd! {vfnmadd213pd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else if dst == s3 {
-            amd! {vfnmadd231pd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else {
-            amd! {vmovapd xmm(ϕ(dst)), xmm(ϕ(s1)); self.amd};
-            amd! {vfnmadd132pd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        }
+        amd! {vunpcklpd xmm(T1), xmm(ϕ(s1)), xmm(ϕ(s1)); self.amd}; // duplicate real
+        amd! {vunpckhpd xmm(T2), xmm(ϕ(s1)), xmm(ϕ(s1)); self.amd}; // duplicate imag
+        amd! {vfnmadd132pd xmm(T1), xmm(ϕ(s3)), xmm(ϕ(s2)); self.amd};
+        amd! {vmulpd xmm(T2), xmm(T2), xmm(ϕ(s2)); self.amd};
+        amd! {vshufpd xmm(T1), xmm(T1), xmm(T1), 1; self.amd}; // exchange real/imag
+        amd! {vaddsubpd xmm(T1), xmm(T1), xmm(T2); self.amd};
+        amd! {vshufpd xmm(ϕ(dst)), xmm(T1), xmm(T1), 1; self.amd}; // exchange real/imag
     }
 
     fn fused_neg_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        if dst == s1 {
-            amd! {vfnmsub132pd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else if dst == s2 {
-            amd! {vfnmsub213pd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else if dst == s3 {
-            amd! {vfnmsub231pd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else {
-            amd! {vmovapd xmm(ϕ(dst)), xmm(ϕ(s1)); self.amd};
-            amd! {vfnmsub132pd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        }
+        amd! {vunpcklpd xmm(T1), xmm(ϕ(s1)), xmm(ϕ(s1)); self.amd}; // duplicate real
+        amd! {vunpckhpd xmm(T2), xmm(ϕ(s1)), xmm(ϕ(s1)); self.amd}; // duplicate imag
+        amd! {vfnmsub132pd xmm(T1), xmm(ϕ(s3)), xmm(ϕ(s2)); self.amd};
+        amd! {vmulpd xmm(T2), xmm(T2), xmm(ϕ(s2)); self.amd};
+        amd! {vshufpd xmm(T1), xmm(T1), xmm(T1), 1; self.amd}; // exchange real/imag
+        amd! {vaddsubpd xmm(T1), xmm(T1), xmm(T2); self.amd};
+        amd! {vshufpd xmm(ϕ(dst)), xmm(T1), xmm(T1), 1; self.amd}; // exchange real/imag
     }
 
     fn add_consts(&mut self, consts: &[f64]) {
@@ -953,7 +939,7 @@ impl Generator for AmdComplexGenerator {
             // self.amd.vmovsd_mem_xmm(MEM, k as i32, RET);
 
             amd! {mov r(Amd::RAX), [r(STATES) + 2 * 8 * i as i32]; self.amd};
-            amd! {vmovsd xmm(RET), [r(Amd::RAX) + IDX * 8]; self.amd};
+            amd! {vmovsd xmm(RET), [r(Amd::RAX) + r(IDX) * 8]; self.amd};
             amd! {vmovsd [r(MEM) + k], xmm(RET); self.amd};
         }
 
@@ -995,7 +981,7 @@ impl Generator for AmdComplexGenerator {
 
             amd! {mov r(Amd::RCX), [r(STATES) + 2 * 8 * (count_states + i) as i32]; self.amd};
             amd! {vmovsd xmm(RET), [r(MEM) + k]; self.amd};
-            amd! {vmovsd [r(Amd::RCX) + IDX * 8], xmm(RET); self.amd};
+            amd! {vmovsd [r(Amd::RCX) + r(IDX) * 8], xmm(RET); self.amd};
         }
 
         let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);

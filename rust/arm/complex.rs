@@ -91,6 +91,16 @@ impl ArmComplexGenerator {
 
         Ok(())
     }
+
+    fn multiply(&mut self, dst: u8, s1: u8, s2: u8) {
+        self.emit(arm! { fmul d(T0), d(s1), d(s2) }); // T0 = x1*x2
+        self.emit(arm! { dup q(T1), q(s1)[1] }); // T1 = y1
+        self.emit(arm! { dup q(T2), q(s2)[1] }); // T2 = y2
+        self.emit(arm! { fmsub d(T0), d(T1), d(T2), d(T0) }); // T0 = x1*x2 - y1*y2
+        self.emit(arm! { fmul d(T2), d(s1), d(T2) }); // T2 = x1*y2
+        self.emit(arm! { fmadd d(T2), d(s2), d(T1), d(T2) }); // T2 = x1*y2 + x2*y1
+        self.emit(arm! { zip1 q(dst), q(T0), q(T2) }); // dst = (x1*x2 - y1*y2) + (x1*y2 + x2*y1)*im
+    }
 }
 
 impl Generator for ArmComplexGenerator {
@@ -311,14 +321,7 @@ impl Generator for ArmComplexGenerator {
         self.emit(arm! {fmov q(ϕ(dst)), q(T1)});
         */
 
-        self.emit(arm! { fmul d(T0), d(ϕ(s1)), d(ϕ(s2)) }); // T0 = x1*x2
-        self.emit(arm! { dup q(T1), q(ϕ(s1))[1] }); // T1 = y1
-        self.emit(arm! { dup q(T2), q(ϕ(s2))[1] }); // T2 = y2
-        self.emit(arm! { fmsub d(T0), d(T1), d(T2), d(T0) }); // T0 = x1*x2 - y1*y2
-        self.emit(arm! { fmul d(T2), d(ϕ(s1)), d(T2) }); // T2 = x1*y2
-        self.emit(arm! { fmadd d(T2), d(ϕ(s2)), d(T1), d(T2) }); // T2 = x1*y2 + x2*y1
-
-        self.emit(arm! { zip1 q(ϕ(dst)), q(T0), q(T2) }); // dst = (x1*x2 - y1*y2) + (x1*y2 + x2*y1)*im
+        self.multiply(ϕ(dst), ϕ(s1), ϕ(s2));
     }
 
     fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
@@ -452,33 +455,30 @@ impl Generator for ArmComplexGenerator {
     }
 
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.fmov(Reg::Temp, s3);
-        self.emit(arm! {fmla q(ϕ(Reg::Temp)), q(ϕ(s1)), q(ϕ(s2))});
-        self.fmov(dst, Reg::Temp);
+        self.multiply(T0, ϕ(s1), ϕ(s2));
+        self.emit(arm! { fadd q(ϕ(dst)), q(T0), q(ϕ(s3))}); // dst = s1 * s2 + s3
     }
 
     // fused_mul_sub is s1 * s2 - s3, corresponding to fnmsub in aarch64
     // and vmsub... in amd64
     fn fused_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.fmov(Reg::Temp, s3);
-        self.emit(arm! {fmls q(ϕ(Reg::Temp)), q(ϕ(s1)), q(ϕ(s2))});
-        self.neg(dst, Reg::Temp);
+        self.multiply(T0, ϕ(s1), ϕ(s2));
+        self.emit(arm! { fsub q(ϕ(dst)), q(T0), q(ϕ(s3))}); // dst = s1 * s2 - s3
     }
 
     // fused_neg_mul_add is s3 - s1 * s2, corresponding to fmsub in aarch64
     // and vnmadd... in amd64
     fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.fmov(Reg::Temp, s3);
-        self.emit(arm! {fmls q(ϕ(Reg::Temp)), q(ϕ(s1)), q(ϕ(s2))});
-        self.fmov(dst, Reg::Temp);
+        self.multiply(T0, ϕ(s1), ϕ(s2));
+        self.emit(arm! { fsub q(ϕ(dst)), q(ϕ(s3)), q(T0)}); // dst = s3 - s1 * s2
     }
 
     // fused_neg_mul_sub is -s3 - s1 * s2, corresponding to fnmadd in aarch64
     // and vnmsub... in amd64
     fn fused_neg_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.fmov(Reg::Temp, s3);
-        self.emit(arm! {fmla q(ϕ(Reg::Temp)), q(ϕ(s1)), q(ϕ(s2))});
-        self.neg(dst, Reg::Temp);
+        self.multiply(T0, ϕ(s1), ϕ(s2));
+        self.emit(arm! { fadd q(ϕ(dst)), q(T0), q(ϕ(s3))});
+        self.emit(arm! { fneg q(ϕ(dst)), q(ϕ(dst))}); // dst = -s1 * s2 - s3
     }
 
     fn add_consts(&mut self, consts: &[f64]) {

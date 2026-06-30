@@ -85,13 +85,17 @@ impl AmdVectorGenerator {
 
         for i in 0..4 {
             if i > 0 {
-                self.amd.vmovsd_xmm_mem(0, STACK, 32 + i * 8);
+                // self.amd.vmovsd_xmm_mem(0, STACK, 32 + i * 8);
+                amd! {vmovsd xmm(0), [r(STACK) + 32 + i * 8]; self.amd};
             }
-            self.amd.call_indirect(label);
-            self.amd.vmovsd_mem_xmm(STACK, 32 + i * 8, 0);
+            // self.amd.call_indirect(label);
+            // self.amd.vmovsd_mem_xmm(STACK, 32 + i * 8, 0);
+            amd! {call label; self.amd};
+            amd! {vmovsd [r(STACK) + 32 + i * 8], xmm(0); self.amd};
         }
 
-        self.amd.vmovpd_ymm_mem(0, STACK, 32);
+        // self.amd.vmovpd_ymm_mem(0, STACK, 32);
+        amd! {vmovupd ymm(0), [r(STACK) + 32]; self.amd};
     }
 
     fn call_vector_binary(&mut self, label: &str) {
@@ -99,105 +103,165 @@ impl AmdVectorGenerator {
         // 32 bytes for shadow store (mandatory in Windows)
         // 32 bytes to save ymm0
         // 32 bytes to save ymm1
-        self.amd.vmovpd_mem_ymm(STACK, 32, 0);
-        self.amd.vmovpd_mem_ymm(STACK, 64, 1);
+        // self.amd.vmovpd_mem_ymm(STACK, 32, 0);
+        // self.amd.vmovpd_mem_ymm(STACK, 64, 1);
+        // self.vzeroupper();
 
-        self.vzeroupper();
+        amd! {vmovupd [r(STACK) + 32], ymm(0); self.amd};
+        amd! {vmovupd [r(STACK) + 64], ymm(1); self.amd};
+        amd! {vzeroupper; self.amd};
 
         for i in 0..4 {
             if i > 0 {
-                self.amd.vmovsd_xmm_mem(0, STACK, 32 + i * 8);
-                self.amd.vmovsd_xmm_mem(1, STACK, 64 + i * 8);
+                // self.amd.vmovsd_xmm_mem(0, STACK, 32 + i * 8);
+                // self.amd.vmovsd_xmm_mem(1, STACK, 64 + i * 8);
+                amd! {vmovsd xmm(0), [r(STACK) + 32 + i * 8]; self.amd};
+                amd! {vmovsd xmm(1), [r(STACK) + 64 + i * 8]; self.amd};
             }
-            self.amd.call_indirect(label);
-            self.amd.vmovsd_mem_xmm(STACK, 32 + i * 8, 0);
+            // self.amd.call_indirect(label);
+            // self.amd.vmovsd_mem_xmm(STACK, 32 + i * 8, 0);
+            amd! {call label; self.amd};
+            amd! {vmovsd [r(STACK) + 32 + i * 8], xmm(0); self.amd};
         }
 
-        self.amd.vmovpd_ymm_mem(0, STACK, 32);
+        // self.amd.vmovpd_ymm_mem(0, STACK, 32);
+        amd! {vmovupd ymm(0), [r(STACK) + 32]; self.amd};
     }
 
     fn call_complex_vector_unary(&mut self, label: &str) {
-        self.amd.vmovpd_mem_ymm(STACK, 64, 0);
-        self.amd.vmovpd_mem_ymm(STACK, 96, 1);
+        // self.amd.vmovpd_mem_ymm(STACK, 64, 0);
+        // self.amd.vmovpd_mem_ymm(STACK, 96, 1);
+        // self.vzeroupper();
 
-        self.vzeroupper();
+        amd! {vmovupd [r(STACK) + 64], ymm(0); self.amd};
+        amd! {vmovupd [r(STACK) + 96], ymm(1); self.amd};
+        amd! {vzeroupper; self.amd};
 
         for i in 0..4 {
             if i > 0 {
-                self.amd.vmovsd_xmm_mem(0, STACK, 64 + i * 8);
-                self.amd.vmovsd_xmm_mem(1, STACK, 96 + i * 8);
+                // self.amd.vmovsd_xmm_mem(0, STACK, 64 + i * 8);
+                // self.amd.vmovsd_xmm_mem(1, STACK, 96 + i * 8);
+                amd! {vmovsd xmm(0), [r(STACK) + 64 + i * 8]; self.amd};
+                amd! {vmovsd xmm(1), [r(STACK) + 96 + i * 8]; self.amd};
             }
 
             if cfg!(target_family = "windows") {
-                self.amd.lea_mem(Amd::R8, STACK, 32);
+                // self.amd.lea_mem(Amd::R8, STACK, 32);
+                amd! {lea r(Amd::R8), [r(STACK) + 32]; self.amd};
             } else {
-                self.amd.lea_mem(Amd::RDI, STACK, 32);
+                // self.amd.lea_mem(Amd::RDI, STACK, 32);
+                amd! {lea r(Amd::RDI), [r(STACK) + 32]; self.amd};
             }
 
+            /*
             self.amd.call_indirect(label);
-
             self.amd.vmovsd_xmm_mem(0, STACK, 32);
             self.amd.vmovsd_xmm_mem(1, STACK, 40);
             self.amd.vmovsd_mem_xmm(STACK, 64 + i * 8, 0);
             self.amd.vmovsd_mem_xmm(STACK, 96 + i * 8, 1);
+            */
+
+            amd! {call label; self.amd};
+            amd! {vmovsd xmm(0), [r(STACK) + 32]; self.amd};
+            amd! {vmovsd xmm(1), [r(STACK) + 40]; self.amd};
+            amd! {vmovsd [r(STACK) + 64 + i * 8], xmm(0); self.amd};
+            amd! {vmovsd [r(STACK) + 96 + i * 8], xmm(1); self.amd};
         }
 
-        self.amd.vmovpd_ymm_mem(0, STACK, 64);
-        self.amd.vmovpd_ymm_mem(1, STACK, 96);
+        // self.amd.vmovpd_ymm_mem(0, STACK, 64);
+        // self.amd.vmovpd_ymm_mem(1, STACK, 96);
+
+        amd! {vmovupd ymm(0), [r(STACK) + 64]; self.amd};
+        amd! {vmovupd ymm(1), [r(STACK) + 96]; self.amd};
     }
 
     fn call_complex_vector_binary(&mut self, label: &str) {
+        /*
         self.amd.vmovpd_mem_ymm(STACK, 64, 0);
         self.amd.vmovpd_mem_ymm(STACK, 96, 1);
         self.amd.vmovpd_mem_ymm(STACK, 128, 2);
         self.amd.vmovpd_mem_ymm(STACK, 160, 3);
-
         self.vzeroupper();
+        */
+
+        amd! {vmovupd [r(STACK) + 64], ymm(0); self.amd};
+        amd! {vmovupd [r(STACK) + 96], ymm(1); self.amd};
+        amd! {vmovupd [r(STACK) + 128], ymm(2); self.amd};
+        amd! {vmovupd [r(STACK) + 160], ymm(3); self.amd};
+        amd! {vzeroupper; self.amd};
 
         for i in 0..4 {
             if i > 0 {
+                /*
                 self.amd.vmovsd_xmm_mem(0, STACK, 64 + i * 8);
                 self.amd.vmovsd_xmm_mem(1, STACK, 96 + i * 8);
                 self.amd.vmovsd_xmm_mem(2, STACK, 128 + i * 8);
                 self.amd.vmovsd_xmm_mem(3, STACK, 160 + i * 8);
+                */
+
+                amd! {vmovsd xmm(0), [r(STACK) + 64 + i * 8]; self.amd};
+                amd! {vmovsd xmm(1), [r(STACK) + 96 + i * 8]; self.amd};
+                amd! {vmovsd xmm(2), [r(STACK) + 128 + i * 8]; self.amd};
+                amd! {vmovsd xmm(3), [r(STACK) + 160 + i * 8]; self.amd};
             }
 
-            self.amd.vmovsd_mem_xmm(STACK, 32, 2);
-            self.amd.vmovsd_mem_xmm(STACK, 40, 3);
+            // self.amd.vmovsd_mem_xmm(STACK, 32, 2);
+            // self.amd.vmovsd_mem_xmm(STACK, 40, 3);
+
+            amd! {vmovsd [r(STACK) + 32], xmm(2); self.amd};
+            amd! {vmovsd [r(STACK) + 40], xmm(3); self.amd};
 
             if cfg!(target_family = "windows") {
-                self.amd.lea_mem(Amd::R8, STACK, 32);
+                // self.amd.lea_mem(Amd::R8, STACK, 32);
+                amd! {lea r(Amd::R8), [r(STACK) + 32]; self.amd};
             } else {
-                self.amd.lea_mem(Amd::RDI, STACK, 32);
+                // self.amd.lea_mem(Amd::RDI, STACK, 32);
+                amd! {lea r(Amd::RDI), [r(STACK) + 32]; self.amd};
             }
 
+            /*
             self.amd.call_indirect(label);
-
             self.amd.vmovsd_xmm_mem(0, STACK, 32);
             self.amd.vmovsd_xmm_mem(1, STACK, 40);
             self.amd.vmovsd_mem_xmm(STACK, 64 + i * 8, 0);
             self.amd.vmovsd_mem_xmm(STACK, 96 + i * 8, 1);
+            */
+
+            amd! {call label; self.amd};
+            amd! {vmovsd xmm(0), [r(STACK) + 32]; self.amd};
+            amd! {vmovsd xmm(1), [r(STACK) + 40]; self.amd};
+            amd! {vmovsd [r(STACK) + 64 + i * 8], xmm(0); self.amd};
+            amd! {vmovsd [r(STACK) + 96 + i * 8], xmm(1); self.amd};
         }
 
-        self.amd.vmovpd_ymm_mem(0, STACK, 64);
-        self.amd.vmovpd_ymm_mem(1, STACK, 96);
+        amd! {vmovupd ymm(0), [r(STACK) + 64]; self.amd};
+        amd! {vmovupd ymm(1), [r(STACK) + 96]; self.amd};
     }
 
     fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
         let cap = SPILL_AREA as u32;
 
+        /*
         self.amd.mov_reg_label(ARGS[0], &format!("_env_{}_", op));
         self.amd.lea_mem(ARGS[1], STACK, (cap * REG_SIZE) as i32);
         self.amd.mov_imm(ARGS[2], num_args as u32);
         self.amd.lea_mem(ARGS[3], STACK, 4 * REG_SIZE as i32);
         self.vzeroupper();
-
         self.amd.call_indirect(&format!("_simd_{}_", op));
+        */
+
+        amd! {mov r(ARGS[0]), [&format!("_env_{}_", op)]; self.amd};
+        amd! {lea r(ARGS[1]), [r(STACK) + cap * REG_SIZE]; self.amd};
+        amd! {mov r(ARGS[2]), num_args; self.amd};
+        amd! {lea r(ARGS[3]), [r(STACK) + 4 * REG_SIZE]; self.amd};
+        amd! {vzeroupper; self.amd};
+        amd! {call &format!("_simd_{}_", op); self.amd};
 
         if self.config.is_complex() {
             let l1 = format!(".P{}", self.amd.a.ip());
             let l2 = format!(".Q{}", self.amd.a.ip());
 
+            /*
             self.amd.or(Amd::RAX, Amd::RAX);
             self.amd.jz(&l1);
 
@@ -211,10 +275,26 @@ impl AmdVectorGenerator {
 
             self.amd.vmovpd_ymm_mem(0, STACK, 4 * REG_SIZE as i32);
             self.amd.vmovpd_ymm_mem(1, STACK, 5 * REG_SIZE as i32);
+            */
+
+            amd! {or r(Amd::RAX), r(Amd::RAX); self.amd};
+            amd! {jz &l1; self.amd};
+
+            amd! {vmovupd ymm(2), [r(STACK) + 4 * REG_SIZE]; self.amd};
+            amd! {vmovupd ymm(3), [r(STACK) + 5 * REG_SIZE]; self.amd};
+            amd! {vshufpd ymm(0), ymm(2), ymm(3), 0; self.amd};
+            amd! {vshufpd ymm(1), ymm(2), ymm(3), 0; self.amd};
+
+            amd! {jmp &l2; self.amd};
+            self.set_label(&l1);
+
+            amd! {vmovupd ymm(0), [r(STACK) + 4 * REG_SIZE]; self.amd};
+            amd! {vmovupd ymm(1), [r(STACK) + 5 * REG_SIZE]; self.amd};
 
             self.set_label(&l2);
         } else {
-            self.amd.vmovpd_ymm_mem(0, STACK, 4 * REG_SIZE as i32);
+            // self.amd.vmovpd_ymm_mem(0, STACK, 4 * REG_SIZE as i32);
+            amd! {vmovupd ymm(0), [r(STACK) + 4 * REG_SIZE]; self.amd};
         }
 
         Ok(())

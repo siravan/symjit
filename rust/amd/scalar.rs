@@ -468,44 +468,61 @@ impl Generator for AmdScalarGenerator {
     }
 
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        if dst == s1 {
-            amd! {vfmadd132sd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else if dst == s2 {
-            amd! {vfmadd213sd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else if dst == s3 {
-            amd! {vfmadd231sd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else {
-            amd! {vmovapd xmm(ϕ(dst)), xmm(ϕ(s1)); self.amd};
-            amd! {vfmadd132sd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
+        match fused_perm(dst, s1, s2, s3) {
+            FusedAction::Use132(a, b, c) => {
+                amd! {vfmadd132sd xmm(ϕ(a)), xmm(ϕ(b)), xmm(ϕ(c)); self.amd}
+            }
+            FusedAction::Use213(a, b, c) => {
+                amd! {vfmadd213sd xmm(ϕ(a)), xmm(ϕ(b)), xmm(ϕ(c)); self.amd}
+            }
+            FusedAction::Use231(a, b, c) => {
+                amd! {vfmadd231sd xmm(ϕ(a)), xmm(ϕ(b)), xmm(ϕ(c)); self.amd}
+            }
+            FusedAction::Copy132(a, b, c) => {
+                amd! {vmovapd xmm(ϕ(dst)), xmm(ϕ(s1)); self.amd};
+                amd! {vfmadd132sd xmm(ϕ(a)), xmm(ϕ(b)), xmm(ϕ(c)); self.amd};
+            }
         }
-        // fuseop!(self, vfmadd132sd, vfmadd213sd, vfmadd231sd, dst, s1, s2, s3);
+        //fuseop!(self, vfmadd132sd, vfmadd213sd, vfmadd231sd, dst, s1, s2, s3);
     }
 
     fn fused_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        if dst == s1 {
-            amd! {vfmsub132sd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else if dst == s2 {
-            amd! {vfmsub213sd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else if dst == s3 {
-            amd! {vfmsub231sd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else {
-            amd! {vmovapd xmm(ϕ(dst)), xmm(ϕ(s1)); self.amd};
-            amd! {vfmsub132sd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
+        match fused_perm(dst, s1, s2, s3) {
+            FusedAction::Use132(a, b, c) => {
+                amd! {vfmsub132sd xmm(ϕ(a)), xmm(ϕ(b)), xmm(ϕ(c)); self.amd}
+            }
+            FusedAction::Use213(a, b, c) => {
+                amd! {vfmsub213sd xmm(ϕ(a)), xmm(ϕ(b)), xmm(ϕ(c)); self.amd}
+            }
+            FusedAction::Use231(a, b, c) => {
+                amd! {vfmsub231sd xmm(ϕ(a)), xmm(ϕ(b)), xmm(ϕ(c)); self.amd}
+            }
+            FusedAction::Copy132(a, b, c) => {
+                amd! {vmovapd xmm(ϕ(dst)), xmm(ϕ(s1)); self.amd};
+                amd! {vfmsub132sd xmm(ϕ(a)), xmm(ϕ(b)), xmm(ϕ(c)); self.amd};
+            }
         }
+
         // fuseop!(self, vfmsub132sd, vfmsub213sd, vfmsub231sd, dst, s1, s2, s3);
     }
 
     fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        if dst == s1 {
-            amd! {vfnmadd132sd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else if dst == s2 {
-            amd! {vfnmadd213sd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else if dst == s3 {
-            amd! {vfnmadd231sd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else {
-            amd! {vmovapd xmm(ϕ(dst)), xmm(ϕ(s1)); self.amd};
-            amd! {vfnmadd132sd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
+        match fused_perm(dst, s1, s2, s3) {
+            FusedAction::Use132(a, b, c) => {
+                amd! {vfnmadd132sd xmm(ϕ(a)), xmm(ϕ(b)), xmm(ϕ(c)); self.amd}
+            }
+            FusedAction::Use213(a, b, c) => {
+                amd! {vfnmadd213sd xmm(ϕ(a)), xmm(ϕ(b)), xmm(ϕ(c)); self.amd}
+            }
+            FusedAction::Use231(a, b, c) => {
+                amd! {vfnmadd231sd xmm(ϕ(a)), xmm(ϕ(b)), xmm(ϕ(c)); self.amd}
+            }
+            FusedAction::Copy132(a, b, c) => {
+                amd! {vmovapd xmm(ϕ(dst)), xmm(ϕ(s1)); self.amd};
+                amd! {vfnmadd132sd xmm(ϕ(a)), xmm(ϕ(b)), xmm(ϕ(c)); self.amd};
+            }
         }
+
         /*
         fuseop!(
             self,
@@ -521,16 +538,22 @@ impl Generator for AmdScalarGenerator {
     }
 
     fn fused_neg_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        if dst == s1 {
-            amd! {vfnmsub132sd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else if dst == s2 {
-            amd! {vfnmsub213sd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else if dst == s3 {
-            amd! {vfnmsub231sd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
-        } else {
-            amd! {vmovapd xmm(ϕ(dst)), xmm(ϕ(s1)); self.amd};
-            amd! {vfnmsub132sd xmm(ϕ(s1)), xmm(ϕ(s2)), xmm(ϕ(s3)); self.amd};
+        match fused_perm(dst, s1, s2, s3) {
+            FusedAction::Use132(a, b, c) => {
+                amd! {vfnmsub132sd xmm(ϕ(a)), xmm(ϕ(b)), xmm(ϕ(c)); self.amd}
+            }
+            FusedAction::Use213(a, b, c) => {
+                amd! {vfnmsub213sd xmm(ϕ(a)), xmm(ϕ(b)), xmm(ϕ(c)); self.amd}
+            }
+            FusedAction::Use231(a, b, c) => {
+                amd! {vfnmsub231sd xmm(ϕ(a)), xmm(ϕ(b)), xmm(ϕ(c)); self.amd}
+            }
+            FusedAction::Copy132(a, b, c) => {
+                amd! {vmovapd xmm(ϕ(dst)), xmm(ϕ(s1)); self.amd};
+                amd! {vfnmsub132sd xmm(ϕ(a)), xmm(ϕ(b)), xmm(ϕ(c)); self.amd};
+            }
         }
+
         /*
         fuseop!(
             self,

@@ -192,3 +192,22 @@ fn add_func(amd: &mut Amd, op: &str, f: Func) {
         amd.a.append_quad(f.func_ptr());
     }
 }
+
+enum FusedAction {
+    Use132(Reg, Reg, Reg),
+    Use213(Reg, Reg, Reg),
+    Use231(Reg, Reg, Reg),
+    Copy132(Reg, Reg, Reg),
+}
+
+fn fused_perm(dst: Reg, s1: Reg, s2: Reg, s3: Reg) -> FusedAction {
+    if dst == s1 {
+        FusedAction::Use132(s1, s3, s2)
+    } else if dst == s2 {
+        FusedAction::Use213(s2, s1, s3)
+    } else if dst == s3 {
+        FusedAction::Use231(s3, s1, s2)
+    } else {
+        FusedAction::Copy132(dst, s3, s2)
+    }
+}
