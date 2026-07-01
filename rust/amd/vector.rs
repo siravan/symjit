@@ -70,20 +70,19 @@ impl AmdVectorGenerator {
     }
 
     fn load_const_by_name(&mut self, dst: Reg, label: &str) {
-        self.amd.vbroadcastsd_label(ϕ(dst), label);
-    }
-
-    fn vzeroupper(&mut self) {
-        self.amd.vzeroupper();
+        // self.amd.vbroadcastsd_ymm_label(ϕ(dst), label);
+        amd! {vbroadcastsd ymm(ϕ(dst)), label; self.amd};
     }
 
     fn call_vector_unary(&mut self, label: &str) {
         // reserves 64 bytes in the stack
         // 32 bytes for shadow store (mandatory in Windows)
         // 32 bytes to save ymm0
-        self.amd.vmovpd_mem_ymm(STACK, 32, 0);
+        // self.amd.vmovpd_mem_ymm(STACK, 32, 0);
+        // self.vzeroupper();
 
-        self.vzeroupper();
+        amd! {vmovupd [r(STACK) + 32], ymm(0); self.amd};
+        amd! {vzeroupper; self.amd};
 
         for i in 0..4 {
             if i > 0 {

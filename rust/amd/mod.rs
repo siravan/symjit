@@ -4,6 +4,11 @@ use crate::utils::Reg;
 #[macro_use]
 mod asm;
 
+mod base;
+mod f64;
+mod f64_rex;
+mod f64x2;
+mod f64x4;
 mod fused;
 
 use asm::*;
