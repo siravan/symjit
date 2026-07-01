@@ -15,23 +15,6 @@ const T1: u8 = 2;
 const T2: u8 = 3;
 
 /*
-macro_rules! fuseop {
-    ($self:ident, $f132:ident, $f213:ident, $f231:ident, $dst: expr, $a: expr, $b: expr, $c:ident) => {{
-        if $dst == $a {
-            $self.amd.$f132(ϕ($a), ϕ($c), ϕ($b));
-        } else if $dst == $b {
-            $self.amd.$f213(ϕ($b), ϕ($a), ϕ($c));
-        } else if $dst == $c {
-            $self.amd.$f231(ϕ($c), ϕ($a), ϕ($b));
-        } else {
-            $self.fmov($dst, $a);
-            $self.amd.$f132(ϕ($dst), ϕ($c), ϕ($b));
-        }
-    }};
-}
-*/
-
-/*
  *  ϕ translates a logical register number (in Reg) to a physical
  *  register number, according to the ABI.
  */
@@ -70,22 +53,11 @@ impl AmdComplexGenerator {
     }
 
     fn load_const_by_name(&mut self, dst: Reg, label: &str) {
-        // self.amd.vbroadcastsd_label(ϕ(dst), label);
         self.amd.vmovsd_xmm_label(ϕ(dst), label);
-    }
-
-    fn vzeroupper(&mut self) {
-        self.amd.vzeroupper();
     }
 
     fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
         let cap = SPILL_AREA as u32;
-
-        // self.amd.mov_reg_label(ARGS[0], &format!("_env_{}_", op));
-        // self.amd.lea_mem(ARGS[1], STACK, (cap * REG_SIZE) as i32);
-        // self.amd.mov_imm(ARGS[2], num_args as u32);
-        // self.amd.lea_mem(ARGS[3], STACK, 4 * REG_SIZE as i32);
-        // self.vzeroupper();
 
         amd! {mov r(ARGS[0]), [&format!("_env_{}_", op)]; self.amd};
         amd! {lea r(ARGS[1]), [r(STACK) + cap * REG_SIZE]; self.amd};
@@ -135,7 +107,6 @@ impl Generator for AmdComplexGenerator {
         let mut n = self.amd.a.ip();
 
         while (n & 7) != 0 {
-            // self.amd.nop();
             amd! {nop ; self.amd};
             n += 1
         }
@@ -146,9 +117,6 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn branch(&mut self, label: &str) {
-        // self.amd.xor(Amd::RAX, Amd::RAX);
-        // self.amd.jz(label);
-
         amd! {xor r(Amd::RAX), r(Amd::RAX); self.amd};
         amd! {jz label; self.amd};
     }
@@ -165,10 +133,8 @@ impl Generator for AmdComplexGenerator {
          * PF = 1 (jpe)
          */
         if is_else {
-            // self.amd.jpe(label);
             amd! {jpe label; self.amd};
         } else {
-            // self.amd.jpo(label);
             amd! {jpe label; self.amd};
         }
     }
@@ -186,10 +152,6 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn fxchg(&mut self, s1: Reg, s2: Reg) {
-        // self.amd.vxordd(ϕ(s1), ϕ(s1), ϕ(s2));
-        // self.amd.vxordd(ϕ(s2), ϕ(s1), ϕ(s2));
-        // self.amd.vxordd(ϕ(s1), ϕ(s1), ϕ(s2));
-
         amd! {vxorpd xmm(ϕ(s1)), xmm(ϕ(s1)), xmm(ϕ(s2)); self.amd};
         amd! {vxorpd xmm(ϕ(s2)), xmm(ϕ(s1)), xmm(ϕ(s2)); self.amd};
         amd! {vxorpd xmm(ϕ(s1)), xmm(ϕ(s1)), xmm(ϕ(s2)); self.amd};
@@ -198,19 +160,15 @@ impl Generator for AmdComplexGenerator {
     fn load_const(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
         let label = format!("_const_{}_", idx);
-        // self.amd.vbroadcastsd_label(ϕ(dst), label.as_str());
-        // self.amd.vmovsd_xmm_label(ϕ(dst), label.as_str());
         amd! {vmovsd xmm(ϕ(dst)), label.as_str(); self.amd};
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        // self.amd.vmovdd_xmm_mem(ϕ(dst), MEM, (idx * REG_SIZE) as i32);
         amd! {vmovupd xmm(ϕ(dst)), [r(MEM) + idx * REG_SIZE]; self.amd};
     }
 
     fn save_mem(&mut self, dst: Reg, idx: u32) {
-        // self.amd.vmovdd_mem_xmm(MEM, (idx * REG_SIZE) as i32, ϕ(dst));
         amd! {vmovupd [r(MEM) + idx * REG_SIZE], xmm(ϕ(dst)); self.amd};
     }
 
@@ -220,18 +178,15 @@ impl Generator for AmdComplexGenerator {
 
     fn load_param(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        // self.amd.vmovdd_xmm_mem(ϕ(dst), PARAMS, (idx * REG_SIZE) as i32);
         amd! {vmovupd xmm(ϕ(dst)), [r(PARAMS) + idx * REG_SIZE]; self.amd};
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        // self.amd.vmovdd_xmm_mem(ϕ(dst), STACK, (idx * REG_SIZE) as i32);
         amd! {vmovupd xmm(ϕ(dst)), [r(STACK) + idx * REG_SIZE]; self.amd};
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        // self.amd.vmovdd_mem_xmm(STACK, (idx * REG_SIZE) as i32, ϕ(dst));
         amd! {vmovupd [r(STACK) + idx * REG_SIZE], xmm(ϕ(dst)); self.amd};
     }
 
@@ -251,18 +206,11 @@ impl Generator for AmdComplexGenerator {
 
     fn neg(&mut self, dst: Reg, s1: Reg) {
         self.load_const_by_name(Reg::Temp, "_minus_zero_");
-        // self.amd.vunpckldd(ϕ(Reg::Temp), ϕ(Reg::Temp), ϕ(Reg::Temp));
         amd! {vunpcklpd xmm(ϕ(Reg::Temp)), xmm(ϕ(Reg::Temp)), xmm(ϕ(Reg::Temp)); self.amd};
         self.xor(dst, s1, Reg::Temp);
     }
 
     fn abs(&mut self, dst: Reg, s1: Reg) {
-        // self.amd.vmuldd(T1, ϕ(s1), ϕ(s1));
-        // self.amd.vhadddd(T1, T1, T1);
-        // self.amd.vsqrtsd(T2, T1);
-        // self.amd.vxorpd(T1, T1, T1);
-        // self.amd.vunpckldd(ϕ(dst), T2, T1);
-
         amd! {vmulpd xmm(T1), xmm(ϕ(s1)), xmm(ϕ(s1)); self.amd};
         amd! {vhaddpd xmm(T1), xmm(T1), xmm(T1); self.amd};
         amd! {vsqrtsd xmm(T2), xmm(T1); self.amd};
@@ -271,37 +219,6 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn root(&mut self, dst: Reg, s1: Reg) {
-        /*
-        self.amd.vmovq_reg_xmm(Amd::RAX, ϕ(s1));
-
-        self.amd.vmuldd(T1, ϕ(s1), ϕ(s1));
-        self.amd.vhadddd(T1, T1, T1);
-
-        self.amd.vsqrtsd(T1, T1);
-        self.amd.vmovsd_xmm_label(T0, "_minus_zero_");
-        self.amd.vandnpd(T2, T0, ϕ(s1));
-        self.amd.vaddsd(T1, T1, T2);
-        self.amd.vmovsd_xmm_label(T0, "_half_");
-        self.amd.vmulsd(T1, T1, T0);
-        self.amd.vsqrtsd(T1, T1);
-
-        self.amd.vunpckhdd(T2, ϕ(s1), ϕ(s1));
-        self.amd.vdivsd(T2, T2, T1);
-        self.amd.vmulsd(T2, T2, T0);
-
-        self.amd.vcmpeqsd(T0, T2, T2);
-        self.amd.vandpd(T2, T2, T0);
-
-        self.amd.vunpckldd(ϕ(dst), T2, T1);
-
-        let label = format!(".Y{}", self.amd.a.ip());
-        // self.amd.mov_reg_mem(Amd::RAX, STACK, 0);
-        self.amd.or(Amd::RAX, Amd::RAX);
-        self.amd.js(&label);
-        self.amd.vshufdd(ϕ(dst), ϕ(dst), ϕ(dst), 1);
-        self.set_label(&label);
-        */
-
         amd! {vmovq r(Amd::RAX), xmm(ϕ(s1)); self.amd};
         amd! {vmulpd xmm(T1), xmm(ϕ(s1)), xmm(ϕ(s1)); self.amd};
         amd! {vhaddpd xmm(T1), xmm(T1), xmm(T1); self.amd};
@@ -331,27 +248,12 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn real_root(&mut self, dst: Reg, s1: Reg) {
-        // self.amd.vxorpd(T1, T1, T1);
-        // self.amd.vsqrtsd(ϕ(dst), ϕ(s1));
-        // self.amd.vunpckldd(ϕ(dst), ϕ(dst), T1);
-
         amd! {vxorpd xmm(T1), xmm(T1), xmm(T1); self.amd};
         amd! {vsqrtsd xmm(ϕ(dst)), xmm(ϕ(s1)); self.amd};
         amd! {vunpcklpd xmm(ϕ(dst)), xmm(ϕ(dst)), xmm(T1); self.amd};
     }
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
-        /*
-        self.amd.vshufdd(T1, ϕ(s1), ϕ(s1), 1);
-        self.amd.vxorpd(T2, T2, T2);
-        self.amd.vaddsubdd(T1, T2, T1);
-        self.amd.vshufdd(T2, T1, T1, 1);
-
-        self.amd.vmuldd(T1, ϕ(s1), ϕ(s1));
-        self.amd.vhadddd(T1, T1, T1);
-        self.amd.vdivdd(ϕ(dst), T2, T1);
-        */
-
         amd! {vshufpd xmm(T1), xmm(ϕ(s1)), xmm(ϕ(s1)), 1; self.amd};
         amd! {vxorpd xmm(T2), xmm(T2), xmm(T2); self.amd};
         amd! {vaddsubpd xmm(T1), xmm(T2), xmm(T1); self.amd};
@@ -364,30 +266,23 @@ impl Generator for AmdComplexGenerator {
 
     fn half(&mut self, dst: Reg, s1: Reg) {
         self.load_const_by_name(Reg::Temp, "_half_");
-        // self.amd.vunpckldd(ϕ(Reg::Temp), ϕ(Reg::Temp), ϕ(Reg::Temp));
-        // self.amd.vmuldd(ϕ(dst), ϕ(s1), ϕ(Reg::Temp));
-
         amd! {vunpcklpd xmm(ϕ(Reg::Temp)), xmm(ϕ(Reg::Temp)), xmm(ϕ(Reg::Temp)); self.amd};
         amd! {vmulpd xmm(ϕ(dst)), xmm(ϕ(s1)), xmm(ϕ(Reg::Temp)); self.amd};
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {
-        // roundop!(self, dst, s1, RoundingMode::Round);
         amd! {vroundpd xmm(ϕ(dst)), xmm(ϕ(s1)), RoundingMode::Round; self.amd};
     }
 
     fn floor(&mut self, dst: Reg, s1: Reg) {
-        // roundop!(self, dst, s1, RoundingMode::Floor);
         amd! {vroundpd xmm(ϕ(dst)), xmm(ϕ(s1)), RoundingMode::Floor; self.amd};
     }
 
     fn ceiling(&mut self, dst: Reg, s1: Reg) {
-        // roundop!(self, dst, s1, RoundingMode::Ceiling);
         amd! {vroundpd xmm(ϕ(dst)), xmm(ϕ(s1)), RoundingMode::Ceiling; self.amd};
     }
 
     fn trunc(&mut self, dst: Reg, s1: Reg) {
-        // roundop!(self, dst, s1, RoundingMode::Trunc);
         amd! {vroundpd xmm(ϕ(dst)), xmm(ϕ(s1)), RoundingMode::Trunc; self.amd};
     }
 
@@ -397,25 +292,14 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        // binop!(self, vadddd, dst, s1, s2);
         amd! {vaddpd xmm(ϕ(dst)), xmm(ϕ(s1)), xmm(ϕ(s2)); self.amd};
     }
 
     fn minus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        // binop!(self, vsubdd, dst, s1, s2);
         amd! {vsubpd xmm(ϕ(dst)), xmm(ϕ(s1)), xmm(ϕ(s2)); self.amd};
     }
 
     fn times(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        /*
-        self.amd.vunpckldd(T1, ϕ(s1), ϕ(s1)); // duplicate real
-        self.amd.vunpckhdd(T2, ϕ(s1), ϕ(s1)); // duplicate imag
-        self.amd.vmuldd(T1, T1, ϕ(s2));
-        self.amd.vmuldd(T2, T2, ϕ(s2));
-        self.amd.vshufdd(T2, T2, T2, 1); // exchange real/imag
-        self.amd.vaddsubdd(ϕ(dst), T1, T2);
-        */
-
         amd! {vunpcklpd xmm(T1), xmm(ϕ(s1)), xmm(ϕ(s1)); self.amd}; // duplicate real
         amd! {vunpckhpd xmm(T2), xmm(ϕ(s1)), xmm(ϕ(s1)); self.amd}; // duplicate imag
         amd! {vmulpd xmm(T1), xmm(T1), xmm(ϕ(s2)); self.amd};
@@ -425,20 +309,6 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        /*
-        self.amd.vmuldd(T0, ϕ(s2), ϕ(s2));
-        self.amd.vhadddd(T0, T0, T0);
-
-        self.amd.vunpckldd(T1, ϕ(s1), ϕ(s1)); // duplicate real
-        self.amd.vunpckhdd(T2, ϕ(s1), ϕ(s1)); // duplicate imag
-        self.amd.vmuldd(T1, T1, ϕ(s2));
-        self.amd.vmuldd(T2, T2, ϕ(s2));
-        self.amd.vshufdd(T1, T1, T1, 1); // exchange real/imag
-        self.amd.vaddsubdd(ϕ(dst), T2, T1);
-        self.amd.vshufdd(ϕ(dst), ϕ(dst), ϕ(dst), 1);
-        self.amd.vdivdd(ϕ(dst), ϕ(dst), T0);
-        */
-
         amd! {vmulpd xmm(T0), xmm(ϕ(s2)), xmm(ϕ(s2)); self.amd};
         amd! {vhaddpd xmm(T0), xmm(T0), xmm(T0); self.amd};
 
@@ -496,26 +366,7 @@ impl Generator for AmdComplexGenerator {
             }
             self.times(d2, s2, Reg::Temp);
         } else {
-            /*
             match l1 {
-                Loc::Mem(idx) => self.amd.vmovdd_xmm_mem(T1, MEM, (idx * REG_SIZE) as i32),
-                Loc::Param(idx) => self.amd.vmovdd_xmm_mem(T1, PARAMS, (idx * REG_SIZE) as i32),
-                Loc::Stack(idx) => self.amd.vmovdd_xmm_mem(T1, STACK, (idx * REG_SIZE) as i32),
-            }
-
-            match l2 {
-                Loc::Mem(idx) => self.amd.vmovdd_xmm_mem(T2, MEM, (idx * REG_SIZE) as i32),
-                Loc::Param(idx) => self.amd.vmovdd_xmm_mem(T2, PARAMS, (idx * REG_SIZE) as i32),
-                Loc::Stack(idx) => self.amd.vmovdd_xmm_mem(T2, STACK, (idx * REG_SIZE) as i32),
-            }
-
-            self.amd.vinsertf128(T0, T1, T2, 1);
-            */
-
-            match l1 {
-                // Loc::Mem(idx) => self.amd.vmovdd_xmm_mem(T0, MEM, (idx * REG_SIZE) as i32),
-                // Loc::Param(idx) => self.amd.vmovdd_xmm_mem(T0, PARAMS, (idx * REG_SIZE) as i32),
-                // Loc::Stack(idx) => self.amd.vmovdd_xmm_mem(T0, STACK, (idx * REG_SIZE) as i32),
                 Loc::Mem(idx) => {
                     amd! {vmovupd xmm(T0), [r(MEM) + idx * REG_SIZE]; self.amd}
                 }
@@ -555,29 +406,16 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn real(&mut self, dst: Reg, s1: Reg) {
-        // self.amd.vxorpd(T1, T1, T1);
-        // self.amd.vunpckldd(ϕ(dst), ϕ(s1), T1);
-
         amd! {vxorpd xmm(T1), xmm(T1), xmm(T1); self.amd};
         amd! {vunpcklpd xmm(ϕ(dst)), xmm(ϕ(s1)), xmm(T1); self.amd};
     }
 
     fn imaginary(&mut self, dst: Reg, s1: Reg) {
-        // self.amd.vxorpd(T1, T1, T1);
-        // self.amd.vunpckhdd(ϕ(dst), ϕ(s1), T1);
-
         amd! {vxorpd xmm(T1), xmm(T1), xmm(T1); self.amd};
         amd! {vunpckhpd xmm(ϕ(dst)), xmm(ϕ(s1)), xmm(T1); self.amd};
     }
 
     fn conjugate(&mut self, dst: Reg, s1: Reg) {
-        /*
-        self.amd.vxorpd(T1, T1, T1);
-        self.amd.vshufdd(ϕ(dst), ϕ(s1), ϕ(s1), 1);
-        self.amd.vaddsubdd(ϕ(dst), T1, ϕ(dst));
-        self.amd.vshufdd(ϕ(dst), ϕ(dst), ϕ(dst), 1);
-        */
-
         amd! {vxorpd xmm(T1), xmm(T1), xmm(T1); self.amd};
         amd! {vshufpd xmm(ϕ(dst)), xmm(ϕ(s1)), xmm(ϕ(s1)), 1; self.amd};
         amd! {vaddsubpd xmm(ϕ(dst)), xmm(T1), xmm(ϕ(dst)); self.amd};
@@ -585,81 +423,57 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn complex(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        //self.amd.vunpckldd(ϕ(dst), ϕ(s1), ϕ(s2));
         amd! {vunpcklpd xmm(ϕ(dst)), xmm(ϕ(s1)), xmm(ϕ(s2)); self.amd};
     }
 
     fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        // binop!(self, vcmpnlesd, dst, s1, s2);
-        // binop!(self, vunpckldd, dst, dst, dst);
-
         amd! {vcmpnlesd xmm(ϕ(dst)), xmm(ϕ(s1)), xmm(ϕ(s2)); self.amd};
         amd! {vunpcklpd xmm(ϕ(dst)), xmm(ϕ(dst)), xmm(ϕ(dst)); self.amd};
     }
 
     fn geq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        // binop!(self, vcmpnltsd, dst, s1, s2);
-        // binop!(self, vunpckldd, dst, dst, dst);
-
         amd! {vcmpnltsd xmm(ϕ(dst)), xmm(ϕ(s1)), xmm(ϕ(s2)); self.amd};
         amd! {vunpcklpd xmm(ϕ(dst)), xmm(ϕ(dst)), xmm(ϕ(dst)); self.amd};
     }
 
     fn lt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        // binop!(self, vcmpltsd, dst, s1, s2);
-        // binop!(self, vunpckldd, dst, dst, dst);
-
         amd! {vcmpltsd xmm(ϕ(dst)), xmm(ϕ(s1)), xmm(ϕ(s2)); self.amd};
         amd! {vunpcklpd xmm(ϕ(dst)), xmm(ϕ(dst)), xmm(ϕ(dst)); self.amd};
     }
 
     fn leq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        // binop!(self, vcmplesd, dst, s1, s2);
-        // binop!(self, vunpckldd, dst, dst, dst);
-
         amd! {vcmplesd xmm(ϕ(dst)), xmm(ϕ(s1)), xmm(ϕ(s2)); self.amd};
         amd! {vunpcklpd xmm(ϕ(dst)), xmm(ϕ(dst)), xmm(ϕ(dst)); self.amd};
     }
 
     fn eq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        // binop!(self, vcmpeqsd, dst, s1, s2);
-        // binop!(self, vunpckldd, dst, dst, dst);
-
         amd! {vcmpeqsd xmm(ϕ(dst)), xmm(ϕ(s1)), xmm(ϕ(s2)); self.amd};
         amd! {vunpcklpd xmm(ϕ(dst)), xmm(ϕ(dst)), xmm(ϕ(dst)); self.amd};
     }
 
     fn neq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        // binop!(self, vcmpneqsd, dst, s1, s2);
-        // binop!(self, vunpckldd, dst, dst, dst);
-
         amd! {vcmpneqsd xmm(ϕ(dst)), xmm(ϕ(s1)), xmm(ϕ(s2)); self.amd};
         amd! {vunpcklpd xmm(ϕ(dst)), xmm(ϕ(dst)), xmm(ϕ(dst)); self.amd};
     }
 
     fn and(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        // binop!(self, vandpd, dst, s1, s2);
         amd! {vandpd xmm(ϕ(dst)), xmm(ϕ(s1)), xmm(ϕ(s2)); self.amd};
     }
 
     fn andnot(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        // binop!(self, vandnpd, dst, s1, s2);
         amd! {vandnpd xmm(ϕ(dst)), xmm(ϕ(s1)), xmm(ϕ(s2)); self.amd};
     }
 
     fn or(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        // binop!(self, vorpd, dst, s1, s2);
         amd! {vorpd xmm(ϕ(dst)), xmm(ϕ(s1)), xmm(ϕ(s2)); self.amd};
     }
 
     fn xor(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        // binop!(self, vxorpd, dst, s1, s2);
         amd! {vxorpd xmm(ϕ(dst)), xmm(ϕ(s1)), xmm(ϕ(s2)); self.amd};
     }
 
     fn not(&mut self, dst: Reg, s1: Reg) {
         self.load_const_by_name(Reg::Temp, "_all_ones_");
-        // self.amd.vunpckldd(ϕ(Reg::Temp), ϕ(Reg::Temp), ϕ(Reg::Temp));
         amd! {vunpcklpd xmm(ϕ(Reg::Temp)), xmm(ϕ(Reg::Temp)), xmm(ϕ(Reg::Temp)); self.amd};
         self.xor(dst, s1, Reg::Temp);
     }
@@ -720,9 +534,6 @@ impl Generator for AmdComplexGenerator {
         }
 
         let label = format!("_func_{}_", op);
-        //self.vzeroupper();
-        //self.amd.call_indirect(&label);
-
         amd! {vzeroupper ; self.amd};
         amd! {call &label; self.amd};
 
@@ -736,22 +547,15 @@ impl Generator for AmdComplexGenerator {
             self.save_stack(Reg::Right, 4);
         }
 
-        // loading the imaginary part of the argument into xmm1
-        // self.amd.vunpckhdd(1, 0, 0);
-        // self.vzeroupper();
-
         amd! {vunpckhpd xmm(1), xmm(0), xmm(0); self.amd};
         amd! {vzeroupper; self.amd};
 
         if cfg!(target_family = "windows") {
-            // self.amd.lea_mem(Amd::R8, STACK, 32);
             amd! {lea r(Amd::R8), [r(STACK) + 32]; self.amd};
         } else {
-            // self.amd.lea_mem(Amd::RDI, STACK, 32);
             amd! {lea r(Amd::RDI), [r(STACK) + 32]; self.amd};
         }
 
-        // self.amd.call_indirect(&label);
         amd! {call &label; self.amd};
 
         self.load_stack(Reg::Ret, 4);
@@ -760,12 +564,10 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn call_funclet(&mut self, label: &str) {
-        // self.amd.call_relative(label);
         amd! {call [rip + label]; self.amd};
     }
 
     fn ret(&mut self) {
-        // self.amd.ret();
         amd! {ret; self.amd};
     }
 
@@ -794,11 +596,6 @@ impl Generator for AmdComplexGenerator {
         amd! {push r(Amd::RBP); self.amd};
 
         let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        /*
-        sub_rsp(&mut self.amd, frame_size);
-        self.amd.mov(MEM, STACK);
-        sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
-        */
 
         amd! {sub rsp, frame_size; self.amd};
         amd! {mov r(MEM), r(STACK); self.amd};
@@ -816,18 +613,12 @@ impl Generator for AmdComplexGenerator {
         amd! {push r(Amd::RBP); self.amd};
 
         let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        /*
-        sub_rsp(&mut self.amd, frame_size);
-        self.amd.mov(MEM, STACK);
-        sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
-        */
 
         amd! {sub rsp, frame_size; self.amd};
         amd! {mov r(MEM), r(STACK); self.amd};
         amd! {sub rsp, align_stack(cap as u32 * REG_SIZE); self.amd};
 
         for i in 0..count_states.min(4) {
-            // self.amd.vmovsd_mem_xmm(MEM, (i as u32 * REG_SIZE) as i32, i as u8);
             amd! {vmovsd [r(MEM) + (i as u32 * REG_SIZE)], xmm(i as u8); self.amd};
         }
 
@@ -838,26 +629,18 @@ impl Generator for AmdComplexGenerator {
             // +1 for the return address in the stack
             // +1 for RBP in the stack
             // -4 for the first four arguments passed in XMM0-XMM3
-
-            // self.amd.vmovsd_xmm_mem(0, MEM, (frame_size + (i + 2) * REG_SIZE) as i32);
-            // self.amd.vmovsd_mem_xmm(MEM, (i * REG_SIZE) as i32, 0);
             amd! {vmovsd xmm(0), [r(MEM) + (frame_size + (i + 2) * REG_SIZE)]; self.amd};
             amd! {vmovsd [r(MEM) + i * REG_SIZE], xmm(0); self.amd};
         }
     }
 
     fn epilogue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize, idx_ret: i32) {
-        // self.vzeroupper();
-        // self.amd.vmovsd_xmm_mem(0, MEM, idx_ret * REG_SIZE as i32);
         amd! {vzeroupper; self.amd};
         amd! {vmovsd xmm(0), [r(MEM) + idx_ret * REG_SIZE as i32]; self.amd};
 
         let total_size = align_stack(cap as u32 * REG_SIZE)
             + align_stack((count_states + count_obs) as u32 * REG_SIZE);
 
-        // add_rsp(&mut self.amd, total_size);
-        // self.amd.pop(Amd::RBP);
-        // self.amd.ret();
         amd! {add rsp, total_size; self.amd};
         amd! {pop r(Amd::RBP); self.amd};
         amd! {ret; self.amd};
@@ -903,50 +686,30 @@ impl Generator for AmdComplexGenerator {
             return self.prologue_symbolica(cap, count_params, count_obs);
         }
 
-        // self.amd.push(Amd::RBP);
         amd! {push r(Amd::RBP); self.amd};
         save_nonvolatile_regs(&mut self.amd);
-
-        /*
-        self.amd.mov(MEM, ARGS[0]); // first arg = mem if direct mode, otherwise null
-        self.amd.mov(STATES, ARGS[1]); // second arg = states+obs if indirect mode, otherwise null
-        self.amd.mov(IDX, ARGS[2]); // third arg = index if indirect mode
-        self.amd.mov(PARAMS, ARGS[3]); // fourth arg = params
-        */
 
         amd! {mov r(MEM), r(ARGS[0]); self.amd}; // first arg = mem if direct mode, otherwise null
         amd! {mov r(STATES), r(ARGS[1]); self.amd}; // second arg = states+obs if indirect mode, otherwise null
         amd! {mov r(IDX), r(ARGS[2]); self.amd}; // third arg = index if indirect mode
         amd! {mov r(PARAMS), r(ARGS[3]); self.amd}; // fourth arg = params
 
-        // self.amd.or(STATES, STATES);
-        // self.amd.jz("@main");
-
         amd! {or r(STATES), r(STATES); self.amd};
         amd! {jz "@main"; self.amd};
 
         let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        // sub_rsp(&mut self.amd, frame_size);
-        // self.amd.mov(MEM, STACK); // in indirect mode, MEM is allocated on the stack
-
         amd! {sub rsp, frame_size; self.amd};
         amd! {mov r(MEM), r(STACK); self.amd}; // in indirect mode, MEM is allocated on the stack
 
         for i in 0..count_states {
-            let k = i as u32 * REG_SIZE;
-            // self.amd.mov_reg_mem(Amd::RAX, STATES, 2 * 8 * i as i32);
-            // self.amd.vmovsd_xmm_indexed(RET, Amd::RAX, IDX, 8);
-            // self.amd.vmovsd_mem_xmm(MEM, k as i32, RET);
-
             amd! {mov r(Amd::RAX), [r(STATES) + 2 * 8 * i as i32]; self.amd};
             amd! {vmovsd xmm(RET), [r(Amd::RAX) + r(IDX) * 8]; self.amd};
-            amd! {vmovsd [r(MEM) + k], xmm(RET); self.amd};
+            amd! {vmovsd [r(MEM) + i as u32 * REG_SIZE], xmm(RET); self.amd};
         }
 
         // may save idx (RDX) as double in RBP + 8/32 * count_states
 
         self.set_label("@main");
-        // sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
         amd! {sub rsp, align_stack(cap as u32 * REG_SIZE); self.amd};
     }
 
@@ -965,36 +728,23 @@ impl Generator for AmdComplexGenerator {
             return self.epilogue_symbolica(cap, count_params, count_obs);
         }
 
-        // add_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
-        // self.amd.or(STATES, STATES);
-        // self.amd.jz("@done");
-
         amd! {add rsp, align_stack(cap as u32 * REG_SIZE); self.amd};
         amd! {or r(STATES), r(STATES); self.amd};
         amd! {jz "@done"; self.amd};
 
         for i in 0..count_obs {
-            let k = (count_states + i) as u32 * REG_SIZE;
-            // self.amd.mov_reg_mem(Amd::RCX, STATES, 2 * 8 * (count_states + i) as i32);
-            // self.amd.vmovsd_xmm_mem(RET, MEM, k as i32);
-            // self.amd.vmovsd_indexed_xmm(Amd::RCX, IDX, 8, RET);
-
             amd! {mov r(Amd::RCX), [r(STATES) + 2 * 8 * (count_states + i) as i32]; self.amd};
-            amd! {vmovsd xmm(RET), [r(MEM) + k]; self.amd};
+            amd! {vmovsd xmm(RET), [r(MEM) + (count_states + i) as u32 * REG_SIZE]; self.amd};
             amd! {vmovsd [r(Amd::RCX) + r(IDX) * 8], xmm(RET); self.amd};
         }
 
         let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        // add_rsp(&mut self.amd, frame_size);
         amd! {add rsp, frame_size; self.amd};
         self.set_label("@done");
 
-        // self.vzeroupper();
         amd! {vzeroupper; self.amd};
 
         load_nonvolatile_regs(&mut self.amd);
-        // self.amd.pop(Amd::RBP);
-        // self.amd.ret();
         amd! {pop r(Amd::RBP); self.amd};
         amd! {ret; self.amd};
     }
@@ -1004,7 +754,6 @@ impl Generator for AmdComplexGenerator {
 
         for r in used {
             if *r >= count_shadows {
-                // self.amd.vmovsd_mem_xmm(STACK, (*r as u32 + 4) as i32, *r);
                 amd! {vmovsd [r(STACK) + (*r as u32 + 4) as i32], xmm(*r); self.amd};
             }
         }
@@ -1015,7 +764,6 @@ impl Generator for AmdComplexGenerator {
 
         for r in used {
             if *r >= count_shadows {
-                // self.amd.vmovsd_xmm_mem(*r, STACK, (*r as u32 + 4) as i32);
                 amd! {vmovsd xmm(*r), [r(STACK) + (*r as u32 + 4) as i32]; self.amd};
             }
         }
@@ -1024,34 +772,23 @@ impl Generator for AmdComplexGenerator {
 
 impl AmdComplexGenerator {
     fn prologue_symbolica(&mut self, cap: usize, _count_params: usize, _count_obs: usize) {
-        // self.amd.push(Amd::RBP);
         amd! {push r(Amd::RBP); self.amd};
         save_nonvolatile_regs(&mut self.amd);
-
-        // self.amd.mov(MEM, ARGS[0]); // first arg = mem if direct mode, otherwise null
-        // self.amd.mov(STATES, ARGS[1]); // second arg = states+obs if indirect mode, otherwise null
-        // self.amd.mov(IDX, ARGS[2]); // third arg = index if indirect mode
-        // self.amd.mov(PARAMS, ARGS[3]); // fourth arg = params
 
         amd! {mov r(MEM), r(ARGS[0]); self.amd}; // first arg = mem if direct mode, otherwise null
         amd! {mov r(STATES), r(ARGS[1]); self.amd}; // second arg = states+obs if indirect mode, otherwise null
         amd! {mov r(IDX), r(ARGS[2]); self.amd}; // third arg = index if indirect mode
         amd! {mov r(PARAMS), r(ARGS[3]); self.amd}; // fourth arg = params
 
-        // sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
         amd! {sub rsp, align_stack(cap as u32 * REG_SIZE); self.amd};
     }
 
     fn epilogue_symbolica(&mut self, cap: usize, _count_params: usize, _count_obs: usize) {
-        // add_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
         amd! {add rsp, align_stack(cap as u32 * REG_SIZE); self.amd};
 
-        // self.vzeroupper();
         amd! {vzeroupper; self.amd};
 
         load_nonvolatile_regs(&mut self.amd);
-        // self.amd.pop(Amd::RBP);
-        // self.amd.ret();
         amd! {pop r(Amd::RBP); self.amd};
         amd! {ret; self.amd};
     }
