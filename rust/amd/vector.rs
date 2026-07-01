@@ -11,6 +11,7 @@ use super::*;
 
 const REG_SIZE: u32 = 32;
 
+/*
 macro_rules! binop {
     ($self:ident, $simd:ident, $dst:expr, $s1: expr, $s2: expr) => {
         $self.amd.$simd(ϕ($dst), ϕ($s1), ϕ($s2));
@@ -28,6 +29,7 @@ macro_rules! roundop {
         $self.amd.vroundpd(ϕ($dst), ϕ($s1), $mode);
     };
 }
+*/
 
 macro_rules! fuseop {
     ($self:ident, $f132:ident, $f213:ident, $f231:ident, $dst: expr, $a: expr, $b: expr, $c:ident) => {{
@@ -336,7 +338,8 @@ impl Generator for AmdVectorGenerator {
         let mut n = self.amd.a.ip();
 
         while (n & 7) != 0 {
-            self.amd.nop();
+            // self.amd.nop();
+            amd! {nop; self.amd};
             n += 1
         }
     }
@@ -346,24 +349,32 @@ impl Generator for AmdVectorGenerator {
     }
 
     fn branch(&mut self, label: &str) {
-        self.amd.xor(Amd::RAX, Amd::RAX);
-        self.amd.jz(label);
+        // self.amd.xor(Amd::RAX, Amd::RAX);
+        // self.amd.jz(label);
+        amd! {xor r(Amd::RAX), r(Amd::RAX); self.amd};
+        amd! {jz label; self.amd};
     }
 
     /// jump to label if all bits of cond == is_else
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
-        self.amd.vmovmskpd(Amd::RAX, ϕ(cond));
-        self.amd.and_imm(Amd::RAX, 15);
+        // self.amd.vmovmskpd(Amd::RAX, ϕ(cond));
+        // self.amd.and_imm(Amd::RAX, 15);
+        amd! {vmovmskpd r(Amd::RAX), ymm(ϕ(cond)); self.amd};
+        amd! {and r(Amd::RAX), 15; self.amd};
 
         if is_else {
-            self.amd.cmp_imm(Amd::RAX, 15);
+            // self.amd.cmp_imm(Amd::RAX, 15);
+            amd! {cmp r(Amd::RAX), 15; self.amd};
         }
 
-        self.amd.jz(label);
+        // self.amd.jz(label);
+        amd! {jz label; self.amd};
 
         if !self.config.simd_branch() {
-            self.amd.or(Amd::RAX, Amd::RAX);
-            self.amd.jnz("@epilogue");
+            // self.amd.or(Amd::RAX, Amd::RAX);
+            // self.amd.jnz("@epilogue");
+            amd! {or r(Amd::RAX), r(Amd::RAX); self.amd};
+            amd! {jnz "@epilogue"; self.amd};
         }
     }
 
@@ -375,31 +386,36 @@ impl Generator for AmdVectorGenerator {
 
     fn fmov(&mut self, dst: Reg, s1: Reg) {
         if dst != s1 {
-            self.amd.vmovapd(ϕ(dst), ϕ(s1));
+            // self.amd.vmovapd(ϕ(dst), ϕ(s1));
+            amd! {vmovapd ymm(ϕ(dst)), ymm(ϕ(s1)); self.amd};
         }
     }
 
     fn fxchg(&mut self, s1: Reg, s2: Reg) {
-        self.amd.vxorpd(ϕ(s1), ϕ(s1), ϕ(s2));
-        self.amd.vxorpd(ϕ(s2), ϕ(s1), ϕ(s2));
-        self.amd.vxorpd(ϕ(s1), ϕ(s1), ϕ(s2));
+        // self.amd.vxorpd(ϕ(s1), ϕ(s1), ϕ(s2));
+        // self.amd.vxorpd(ϕ(s2), ϕ(s1), ϕ(s2));
+        // self.amd.vxorpd(ϕ(s1), ϕ(s1), ϕ(s2));
+        amd! {vxorpd ymm(ϕ(s1)), ymm(ϕ(s1)), ymm(ϕ(s2)); self.amd};
+        amd! {vxorpd ymm(ϕ(s2)), ymm(ϕ(s1)), ymm(ϕ(s2)); self.amd};
+        amd! {vxorpd ymm(ϕ(s1)), ymm(ϕ(s1)), ymm(ϕ(s2)); self.amd};
     }
 
     fn load_const(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
         let label = format!("_const_{}_", idx);
-        self.amd.vbroadcastsd_label(ϕ(dst), label.as_str());
+        // self.amd.vbroadcastsd_label(ϕ(dst), label.as_str());
+        amd! {vbroadcastsd ymm(ϕ(dst)), label.as_str(); self.amd};
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        self.amd
-            .vmovpd_ymm_mem(ϕ(dst), MEM, (idx * REG_SIZE) as i32);
+        // self.amd.vmovpd_ymm_mem(ϕ(dst), MEM, (idx * REG_SIZE) as i32);
+        amd! {vmovupd ymm(ϕ(dst)), [r(MEM) + idx * REG_SIZE]; self.amd};
     }
 
     fn save_mem(&mut self, dst: Reg, idx: u32) {
-        self.amd
-            .vmovpd_mem_ymm(MEM, (idx * REG_SIZE) as i32, ϕ(dst));
+        // self.amd.vmovpd_mem_ymm(MEM, (idx * REG_SIZE) as i32, ϕ(dst));
+        amd! {vmovupd [r(MEM) + idx * REG_SIZE], ymm(ϕ(dst)); self.amd};
     }
 
     fn save_mem_result(&mut self, idx: u32) {
@@ -410,22 +426,23 @@ impl Generator for AmdVectorGenerator {
         self.last_load = self.amd.a.ip();
 
         if self.config.symbolica() {
-            self.amd
-                .vmovpd_ymm_mem(ϕ(dst), PARAMS, (idx * REG_SIZE) as i32);
+            // self.amd.vmovpd_ymm_mem(ϕ(dst), PARAMS, (idx * REG_SIZE) as i32);
+            amd! {vmovupd ymm(ϕ(dst)), [r(PARAMS) + idx * REG_SIZE]; self.amd};
         } else {
-            self.amd.vbroadcastsd(ϕ(dst), PARAMS, 8 * idx as i32);
+            // self.amd.vbroadcastsd(ϕ(dst), PARAMS, 8 * idx as i32);
+            amd! {vbroadcastsd ymm(ϕ(dst)), [r(PARAMS) + 8 * idx]; self.amd};
         }
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        self.amd
-            .vmovpd_ymm_mem(ϕ(dst), STACK, (idx * REG_SIZE) as i32);
+        // self.amd.vmovpd_ymm_mem(ϕ(dst), STACK, (idx * REG_SIZE) as i32);
+        amd! {vmovupd ymm(ϕ(dst)), [r(STACK) + idx * REG_SIZE]; self.amd};
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        self.amd
-            .vmovpd_mem_ymm(STACK, (idx * REG_SIZE) as i32, ϕ(dst));
+        // self.amd.vmovpd_mem_ymm(STACK, (idx * REG_SIZE) as i32, ϕ(dst));
+        amd! {vmovupd [r(STACK) + idx * REG_SIZE], ymm(ϕ(dst)); self.amd};
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
@@ -468,7 +485,8 @@ impl Generator for AmdVectorGenerator {
     }
 
     fn root(&mut self, dst: Reg, s1: Reg) {
-        uniop!(self, vsqrtpd, dst, s1);
+        // uniop!(self, vsqrtpd, dst, s1);
+        amd! {vsqrtpd ymm(ϕ(dst)), ymm(ϕ(s1)); self.amd};
     }
 
     fn real_root(&mut self, dst: Reg, s1: Reg) {
@@ -486,19 +504,23 @@ impl Generator for AmdVectorGenerator {
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {
-        roundop!(self, dst, s1, RoundingMode::Round);
+        // roundop!(self, dst, s1, RoundingMode::Round);
+        amd! {vroundpd ymm(ϕ(dst)), ymm(ϕ(s1)), RoundingMode::Round; self.amd};
     }
 
     fn floor(&mut self, dst: Reg, s1: Reg) {
-        roundop!(self, dst, s1, RoundingMode::Floor);
+        // roundop!(self, dst, s1, RoundingMode::Floor);
+        amd! {vroundpd ymm(ϕ(dst)), ymm(ϕ(s1)), RoundingMode::Floor; self.amd};
     }
 
     fn ceiling(&mut self, dst: Reg, s1: Reg) {
-        roundop!(self, dst, s1, RoundingMode::Ceiling);
+        // roundop!(self, dst, s1, RoundingMode::Ceiling);
+        amd! {vroundpd ymm(ϕ(dst)), ymm(ϕ(s1)), RoundingMode::Ceiling; self.amd};
     }
 
     fn trunc(&mut self, dst: Reg, s1: Reg) {
-        roundop!(self, dst, s1, RoundingMode::Trunc);
+        // roundop!(self, dst, s1, RoundingMode::Trunc);
+        amd! {vroundpd ymm(ϕ(dst)), ymm(ϕ(s1)), RoundingMode::Trunc; self.amd};
     }
 
     fn frac(&mut self, dst: Reg, s1: Reg) {
@@ -507,19 +529,23 @@ impl Generator for AmdVectorGenerator {
     }
 
     fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vaddpd, dst, s1, s2);
+        // binop!(self, vaddpd, dst, s1, s2);
+        amd! {vaddpd ymm(ϕ(dst)), ymm(ϕ(s1)), ymm(ϕ(s2)); self.amd};
     }
 
     fn minus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vsubpd, dst, s1, s2);
+        // binop!(self, vsubpd, dst, s1, s2);
+        amd! {vsubpd ymm(ϕ(dst)), ymm(ϕ(s1)), ymm(ϕ(s2)); self.amd};
     }
 
     fn times(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vmulpd, dst, s1, s2);
+        // binop!(self, vmulpd, dst, s1, s2);
+        amd! {vmulpd ymm(ϕ(dst)), ymm(ϕ(s1)), ymm(ϕ(s2)); self.amd};
     }
 
     fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vdivpd, dst, s1, s2);
+        // binop!(self, vdivpd, dst, s1, s2);
+        amd! {vdivpd ymm(ϕ(dst)), ymm(ϕ(s1)), ymm(ϕ(s2)); self.amd};
     }
 
     fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
@@ -583,43 +609,53 @@ impl Generator for AmdVectorGenerator {
     }
 
     fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vcmpnlepd, dst, s1, s2);
+        // binop!(self, vcmpnlepd, dst, s1, s2);
+        amd! {vcmpnlepd ymm(ϕ(dst)), ymm(ϕ(s1)), ymm(ϕ(s2)); self.amd};
     }
 
     fn geq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vcmpnltpd, dst, s1, s2);
+        // binop!(self, vcmpnltpd, dst, s1, s2);
+        amd! {vcmpnltpd ymm(ϕ(dst)), ymm(ϕ(s1)), ymm(ϕ(s2)); self.amd};
     }
 
     fn lt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vcmpltpd, dst, s1, s2);
+        // binop!(self, vcmpltpd, dst, s1, s2);
+        amd! {vcmpltpd ymm(ϕ(dst)), ymm(ϕ(s1)), ymm(ϕ(s2)); self.amd};
     }
 
     fn leq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vcmplepd, dst, s1, s2);
+        // binop!(self, vcmplepd, dst, s1, s2);
+        amd! {vcmplepd ymm(ϕ(dst)), ymm(ϕ(s1)), ymm(ϕ(s2)); self.amd};
     }
 
     fn eq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vcmpeqpd, dst, s1, s2);
+        // binop!(self, vcmpeqpd, dst, s1, s2);
+        amd! {vcmpeqpd ymm(ϕ(dst)), ymm(ϕ(s1)), ymm(ϕ(s2)); self.amd};
     }
 
     fn neq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vcmpneqpd, dst, s1, s2);
+        // binop!(self, vcmpneqpd, dst, s1, s2);
+        amd! {vcmpneqpd ymm(ϕ(dst)), ymm(ϕ(s1)), ymm(ϕ(s2)); self.amd};
     }
 
     fn and(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vandpd, dst, s1, s2);
+        // binop!(self, vandpd, dst, s1, s2);
+        amd! {vandpd ymm(ϕ(dst)), ymm(ϕ(s1)), ymm(ϕ(s2)); self.amd};
     }
 
     fn andnot(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vandnpd, dst, s1, s2);
+        // binop!(self, vandnpd, dst, s1, s2);
+        amd! {vandnpd ymm(ϕ(dst)), ymm(ϕ(s1)), ymm(ϕ(s2)); self.amd};
     }
 
     fn or(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vorpd, dst, s1, s2);
+        // binop!(self, vorpd, dst, s1, s2);
+        amd! {vorpd ymm(ϕ(dst)), ymm(ϕ(s1)), ymm(ϕ(s2)); self.amd};
     }
 
     fn xor(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vxorpd, dst, s1, s2);
+        // binop!(self, vxorpd, dst, s1, s2);
+        amd! {vxorpd ymm(ϕ(dst)), ymm(ϕ(s1)), ymm(ϕ(s2)); self.amd};
     }
 
     fn not(&mut self, dst: Reg, s1: Reg) {
@@ -628,37 +664,75 @@ impl Generator for AmdVectorGenerator {
     }
 
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        fuseop!(self, vfmadd132pd, vfmadd213pd, vfmadd231pd, dst, s1, s2, s3);
+        match fused_perm(dst, s1, s2, s3) {
+            FusedAction::Use132(a, b, c) => {
+                amd! {vfmadd132pd ymm(ϕ(a)), ymm(ϕ(b)), ymm(ϕ(c)); self.amd}
+            }
+            FusedAction::Use213(a, b, c) => {
+                amd! {vfmadd213pd ymm(ϕ(a)), ymm(ϕ(b)), ymm(ϕ(c)); self.amd}
+            }
+            FusedAction::Use231(a, b, c) => {
+                amd! {vfmadd231pd ymm(ϕ(a)), ymm(ϕ(b)), ymm(ϕ(c)); self.amd}
+            }
+            FusedAction::Copy132(a, b, c) => {
+                amd! {vmovapd ymm(ϕ(dst)), ymm(ϕ(s1)); self.amd};
+                amd! {vfmadd132pd ymm(ϕ(a)), ymm(ϕ(b)), ymm(ϕ(c)); self.amd};
+            }
+        }
     }
 
     fn fused_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        fuseop!(self, vfmsub132pd, vfmsub213pd, vfmsub231pd, dst, s1, s2, s3);
+        match fused_perm(dst, s1, s2, s3) {
+            FusedAction::Use132(a, b, c) => {
+                amd! {vfmsub132pd ymm(ϕ(a)), ymm(ϕ(b)), ymm(ϕ(c)); self.amd}
+            }
+            FusedAction::Use213(a, b, c) => {
+                amd! {vfmsub213pd ymm(ϕ(a)), ymm(ϕ(b)), ymm(ϕ(c)); self.amd}
+            }
+            FusedAction::Use231(a, b, c) => {
+                amd! {vfmsub231pd ymm(ϕ(a)), ymm(ϕ(b)), ymm(ϕ(c)); self.amd}
+            }
+            FusedAction::Copy132(a, b, c) => {
+                amd! {vmovapd ymm(ϕ(dst)), ymm(ϕ(s1)); self.amd};
+                amd! {vfmsub132pd ymm(ϕ(a)), ymm(ϕ(b)), ymm(ϕ(c)); self.amd};
+            }
+        }
     }
 
     fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        fuseop!(
-            self,
-            vfnmadd132pd,
-            vfnmadd213pd,
-            vfnmadd231pd,
-            dst,
-            s1,
-            s2,
-            s3
-        );
+        match fused_perm(dst, s1, s2, s3) {
+            FusedAction::Use132(a, b, c) => {
+                amd! {vfnmadd132pd ymm(ϕ(a)), ymm(ϕ(b)), ymm(ϕ(c)); self.amd}
+            }
+            FusedAction::Use213(a, b, c) => {
+                amd! {vfnmadd213pd ymm(ϕ(a)), ymm(ϕ(b)), ymm(ϕ(c)); self.amd}
+            }
+            FusedAction::Use231(a, b, c) => {
+                amd! {vfnmadd231pd ymm(ϕ(a)), ymm(ϕ(b)), ymm(ϕ(c)); self.amd}
+            }
+            FusedAction::Copy132(a, b, c) => {
+                amd! {vmovapd ymm(ϕ(dst)), ymm(ϕ(s1)); self.amd};
+                amd! {vfnmadd132pd ymm(ϕ(a)), ymm(ϕ(b)), ymm(ϕ(c)); self.amd};
+            }
+        }
     }
 
     fn fused_neg_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        fuseop!(
-            self,
-            vfnmsub132pd,
-            vfnmsub213pd,
-            vfnmsub231pd,
-            dst,
-            s1,
-            s2,
-            s3
-        );
+        match fused_perm(dst, s1, s2, s3) {
+            FusedAction::Use132(a, b, c) => {
+                amd! {vfnmsub132pd ymm(ϕ(a)), ymm(ϕ(b)), ymm(ϕ(c)); self.amd}
+            }
+            FusedAction::Use213(a, b, c) => {
+                amd! {vfnmsub213pd ymm(ϕ(a)), ymm(ϕ(b)), ymm(ϕ(c)); self.amd}
+            }
+            FusedAction::Use231(a, b, c) => {
+                amd! {vfnmsub231pd ymm(ϕ(a)), ymm(ϕ(b)), ymm(ϕ(c)); self.amd}
+            }
+            FusedAction::Copy132(a, b, c) => {
+                amd! {vmovapd ymm(ϕ(dst)), ymm(ϕ(s1)); self.amd};
+                amd! {vfnmsub132pd ymm(ϕ(a)), ymm(ϕ(b)), ymm(ϕ(c)); self.amd};
+            }
+        }
     }
 
     fn add_consts(&mut self, consts: &[f64]) {
@@ -730,30 +804,41 @@ impl Generator for AmdVectorGenerator {
 
     #[cfg(target_family = "unix")]
     fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
-        self.amd.push(Amd::RBP);
+        // self.amd.push(Amd::RBP);
+        amd! {push r(Amd::RBP); self.amd};
 
         let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        sub_rsp(&mut self.amd, frame_size);
-        self.amd.mov(MEM, STACK);
-        sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
+        // sub_rsp(&mut self.amd, frame_size);
+        // self.amd.mov(MEM, STACK);
+        // sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
+
+        amd! {sub rsp, frame_size; self.amd};
+        amd! {mov r(MEM), r(STACK); self.amd};
+        amd! {sub rsp, align_stack(cap as u32 * REG_SIZE); self.amd};
 
         for i in 0..count_states {
-            self.amd.vmovsd_mem_xmm(MEM, (i * 8) as i32, i as u8);
+            // self.amd.vmovsd_mem_xmm(MEM, (i * 8) as i32, i as u8);
+            amd! {vmovsd [r(MEM) + i * 8], xmm(i as u8); self.amd};
         }
     }
 
     #[cfg(target_family = "windows")]
     fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
-        self.amd.push(Amd::RBP);
+        // self.amd.push(Amd::RBP);
+        amd! {push r(Amd::RBP); self.amd};
 
         let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        sub_rsp(&mut self.amd, frame_size);
-        self.amd.mov(MEM, STACK);
-        sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
+        // sub_rsp(&mut self.amd, frame_size);
+        // self.amd.mov(MEM, STACK);
+        // sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
+
+        amd! {sub rsp, frame_size; self.amd};
+        amd! {mov r(MEM), r(STACK); self.amd};
+        amd! {sub rsp, align_stack(cap as u32 * REG_SIZE); self.amd};
 
         for i in 0..count_states.min(4) {
-            self.amd
-                .vmovsd_mem_xmm(MEM, (i as u32 * REG_SIZE) as i32, i as u8);
+            // self.amd.vmovsd_mem_xmm(MEM, (i as u32 * REG_SIZE) as i32, i as u8);
+            amd! {vmovsd [r(MEM) + i * REG_SIZE], xmm(i as u8); self.amd};
         }
 
         for i in 4..count_states {
@@ -763,22 +848,29 @@ impl Generator for AmdVectorGenerator {
             // +1 for the return address in the stack
             // +1 for RBP in the stack
             // -4 for the first four arguments passed in XMM0-XMM3
-            self.amd
-                .vmovsd_xmm_mem(0, MEM, (frame_size + (i + 2) * REG_SIZE) as i32);
-            self.amd.vmovsd_mem_xmm(MEM, (i * REG_SIZE) as i32, 0);
+            // self.amd.vmovsd_xmm_mem(0, MEM, (frame_size + (i + 2) * REG_SIZE) as i32);
+            // self.amd.vmovsd_mem_xmm(MEM, (i * REG_SIZE) as i32, 0);
+            amd! {vmovsd xmm(0), [r(MEM) + (frame_size + (i + 2) * REG_SIZE)]; self.amd};
+            amd! {vmovsd [r(MEM) + i * REG_SIZE], xmm(0); self.amd};
         }
     }
 
     fn epilogue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize, idx_ret: i32) {
-        self.vzeroupper();
-        self.amd.movsd_xmm_mem(0, MEM, idx_ret * REG_SIZE as i32);
+        // self.vzeroupper();
+        // self.amd.movsd_xmm_mem(0, MEM, idx_ret * REG_SIZE as i32);
+        amd! {vzeroupper; self.amd};
+        amd! {vmovsd xmm(0), [r(MEM) + idx_ret * REG_SIZE as i32]; self.amd};
 
         let total_size = align_stack(cap as u32 * REG_SIZE)
             + align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        add_rsp(&mut self.amd, total_size);
 
-        self.amd.pop(Amd::RBP);
-        self.amd.ret();
+        // add_rsp(&mut self.amd, total_size);
+        // self.amd.pop(Amd::RBP);
+        // self.amd.ret();
+
+        amd! {add rsp, total_size; self.amd};
+        amd! {pop r(Amd::RBP); self.amd};
+        amd! {ret; self.amd};
     }
 
     /*
@@ -821,9 +913,11 @@ impl Generator for AmdVectorGenerator {
             return self.prologue_symbolica(cap, count_params, count_obs);
         }
 
-        self.amd.push(Amd::RBP);
+        // self.amd.push(Amd::RBP);
+        amd! {push r(Amd::RBP); self.amd};
         save_nonvolatile_regs(&mut self.amd);
 
+        /*
         self.amd.mov(MEM, ARGS[0]); // first arg = mem if direct mode, otherwise null
         self.amd.mov(STATES, ARGS[1]); // second arg = states+obs if indirect mode, otherwise null
         self.amd.mov(IDX, ARGS[2]); // third arg = index if indirect mode
@@ -831,26 +925,47 @@ impl Generator for AmdVectorGenerator {
 
         self.amd.or(STATES, STATES);
         self.amd.jz("@main");
+        */
+
+        amd! {mov r(MEM), r(ARGS[0]); self.amd}; // first arg = mem if direct mode, otherwise null
+        amd! {mov r(STATES), r(ARGS[1]); self.amd}; // second arg = states+obs if indirect mode, otherwise null
+        amd! {mov r(IDX), r(ARGS[2]); self.amd}; // third arg = index if indirect mode
+        amd! {mov r(PARAMS), r(ARGS[3]); self.amd}; // fourth arg = params
+
+        amd! {or r(STATES), r(STATES); self.amd};
+        amd! {jz "@main"; self.amd};
 
         let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
+
+        /*
         sub_rsp(&mut self.amd, frame_size);
         self.amd.mov(MEM, STACK); // in indirect mode, MEM is allocated on the stack
-
         // multiply IDX by 4 to convert from f64x4 index to f64 index
         self.amd.add(IDX, IDX);
         self.amd.add(IDX, IDX);
+        */
+
+        amd! {sub rsp, frame_size; self.amd};
+        amd! {mov r(MEM), r(STACK); self.amd}; // in indirect mode, MEM is allocated on the stack
+                                               // multiply IDX by 4 to convert from f64x4 index to f64 index
+        amd! {add r(IDX), r(IDX); self.amd};
+        amd! {add r(IDX), r(IDX); self.amd};
 
         for i in 0..count_states {
-            self.amd.mov_reg_mem(Amd::RAX, STATES, 2 * 8 * i as i32);
             let k = i as u32 * REG_SIZE;
-            self.amd.vmovpd_ymm_indexed(RET, Amd::RAX, IDX, 8);
-            self.amd.vmovpd_mem_ymm(MEM, k as i32, RET);
+            // self.amd.mov_reg_mem(Amd::RAX, STATES, 2 * 8 * i as i32);
+            // self.amd.vmovpd_ymm_indexed(RET, Amd::RAX, IDX, 8);
+            // self.amd.vmovpd_mem_ymm(MEM, k as i32, RET);
+            amd! {mov r(Amd::RAX), [r(STATES) + 2 * 8 * i as i32]; self.amd};
+            amd! {vmovupd ymm(RET), [r(Amd::RAX) + r(IDX) * 8]; self.amd};
+            amd! {vmovupd [r(MEM) + k], ymm(RET); self.amd};
         }
 
         // may save idx (RDX) as double in RBP + 8/32 * count_states
 
         self.set_label("@main");
-        sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
+        // sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
+        amd! {sub rsp, align_stack(cap as u32 * REG_SIZE); self.amd};
     }
 
     fn epilogue_indirect(
@@ -860,35 +975,47 @@ impl Generator for AmdVectorGenerator {
         count_obs: usize,
         count_params: usize,
     ) {
-        self.amd.xor(Amd::RAX, Amd::RAX);
+        // self.amd.xor(Amd::RAX, Amd::RAX);
+        amd! {xor r(Amd::RAX), r(Amd::RAX); self.amd};
         self.set_label("@epilogue");
 
         if self.config.symbolica() {
             return self.epilogue_symbolica(cap, count_params, count_obs);
         }
 
-        add_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
+        // add_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
+        // self.amd.or(STATES, STATES);
+        // self.amd.jz("@done");
 
-        self.amd.or(STATES, STATES);
-        self.amd.jz("@done");
+        amd! {add rsp, align_stack(cap as u32 * REG_SIZE); self.amd};
+        amd! {or r(STATES), r(STATES); self.amd};
+        amd! {jz "@done"; self.amd};
 
         for i in 0..count_obs {
-            self.amd
-                .mov_reg_mem(Amd::RCX, STATES, 2 * 8 * (count_states + i) as i32);
             let k = (count_states + i) as u32 * REG_SIZE;
-            self.amd.vmovpd_ymm_mem(RET, MEM, k as i32);
-            self.amd.vmovpd_indexed_ymm(Amd::RCX, IDX, 8, RET);
+            // self.amd.mov_reg_mem(Amd::RCX, STATES, 2 * 8 * (count_states + i) as i32);
+            // self.amd.vmovpd_ymm_mem(RET, MEM, k as i32);
+            // self.amd.vmovpd_indexed_ymm(Amd::RCX, IDX, 8, RET);
+            amd! {mov r(Amd::RCX), [r(STATES) + 2 * 8 * (count_states + i) as i32]; self.amd};
+            amd! {vmovupd ymm(RET), [r(MEM) + k]; self.amd};
+            amd! {vmovupd [r(Amd::RCX) + r(IDX) * 8], ymm(RET); self.amd};
         }
 
         let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        add_rsp(&mut self.amd, frame_size);
-        self.set_label("@done");
 
-        self.vzeroupper();
+        // add_rsp(&mut self.amd, frame_size);
+        // self.set_label("@done");
+        // self.vzeroupper();
+
+        amd! {add rsp, frame_size; self.amd};
+        self.set_label("@done");
+        amd! {vzeroupper; self.amd};
 
         load_nonvolatile_regs(&mut self.amd);
-        self.amd.pop(Amd::RBP);
-        self.amd.ret();
+        // self.amd.pop(Amd::RBP);
+        // self.amd.ret();
+        amd! {pop r(Amd::RBP); self.amd};
+        amd! {ret; self.amd};
     }
 
     fn save_used_registers(&mut self, used: &[u8]) {
@@ -914,64 +1041,92 @@ impl Generator for AmdVectorGenerator {
 
 impl AmdVectorGenerator {
     fn prologue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
-        self.amd.push(Amd::RBP);
+        // self.amd.push(Amd::RBP);
+        amd! {push r(Amd::RBP); self.amd};
         save_nonvolatile_regs(&mut self.amd);
 
+        /*
         self.amd.mov(MEM, ARGS[0]); // first arg = mem if direct mode, otherwise null
         self.amd.mov(STATES, ARGS[1]); // second arg = states+obs if indirect mode, otherwise null
         self.amd.mov(IDX, ARGS[2]); // third arg = index if indirect mode
         self.amd.mov(PARAMS, ARGS[3]); // fourth arg = params
+        */
+
+        amd! {mov r(MEM), r(ARGS[0]); self.amd}; // first arg = mem if direct mode, otherwise null
+        amd! {mov r(STATES), r(ARGS[1]); self.amd}; // second arg = states+obs if indirect mode, otherwise null
+        amd! {mov r(IDX), r(ARGS[2]); self.amd}; // third arg = index if indirect mode
+        amd! {mov r(PARAMS), r(ARGS[3]); self.amd}; // fourth arg = params
 
         if REG_SIZE == 32 {
+            /*
             self.amd.or(IDX, IDX);
             self.amd.jz("@main");
-
             sub_rsp(&mut self.amd, align_stack(count_params as u32 * 32));
             self.amd.mov(Amd::RAX, PARAMS);
             self.amd.mov(PARAMS, STACK);
+            */
+
+            amd! {or r(IDX), r(IDX); self.amd};
+            amd! {jz "@main"; self.amd};
+            amd! {sub rsp, align_stack(count_params as u32 * 32); self.amd};
+            amd! {mov r(Amd::RAX), r(PARAMS); self.amd};
+            amd! {mov r(PARAMS), r(STACK); self.amd};
 
             for j in 0..4 {
                 for i in 0..count_params {
-                    self.amd
-                        .vmovsd_xmm_mem(RET, Amd::RAX, 8 * (i + j * count_params) as i32);
-                    self.amd.vmovsd_mem_xmm(PARAMS, 8 * (i * 4 + j) as i32, RET);
+                    // self.amd.vmovsd_xmm_mem(RET, Amd::RAX, 8 * (i + j * count_params) as i32);
+                    // self.amd.vmovsd_mem_xmm(PARAMS, 8 * (i * 4 + j) as i32, RET);
+                    amd! {vmovsd xmm(RET), [r(Amd::RAX) + 8 * (i + j * count_params) as i32]; self.amd};
+                    amd! {vmovsd [r(PARAMS) + 8 * (i * 4 + j) as i32], xmm(RET); self.amd};
                 }
             }
 
-            sub_rsp(&mut self.amd, align_stack(count_obs as u32 * 32));
-            self.amd.mov(STATES, MEM);
-            self.amd.mov(MEM, STACK);
+            // sub_rsp(&mut self.amd, align_stack(count_obs as u32 * 32));
+            // self.amd.mov(STATES, MEM);
+            // self.amd.mov(MEM, STACK);
+
+            amd! {sub rsp, align_stack(count_obs as u32 * 32); self.amd};
+            amd! {mov r(STATES), r(MEM); self.amd};
+            amd! {mov r(MEM), r(STACK); self.amd};
 
             self.set_label("@main");
         }
-        sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
+        amd! {sub rsp, align_stack(cap as u32 * REG_SIZE); self.amd};
     }
 
     fn epilogue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
-        add_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
+        // add_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
+        amd! {add rsp, align_stack(cap as u32 * REG_SIZE); self.amd};
 
         if REG_SIZE == 32 {
-            self.amd.or(IDX, IDX);
-            self.amd.jz("@done");
+            // self.amd.or(IDX, IDX);
+            // self.amd.jz("@done");
+            amd! {or r(IDX), r(IDX); self.amd};
+            amd! {jz "@done"; self.amd};
 
             for j in 0..4 {
                 for i in 0..count_obs {
-                    self.amd.vmovsd_xmm_mem(RET, MEM, 8 * (i * 4 + j) as i32);
-                    self.amd
-                        .vmovsd_mem_xmm(STATES, 8 * (i + j * count_obs) as i32, 0);
+                    // self.amd.vmovsd_xmm_mem(RET, MEM, 8 * (i * 4 + j) as i32);
+                    // self.amd.vmovsd_mem_xmm(STATES, 8 * (i + j * count_obs) as i32, 0);
+                    amd! {vmovsd xmm(RET), [r(MEM) + 8 * (i * 4 + j) as i32]; self.amd};
+                    amd! {vmovsd [r(STATES) + 8 * (i + j * count_obs) as i32], xmm(0); self.amd};
                 }
             }
 
             let frame_size =
                 align_stack(count_params as u32 * 32) + align_stack(count_obs as u32 * 32);
-            add_rsp(&mut self.amd, frame_size);
+            // add_rsp(&mut self.amd, frame_size);
+            amd! {add rsp, frame_size; self.amd};
             self.set_label("@done");
         }
 
-        self.vzeroupper();
+        // self.vzeroupper();
+        amd! {vzeroupper; self.amd};
 
         load_nonvolatile_regs(&mut self.amd);
-        self.amd.pop(Amd::RBP);
-        self.amd.ret();
+        // self.amd.pop(Amd::RBP);
+        // self.amd.ret();
+        amd! {pop r(Amd::RBP); self.amd};
+        amd! {ret; self.amd};
     }
 }

@@ -1440,6 +1440,14 @@ macro_rules! amd {
         $a.vmovdd_mem_xmm($rm, $offset as i32, $reg);
     };
 
+    (vbroadcastsd xmm($dst:expr), [r($rm:expr) + $offset:expr]; $a:expr) => {
+        $a.vbroadcastdd($dst, $rm, $offset as i32);
+    };
+
+    (vbroadcastsd xmm($reg:expr), $label:expr; $a:expr) => {
+        $a.vbroadcastdd_label($reg, $label);
+    };
+
     (vandpd xmm($dst:expr), xmm($s1:expr), xmm($s2:expr); $a:expr) => {
         $a.vanddd($dst, $s1, $s2);
     };
@@ -1557,6 +1565,14 @@ macro_rules! amd {
         $a.vmovpd_mem_ymm($rm, $offset as i32, $reg);
     };
 
+    (vbroadcastsd ymm($dst:expr), [r($rm:expr) + $offset:expr]; $a:expr) => {
+        $a.vbroadcastsd($dst, $rm, $offset as i32);
+    };
+
+    (vbroadcastsd ymm($reg:expr), $label:expr; $a:expr) => {
+        $a.vbroadcastsd_label($reg, $label);
+    };
+
     (vandpd ymm($dst:expr), ymm($s1:expr), ymm($s2:expr); $a:expr) => {
         $a.vandpd($dst, $s1, $s2);
     };
@@ -1659,6 +1675,10 @@ macro_rules! amd {
         $a.vinsertf128_mem($reg, $vreg, $rm, $offset, $imm as u8);
     };
 
+    (vmovmskpd r($reg:expr), ymm($rm:expr); $a:expr) => {
+        $a.vmovmskpd($reg, $rm);
+    };
+
     // imm8 == 0 => rm = reg[0:128]
     // imm8 == 1 => rm = reg[128:256]
     (vextractf128 ymm($rm:expr), ymm($reg:expr), $imm:literal; $a:expr) => {
@@ -1748,27 +1768,27 @@ macro_rules! amd {
         $a.mov_imm($reg, $imm as u32);
     };
 
-    (add r($reg:expr), imm:expr; $a:expr) => {
+    (add r($reg:expr), $imm:expr; $a:expr) => {
         $a.add_imm($reg, $imm as u32);
     };
 
-    (sub r($reg:expr), imm:expr; $a:expr) => {
+    (sub r($reg:expr), $imm:expr; $a:expr) => {
         $a.sub_imm($reg, $imm as u32);
     };
 
-    (or r($reg:expr), imm:expr; $a:expr) => {
+    (or r($reg:expr), $imm:expr; $a:expr) => {
         $a.or_imm($reg, $imm as u32);
     };
 
-    (and r($reg:expr), imm:expr; $a:expr) => {
+    (and r($reg:expr), $imm:expr; $a:expr) => {
         $a.and_imm($reg, $imm as u32);
     };
 
-    (xor r($reg:expr), imm:expr; $a:expr) => {
+    (xor r($reg:expr), $imm:expr; $a:expr) => {
         $a.xor_imm($reg, $imm as u32);
     };
 
-    (cmp r($reg:expr), imm:expr; $a:expr) => {
+    (cmp r($reg:expr), $imm:expr; $a:expr) => {
         $a.cmp_imm($reg, $imm as u32);
     };
 
