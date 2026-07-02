@@ -2,7 +2,10 @@ use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 use std::io::{Read, Write};
 
-use crate::amd::{AmdComplexGenerator, AmdSSEGenerator, AmdScalarGenerator, AmdVectorGenerator};
+use crate::amd::{
+    AmdComplexGenerator, AmdSSEGenerator, AmdScalarGenerator, AmdVectorF64x8Generator,
+    AmdVectorGenerator,
+};
 use crate::applet::Applet;
 use crate::arm::{ArmComplexGenerator, ArmGenerator, ArmSimdGenerator};
 use crate::complexify::Complexifier;
@@ -280,10 +283,10 @@ impl Application {
     }
 
     fn compile_avx_simd(mir: &Mir, prog: &mut Program) -> Result<MachineCode<f64>> {
-        Self::compile::<AmdVectorGenerator>(
+        Self::compile::<AmdVectorF64x8Generator>(
             mir,
             prog,
-            AmdVectorGenerator::new(prog.config().clone()),
+            AmdVectorF64x8Generator::new(prog.config().clone()),
             prog.mem_size() * 4,
             "x86_64",
             4,

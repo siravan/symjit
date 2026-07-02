@@ -9,6 +9,7 @@ mod f64;
 mod f64_rex;
 mod f64x2;
 mod f64x4;
+mod f64x8;
 mod fused;
 
 use asm::*;
@@ -17,11 +18,13 @@ mod complex;
 mod scalar;
 mod sse;
 mod vector;
+mod vector_f64x8;
 
 pub use complex::AmdComplexGenerator;
 pub use scalar::AmdScalarGenerator;
 pub use sse::AmdSSEGenerator;
 pub use vector::AmdVectorGenerator;
+pub use vector_f64x8::AmdVectorF64x8Generator;
 
 #[cfg(target_family = "windows")]
 const ARGS: [u8; 4] = [Amd::RCX, Amd::RDX, Amd::R8, Amd::R9];

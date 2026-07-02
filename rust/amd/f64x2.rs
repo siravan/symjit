@@ -224,31 +224,6 @@ impl Amd {
         self.modrm_reg(reg, rm);
     }
 
-    pub fn vshufpd(&mut self, reg: u8, vreg: u8, rm: u8, imm8: u8) {
-        self.vex_pd(reg, vreg, rm, 0);
-        self.append_byte(0xc6);
-        self.modrm_reg(reg, rm);
-        self.append_byte(imm8);
-    }
-
-    pub fn vunpckhpd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_pd(reg, vreg, rm, 0);
-        self.append_byte(0x15);
-        self.modrm_reg(reg, rm);
-    }
-
-    pub fn vunpcklpd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_pd(reg, vreg, rm, 0);
-        self.append_byte(0x14);
-        self.modrm_reg(reg, rm);
-    }
-
-    pub fn vaddsubpd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        self.vex_pd(reg, vreg, rm, 0);
-        self.append_byte(0xd0);
-        self.modrm_reg(reg, rm);
-    }
-
     // imm8 == 0 => reg = vreg[128:256]:rm[0:128]
     // imm8 == 1 => reg = rm[128:256]:vreg[0:128]
     pub fn vinsertf128(&mut self, reg: u8, vreg: u8, rm: u8, imm8: u8) {

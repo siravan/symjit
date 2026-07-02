@@ -193,4 +193,29 @@ impl Amd {
         self.append_byte(0x7e);
         self.modrm_reg(reg, rm);
     }
+
+    pub fn vshufpd(&mut self, reg: u8, vreg: u8, rm: u8, imm8: u8) {
+        self.vex_pd(reg, vreg, rm, 0);
+        self.append_byte(0xc6);
+        self.modrm_reg(reg, rm);
+        self.append_byte(imm8);
+    }
+
+    pub fn vunpckhpd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_pd(reg, vreg, rm, 0);
+        self.append_byte(0x15);
+        self.modrm_reg(reg, rm);
+    }
+
+    pub fn vunpcklpd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_pd(reg, vreg, rm, 0);
+        self.append_byte(0x14);
+        self.modrm_reg(reg, rm);
+    }
+
+    pub fn vaddsubpd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vex_pd(reg, vreg, rm, 0);
+        self.append_byte(0xd0);
+        self.modrm_reg(reg, rm);
+    }
 }

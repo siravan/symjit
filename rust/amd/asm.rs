@@ -376,6 +376,151 @@ macro_rules! amd {
         $a.vextractf128($rm, $reg, $imm);
     };
 
+    // Packed-Double (zmm)
+    (vmovapd zmm($reg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vmovaqd($reg, $rm);
+    };
+
+    (vmovapd zmm($reg:expr){k($k:expr)}, zmm($rm:expr); $a:expr) => {
+        $a.vmovaqd_masked($reg, $rm, $k, false);
+    };
+
+    (vmovapd zmm($reg:expr){k($k:expr)}{z}, zmm($rm:expr); $a:expr) => {
+        $a.vmovaqd_masked($reg, $rm, $k, true);
+    };
+
+    (vmovupd zmm($dst:expr), [r($base:expr) + r($index:expr) * $scale:literal]; $a:expr) => {
+        $a.vmovqd_zmm_indexed($dst, $base, $index, $scale);
+    };
+
+    (vmovupd zmm($dst:expr), [r($rm:expr) + $offset:expr]; $a:expr) => {
+        $a.vmovqd_zmm_mem($dst, $rm, $offset as i32);
+    };
+
+    (vmovupd zmm($reg:expr), $label:expr; $a:expr) => {
+        $a.vmovqd_zmm_label($reg, $label);
+    };
+
+    (vmovupd [r($base:expr) + r($index:expr) * $scale:literal], zmm($reg:expr); $a:expr) => {
+        $a.vmovqd_indexed_zmm($base, $index, $scale, $reg);
+    };
+
+    (vmovupd [r($rm:expr) + $offset:expr], zmm($reg:expr); $a:expr) => {
+        $a.vmovqd_mem_zmm($rm, $offset as i32, $reg);
+    };
+
+    (vbroadcastsd zmm($dst:expr), [r($rm:expr) + $offset:expr]; $a:expr) => {
+        $a.vbroadcastsd_zmm($dst, $rm, $offset as i32);
+    };
+
+    (vbroadcastsd zmm($reg:expr), $label:expr; $a:expr) => {
+        $a.vbroadcastsd_zmm_label($reg, $label);
+    };
+
+    (vandpd zmm($dst:expr), zmm($s1:expr), zmm($s2:expr); $a:expr) => {
+        $a.vandqd($dst, $s1, $s2);
+    };
+
+    (vandnpd zmm($dst:expr), zmm($s1:expr), zmm($s2:expr); $a:expr) => {
+        $a.vandnqd($dst, $s1, $s2);
+    };
+
+    (vorpd zmm($dst:expr), zmm($s1:expr), zmm($s2:expr); $a:expr) => {
+        $a.vorqd($dst, $s1, $s2);
+    };
+
+    (vxorpd zmm($dst:expr), zmm($s1:expr), zmm($s2:expr); $a:expr) => {
+        $a.vxorqd($dst, $s1, $s2);
+    };
+
+    (vaddpd zmm($dst:expr), zmm($s1:expr), zmm($s2:expr); $a:expr) => {
+        $a.vaddqd($dst, $s1, $s2);
+    };
+
+    (vhaddpd zmm($dst:expr), zmm($s1:expr), zmm($s2:expr); $a:expr) => {
+        $a.vhaddqd($dst, $s1, $s2);
+    };
+
+    (vsubpd zmm($dst:expr), zmm($s1:expr), zmm($s2:expr); $a:expr) => {
+        $a.vsubqd($dst, $s1, $s2);
+    };
+
+    (vmulpd zmm($dst:expr), zmm($s1:expr), zmm($s2:expr); $a:expr) => {
+        $a.vmulqd($dst, $s1, $s2);
+    };
+
+    (vdivpd zmm($dst:expr), zmm($s1:expr), zmm($s2:expr); $a:expr) => {
+        $a.vdivqd($dst, $s1, $s2);
+    };
+
+    (vsqrtpd zmm($reg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vsqrtqd($reg, $rm);
+    };
+
+    (vroundpd zmm($reg:expr), zmm($rm:expr), $mode:expr; $a:expr) => {
+        $a.vroundqd($reg, $rm, $mode);
+    };
+
+    (vcmpeqpd k($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vcmpeqqd($reg, $vreg, $rm);
+    };
+
+    (vcmpltpd k($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vcmpltqd($reg, $vreg, $rm);
+    };
+
+    (vcmplepd k($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vcmpleqd($reg, $vreg, $rm);
+    };
+
+    (vcmpunorpd k($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vcmpunordqd($reg, $vreg, $rm);
+    };
+
+    (vcmpneqpd k($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vcmpneqqd($reg, $vreg, $rm);
+    };
+
+    (vcmpnltpd k($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vcmpnltqd($reg, $vreg, $rm);
+    };
+
+    (vcmpnlepd k($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vcmpnleqd($reg, $vreg, $rm);
+    };
+
+    (vcmpordpd k($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vcmpordqd($reg, $vreg, $rm);
+    };
+
+    (vshufpd zmm($reg:expr), zmm($vreg:expr), zmm($rm:expr), $imm8:literal; $a:expr) => {
+        $a.vshufqd($reg, $vreg, $rm, $imm8 as u8);
+    };
+
+    (vunpckhpd zmm($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vunpckhqd($reg, $vreg, $rm);
+    };
+
+    (vunpcklpd zmm($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vunpcklqd($reg, $vreg, $rm);
+    };
+
+    (vaddsubpd zmm($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vaddsubqd($reg, $vreg, $rm);
+    };
+
+    (kmovw r($reg:expr), k($k:expr); $a:expr) => {
+        $a.kmovw_reg_k($reg, $k);
+    };
+
+    (kmovw k($k:expr), r($rm:expr); $a:expr) => {
+        $a.kmovw_reg_k($k, $rm);
+    };
+
+    (knotw k($k1:expr), k($k2:expr); $a:expr) => {
+        $a.knotw($k1, $k2);
+    };
+
     /* General Registers */
     (mov r($reg:expr), r($rm:expr); $a:expr) => {
         $a.mov($reg, $rm);
