@@ -283,14 +283,25 @@ impl Application {
     }
 
     fn compile_avx_simd(mir: &Mir, prog: &mut Program) -> Result<MachineCode<f64>> {
-        Self::compile::<AmdVectorF64x8Generator>(
-            mir,
-            prog,
-            AmdVectorF64x8Generator::new(prog.config().clone()),
-            prog.mem_size() * 4,
-            "x86_64",
-            4,
-        )
+        if prog.config().use_simd512() {
+            Self::compile::<AmdVectorF64x8Generator>(
+                mir,
+                prog,
+                AmdVectorF64x8Generator::new(prog.config().clone()),
+                prog.mem_size() * 8,
+                "x86_64",
+                8,
+            )
+        } else {
+            Self::compile::<AmdVectorGenerator>(
+                mir,
+                prog,
+                AmdVectorGenerator::new(prog.config().clone()),
+                prog.mem_size() * 4,
+                "x86_64",
+                4,
+            )
+        }
     }
 
     fn compile_arm(mir: &Mir, prog: &mut Program) -> Result<MachineCode<f64>> {

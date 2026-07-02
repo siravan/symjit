@@ -17,13 +17,14 @@ use asm::*;
 mod complex;
 mod scalar;
 mod sse;
-mod vector;
+mod vector_f64x4;
 mod vector_f64x8;
 
 pub use complex::AmdComplexGenerator;
+pub use f64x8::Prefix;
 pub use scalar::AmdScalarGenerator;
 pub use sse::AmdSSEGenerator;
-pub use vector::AmdVectorGenerator;
+pub use vector_f64x4::AmdVectorGenerator;
 pub use vector_f64x8::AmdVectorF64x8Generator;
 
 #[cfg(target_family = "windows")]

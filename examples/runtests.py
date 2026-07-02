@@ -361,7 +361,7 @@ def cases():
         for dtype in dtypes:
             # for ty in ["native", "amd-sse", "bytecode", "debug"]:
             for ty in ["native", "bytecode", "debug"]:
-                for use_simd in [False, True]:
+                for simd in [0, 1, 2]:
                     for use_threads in [False, True]:
                         for cse in [False, True]:
                             for fastmath in [False, True]:
@@ -369,15 +369,15 @@ def cases():
                                     args = {
                                         "backend": "rust",
                                         "ty": ty,
-                                        "use_simd": use_simd,
+                                        "use_simd": simd > 0,
+                                        "enable_simd512": simd == 2,
                                         "use_threads": use_threads,
                                         "cse": cse,
                                         "fastmath": fastmath,
                                         "opt_level": opt_level,
-                                        "sanitize": False,
                                         "dtype": dtype,
                                     }
-                                    s = f"d={abbr_dtype(dtype)},y={abbr_ty(ty)}:s={Ω(use_simd)}:t={Ω(use_threads)}:c={Ω(cse)}:f={Ω(fastmath)},O={opt_level}"
+                                    s = f"d={abbr_dtype(dtype)},y={abbr_ty(ty)}:s={simd}:t={Ω(use_threads)}:c={Ω(cse)}:f={Ω(fastmath)},O={opt_level}"
                                     cases.append((s, args))
     else:
         for dtype in dtypes:
@@ -394,7 +394,6 @@ def cases():
                                     "cse": cse,
                                     "fastmath": fastmath,
                                     "opt_level": opt_level,
-                                    "sanitize": False,
                                     "dtype": dtype,
                                 }
                                 s = f"d={abbr_dtype(dtype)},y={abbr_ty(ty)}:s=F:t={Ω(use_threads)}:c={Ω(cse)}:f={Ω(fastmath)},O={opt_level}"
@@ -406,7 +405,7 @@ def test_model(f, label, log, pyback=True, bytecode=False, may_complex=True):
     print(f"testing {label}")
     print("\td: dtype\t\t(R=float64, C=complex128)")
     print("\ty: ty\t\t(n: native, a: amd-sse, b: bytecode, d: debug)")
-    print("\ts: simd\t\t(True/False)")
+    print("\ts: simd\t\t(0 or False: no-simd, 1 or True: simd256, 2: simd512)")
     print("\tt: threads\t(True/False)")
     print("\tc: cse\t\t(True/False)")
     print("\tf: fastmath\t(True/False)")

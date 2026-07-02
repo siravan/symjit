@@ -6,7 +6,7 @@ enum Masking {
     Zero(u8),
 }
 
-struct Prefix {
+pub struct Prefix {
     mask: Masking,
     reg: u8,
     vreg: u8,
@@ -29,7 +29,7 @@ impl Prefix {
             index: 0,
             encoding: 1,
             w: 1,
-            len: 256,
+            len: 512,
             pp: 1,
         }
     }

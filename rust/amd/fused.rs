@@ -1,4 +1,5 @@
 use super::asm::Amd;
+use super::Prefix;
 
 #[allow(dead_code)]
 impl Amd {
@@ -10,6 +11,15 @@ impl Amd {
 
     fn vfma_dd(&mut self, reg: u8, vreg: u8, rm: u8, code: u8) {
         self.vex3dd_w1(reg, vreg, rm, 0, 2);
+        self.append_byte(code);
+        self.modrm_reg(reg, rm);
+    }
+
+    fn vfma_qd(&mut self, reg: u8, vreg: u8, rm: u8, code: u8) {
+        Prefix::new(reg, vreg, rm)
+            .set_encoding(2)
+            .set_w(1)
+            .evex(self);
         self.append_byte(code);
         self.modrm_reg(reg, rm);
     }
@@ -132,6 +142,66 @@ impl Amd {
     // reg = - vreg * rm - reg
     pub fn vfnmsub231pd(&mut self, reg: u8, vreg: u8, rm: u8) {
         self.vfma(reg, vreg, rm, 0xbe);
+    }
+
+    // reg = reg * rm + vreg
+    pub fn vfmadd132qd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_qd(reg, vreg, rm, 0x98);
+    }
+
+    // reg = vreg * reg + rm
+    pub fn vfmadd213qd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_qd(reg, vreg, rm, 0xa8);
+    }
+
+    // reg = vreg * rm + reg
+    pub fn vfmadd231qd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_qd(reg, vreg, rm, 0xb8);
+    }
+
+    // reg = reg * rm - vreg
+    pub fn vfmsub132qd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_qd(reg, vreg, rm, 0x9a);
+    }
+
+    // reg = vreg * reg - rm
+    pub fn vfmsub213qd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_qd(reg, vreg, rm, 0xaa);
+    }
+
+    // reg = vreg * rm - reg
+    pub fn vfmsub231qd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_qd(reg, vreg, rm, 0xba);
+    }
+
+    // reg = - reg * rm - vreg
+    pub fn vfnmadd132qd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_qd(reg, vreg, rm, 0x9c);
+    }
+
+    // reg = - vreg * reg + rm
+    pub fn vfnmadd213qd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_qd(reg, vreg, rm, 0xac);
+    }
+
+    // reg = - vreg * rm + reg
+    pub fn vfnmadd231qd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_qd(reg, vreg, rm, 0xbc);
+    }
+
+    // reg = - reg * rm - vreg
+    pub fn vfnmsub132qd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_qd(reg, vreg, rm, 0x9e);
+    }
+
+    // reg = - vreg * reg - rm
+    pub fn vfnmsub213qd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_qd(reg, vreg, rm, 0xae);
+    }
+
+    // reg = - vreg * rm - reg
+    pub fn vfnmsub231qd(&mut self, reg: u8, vreg: u8, rm: u8) {
+        self.vfma_qd(reg, vreg, rm, 0xbe);
     }
 
     // reg = reg * rm + vreg

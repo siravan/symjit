@@ -12,39 +12,53 @@ def process_argv():
     parser.add_argument("--backend", help="backend engine", default="rust")
     parser.add_argument("--ty", help="architecture type", default="native")
     parser.add_argument(
-        "--nosimd", help="do not use simd!", action="store_false", dest="use_simd"
-    )
-    parser.add_argument(
-        "--nothreads",
-        help="do not use multi-threading",
-        action="store_false",
+        "--threads",
+        help="use multi-threading",
+        action=argparse.BooleanOptionalAction,
         dest="use_threads",
+        default=True,
     )
     parser.add_argument(
-        "--nocse",
-        help="do not apply common subexpression elimination",
-        action="store_false",
+        "--simd",
+        help="use simd",
+        action=argparse.BooleanOptionalAction,
+        dest="use_simd",
+        default=True,
+    )
+    parser.add_argument(
+        "--simd512",
+        help="enable simd512",
+        action=argparse.BooleanOptionalAction,
+        dest="enable_simd512",
+        default=False,
+    )
+    parser.add_argument(
+        "--cse",
+        help="apply common subexpression elimination",
+        action=argparse.BooleanOptionalAction,
         dest="cse",
+        default=True,
     )
     parser.add_argument(
         "--fastmath",
         help="use fastmath operations",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         dest="fastmath",
         default=True,
     )
     parser.add_argument(
         "--fast_complex",
         help="use SIMD instructions for scalar complex functions",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         dest="fast_complex",
         default=True,
     )
     parser.add_argument(
         "--compress",
         help="Contract compiled code",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         dest="compress",
+        default=False,
     )
     parser.add_argument("--dtype", help="data type", default="float64")
     parser.add_argument(
@@ -56,10 +70,11 @@ def process_argv():
         type=int,
     )
     parser.add_argument(
-        "--nosymjit",
+        "--symjit",
         help="do not use symjit at all!",
-        action="store_false",
+        action=argparse.BooleanOptionalAction,
         dest="symjit",
+        default=True,
     )
 
     args = vars(parser.parse_args())

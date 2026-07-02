@@ -883,4 +883,65 @@ macro_rules! amd {
     (vfnmsub231pd ymm($reg:expr), ymm($vreg:expr), ymm($rm:expr); $a:expr) => {
         $a.vfnmsub231pd($reg, $vreg, $rm);
     };
+
+    // packed zmm
+    // reg = reg * rm + vreg
+    (vfmadd132pd zmm($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vfmadd132qd($reg, $vreg, $rm);
+    };
+
+    // reg = vreg * reg + rm
+    (vfmadd213pd zmm($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vfmadd213qd($reg, $vreg, $rm);
+    };
+
+    // reg = vreg * rm + reg
+    (vfmadd231pd zmm($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vfmadd231qd($reg, $vreg, $rm);
+    };
+
+    // reg = reg * rm - vreg
+    (vfmsub132pd zmm($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vfmsub132qd($reg, $vreg, $rm);
+    };
+
+    // reg = vreg * reg - rm
+    (vfmsub213pd zmm($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vfmsub213qd($reg, $vreg, $rm);
+    };
+
+    // reg = vreg * rm - reg
+    (vfmsub231pd zmm($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vfmsub231qd($reg, $vreg, $rm);
+    };
+
+    // reg = - reg * rm - vreg
+    (vfnmadd132pd zmm($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vfnmadd132qd($reg, $vreg, $rm);
+    };
+
+    // reg = - vreg * reg + rm
+    (vfnmadd213pd zmm($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vfnmadd213qd($reg, $vreg, $rm);
+    };
+
+    // reg = - vreg * rm + reg
+    (vfnmadd231pd zmm($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vfnmadd231qd($reg, $vreg, $rm);
+    };
+
+    // reg = - reg * rm - vreg
+    (vfnmsub132pd zmm($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vfnmsub132qd($reg, $vreg, $rm);
+    };
+
+    // reg = - vreg * reg - rm
+    (vfnmsub213pd zmm($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vfnmsub213qd($reg, $vreg, $rm);
+    };
+
+    // reg = - vreg * rm - reg
+    (vfnmsub231pd zmm($reg:expr), zmm($vreg:expr), zmm($rm:expr); $a:expr) => {
+        $a.vfnmsub231qd($reg, $vreg, $rm);
+    };
 }
