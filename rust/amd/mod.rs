@@ -35,7 +35,8 @@ const ARGS: [u8; 4] = [Amd::RDI, Amd::RSI, Amd::RDX, Amd::RCX];
 
 const RET: u8 = 0;
 
-const MEM: u8 = Amd::RBP;
+// const MEM: u8 = Amd::RBP;
+const MEM: u8 = Amd::R14;
 const STATES: u8 = Amd::R13;
 const IDX: u8 = Amd::R12;
 const PARAMS: u8 = Amd::RBX;
@@ -48,6 +49,7 @@ fn save_nonvolatile_regs(amd: &mut Amd) {
         amd.mov_mem_reg(STACK, 0x20, STATES);
     } else {
         amd.sub_rsp(32);
+        amd.mov_mem_reg(STACK, 0x00, MEM);
         amd.mov_mem_reg(STACK, 0x08, PARAMS);
         amd.mov_mem_reg(STACK, 0x10, IDX);
         amd.mov_mem_reg(STACK, 0x18, STATES);
@@ -60,6 +62,7 @@ fn load_nonvolatile_regs(amd: &mut Amd) {
         amd.mov_reg_mem(IDX, STACK, 0x18);
         amd.mov_reg_mem(STATES, STACK, 0x20);
     } else {
+        amd.mov_reg_mem(MEM, STACK, 0x00);
         amd.mov_reg_mem(PARAMS, STACK, 0x08);
         amd.mov_reg_mem(IDX, STACK, 0x10);
         amd.mov_reg_mem(STATES, STACK, 0x18);

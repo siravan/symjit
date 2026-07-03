@@ -38,7 +38,11 @@ pub fn bool_to_f64(b: bool) -> f64 {
 
 /// aligns at a multiple of 32 (to cover different ABIs)
 pub fn align_stack(n: u32) -> u32 {
-    n + 16 - (n & 15)
+    if n & 31 == 0 {
+        n
+    } else {
+        (n + 31) & 0xffffffe0
+    }
 }
 
 /*****************************************/

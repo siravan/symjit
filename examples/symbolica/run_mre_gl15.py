@@ -235,13 +235,13 @@ t_start = time.time()
 for _ in range(N_SAMPLES):
     symjit_f.evaluate_complex(input[None, :])
 print(
-    f"Symjit evaluation: {((time.time() - t_start) * 1000000.0 / N_SAMPLES):.3f} μsec"
+    f"Symjit scalar evaluation: {((time.time() - t_start) * 1000000.0 / N_SAMPLES):.3f} μsec"
 )
 
 t_start = time.time()
 symjit_f.evaluate_complex(samples)
 print(
-    f"Symjit evaluation: {((time.time() - t_start) * 1000000.0 / N_SAMPLES):.3f} μsec"
+    f"Symjit vector evaluation: {((time.time() - t_start) * 1000000.0 / N_SAMPLES):.3f} μsec"
 )
 
 ret = symjit_f.evaluate_complex(input[None, :]).sum()

@@ -20,6 +20,7 @@ t0 = time.perf_counter_ns()
 f = compile_func([a, b, x, y], [x**2 - y**2 + a, 2 * x * y + b], **args)
 
 # print(f.dumps("bytecode"))
+print(f.dumps("simd"))
 
 t1 = time.perf_counter_ns()
 

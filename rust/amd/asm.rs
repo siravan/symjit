@@ -521,6 +521,14 @@ macro_rules! amd {
         $a.knotw($k1, $k2);
     };
 
+    (vpmovq2m k($k:expr), zmm($rm:expr); $a:expr) => {
+        $a.vpmovq2m_qd($k, $rm);
+    };
+
+    (vpmovm2q zmm($reg:expr), k($k:expr); $a:expr) => {
+        $a.vpmovm2q_qd($reg, $k);
+    };
+
     /* General Registers */
     (mov r($reg:expr), r($rm:expr); $a:expr) => {
         $a.mov($reg, $rm);

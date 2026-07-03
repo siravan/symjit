@@ -36,7 +36,7 @@ impl Prefix {
 
     // packed single
     pub fn ps(&mut self) -> &mut Self {
-        self.pp = 1;
+        self.pp = 0;
         self
     }
 
@@ -121,8 +121,6 @@ impl Prefix {
         let b = if self.rm & 8 != 0 { 0 } else { 0x20 };
 
         let vvvv = (!self.vreg & 0x0f) << 3;
-
-        let pp = 1; // pd
         let l = if self.len == 256 { 0x20 } else { 0 };
 
         assert!(matches!(self.mask, Masking::Nil));
@@ -131,7 +129,7 @@ impl Prefix {
 
         amd.append_byte(0xc4);
         amd.append_byte(r | x | b | self.encoding);
-        amd.append_byte(w | vvvv | l | pp);
+        amd.append_byte(w | vvvv | l | self.pp);
     }
 
     pub fn evex(&self, amd: &mut Amd) {
@@ -148,7 +146,6 @@ impl Prefix {
         let vvvv = (!self.vreg & 0x0f) << 3;
         let v_prime = if self.vreg & 0x10 != 0 { 0 } else { 8 };
 
-        let pp = 1; // pd
         let l = if self.len == 256 { 0x20 } else { 0 };
         let l_prime = if self.len == 512 { 0x40 } else { 0 };
         let (a, z): (u8, u8) = match self.mask {
@@ -162,7 +159,7 @@ impl Prefix {
 
         amd.append_byte(0x62);
         amd.append_byte(r | x | b | r_prime | self.encoding);
-        amd.append_byte(w | vvvv | 4 | pp);
+        amd.append_byte(w | vvvv | 4 | self.pp);
         amd.append_byte(z | l_prime | l | br | v_prime | a);
     }
 
@@ -439,20 +436,40 @@ impl Amd {
     }
 
     pub fn kmovw_reg_k(&mut self, reg: u8, k: u8) {
-        Prefix::new(reg, 0, k).set_len(128).set_w(0).vex(self);
+        Prefix::new(reg, 0, k).set_len(128).set_w(0).ps().vex(self);
         self.append_byte(0x93);
         self.modrm_reg(reg, k);
     }
 
     pub fn kmovw_k_reg(&mut self, k: u8, rm: u8) {
-        Prefix::new(k, 0, rm).set_len(128).set_w(0).vex(self);
+        Prefix::new(k, 0, rm).set_len(128).set_w(0).ps().vex(self);
         self.append_byte(0x92);
         self.modrm_reg(k, rm);
     }
 
     pub fn knotw(&mut self, k1: u8, k2: u8) {
-        Prefix::new(k1, 0, k2).set_len(128).set_w(0).vex(self);
+        Prefix::new(k1, 0, k2).set_len(128).set_w(0).ps().vex(self);
         self.append_byte(0x44);
         self.modrm_reg(k1, k2);
+    }
+
+    pub fn vpmovq2m_qd(&mut self, k: u8, rm: u8) {
+        Prefix::new(k, 0, rm)
+            .set_w(1)
+            .set_encoding(2)
+            .ss()
+            .evex(self);
+        self.append_byte(0x39);
+        self.modrm_reg(k, rm);
+    }
+
+    pub fn vpmovm2q_qd(&mut self, reg: u8, k: u8) {
+        Prefix::new(reg, 0, k)
+            .set_w(1)
+            .set_encoding(2)
+            .ss()
+            .evex(self);
+        self.append_byte(0x38);
+        self.modrm_reg(reg, k);
     }
 }
