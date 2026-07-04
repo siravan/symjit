@@ -38,9 +38,9 @@ for simd_branch in [False, True]:
 
     Y_with_simd = f_with_simd.evaluate_complex(X)
 
-    # print(Y_without_simd[:10, :])
-    # print(Y_with_simd[:10, :])
-    # print(Y_without_simd[:10, :] - Y_with_simd[:10, :])
+    print(Y_without_simd[:10, :])
+    print(Y_with_simd[:10, :])
+    print(Y_without_simd[:10, :] - Y_with_simd[:10, :])
 
     relative_error = np.max(np.abs((Y_with_simd - Y_without_simd) / Y_with_simd))
     assert relative_error < 1e-10

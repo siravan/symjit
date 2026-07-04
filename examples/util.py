@@ -9,7 +9,7 @@ def use_symjit():
 
 def process_argv():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--backend", help="backend engine", default="rust")
+    # parser.add_argument("--backend", help="backend engine", default="rust")
     parser.add_argument("--ty", help="architecture type", default="native")
     parser.add_argument(
         "--nosimd", help="do not use simd!", action="store_false", dest="use_simd"
