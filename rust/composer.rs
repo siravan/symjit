@@ -51,6 +51,7 @@ pub struct DirectTranslator {
     pub count_outs: usize,
     pub ft: HashSet<String>,
     pub prog: Program,
+    pub conditions: Vec<Slot>,
 }
 
 impl DirectTranslator {
@@ -71,6 +72,7 @@ impl DirectTranslator {
             count_outs: 0,
             ft: HashSet::new(),
             prog,
+            conditions: Vec::new(),
         }
     }
 
@@ -408,14 +410,22 @@ impl Composer for DirectTranslator {
         self.load(reg(0), cond)?;
         self.mir.iszero(reg(1), reg(0));
         self.mir.branch_if(reg(1), &label, true);
+        self.conditions.push(*cond);
         Ok(())
     }
 
     fn append_goto(&mut self, id: usize) -> Result<()> {
-        if !self.mir.config.simd_branch() || !self.mir.config.symbolica() {
-            let label = format!(".S{}", id);
+        let cond = self.conditions.pop().unwrap();
+        let label = format!(".S{}", id);
+
+        if !self.mir.config.symbolica() || !self.mir.config.use_simd() {
             self.mir.branch(&label);
+        } else {
+            self.load(reg(0), &cond)?;
+            self.mir.iszero(reg(1), reg(0));
+            self.mir.branch_if(reg(1), &label, false);
         }
+
         Ok(())
     }
 

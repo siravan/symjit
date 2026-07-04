@@ -132,18 +132,15 @@ impl Generator for ArmGenerator {
     }
 
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
-        self.emit(arm! {umov x(0), v(ϕ(cond)).d[0]});
-
-        let l = self.a.create_label();
-
         if is_else {
+            self.emit(arm! {umov x(0), v(ϕ(cond)).d[0]});
+            let l = self.a.create_label();
             self.jump(&l, 0, |offset, _| arm! {tbz x(0), #0, label(offset)});
+            self.branch(label);
+            self.set_label(&l);
         } else {
-            self.jump(&l, 0, |offset, _| arm! {tbnz x(0), #0, label(offset)});
+            self.branch(label);
         }
-
-        self.branch(label);
-        self.set_label(&l);
     }
 
     fn fuse_load_math(&mut self) {}
