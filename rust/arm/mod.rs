@@ -15,6 +15,8 @@ const CALL: u8 = 23; // call pointer
 
 const SCRATCH1: u8 = 9;
 const SCRATCH2: u8 = 10;
+const SCRATCH3: u8 = 11;
+const COUNTER: u8 = 12;
 const TEMP: u8 = 1;
 
 const T0: u8 = 29;
