@@ -117,25 +117,18 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn branch(&mut self, label: &str) {
-        amd! {xor r(Amd::RAX), r(Amd::RAX); self.amd};
-        amd! {jz label; self.amd};
+        amd! {jmp label; self.amd};
     }
 
     /// jump to label if cond == is_else
     /// note that `is_else` is not the correct name anymore and should be
     /// changed to `expectation`
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
-        // self.amd.vucomisd(ϕ(cond), ϕ(cond));
-        amd! {vucomisd xmm(ϕ(cond)), xmm(ϕ(cond)); self.amd};
-        /*
-         * if is_else (expectation) is true, jump if cond is true (all-1, NaN).
-         * In this situation, vucomisd returns an unordered result, setting
-         * PF = 1 (jpe)
-         */
         if is_else {
+            amd! {vucomisd xmm(ϕ(cond)), xmm(ϕ(cond)); self.amd};
             amd! {jpe label; self.amd};
         } else {
-            amd! {jpe label; self.amd};
+            amd! {jmp label; self.amd};
         }
     }
 

@@ -222,8 +222,7 @@ impl Generator for AmdVectorGenerator {
     }
 
     fn branch(&mut self, label: &str) {
-        amd! {xor r(Amd::RAX), r(Amd::RAX); self.amd};
-        amd! {jz label; self.amd};
+        amd! {jmp label; self.amd};
     }
 
     /// jump to label if all bits of cond == is_else
@@ -827,26 +826,25 @@ impl AmdVectorGenerator {
         amd! {mov r(IDX), r(ARGS[2]); self.amd}; // third arg = index if indirect mode
         amd! {mov r(PARAMS), r(ARGS[3]); self.amd}; // fourth arg = params
 
-        if REG_SIZE == 32 {
-            amd! {or r(IDX), r(IDX); self.amd};
-            amd! {jz "@main"; self.amd};
-            amd! {sub rsp, align_stack(count_params as u32 * 32); self.amd};
-            amd! {mov r(Amd::RAX), r(PARAMS); self.amd};
-            amd! {mov r(PARAMS), r(STACK); self.amd};
+        amd! {or r(IDX), r(IDX); self.amd};
+        amd! {jz "@main"; self.amd};
+        amd! {sub rsp, align_stack(count_params as u32 * 32); self.amd};
+        amd! {mov r(Amd::RAX), r(PARAMS); self.amd};
+        amd! {mov r(PARAMS), r(STACK); self.amd};
 
-            for j in 0..4 {
-                for i in 0..count_params {
-                    amd! {vmovsd xmm(RET), [r(Amd::RAX) + 8 * (i + j * count_params) as i32]; self.amd};
-                    amd! {vmovsd [r(PARAMS) + 8 * (i * 4 + j) as i32], xmm(RET); self.amd};
-                }
+        for j in 0..NUM_LANES {
+            for i in 0..count_params as u32 {
+                amd! {vmovsd xmm(RET), [r(Amd::RAX) + 8 * (i + j * count_params as u32) as i32]; self.amd};
+                amd! {vmovsd [r(PARAMS) + 8 * (i * NUM_LANES + j) as i32], xmm(RET); self.amd};
             }
-
-            amd! {sub rsp, align_stack(count_obs as u32 * 32); self.amd};
-            amd! {mov r(STATES), r(MEM); self.amd};
-            amd! {mov r(MEM), r(STACK); self.amd};
-
-            self.set_label("@main");
         }
+
+        amd! {sub rsp, align_stack(count_obs as u32 * 32); self.amd};
+        amd! {mov r(STATES), r(MEM); self.amd};
+        amd! {mov r(MEM), r(STACK); self.amd};
+
+        self.set_label("@main");
+
         amd! {sub rsp, align_stack(cap as u32 * REG_SIZE); self.amd};
     }
 
@@ -854,22 +852,19 @@ impl AmdVectorGenerator {
         // add_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
         amd! {add rsp, align_stack(cap as u32 * REG_SIZE); self.amd};
 
-        if REG_SIZE == 32 {
-            amd! {or r(IDX), r(IDX); self.amd};
-            amd! {jz "@done"; self.amd};
+        amd! {or r(IDX), r(IDX); self.amd};
+        amd! {jz "@done"; self.amd};
 
-            for j in 0..4 {
-                for i in 0..count_obs {
-                    amd! {vmovsd xmm(RET), [r(MEM) + 8 * (i * 4 + j) as i32]; self.amd};
-                    amd! {vmovsd [r(STATES) + 8 * (i + j * count_obs) as i32], xmm(0); self.amd};
-                }
+        for j in 0..NUM_LANES {
+            for i in 0..count_obs as u32 {
+                amd! {vmovsd xmm(RET), [r(MEM) + 8 * (i * 4 + j) as i32]; self.amd};
+                amd! {vmovsd [r(STATES) + 8 * (i + j * count_obs as u32) as i32], xmm(0); self.amd};
             }
-
-            let frame_size =
-                align_stack(count_params as u32 * 32) + align_stack(count_obs as u32 * 32);
-            amd! {add rsp, frame_size; self.amd};
-            self.set_label("@done");
         }
+
+        let frame_size = align_stack(count_params as u32 * 32) + align_stack(count_obs as u32 * 32);
+        amd! {add rsp, frame_size; self.amd};
+        self.set_label("@done");
 
         amd! {vzeroupper; self.amd};
 

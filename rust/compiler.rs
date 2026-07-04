@@ -563,6 +563,7 @@ pub struct IndirectTranslator {
     has_jump: bool,
     last_label: usize,
     depth: usize,
+    conditions: Vec<Slot>, // stack of If_Else conditions
 }
 
 impl Composer for IndirectTranslator {
@@ -715,6 +716,7 @@ impl IndirectTranslator {
             has_jump: false,
             last_label: 0,
             depth: 0,
+            conditions: Vec::new(),
         }
     }
 
@@ -1003,12 +1005,22 @@ impl IndirectTranslator {
             id,
             is_else: true,
         }));
+        self.conditions.push(*cond);
         Ok(())
     }
 
     fn translate_goto(&mut self, id: usize) -> Result<()> {
-        if !self.config.simd_branch() || !self.config.symbolica() {
+        let cond = self.conditions.pop().unwrap();
+
+        if !self.config.symbolica() || !self.config.use_simd() {
             self.eqs.push(Expr::special(&Expr::Branch { id }));
+        } else {
+            let if_clause = Expr::unary("iszero", &self.expr(&cond, false));
+            self.eqs.push(Expr::special(&Expr::BranchIf {
+                cond: Box::new(if_clause),
+                id,
+                is_else: false,
+            }));
         }
 
         Ok(())

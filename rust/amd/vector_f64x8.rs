@@ -222,8 +222,7 @@ impl Generator for AmdVectorF64x8Generator {
     }
 
     fn branch(&mut self, label: &str) {
-        amd! {xor r(Amd::RAX), r(Amd::RAX); self.amd};
-        amd! {jz label; self.amd};
+        amd! {jmp label; self.amd};
     }
 
     /// jump to label if all bits of cond == is_else
@@ -628,17 +627,19 @@ impl Generator for AmdVectorF64x8Generator {
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {
         if true_val == false_val {
             self.fmov(dst, true_val);
-        } else if dst != false_val {
-            self.load_stack(Reg::Temp, idx);
-            self.and(dst, Reg::Temp, true_val);
-            self.andnot(Reg::Temp, Reg::Temp, false_val);
-            self.or(dst, dst, Reg::Temp);
+        }
+
+        self.load_stack(Reg::Temp, idx);
+        amd! {vpmovq2m k(1), zmm(ϕ(Reg::Temp)); self.amd};
+
+        if dst == true_val {
+            amd! {knotw k(1), k(1); self.amd};
+            amd! {vmovapd zmm(ϕ(dst)){k(1)}, zmm(ϕ(false_val)); self.amd};
+        } else if dst == false_val {
+            amd! {vmovapd zmm(ϕ(dst)){k(1)}, zmm(ϕ(true_val)); self.amd};
         } else {
-            // dst == false_val && dst != true_val
-            self.load_stack(Reg::Temp, idx);
-            self.andnot(dst, Reg::Temp, false_val);
-            self.and(Reg::Temp, Reg::Temp, true_val);
-            self.or(dst, dst, Reg::Temp);
+            amd! {vmovapd zmm(ϕ(dst)), zmm(ϕ(false_val)); self.amd};
+            amd! {vmovapd zmm(ϕ(dst)){k(1)}, zmm(ϕ(true_val)); self.amd};
         }
     }
 
@@ -860,15 +861,6 @@ impl AmdVectorF64x8Generator {
         amd! {jnz "@load"; self.amd};
         amd! {sub r(PARAMS), 8 * NUM_LANES as usize * count_params; self.amd};
 
-        /*
-        for j in 0..NUM_LANES as usize {
-            for i in 0..count_params {
-                amd! {vmovsd xmm(RET), [r(Amd::RAX) + 8 * (i + j * count_params) as i32]; self.amd};
-                amd! {vmovsd [r(PARAMS) + 8 * (i * 8 + j) as i32], xmm(RET); self.amd};
-            }
-        }
-        */
-
         amd! {sub rsp, align_stack(count_obs as u32 * REG_SIZE); self.amd};
         amd! {mov r(STATES), r(MEM); self.amd};
         amd! {mov r(MEM), r(STACK); self.amd};
@@ -897,15 +889,6 @@ impl AmdVectorF64x8Generator {
         amd! {add r(STATES), 8; self.amd};
         amd! {dec r(Amd::RCX); self.amd};
         amd! {jnz "@save"; self.amd};
-
-        /*
-        for j in 0..NUM_LANES as usize {
-            for i in 0..count_obs {
-                amd! {vmovsd xmm(RET), [r(MEM) + 8 * (i * 8 + j) as i32]; self.amd};
-                amd! {vmovsd [r(STATES) + 8 * (i + j * count_obs) as i32], xmm(0); self.amd};
-            }
-        }
-        */
 
         let frame_size =
             align_stack(count_params as u32 * REG_SIZE) + align_stack(count_obs as u32 * REG_SIZE);

@@ -2,13 +2,13 @@ ty = "native"
 
 [options]
 use_simd = true
-enable_simd512 = false
+enable_simd512 = true
 use_threads = false
 cse = false
 fastmath = true
 complex = false
 symbolica = true
-simd_branch = false
+simd_branch = true
 compact = true
 compress = false
 direct = false
