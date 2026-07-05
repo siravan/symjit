@@ -798,7 +798,11 @@ impl ArmSimdGenerator {
         self.emit(arm! {mov x(SCRATCH2), x(PARAMS)});
         self.emit(arm! {mov x(PARAMS), sp});
 
+<<<<<<< HEAD
         if count_params >= 256 {
+=======
+        if count_params >= 100 {
+>>>>>>> a09e199 (adding fixes from 2.18.9)
             self.emit(arm! {mov x(SCRATCH3), x(PARAMS)});
             self.emit(arm! {movz x(COUNTER), #count_params & 0xffff});
             self.emit(arm! {movk_lsl16 x(COUNTER), #count_params >> 16});
@@ -808,8 +812,13 @@ impl ArmSimdGenerator {
             self.load_d_from_mem(1, SCRATCH2, count_params as u32);
             self.emit(arm! {zip1 q(0), q(0), q(1)});
             self.save_q_to_mem(0, SCRATCH3, 0);
+<<<<<<< HEAD
             self.emit(arm! {add x(SCRATCH2), x(SCRATCH2), #1});
             self.emit(arm! {add x(SCRATCH3), x(SCRATCH3), #2});
+=======
+            self.emit(arm! {add x(SCRATCH2), x(SCRATCH2), #8});
+            self.emit(arm! {add x(SCRATCH3), x(SCRATCH3), #16});
+>>>>>>> a09e199 (adding fixes from 2.18.9)
             self.emit(arm! {subs x(COUNTER), x(COUNTER), #1});
             self.jump("@load", 0, |offset, _| arm! {b.ne label(offset)});
         } else {
@@ -838,7 +847,11 @@ impl ArmSimdGenerator {
         self.emit(arm! {tst x(IDX), x(IDX)});
         self.jump("@done", 0, |offset, _| arm! {b.eq label(offset)});
 
+<<<<<<< HEAD
         if count_obs >= 256 {
+=======
+        if count_obs >= 100 {
+>>>>>>> a09e199 (adding fixes from 2.18.9)
             self.emit(arm! {mov x(SCRATCH2), x(MEM)});
             self.emit(arm! {mov x(SCRATCH3), x(STATES)});
             self.emit(arm! {movz x(COUNTER), #count_obs & 0xffff});
@@ -849,8 +862,13 @@ impl ArmSimdGenerator {
             self.emit(arm! {dup q(1), q(0)[1]});
             self.save_d_to_mem(0, SCRATCH3, 0);
             self.save_d_to_mem(1, SCRATCH3, count_obs as u32);
+<<<<<<< HEAD
             self.emit(arm! {add x(SCRATCH2), x(SCRATCH2), #2});
             self.emit(arm! {add x(SCRATCH3), x(SCRATCH3), #1});
+=======
+            self.emit(arm! {add x(SCRATCH2), x(SCRATCH2), #16});
+            self.emit(arm! {add x(SCRATCH3), x(SCRATCH3), #8});
+>>>>>>> a09e199 (adding fixes from 2.18.9)
             self.emit(arm! {subs x(COUNTER), x(COUNTER), #1});
             self.jump("@save", 0, |offset, _| arm! {b.ne label(offset)});
         } else {
