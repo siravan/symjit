@@ -17,10 +17,7 @@ const SCRATCH1: u8 = 9;
 const SCRATCH2: u8 = 10;
 const SCRATCH3: u8 = 11;
 const COUNTER: u8 = 12;
-<<<<<<< HEAD
 const TEMP: u8 = 1;
-=======
->>>>>>> a09e199 (adding fixes from 2.18.9)
 
 const T0: u8 = 29;
 const T1: u8 = 30;
