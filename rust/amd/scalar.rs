@@ -163,11 +163,19 @@ impl Generator for AmdScalarGenerator {
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        amd! {vmovsd xmm(ϕ(dst)), [r(STACK) + idx * REG_SIZE]; self.amd};
+        if idx < 256 {
+            amd! {vmovsd xmm(ϕ(dst)), [r(STACK) + idx * REG_SIZE]; self.amd};
+        } else {
+            amd! {vmovsd xmm(ϕ(dst)), [r(STATES) + idx * REG_SIZE]; self.amd};
+        }
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        amd! {vmovsd [r(STACK) + idx * REG_SIZE], xmm(ϕ(dst)); self.amd};
+        if idx < 256 {
+            amd! {vmovsd [r(STACK) + idx * REG_SIZE], xmm(ϕ(dst)); self.amd};
+        } else {
+            amd! {vmovsd [r(STATES) + idx * REG_SIZE], xmm(ϕ(dst)); self.amd};
+        }
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
@@ -186,13 +194,21 @@ impl Generator for AmdScalarGenerator {
     }
 
     fn load_stack_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        amd! {vmovupd xmm(ϕ(xd)), [r(STACK) + idx * REG_SIZE]; self.amd};
+        if idx < 256 {
+            amd! {vmovupd xmm(ϕ(xd)), [r(STACK) + idx * REG_SIZE]; self.amd};
+        } else {
+            amd! {vmovupd xmm(ϕ(xd)), [r(STATES) + idx * REG_SIZE]; self.amd};
+        }
         amd! {vshufpd xmm(ϕ(yd)), xmm(ϕ(xd)), xmm(ϕ(xd)), 1; self.amd};
     }
 
     fn save_stack_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
         amd! {vunpcklpd xmm(ϕ(xs)), xmm(ϕ(xs)), xmm(ϕ(ys)); self.amd};
-        amd! {vmovupd [r(STACK) + idx * REG_SIZE], xmm(ϕ(xs)); self.amd};
+        if idx < 256 {
+            amd! {vmovupd [r(STACK) + idx * REG_SIZE], xmm(ϕ(xs)); self.amd};
+        } else {
+            amd! {vmovupd [r(STATES) + idx * REG_SIZE], xmm(ϕ(xs)); self.amd};
+        }
     }
 
     fn save_stack_result(&mut self, idx: u32) {
@@ -699,11 +715,13 @@ impl AmdScalarGenerator {
         amd! {mov r(IDX), r(ARGS[2]); self.amd};
         amd! {mov r(PARAMS), r(ARGS[3]); self.amd};
 
-        amd! {sub rsp, align_stack(cap as u32 * REG_SIZE); self.amd};
+        prologue_stack(&mut self.amd, cap, REG_SIZE);
     }
 
     fn epilogue_symbolica(&mut self, cap: usize, _count_params: usize, _count_obs: usize) {
-        amd! {add rsp, align_stack(cap as u32 * REG_SIZE); self.amd};
+        epilogue_stack(&mut self.amd, cap, REG_SIZE);
+
+        // amd! {add rsp, align_stack(cap as u32 * REG_SIZE); self.amd};
         amd! {vzeroupper; self.amd};
 
         load_nonvolatile_regs(&mut self.amd);

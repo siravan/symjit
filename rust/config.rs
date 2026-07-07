@@ -480,6 +480,18 @@ impl Config {
     pub fn set_debug_stats(&mut self, enabled: bool) {
         self.opt = (self.opt & !DEBUG_STATS) | if enabled { DEBUG_STATS } else { 0 };
     }
+
+    pub fn max_lanes(&self) -> usize {
+        if self.use_simd512() {
+            8
+        } else if self.use_simd() && self.has_avx() {
+            4
+        } else if self.use_simd() && self.is_arm64() {
+            2
+        } else {
+            1
+        }
+    }
 }
 
 impl Default for Config {

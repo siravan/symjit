@@ -19,6 +19,7 @@ pub struct Applet {
     pub count_obs: usize,
     pub count_diffs: usize,
     pub config: Config,
+    pub states: Vec<f64>,
 }
 
 impl Applet {
@@ -37,7 +38,17 @@ impl Applet {
             count_obs: app.count_obs,
             count_diffs: app.count_diffs,
             config: app.config.clone(),
+            states: app.states.clone(),
         })
+    }
+
+    fn stack(&self) -> *const &mut [f64] {
+        let p: *const f64 = unsafe { std::mem::transmute(self.states.as_ptr()) };
+        if self.states.is_empty() {
+            std::ptr::null()
+        } else {
+            p as *const &mut [f64]
+        }
     }
 
     /// Generic evaluate function for compiled Symbolica expressions
@@ -58,9 +69,9 @@ impl Applet {
 
         if let Some(f) = &self.compiled {
             if !simd {
-                f.func()(outs.as_mut_ptr(), std::ptr::null(), 0, args.as_ptr());
+                f.func()(outs.as_mut_ptr(), self.stack(), 0, args.as_ptr());
             } else if let Some(g) = &self.compiled_simd {
-                g.func()(outs.as_mut_ptr(), std::ptr::null(), 0, args.as_ptr());
+                g.func()(outs.as_mut_ptr(), self.stack(), 0, args.as_ptr());
             }
         }
     }
@@ -85,11 +96,12 @@ impl Applet {
         outs_idx: usize,
         f: CompiledFunc<f64>,
         transpose: bool,
+        stack: *const &mut [f64],
     ) -> i32 {
         unsafe {
             f(
                 outs.as_ptr().add(outs_idx),
-                std::ptr::null(),
+                stack,
                 if transpose { 1 } else { 0 },
                 args.as_ptr().add(args_idx),
             )
@@ -103,7 +115,15 @@ impl Applet {
             let f_scalar = f.func();
 
             (0..n).into_par_iter().for_each(|t| {
-                Self::evaluate_row(args, t * count_params, outs, t * count_obs, f_scalar, false);
+                Self::evaluate_row(
+                    args,
+                    t * count_params,
+                    outs,
+                    t * count_obs,
+                    f_scalar,
+                    false,
+                    self.stack(),
+                );
             });
         }
     }
@@ -115,7 +135,15 @@ impl Applet {
             let f_scalar = f.func();
 
             for t in 0..n {
-                Self::evaluate_row(args, t * count_params, outs, t * count_obs, f_scalar, false);
+                Self::evaluate_row(
+                    args,
+                    t * count_params,
+                    outs,
+                    t * count_obs,
+                    f_scalar,
+                    false,
+                    self.stack(),
+                );
             }
         }
     }
@@ -146,6 +174,7 @@ impl Applet {
                         top * count_obs,
                         f_simd,
                         transpose,
+                        self.stack(),
                     ) != 0
                     {
                         for i in 0..lanes {
@@ -156,6 +185,7 @@ impl Applet {
                                 (top + i) * count_obs,
                                 f_scalar,
                                 false,
+                                self.stack(),
                             );
                         }
                     }
@@ -169,6 +199,7 @@ impl Applet {
                         t * count_obs,
                         f_scalar,
                         false,
+                        self.stack(),
                     );
                 }
             }
@@ -201,6 +232,7 @@ impl Applet {
                         top * count_obs,
                         f_simd,
                         transpose,
+                        self.stack(),
                     ) != 0
                     {
                         for i in 0..lanes {
@@ -211,6 +243,7 @@ impl Applet {
                                 (top + i) * count_obs,
                                 f_scalar,
                                 false,
+                                self.stack(),
                             );
                         }
                     }
@@ -224,6 +257,7 @@ impl Applet {
                         t * count_obs,
                         f_scalar,
                         false,
+                        self.stack(),
                     );
                 }
             }

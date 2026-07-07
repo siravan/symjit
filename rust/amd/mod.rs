@@ -1,5 +1,5 @@
 use crate::code::Func;
-use crate::utils::Reg;
+use crate::utils::{align_stack, Reg};
 
 #[macro_use]
 mod asm;
@@ -36,6 +36,7 @@ const ARGS: [u8; 4] = [Amd::RDI, Amd::RSI, Amd::RDX, Amd::RCX];
 const RET: u8 = 0;
 
 // const MEM: u8 = Amd::RBP;
+const OUTS: u8 = Amd::R15;
 const MEM: u8 = Amd::R14;
 const STATES: u8 = Amd::R13;
 const IDX: u8 = Amd::R12;
@@ -48,11 +49,12 @@ fn save_nonvolatile_regs(amd: &mut Amd) {
         amd.mov_mem_reg(STACK, 0x18, IDX);
         amd.mov_mem_reg(STACK, 0x20, STATES);
     } else {
-        amd.sub_rsp(32);
+        amd.sub_rsp(48);
         amd.mov_mem_reg(STACK, 0x00, MEM);
         amd.mov_mem_reg(STACK, 0x08, PARAMS);
         amd.mov_mem_reg(STACK, 0x10, IDX);
         amd.mov_mem_reg(STACK, 0x18, STATES);
+        amd.mov_mem_reg(STACK, 0x20, OUTS);
     }
 }
 
@@ -66,7 +68,8 @@ fn load_nonvolatile_regs(amd: &mut Amd) {
         amd.mov_reg_mem(PARAMS, STACK, 0x08);
         amd.mov_reg_mem(IDX, STACK, 0x10);
         amd.mov_reg_mem(STATES, STACK, 0x18);
-        amd.add_rsp(32);
+        amd.mov_reg_mem(OUTS, STACK, 0x20);
+        amd.add_rsp(48);
     }
 }
 
@@ -221,5 +224,42 @@ fn fused_perm(dst: Reg, s1: Reg, s2: Reg, s3: Reg) -> FusedAction {
         FusedAction::Use231(s3, s1, s2)
     } else {
         FusedAction::Copy132(dst, s3, s2)
+    }
+}
+
+fn prologue_stack(amd: &mut Amd, cap: usize, reg_size: u32) {
+    if cap < 256 {
+        amd! {sub rsp, align_stack(cap as u32 * reg_size); amd};
+        amd! {mov r(STATES), r(STACK); amd};
+    } else {
+        amd! {or r(STATES), r(STATES); amd};
+        amd! {jnz ".K1"; amd};
+
+        amd! {sub rsp, align_stack(cap as u32 * reg_size); amd};
+        amd! {mov r(STATES), r(STACK); amd};
+        amd! {jmp ".K2"; amd};
+
+        amd.a.set_label(".K1");
+        amd! {sub rsp, align_stack(256 * reg_size); amd};
+
+        amd.a.set_label(".K2");
+    }
+}
+
+fn epilogue_stack(amd: &mut Amd, cap: usize, reg_size: u32) {
+    if cap < 256 {
+        amd! {add rsp, align_stack(cap as u32 * reg_size); amd};
+    } else {
+        amd! {mov r(Amd::RCX), r(STATES); amd};
+        amd! {xor r(Amd::RCX), r(Amd::RSP); amd};
+        amd! {jnz ".K3"; amd};
+
+        amd! {add rsp, align_stack(cap as u32 * reg_size); amd};
+        amd! {jmp ".K4"; amd};
+
+        amd.a.set_label(".K3");
+        amd! {add rsp, align_stack(256 * reg_size); amd};
+
+        amd.a.set_label(".K4");
     }
 }

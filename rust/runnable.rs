@@ -56,6 +56,7 @@ pub struct Application {
     pub count_obs: usize,
     pub count_diffs: usize,
     pub config: Config,
+    pub states: Vec<f64>,
     // Non-Applet fields
     pub prog: Program,
     pub compiled_fast: Option<MachineCode<f64>>,
@@ -134,6 +135,18 @@ impl Application {
         // bytecode takes the ownership of mir
         let bytecode = Self::compile_bytecode(mir, &mut prog)?;
 
+        let stack_size = prog.builder.stack_size()
+            * config.max_lanes()
+            * if config.is_complex() { 2 } else { 1 };
+
+        let states: Vec<f64> = if config.use_threads()
+        /* || stack_size < 1 << 18 */
+        {
+            Vec::new()
+        } else {
+            vec![0.0; stack_size]
+        };
+
         Ok(Application {
             prog,
             compiled,
@@ -153,6 +166,7 @@ impl Application {
             count_obs,
             count_diffs,
             config,
+            states,
             reals,
             original,
         })

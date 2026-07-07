@@ -291,11 +291,19 @@ impl Generator for AmdVectorGenerator {
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        amd! {vmovupd ymm(ϕ(dst)), [r(STACK) + idx * REG_SIZE]; self.amd};
+        if idx < 256 {
+            amd! {vmovupd ymm(ϕ(dst)), [r(STACK) + idx * REG_SIZE]; self.amd};
+        } else {
+            amd! {vmovupd ymm(ϕ(dst)), [r(STATES) + idx * REG_SIZE]; self.amd};
+        }
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        amd! {vmovupd [r(STACK) + idx * REG_SIZE], ymm(ϕ(dst)); self.amd};
+        if idx < 256 {
+            amd! {vmovupd [r(STACK) + idx * REG_SIZE], ymm(ϕ(dst)); self.amd};
+        } else {
+            amd! {vmovupd [r(STATES) + idx * REG_SIZE], ymm(ϕ(dst)); self.amd};
+        }
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
@@ -821,7 +829,7 @@ impl AmdVectorGenerator {
         amd! {push r(Amd::RBP); self.amd};
         save_nonvolatile_regs(&mut self.amd);
 
-        amd! {mov r(MEM), r(ARGS[0]); self.amd}; // first arg = mem if direct mode, otherwise null
+        amd! {mov r(OUTS), r(ARGS[0]); self.amd}; // first arg = mem if direct mode, otherwise null
         amd! {mov r(STATES), r(ARGS[1]); self.amd}; // second arg = states+obs if indirect mode, otherwise null
         amd! {mov r(IDX), r(ARGS[2]); self.amd}; // third arg = index if indirect mode
         amd! {mov r(PARAMS), r(ARGS[3]); self.amd}; // fourth arg = params
@@ -840,17 +848,17 @@ impl AmdVectorGenerator {
         }
 
         amd! {sub rsp, align_stack(count_obs as u32 * 32); self.amd};
-        amd! {mov r(STATES), r(MEM); self.amd};
+        // amd! {mov r(STATES), r(MEM); self.amd};
         amd! {mov r(MEM), r(STACK); self.amd};
 
         self.set_label("@main");
 
-        amd! {sub rsp, align_stack(cap as u32 * REG_SIZE); self.amd};
+        prologue_stack(&mut self.amd, cap, REG_SIZE);
     }
 
     fn epilogue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
         // add_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
-        amd! {add rsp, align_stack(cap as u32 * REG_SIZE); self.amd};
+        epilogue_stack(&mut self.amd, cap, REG_SIZE);
 
         amd! {or r(IDX), r(IDX); self.amd};
         amd! {jz "@done"; self.amd};
@@ -858,7 +866,7 @@ impl AmdVectorGenerator {
         for j in 0..NUM_LANES {
             for i in 0..count_obs as u32 {
                 amd! {vmovsd xmm(RET), [r(MEM) + 8 * (i * 4 + j) as i32]; self.amd};
-                amd! {vmovsd [r(STATES) + 8 * (i + j * count_obs as u32) as i32], xmm(0); self.amd};
+                amd! {vmovsd [r(OUTS) + 8 * (i + j * count_obs as u32) as i32], xmm(0); self.amd};
             }
         }
 
