@@ -452,33 +452,37 @@ impl Generator for ArmComplexGenerator {
     }
 
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.fmov(Reg::Temp, s3);
-        self.emit(arm! {fmla q(ϕ(Reg::Temp)), q(ϕ(s1)), q(ϕ(s2))});
-        self.fmov(dst, Reg::Temp);
+        self.emit(arm! {fmov q(T1), q(ϕ(s3))});
+        self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #0});
+        self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #90});
+        self.emit(arm! {fmov q(ϕ(dst)), q(T1)});
     }
 
     // fused_mul_sub is s1 * s2 - s3, corresponding to fnmsub in aarch64
     // and vmsub... in amd64
     fn fused_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.fmov(Reg::Temp, s3);
-        self.emit(arm! {fmls q(ϕ(Reg::Temp)), q(ϕ(s1)), q(ϕ(s2))});
-        self.neg(dst, Reg::Temp);
+        self.emit(arm! {fneg q(T1), q(ϕ(s3))});
+        self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #0});
+        self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #90});
+        self.emit(arm! {fmov q(ϕ(dst)), q(T1)});
     }
 
     // fused_neg_mul_add is s3 - s1 * s2, corresponding to fmsub in aarch64
     // and vnmadd... in amd64
     fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.fmov(Reg::Temp, s3);
-        self.emit(arm! {fmls q(ϕ(Reg::Temp)), q(ϕ(s1)), q(ϕ(s2))});
-        self.fmov(dst, Reg::Temp);
+        self.emit(arm! {fneg q(T1), q(ϕ(s3))});
+        self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #0});
+        self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #90});
+        self.emit(arm! {fneg q(ϕ(dst)), q(T1)});
     }
 
     // fused_neg_mul_sub is -s3 - s1 * s2, corresponding to fnmadd in aarch64
     // and vnmsub... in amd64
     fn fused_neg_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.fmov(Reg::Temp, s3);
-        self.emit(arm! {fmla q(ϕ(Reg::Temp)), q(ϕ(s1)), q(ϕ(s2))});
-        self.neg(dst, Reg::Temp);
+        self.emit(arm! {fmov q(T1), q(ϕ(s3))});
+        self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #0});
+        self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #90});
+        self.emit(arm! {fneg q(ϕ(dst)), q(T1)});
     }
 
     fn add_consts(&mut self, consts: &[f64]) {

@@ -535,37 +535,41 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        fuseop!(self, vfmadd132dd, vfmadd213dd, vfmadd231dd, dst, s1, s2, s3);
+        self.amd.vunpckldd(T1, ϕ(s1), ϕ(s1)); // duplicate real
+        self.amd.vunpckhdd(T2, ϕ(s1), ϕ(s1)); // duplicate imag
+        self.amd.vfmadd132dd(T1, ϕ(s3), ϕ(s2));
+        self.amd.vmuldd(T2, T2, ϕ(s2));
+        self.amd.vshufdd(T2, T2, T2, 1); // exchange real/imag
+        self.amd.vaddsubdd(ϕ(dst), T1, T2);
     }
 
     fn fused_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        fuseop!(self, vfmsub132dd, vfmsub213dd, vfmsub231dd, dst, s1, s2, s3);
+        self.amd.vunpckldd(T1, ϕ(s1), ϕ(s1)); // duplicate real
+        self.amd.vunpckhdd(T2, ϕ(s1), ϕ(s1)); // duplicate imag
+        self.amd.vfmsub132dd(T1, ϕ(s3), ϕ(s2));
+        self.amd.vmuldd(T2, T2, ϕ(s2));
+        self.amd.vshufdd(T2, T2, T2, 1); // exchange real/imag
+        self.amd.vaddsubdd(ϕ(dst), T1, T2);
     }
 
     fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        fuseop!(
-            self,
-            vfnmadd132dd,
-            vfnmadd213dd,
-            vfnmadd231dd,
-            dst,
-            s1,
-            s2,
-            s3
-        );
+        self.amd.vunpckldd(T1, ϕ(s1), ϕ(s1)); // duplicate real
+        self.amd.vunpckhdd(T2, ϕ(s1), ϕ(s1)); // duplicate imag
+        self.amd.vfnmadd132dd(T1, ϕ(s3), ϕ(s2));
+        self.amd.vmuldd(T2, T2, ϕ(s2));
+        self.amd.vshufdd(T1, T1, T1, 1);
+        self.amd.vaddsubdd(T1, T1, T2);
+        self.amd.vshufdd(ϕ(dst), T1, T1, 1); // exchange real/imag
     }
 
     fn fused_neg_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        fuseop!(
-            self,
-            vfnmsub132dd,
-            vfnmsub213dd,
-            vfnmsub231dd,
-            dst,
-            s1,
-            s2,
-            s3
-        );
+        self.amd.vunpckldd(T1, ϕ(s1), ϕ(s1)); // duplicate real
+        self.amd.vunpckhdd(T2, ϕ(s1), ϕ(s1)); // duplicate imag
+        self.amd.vfnmsub132dd(T1, ϕ(s3), ϕ(s2));
+        self.amd.vmuldd(T2, T2, ϕ(s2));
+        self.amd.vshufdd(T1, T1, T1, 1);
+        self.amd.vaddsubdd(T1, T1, T2);
+        self.amd.vshufdd(ϕ(dst), T1, T1, 1); // exchange real/imag
     }
 
     fn add_consts(&mut self, consts: &[f64]) {
