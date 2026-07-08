@@ -346,12 +346,32 @@ impl Generator for ArmSimdGenerator {
         let xt = Reg::Gen(2);
         let yt = Reg::Gen(3);
 
-        self.times(xt, x1, x2); // xt := x1 * x2
-        self.emit(arm! {fmls q(ϕ(xt)), q(ϕ(y1)), q(ϕ(y2))}); // xt := x1 * x2 - y1 * y2
-        self.times(yt, x1, y2); // yt := x1 * y2
-        self.emit(arm! {fmla q(ϕ(yt)), q(ϕ(x2)), q(ϕ(y1))}); // xt := x1 * y2 + x2 * y1
-        self.fmov(xd, xt);
-        self.fmov(yd, yt);
+        if xd != x1 && xd != x2 {
+            self.times(xd, x1, x2); // xt := x1 * x2
+            self.emit(arm! {fmls q(ϕ(xd)), q(ϕ(y1)), q(ϕ(y2))}); // xt := x1 * x2 - y1 * y2
+            self.times(yd, x1, y2); // yt := x1 * y2
+            self.emit(arm! {fmla q(ϕ(yd)), q(ϕ(x2)), q(ϕ(y1))}); // xt := x1 * y2 + x2 * y1
+        } else if xd == x1 && xd != x2 {
+            self.times(xt, x1, x2); // xt := x1 * x2
+            self.emit(arm! {fmls q(ϕ(xt)), q(ϕ(y1)), q(ϕ(y2))}); // xt := x1 * x2 - y1 * y2
+            self.times(yd, x2, y1); // yt := x1 * y2
+            self.emit(arm! {fmla q(ϕ(yd)), q(ϕ(x1)), q(ϕ(y2))}); // xt := x1 * y2 + x2 * y1
+            self.fmov(xd, xt);
+        } else if xd != x1 && xd == x2 {
+            self.times(xt, x1, x2); // xt := x1 * x2
+            self.emit(arm! {fmls q(ϕ(xt)), q(ϕ(y1)), q(ϕ(y2))}); // xt := x1 * x2 - y1 * y2
+            self.times(yd, x1, y2); // yt := x1 * y2
+            self.emit(arm! {fmla q(ϕ(yd)), q(ϕ(x2)), q(ϕ(y1))}); // xt := x1 * y2 + x2 * y1
+            self.fmov(xd, xt);
+        } else {
+            // xd == x1 && xd == x2
+            self.times(xt, x1, x2); // xt := x1 * x2
+            self.emit(arm! {fmls q(ϕ(xt)), q(ϕ(y1)), q(ϕ(y2))}); // xt := x1 * x2 - y1 * y2
+            self.times(yt, x1, y2); // yt := x1 * y2
+            self.emit(arm! {fmla q(ϕ(yt)), q(ϕ(x2)), q(ϕ(y1))}); // xt := x1 * y2 + x2 * y1
+            self.fmov(xd, xt);
+            self.fmov(yd, yt);
+        }
 
         true
     }

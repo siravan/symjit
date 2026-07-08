@@ -841,7 +841,7 @@ impl GreedyAllocator {
                     self.push(Instruction::Uni { op, dst, s1 })
                 }
                 Instruction::Bi { op, dst, s1, s2 } => {
-                    if self.config.is_sse() {
+                    if self.config.is_sse() || self.config.is_arm64() {
                         let (dst, _) = self.allocate(dst, None);
                         let s1 = self.deallocate(ip, s1);
                         let s2 = self.deallocate(ip, s2);
