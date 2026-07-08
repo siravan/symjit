@@ -40,17 +40,22 @@ def run():
         res_eager = sum(ev.evaluate_complex(inputs))
         t_eager = (time.time() - t_start) * 1000000.0 / N
 
-        f = symjit.compile_evaluator(ev, use_simd=False, use_threads=False)
+        f = symjit.compile_evaluator(
+            ev, use_simd=False, use_threads=False, dtype="complex128"
+        )
         t_start = time.time()
         res_symjit_no_simd = sum(f.evaluate_complex(inputs))
         t_symjit_no_simd = (time.time() - t_start) * 1000000.0 / N
 
-        f = symjit.compile_evaluator(ev, use_simd=True, use_threads=False)
+        f = symjit.compile_evaluator(
+            ev, use_simd=True, use_threads=False, dtype="complex128"
+        )
+
         t_start = time.time()
         res_symjit_simd = sum(f.evaluate_complex(inputs))
         t_symjit_simd = (time.time() - t_start) * 1000000.0 / N
 
-        f = symjit.compile_evaluator(ev, ty=CONFIG)
+        f = symjit.compile_evaluator(ev, ty=CONFIG, dtype="complex128")
         t_start = time.time()
         res_symjit_cfg = sum(f.evaluate_complex(inputs))
         t_symjit_cfg = (time.time() - t_start) * 1000000.0 / N

@@ -5,7 +5,7 @@ use_simd = true
 use_threads = false
 cse = true
 fastmath = true
-complex = false
+complex = true
 symbolica = true
 simd_branch = false
 compact = true
@@ -14,7 +14,7 @@ direct = false
 fast_complex = true
 huge = false
 parallel_mul = true
-opt_level = 3
+opt_level = 2
 
 [debug]
 bytecode = false

@@ -269,20 +269,24 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn load_param_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        self.load_param(xd, idx);
-        self.load_param(yd, idx + 1);
+        if self.config.symbolica() {
+            self.load_paired_q_from_mem(ϕ(xd), ϕ(yd), PARAMS, idx);
+        } else {
+            self.load_param(xd, idx);
+            self.load_param(yd, idx + 1);
+        }
     }
 
     fn load_stack_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
         // self.load_stack(xd, idx);
         // self.load_stack(yd, idx + 1);
-        self.load_paired_q_from_mem(ϕ(xd), ϕ(yd), SP, idx);
+        self.load_paired_q_from_mem(ϕ(xd), ϕ(yd), STACK, idx);
     }
 
     fn save_stack_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
         // self.save_stack(xs, idx);
         // self.save_stack(ys, idx + 1);
-        self.save_paired_q_to_mem(ϕ(xs), ϕ(ys), SP, idx);
+        self.save_paired_q_to_mem(ϕ(xs), ϕ(ys), STACK, idx);
     }
 
     fn save_stack_result(&mut self, idx: u32) {
@@ -710,13 +714,14 @@ impl Generator for ArmSimdGenerator {
             return self.prologue_symbolica(cap, count_params, count_obs);
         }
 
-        self.emit(arm! {sub sp, sp, #48});
+        self.emit(arm! {sub sp, sp, #64});
         self.emit(arm! {str lr, [sp, #0]});
         self.emit(arm! {str x(MEM), [sp, #8]});
         self.emit(arm! {str x(PARAMS), [sp, #16]});
         self.emit(arm! {str x(STATES), [sp, #24]});
         self.emit(arm! {str x(IDX), [sp, #32]});
         self.emit(arm! {str x(CALL), [sp, #40]});
+        self.emit(arm! {str x(STACK), [sp, #48]});
 
         self.emit(arm! {mov x(MEM), x(0)});
         self.emit(arm! {mov x(STATES), x(1)});
@@ -745,6 +750,7 @@ impl Generator for ArmSimdGenerator {
 
         let stack_size = align_stack(cap as u32 * REG_SIZE);
         self.sub_stack(stack_size);
+        self.emit(arm! {mov x(STACK), sp});
     }
 
     fn epilogue_indirect(
@@ -785,8 +791,9 @@ impl Generator for ArmSimdGenerator {
         self.emit(arm! {ldr x(STATES), [sp, #24]});
         self.emit(arm! {ldr x(IDX), [sp, #32]});
         self.emit(arm! {ldr x(CALL), [sp, #40]});
+        self.emit(arm! {ldr x(STACK), [sp, #48]});
 
-        self.emit(arm! {add sp, sp, #48});
+        self.emit(arm! {add sp, sp, #64});
         self.emit(arm! {ret});
     }
 
@@ -809,13 +816,14 @@ impl Generator for ArmSimdGenerator {
 
 impl ArmSimdGenerator {
     fn prologue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
-        self.emit(arm! {sub sp, sp, #48});
+        self.emit(arm! {sub sp, sp, #64});
         self.emit(arm! {str lr, [sp, #0]});
         self.emit(arm! {str x(MEM), [sp, #8]});
         self.emit(arm! {str x(PARAMS), [sp, #16]});
         self.emit(arm! {str x(STATES), [sp, #24]});
         self.emit(arm! {str x(IDX), [sp, #32]});
         self.emit(arm! {str x(CALL), [sp, #40]});
+        self.emit(arm! {str x(STACK), [sp, #48]});
 
         self.emit(arm! {mov x(MEM), x(0)});
         self.emit(arm! {mov x(STATES), x(1)});
@@ -861,6 +869,7 @@ impl ArmSimdGenerator {
 
         let stack_size = align_stack(cap as u32 * REG_SIZE);
         self.sub_stack(stack_size);
+        self.emit(arm! {mov x(STACK), sp});
     }
 
     fn epilogue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
@@ -905,8 +914,9 @@ impl ArmSimdGenerator {
         self.emit(arm! {ldr x(STATES), [sp, #24]});
         self.emit(arm! {ldr x(IDX), [sp, #32]});
         self.emit(arm! {ldr x(CALL), [sp, #40]});
+        self.emit(arm! {ldr x(STACK), [sp, #48]});
 
-        self.emit(arm! {add sp, sp, #48});
+        self.emit(arm! {add sp, sp, #64});
         self.emit(arm! {ret});
     }
 }

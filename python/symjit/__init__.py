@@ -415,7 +415,7 @@ def compile_evaluator(
     cse=True,
     fastmath=True,
     backend="rust",
-    opt_level=2,
+    opt_level=3,
     defuns=None,
     sanitize=True,
     dtype="float64",
