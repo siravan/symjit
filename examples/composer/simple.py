@@ -104,7 +104,13 @@ def test_sum(dtype="float64"):
 
     f = compile_composer(cp, dtype=dtype)
 
+<<<<<<< HEAD
     # print(f(0)[0][0])
+=======
+    print(f.dumps("scalar"))
+
+    print(f(0)[0][0])
+>>>>>>> 2d0ecd50528f61933d86d1e28c5530ca03c1601d
 
 
 def test_call(dtype="float64", direct=True):

@@ -798,10 +798,26 @@ impl ArmSimdGenerator {
         self.emit(arm! {mov x(SCRATCH2), x(PARAMS)});
         self.emit(arm! {mov x(PARAMS), sp});
 
-        for j in 0..2 {
-            for i in 0..count_params {
-                self.load_d_from_mem(0, SCRATCH2, (i + j * count_params) as u32);
-                self.save_d_to_mem(0, PARAMS, (i * 2 + j) as u32);
+        if count_params >= 100 {
+            self.emit(arm! {mov x(SCRATCH3), x(PARAMS)});
+            self.emit(arm! {movz x(COUNTER), #count_params & 0xffff});
+            self.emit(arm! {movk_lsl16 x(COUNTER), #count_params >> 16});
+
+            self.set_label("@load");
+            self.load_d_from_mem(0, SCRATCH2, 0);
+            self.load_d_from_mem(1, SCRATCH2, count_params as u32);
+            self.emit(arm! {zip1 q(0), q(0), q(1)});
+            self.save_q_to_mem(0, SCRATCH3, 0);
+            self.emit(arm! {add x(SCRATCH2), x(SCRATCH2), #8});
+            self.emit(arm! {add x(SCRATCH3), x(SCRATCH3), #16});
+            self.emit(arm! {subs x(COUNTER), x(COUNTER), #1});
+            self.jump("@load", 0, |offset, _| arm! {b.ne label(offset)});
+        } else {
+            for j in 0..2 {
+                for i in 0..count_params {
+                    self.load_d_from_mem(0, SCRATCH2, (i + j * count_params) as u32);
+                    self.save_d_to_mem(0, PARAMS, (i * 2 + j) as u32);
+                }
             }
         }
 
@@ -822,10 +838,27 @@ impl ArmSimdGenerator {
         self.emit(arm! {tst x(IDX), x(IDX)});
         self.jump("@done", 0, |offset, _| arm! {b.eq label(offset)});
 
-        for j in 0..2 {
-            for i in 0..count_obs {
-                self.load_d_from_mem(0, MEM, (i * 2 + j) as u32);
-                self.save_d_to_mem(0, STATES, (i + j * count_obs) as u32);
+        if count_obs >= 100 {
+            self.emit(arm! {mov x(SCRATCH2), x(MEM)});
+            self.emit(arm! {mov x(SCRATCH3), x(STATES)});
+            self.emit(arm! {movz x(COUNTER), #count_obs & 0xffff});
+            self.emit(arm! {movk_lsl16 x(COUNTER), #count_obs >> 16});
+
+            self.set_label("@save");
+            self.load_q_from_mem(0, SCRATCH2, 0);
+            self.emit(arm! {dup q(1), q(0)[1]});
+            self.save_d_to_mem(0, SCRATCH3, 0);
+            self.save_d_to_mem(1, SCRATCH3, count_obs as u32);
+            self.emit(arm! {add x(SCRATCH2), x(SCRATCH2), #16});
+            self.emit(arm! {add x(SCRATCH3), x(SCRATCH3), #8});
+            self.emit(arm! {subs x(COUNTER), x(COUNTER), #1});
+            self.jump("@save", 0, |offset, _| arm! {b.ne label(offset)});
+        } else {
+            for j in 0..2 {
+                for i in 0..count_obs {
+                    self.load_d_from_mem(0, MEM, (i * 2 + j) as u32);
+                    self.save_d_to_mem(0, STATES, (i + j * count_obs) as u32);
+                }
             }
         }
 

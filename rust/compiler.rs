@@ -903,6 +903,12 @@ impl IndirectTranslator {
     }
 
     fn translate_nary(&mut self, op: &str, lhs: &Slot, args: &[Slot], n: usize) -> Result<()> {
+        if args.len() == 2 && op == "times" && args[0] == args[1] {
+            return self.translate_pow(lhs, &args[0], &Expr::from(2.0), n != 0);
+        } else if args.len() == 3 && op == "times" && args[0] == args[1] && args[1] == args[2] {
+            return self.translate_pow(lhs, &args[0], &Expr::from(3.0), n != 0);
+        }
+
         let args: Vec<Expr> = args
             .iter()
             .enumerate()
