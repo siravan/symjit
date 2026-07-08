@@ -339,16 +339,18 @@ impl Config {
     }
 
     pub fn available_registers(&self) -> u8 {
-        16
+        if self.is_arm64() && self.opt_level() == 3 {
+            32
+        } else {
+            16
+        }
     }
 
     pub fn count_scratch(&self) -> u8 {
         if !self.is_complex() {
             self.available_registers() - 2
-        /*
-            } else if self.fast_complex() {
-            self.available_registers() - 4
-        */
+        } else if self.fast_complex() && !self.use_simd() {
+            self.available_registers() - 5
         } else {
             (self.available_registers() - 6) / 2
         }
@@ -466,6 +468,7 @@ impl Default for Config {
             Config::new(
                 CompilerType::Native,
                 USE_SIMD
+                    | CSE
                     | SYMBOLICA
                     | COMPACT
                     | FASTMATH

@@ -1,4 +1,5 @@
 import math
+import os
 import random
 import time
 
@@ -8,6 +9,8 @@ from symbolica import E
 
 P = 60
 N = 10000
+
+CONFIG = os.path.join(os.path.dirname(__file__), "symjit.toml")
 
 
 def build_evaluator_poly(num_terms: int, num_factors: int):
@@ -42,32 +45,28 @@ def run():
         res_symjit_no_simd = sum(f.evaluate_complex(inputs))
         t_symjit_no_simd = (time.time() - t_start) * 1000000.0 / N
 
-        f = symjit.compile_evaluator(
-            ev, enable_simd512=False, use_simd=True, use_threads=False
-        )
+        f = symjit.compile_evaluator(ev, use_simd=True, use_threads=False)
         t_start = time.time()
         res_symjit_simd = sum(f.evaluate_complex(inputs))
         t_symjit_simd = (time.time() - t_start) * 1000000.0 / N
 
-        f = symjit.compile_evaluator(
-            ev, use_simd=True, enable_simd512=True, use_threads=False
-        )
+        f = symjit.compile_evaluator(ev, ty=CONFIG)
         t_start = time.time()
-        res_symjit_simd512 = sum(f.evaluate_complex(inputs))
-        t_symjit_simd512 = (time.time() - t_start) * 1000000.0 / N
+        res_symjit_cfg = sum(f.evaluate_complex(inputs))
+        t_symjit_cfg = (time.time() - t_start) * 1000000.0 / N
 
         threashold = 1e-14 * math.sqrt(num_terms)
 
         valid = (
             abs(res_eager - res_symjit_no_simd) < threashold
             and abs(res_eager - res_symjit_simd) < threashold
-            and abs(res_eager - res_symjit_simd512) < threashold
+            and abs(res_eager - res_symjit_cfg) < threashold
         )
 
         msg = "   pass" if valid else "   fail"
 
         print(
-            f"{k}\t{num_terms}\t{t_eager:7.1f}\t{t_symjit_no_simd:7.1f}\t{t_symjit_simd:7.1f}\t{t_symjit_simd512:7.1f}\t{msg}"
+            f"{k}\t{num_terms}\t{t_eager:7.1f}\t{t_symjit_no_simd:7.1f}\t{t_symjit_simd:7.1f}\t{t_symjit_cfg:7.1f}\t{msg}"
         )
 
 

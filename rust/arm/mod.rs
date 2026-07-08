@@ -38,12 +38,15 @@ fn ϕ(r: Reg) -> u8 {
         Reg::Left => 0,
         Reg::Right => 1,
         Reg::Gen(dst) => {
+            assert!(dst < 30);
             if dst < 6 {
                 dst + 2 // d2-d7
             } else if dst < 22 - 3 {
                 dst + 10 // d16-28 (d29, d30, and d31 are scratch)
-            } else {
+            } else if dst < 30 - 3 {
                 dst - (14 - 3) // d8-d15 (non-volatile)
+            } else {
+                dst + 2
             }
         }
         Reg::Static(..) => panic!("passing static registers to codegen"),
