@@ -60,6 +60,14 @@ impl ArmSimdGenerator {
         save_q_to_mem(&mut self.a, d, base, idx);
     }
 
+    fn load_paired_q_from_mem(&mut self, d1: u8, d2: u8, base: u8, idx: u32) {
+        load_paired_q_from_mem(&mut self.a, d1, d2, base, idx);
+    }
+
+    fn save_paired_q_to_mem(&mut self, d1: u8, d2: u8, base: u8, idx: u32) {
+        save_paired_q_to_mem(&mut self.a, d1, d2, base, idx);
+    }
+
     fn load_x_from_mem(&mut self, r: u8, base: u8, idx: u32) {
         load_x_from_mem(&mut self.a, r, base, idx);
     }
@@ -249,13 +257,15 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        self.load_mem(xd, idx);
-        self.load_mem(yd, idx + 1);
+        // self.load_mem(xd, idx);
+        // self.load_mem(yd, idx + 1);
+        self.load_paired_q_from_mem(ϕ(xd), ϕ(yd), MEM, idx);
     }
 
     fn save_mem_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
-        self.save_mem(xs, idx);
-        self.save_mem(ys, idx + 1);
+        // self.save_mem(xs, idx);
+        // self.save_mem(ys, idx + 1);
+        self.save_paired_q_to_mem(ϕ(xs), ϕ(ys), MEM, idx);
     }
 
     fn load_param_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
@@ -264,13 +274,15 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn load_stack_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        self.load_stack(xd, idx);
-        self.load_stack(yd, idx + 1);
+        // self.load_stack(xd, idx);
+        // self.load_stack(yd, idx + 1);
+        self.load_paired_q_from_mem(ϕ(xd), ϕ(yd), SP, idx);
     }
 
     fn save_stack_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
-        self.save_stack(xs, idx);
-        self.save_stack(ys, idx + 1);
+        // self.save_stack(xs, idx);
+        // self.save_stack(ys, idx + 1);
+        self.save_paired_q_to_mem(ϕ(xs), ϕ(ys), SP, idx);
     }
 
     fn save_stack_result(&mut self, idx: u32) {

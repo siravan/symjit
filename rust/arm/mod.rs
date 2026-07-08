@@ -125,6 +125,36 @@ fn save_q_to_mem(a: &mut Assembler, d: u8, base: u8, idx: u32) {
     }
 }
 
+fn load_paired_q_from_mem(a: &mut Assembler, d1: u8, d2: u8, base: u8, idx: u32) {
+    if idx < 128 {
+        emit(a, arm! {ldp q(d1), q(d2), [x(base), #16*idx]});
+    } else if idx < 65536 {
+        emit(a, arm! {movz x(SCRATCH1), #idx});
+        emit(a, arm! {add x(SCRATCH1), x(base), x(SCRATCH1), lsl #4});
+        emit(a, arm! {ldp q(d1), q(d2), [x(SCRATCH1), #0]});
+    } else {
+        emit(a, arm! {movz x(SCRATCH1), #idx & 0xffff});
+        emit(a, arm! {movk_lsl16 x(SCRATCH1), #idx >> 16});
+        emit(a, arm! {add x(SCRATCH1), x(base), x(SCRATCH1), lsl #4});
+        emit(a, arm! {ldp q(d1), q(d2), [x(SCRATCH1), #0]});
+    }
+}
+
+fn save_paired_q_to_mem(a: &mut Assembler, d1: u8, d2: u8, base: u8, idx: u32) {
+    if idx < 128 {
+        emit(a, arm! {stp q(d1), q(d2), [x(base), #16*idx]});
+    } else if idx < 65536 {
+        emit(a, arm! {movz x(SCRATCH1), #idx});
+        emit(a, arm! {add x(SCRATCH1), x(base), x(SCRATCH1), lsl #4});
+        emit(a, arm! {stp q(d1), q(d2), [x(SCRATCH1), #0]});
+    } else {
+        emit(a, arm! {movz x(SCRATCH1), #idx & 0xffff});
+        emit(a, arm! {movk_lsl16 x(SCRATCH1), #idx >> 16});
+        emit(a, arm! {add x(SCRATCH1), x(base), x(SCRATCH1), lsl #4});
+        emit(a, arm! {stp q(d1), q(d2), [x(SCRATCH1), #0]});
+    }
+}
+
 fn load_x_from_mem(a: &mut Assembler, r: u8, base: u8, idx: u32) {
     assert!(r != 9);
 
