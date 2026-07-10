@@ -404,16 +404,30 @@ impl Generator for AmdVectorGenerator {
         let xt = Reg::Gen(2);
         let yt = Reg::Gen(3);
 
-        self.times(xt, y1, y2);
-        self.times(yt, x1, y2);
-
         if xd != x2 && xd != y1 {
-            self.fused_mul_sub(xd, x1, x2, xt);
-            self.fused_mul_add(yd, x2, y1, yt);
-        } else {
+            self.times(xd, y1, y2);
+            self.fused_mul_sub(xd, x1, x2, xd);
+            self.times(yd, x1, y2);
+            self.fused_mul_add(yd, x2, y1, yd);
+        } else if xd == x1 && xd != x2 {
+            self.times(xt, y1, y2);
             self.fused_mul_sub(xt, x1, x2, xt);
-            self.fused_mul_add(yd, x2, y1, yt);
+            self.times(yd, x2, y1);
+            self.fused_mul_add(yd, x1, y2, yd);
             self.fmov(xd, xt);
+        } else if xd != x1 && xd == x2 {
+            self.times(xt, y1, y2);
+            self.fused_mul_sub(xt, x1, x2, xt);
+            self.times(yd, x1, y2);
+            self.fused_mul_add(yd, x2, y1, yd);
+            self.fmov(xd, xt);
+        } else {
+            self.times(xt, y1, y2);
+            self.fused_mul_sub(xt, x1, x2, xt);
+            self.times(yt, x2, y1);
+            self.fused_mul_add(yt, x1, y2, yt);
+            self.fmov(xd, xt);
+            self.fmov(yd, yt);
         }
 
         true

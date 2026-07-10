@@ -12,6 +12,7 @@ const PARAMS: u8 = 20; // fourth arg = params
 const STATES: u8 = 21; // second arg = states+obs if indirect mode, otherwise null
 const IDX: u8 = 22; // third arg = index if indirect mode
 const CALL: u8 = 23; // call pointer
+const STACK: u8 = 24;
 
 const SCRATCH1: u8 = 9;
 const SCRATCH2: u8 = 10;
@@ -38,12 +39,15 @@ fn ϕ(r: Reg) -> u8 {
         Reg::Left => 0,
         Reg::Right => 1,
         Reg::Gen(dst) => {
+            assert!(dst < 30);
             if dst < 6 {
                 dst + 2 // d2-d7
             } else if dst < 22 - 3 {
                 dst + 10 // d16-28 (d29, d30, and d31 are scratch)
-            } else {
+            } else if dst < 30 - 3 {
                 dst - (14 - 3) // d8-d15 (non-volatile)
+            } else {
+                dst + 2
             }
         }
         Reg::Static(..) => panic!("passing static registers to codegen"),
@@ -119,6 +123,62 @@ fn save_q_to_mem(a: &mut Assembler, d: u8, base: u8, idx: u32) {
         emit(a, arm! {movz x(SCRATCH1), #idx & 0xffff});
         emit(a, arm! {movk_lsl16 x(SCRATCH1), #idx >> 16});
         emit(a, arm! {str q(d), [x(base), x(SCRATCH1), lsl #4]});
+    }
+}
+
+fn load_paired_q_from_mem(a: &mut Assembler, d1: u8, d2: u8, base: u8, idx: u32) {
+    assert!(idx & 1 == 0);
+
+    match idx {
+        0..64 => emit(a, arm! {ldp q(d1), q(d2), [x(base), #32*idx]}),
+        64..4096 => {
+            emit(a, arm! {ldr q(d1), [x(base), #16*idx]});
+            emit(a, arm! {ldr q(d2), [x(base), #16*(idx+1)]});
+        }
+        4096..65536 => {
+            emit(a, arm! {movz x(SCRATCH1), #idx});
+            emit(a, arm! {add x(SCRATCH1), x(base), x(SCRATCH1), lsl #4});
+            emit(a, arm! {ldp q(d1), q(d2), [x(SCRATCH1), #0]});
+        }
+        65536..131072 => {
+            emit(a, arm! {movz x(SCRATCH1), #idx >> 1});
+            emit(a, arm! {add x(SCRATCH1), x(base), x(SCRATCH1), lsl #5});
+            emit(a, arm! {ldp q(d1), q(d2), [x(SCRATCH1), #0]});
+        }
+        idx => {
+            emit(a, arm! {movz x(SCRATCH1), #idx & 0xffff});
+            emit(a, arm! {movk_lsl16 x(SCRATCH1), #idx >> 16});
+            emit(a, arm! {add x(SCRATCH1), x(base), x(SCRATCH1), lsl #4});
+            emit(a, arm! {ldp q(d1), q(d2), [x(SCRATCH1), #0]});
+        }
+    }
+}
+
+fn save_paired_q_to_mem(a: &mut Assembler, d1: u8, d2: u8, base: u8, idx: u32) {
+    assert!(idx & 1 == 0);
+
+    match idx {
+        0..64 => emit(a, arm! {stp q(d1), q(d2), [x(base), #32*idx]}),
+        64..4096 => {
+            emit(a, arm! {str q(d1), [x(base), #16*idx]});
+            emit(a, arm! {str q(d2), [x(base), #16*(idx+1)]});
+        }
+        4096..65536 => {
+            emit(a, arm! {movz x(SCRATCH1), #idx});
+            emit(a, arm! {add x(SCRATCH1), x(base), x(SCRATCH1), lsl #4});
+            emit(a, arm! {stp q(d1), q(d2), [x(SCRATCH1), #0]});
+        }
+        65536..131072 => {
+            emit(a, arm! {movz x(SCRATCH1), #idx >> 1});
+            emit(a, arm! {add x(SCRATCH1), x(base), x(SCRATCH1), lsl #5});
+            emit(a, arm! {stp q(d1), q(d2), [x(SCRATCH1), #0]});
+        }
+        idx => {
+            emit(a, arm! {movz x(SCRATCH1), #idx & 0xffff});
+            emit(a, arm! {movk_lsl16 x(SCRATCH1), #idx >> 16});
+            emit(a, arm! {add x(SCRATCH1), x(base), x(SCRATCH1), lsl #4});
+            emit(a, arm! {stp q(d1), q(d2), [x(SCRATCH1), #0]});
+        }
     }
 }
 

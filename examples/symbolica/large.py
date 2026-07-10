@@ -4,7 +4,7 @@ import numpy as np
 from symbolica import E, S
 from symjit import compile_evaluator
 
-DEPTH = 12
+DEPTH = 15
 NCOLS = 2**DEPTH
 NROWS = 107
 

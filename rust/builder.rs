@@ -304,7 +304,7 @@ impl Builder {
         }
 
         if opt_level >= 3 {
-            ColoringAllocator::new(self.config.clone()).optimize(mir)?;
+            // ColoringAllocator::new(self.config.clone()).optimize(mir)?;
         }
 
         if self.config.compact() {

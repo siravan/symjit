@@ -94,6 +94,14 @@ macro_rules! of7 {
     }};
 }
 
+macro_rules! of7_2q {
+    ($x:expr) => {{
+        let x = $x;
+        assert!((x & 31 == 0) && (x < 2048));
+        (x as u32) << 10
+    }};
+}
+
 #[macro_export]
 macro_rules! arm {
     // lr/sp substitution rules
@@ -191,11 +199,17 @@ macro_rules! arm {
     (ldp d($rd:expr), d($rd2:expr), [x($rn:expr), #$of7:expr]) => {
         0x6d400000 | rd!($rd) | rd2!($rd2) | rn!($rn) | of7!($of7)
     };
+    (ldp q($rd:expr), q($rd2:expr), [x($rn:expr), #$of7:expr]) => {
+        0xad400000 | rd!($rd) | rd2!($rd2) | rn!($rn) | of7_2q!($of7)
+    };
     (ldp x($rd:expr), x($rd2:expr), [x($rn:expr), #$of7:expr]) => {
         0xa9400000 | rd!($rd) | rd2!($rd2) | rn!($rn) | of7!($of7)
     };
     (stp d($rd:expr), d($rd2:expr), [x($rn:expr), #$of7:expr]) => {
         0x6d000000 | rd!($rd) | rd2!($rd2) | rn!($rn) | of7!($of7)
+    };
+    (stp q($rd:expr), q($rd2:expr), [x($rn:expr), #$of7:expr]) => {
+        0xad000000 | rd!($rd) | rd2!($rd2) | rn!($rn) | of7_2q!($of7)
     };
     (stp x($rd:expr), x($rd2:expr), [x($rn:expr), #$of7:expr]) => {
         0xa9000000 | rd!($rd) | rd2!($rd2) | rn!($rn) | of7!($of7)
@@ -404,6 +418,12 @@ macro_rules! arm {
     (eor x($rd:expr), x($rn:expr), x($rm:expr)) => {
         0xca000000 | rd!($rd) | rn!($rn) | rm!($rm)
     };
+
+    (add x($rd:expr), x($rn:expr), x($rm:expr), lsl #$shift:expr) => {{
+        let shift = $shift;
+        assert!(shift < 64);
+        0x8b000000 | rd!($rd) | rn!($rn) | rm!($rm) | (shift << 10)
+    }};
 
     (add x($rd:expr), x($rn:expr), x($rm:expr)) => {
         0x8b000000 | rd!($rd) | rn!($rn) | rm!($rm)

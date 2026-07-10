@@ -841,17 +841,10 @@ impl GreedyAllocator {
                     self.push(Instruction::Uni { op, dst, s1 })
                 }
                 Instruction::Bi { op, dst, s1, s2 } => {
-                    if self.config.is_sse() {
-                        let (dst, _) = self.allocate(dst, None);
-                        let s1 = self.deallocate(ip, s1);
-                        let s2 = self.deallocate(ip, s2);
-                        self.push(Instruction::Bi { op, dst, s1, s2 })
-                    } else {
-                        let s1 = self.deallocate(ip, s1);
-                        let s2 = self.deallocate(ip, s2);
-                        let (dst, _) = self.allocate(dst, None);
-                        self.push(Instruction::Bi { op, dst, s1, s2 })
-                    }
+                    let (dst, _) = self.allocate(dst, None);
+                    let s1 = self.deallocate(ip, s1);
+                    let s2 = self.deallocate(ip, s2);
+                    self.push(Instruction::Bi { op, dst, s1, s2 })
                 }
                 Instruction::LoadConst { dst, idx } => {
                     let (dst, _) = self.allocate(dst, None);

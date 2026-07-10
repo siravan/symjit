@@ -293,7 +293,7 @@ impl Instruction {
             Self::BranchIf { .. } => "branch_if".into(),
             Self::LoadMath { op, .. } => format!("load math {:?}", &op),
             Self::LoadConstMath { op, .. } => format!("load const math {:?}", &op),
-            Self::ComplexBi { op, .. } => format!("copmlex binop {:?}", &op),
+            Self::ComplexBi { op, .. } => format!("complex binop {:?}", &op),
         }
     }
 }
@@ -3099,6 +3099,8 @@ impl Mir {
         }
         let _ = writeln!(fs, "times2 x {}", times2);
         let _ = writeln!(fs, "compiled size {} bytes", size);
+
+        // self.config.to_toml("symjit.dump.toml");
     }
 }
 
