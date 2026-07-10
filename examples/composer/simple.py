@@ -104,7 +104,7 @@ def test_sum(dtype="float64"):
 
     f = compile_composer(cp, dtype=dtype)
 
-    print(f.dumps("scalar"))
+    # print(f.dumps("scalar"))
 
     print(f(0)[0][0])
 

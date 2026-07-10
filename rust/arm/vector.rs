@@ -257,15 +257,15 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        self.load_mem(xd, idx);
-        self.load_mem(yd, idx + 1);
-        // self.load_paired_q_from_mem(ϕ(xd), ϕ(yd), MEM, idx);
+        // self.load_mem(xd, idx);
+        // self.load_mem(yd, idx + 1);
+        self.load_paired_q_from_mem(ϕ(xd), ϕ(yd), MEM, idx);
     }
 
     fn save_mem_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
-        self.save_mem(xs, idx);
-        self.save_mem(ys, idx + 1);
-        // self.save_paired_q_to_mem(ϕ(xs), ϕ(ys), MEM, idx);
+        // self.save_mem(xs, idx);
+        // self.save_mem(ys, idx + 1);
+        self.save_paired_q_to_mem(ϕ(xs), ϕ(ys), MEM, idx);
     }
 
     fn load_param_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
