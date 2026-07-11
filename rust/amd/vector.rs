@@ -466,8 +466,8 @@ impl Generator for AmdVectorGenerator {
         } else {
             self.times(xt, y1, y2);
             self.fused_mul_sub(xt, x1, x2, xt);
-            self.times(yt, x2, y1);
-            self.fused_mul_add(yt, x1, y2, yt);
+            self.times(yt, x1, y2);
+            self.fused_mul_add(yt, x2, y1, yt);
             self.fmov(xd, xt);
             self.fmov(yd, yt);
         }
