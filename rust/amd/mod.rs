@@ -2,6 +2,7 @@ use crate::code::Func;
 use crate::utils::Reg;
 
 mod asm;
+mod f64x8;
 mod fused;
 
 use asm::Amd;
@@ -10,6 +11,8 @@ mod complex;
 mod scalar;
 mod sse;
 mod vector;
+
+pub use f64x8::Prefix;
 
 pub use complex::AmdComplexGenerator;
 pub use scalar::AmdScalarGenerator;

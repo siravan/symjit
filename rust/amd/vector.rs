@@ -446,16 +446,30 @@ impl Generator for AmdVectorGenerator {
         let xt = Reg::Gen(2);
         let yt = Reg::Gen(3);
 
-        self.times(xt, y1, y2);
-        self.times(yt, x1, y2);
-
-        if xd != x2 && xd != y1 {
-            self.fused_mul_sub(xd, x1, x2, xt);
-            self.fused_mul_add(yd, x2, y1, yt);
-        } else {
+        if xd != x1 && xd != x2 {
+            self.times(xd, y1, y2);
+            self.fused_mul_sub(xd, x1, x2, xd);
+            self.times(yd, x1, y2);
+            self.fused_mul_add(yd, x2, y1, yd);
+        } else if xd == x1 && xd != x2 {
+            self.times(xt, y1, y2);
             self.fused_mul_sub(xt, x1, x2, xt);
-            self.fused_mul_add(yd, x2, y1, yt);
+            self.times(yd, x2, y1);
+            self.fused_mul_add(yd, x1, y2, yd);
             self.fmov(xd, xt);
+        } else if xd != x1 && xd == x2 {
+            self.times(xt, y1, y2);
+            self.fused_mul_sub(xt, x1, x2, xt);
+            self.times(yd, x1, y2);
+            self.fused_mul_add(yd, x2, y1, yd);
+            self.fmov(xd, xt);
+        } else {
+            self.times(xt, y1, y2);
+            self.fused_mul_sub(xt, x1, x2, xt);
+            self.times(yt, x2, y1);
+            self.fused_mul_add(yt, x1, y2, yt);
+            self.fmov(xd, xt);
+            self.fmov(yd, yt);
         }
 
         true
@@ -678,7 +692,7 @@ impl Generator for AmdVectorGenerator {
 
         for i in 4..count_states {
             let i = i as u32;
-            // the offset of the fifth or eight arguments:
+            // the offset of the fifth or eighth arguments:
             // +4 for the 32-byte home
             // +1 for the return address in the stack
             // +1 for RBP in the stack
@@ -848,6 +862,23 @@ impl AmdVectorGenerator {
         self.amd.mov(Amd::RAX, PARAMS);
         self.amd.mov(PARAMS, STACK);
 
+        self.amd.mov_imm(Amd::RCX, count_params as u32);
+        self.set_label(".load");
+
+        for j in 0..NUM_LANES {
+            self.amd
+                .vmovsd_xmm_mem(RET, Amd::RAX, (8 * j * count_params) as i32);
+            self.amd.vmovsd_mem_xmm(PARAMS, 8 * j as i32, RET);
+        }
+        self.amd.add_imm(Amd::RAX, 8);
+        self.amd.add_imm(PARAMS, 8 * NUM_LANES as u32);
+        self.amd.dec(Amd::RCX);
+        self.amd.jnz(".load");
+
+        self.amd
+            .sub_imm(PARAMS, 8 * count_params as u32 * NUM_LANES as u32);
+
+        /*
         for j in 0..NUM_LANES {
             for i in 0..count_params {
                 self.amd
@@ -856,6 +887,7 @@ impl AmdVectorGenerator {
                     .vmovsd_mem_xmm(PARAMS, 8 * (i * NUM_LANES + j) as i32, RET);
             }
         }
+        */
 
         sub_rsp(&mut self.amd, align_stack(count_obs as u32 * REG_USIZE));
         self.amd.mov(STATES, MEM);
@@ -881,8 +913,8 @@ impl AmdVectorGenerator {
             }
         }
 
-        let frame_size =
-            align_stack(count_params as u32 * 32) + align_stack(count_obs as u32 * REG_USIZE);
+        let frame_size = align_stack(count_params as u32 * REG_USIZE)
+            + align_stack(count_obs as u32 * REG_USIZE);
         add_rsp(&mut self.amd, frame_size);
         self.set_label("@done");
 
