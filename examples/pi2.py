@@ -41,7 +41,7 @@ def lemniscate(x):
 # f = compile_func([x], [2 / viete(x), 2 / lemniscate(x)], **args)
 f = compile_func([x], [2 / viete(x), 2 / lemniscate(x)], **args)
 
-# print(f.dumps("bytecode"))
+# print(f.dumps("scalar"))
 
 p, q = f(1 / 2)
 print(p, "?= ", math.pi, "(pi)")

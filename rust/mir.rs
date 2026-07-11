@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 use anyhow::Result;
 use num_complex::Complex;
-use petgraph::matrix_graph::Zero;
+use num_traits::identities::Zero;
 
 use crate::code::{Func, VirtualTable};
 use crate::complexify::Complexifier;

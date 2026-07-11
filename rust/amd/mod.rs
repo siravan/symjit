@@ -36,7 +36,6 @@ const ARGS: [u8; 4] = [Amd::RDI, Amd::RSI, Amd::RDX, Amd::RCX];
 const RET: u8 = 0;
 
 // const MEM: u8 = Amd::RBP;
-const OUTS: u8 = Amd::R15;
 const MEM: u8 = Amd::R14;
 const STATES: u8 = Amd::R13;
 const IDX: u8 = Amd::R12;
@@ -45,21 +44,22 @@ const STACK: u8 = Amd::RSP;
 
 fn save_nonvolatile_regs(amd: &mut Amd) {
     if cfg!(target_family = "windows") {
+        amd.mov_mem_reg(STACK, 0x08, MEM);
         amd.mov_mem_reg(STACK, 0x10, PARAMS);
         amd.mov_mem_reg(STACK, 0x18, IDX);
         amd.mov_mem_reg(STACK, 0x20, STATES);
     } else {
-        amd.sub_rsp(48);
+        amd.sub_rsp(32);
         amd.mov_mem_reg(STACK, 0x00, MEM);
         amd.mov_mem_reg(STACK, 0x08, PARAMS);
         amd.mov_mem_reg(STACK, 0x10, IDX);
         amd.mov_mem_reg(STACK, 0x18, STATES);
-        amd.mov_mem_reg(STACK, 0x20, OUTS);
     }
 }
 
 fn load_nonvolatile_regs(amd: &mut Amd) {
     if cfg!(target_family = "windows") {
+        amd.mov_reg_mem(MEM, STACK, 0x08);
         amd.mov_reg_mem(PARAMS, STACK, 0x10);
         amd.mov_reg_mem(IDX, STACK, 0x18);
         amd.mov_reg_mem(STATES, STACK, 0x20);
@@ -68,8 +68,7 @@ fn load_nonvolatile_regs(amd: &mut Amd) {
         amd.mov_reg_mem(PARAMS, STACK, 0x08);
         amd.mov_reg_mem(IDX, STACK, 0x10);
         amd.mov_reg_mem(STATES, STACK, 0x18);
-        amd.mov_reg_mem(OUTS, STACK, 0x20);
-        amd.add_rsp(48);
+        amd.add_rsp(32);
     }
 }
 
@@ -227,6 +226,7 @@ fn fused_perm(dst: Reg, s1: Reg, s2: Reg, s3: Reg) -> FusedAction {
     }
 }
 
+/*
 fn prologue_stack(amd: &mut Amd, cap: usize, reg_size: u32) {
     if cap < 256 {
         amd! {sub rsp, align_stack(cap as u32 * reg_size); amd};
@@ -263,3 +263,4 @@ fn epilogue_stack(amd: &mut Amd, cap: usize, reg_size: u32) {
         amd.a.set_label(".K4");
     }
 }
+*/

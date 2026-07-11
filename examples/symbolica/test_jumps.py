@@ -5,6 +5,7 @@ from symbolica import E, Expression, S
 from symjit import compile_evaluator
 
 file = os.path.join(os.path.dirname(__file__), "1loop_instructions.txt")
+CONFIG = os.path.join(os.path.dirname(__file__), "symjit.toml")
 
 with open(file, "rt", encoding="utf-8") as fd:
     one_loop_instructions = fd.read()
@@ -12,19 +13,24 @@ with open(file, "rt", encoding="utf-8") as fd:
 f_without_simd = compile_evaluator(
     one_loop_instructions,
     dtype="complex128",
-    use_simd=False,
-    use_threads=False,
+    ty=CONFIG,
 )
 
 count_params = f_without_simd.complex_compiler.count_params // 2
 
-N = 10007
+N = 1
 
 X = np.random.rand(N, count_params) + np.random.rand(N, count_params) * 1j
 
 # X[:, 48:67] = X[:, 48:67] > 0.99
+#
+print("done!")
 
 Y_without_simd = f_without_simd.evaluate_complex(X)
+print(Y_without_simd[:10, :])
+
+# os._exit(0)
+
 
 for simd_branch in [False, True]:
     print(f"simd_branch = {simd_branch}...")

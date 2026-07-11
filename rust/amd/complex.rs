@@ -176,19 +176,11 @@ impl Generator for AmdComplexGenerator {
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        if idx < 256 {
-            amd! {vmovupd xmm(ϕ(dst)), [r(STACK) + idx * REG_SIZE]; self.amd};
-        } else {
-            amd! {vmovupd xmm(ϕ(dst)), [r(STATES) + idx * REG_SIZE]; self.amd};
-        }
+        amd! {vmovupd xmm(ϕ(dst)), [r(STACK) + idx * REG_SIZE]; self.amd};
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        if idx < 256 {
-            amd! {vmovupd [r(STACK) + idx * REG_SIZE], xmm(ϕ(dst)); self.amd};
-        } else {
-            amd! {vmovupd [r(STATES) + idx * REG_SIZE], xmm(ϕ(dst)); self.amd};
-        }
+        amd! {vmovupd [r(STACK) + idx * REG_SIZE], xmm(ϕ(dst)); self.amd};
     }
 
     fn load_mem_complex(&mut self, _xd: Reg, _yd: Reg, _idx: u32) {}
@@ -375,11 +367,7 @@ impl Generator for AmdComplexGenerator {
                     amd! {vmovupd xmm(T0), [r(PARAMS) + idx * REG_SIZE]; self.amd}
                 }
                 Loc::Stack(idx) => {
-                    if idx < 256 {
-                        amd! {vmovupd xmm(T0), [r(STACK) + idx * REG_SIZE]; self.amd}
-                    } else {
-                        amd! {vmovupd xmm(T0), [r(STATES) + idx * REG_SIZE]; self.amd}
-                    }
+                    amd! {vmovupd xmm(T0), [r(STACK) + idx * REG_SIZE]; self.amd}
                 }
             }
 
@@ -392,13 +380,8 @@ impl Generator for AmdComplexGenerator {
                         .vinsertf128_mem(T0, T0, PARAMS, (idx * REG_SIZE) as i32, 1)
                 }
                 Loc::Stack(idx) => {
-                    if idx < 128 {
-                        self.amd
-                            .vinsertf128_mem(T0, T0, STACK, (idx * REG_SIZE) as i32, 1)
-                    } else {
-                        self.amd
-                            .vinsertf128_mem(T0, T0, STATES, (idx * REG_SIZE) as i32, 1)
-                    }
+                    self.amd
+                        .vinsertf128_mem(T0, T0, STACK, (idx * REG_SIZE) as i32, 1)
                 }
             }
 
@@ -730,7 +713,6 @@ impl Generator for AmdComplexGenerator {
         count_obs: usize,
         count_params: usize,
     ) {
-        // self.amd.xor(Amd::RAX, Amd::RAX);
         amd! {xor r(Amd::RAX), r(Amd::RAX); self.amd};
         self.set_label("@epilogue");
 
@@ -790,15 +772,14 @@ impl AmdComplexGenerator {
         amd! {mov r(IDX), r(ARGS[2]); self.amd}; // third arg = index if indirect mode
         amd! {mov r(PARAMS), r(ARGS[3]); self.amd}; // fourth arg = params
 
-        // prologue_stack(&mut self.amd, cap, REG_SIZE);
         amd! {sub rsp, align_stack(cap as u32 * REG_SIZE); self.amd};
-        amd! {mov r(STATES), r(STACK); self.amd};
     }
 
     fn epilogue_symbolica(&mut self, cap: usize, _count_params: usize, _count_obs: usize) {
-        epilogue_stack(&mut self.amd, cap, REG_SIZE);
+        amd! {add rsp, align_stack(cap as u32 * REG_SIZE); self.amd};
 
         amd! {vzeroupper; self.amd};
+
         load_nonvolatile_regs(&mut self.amd);
         amd! {pop r(Amd::RBP); self.amd};
         amd! {ret; self.amd};

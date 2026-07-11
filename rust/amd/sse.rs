@@ -217,23 +217,13 @@ impl Generator for AmdSSEGenerator {
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        if idx < 256 {
-            self.amd
-                .movsd_xmm_mem(ϕ(dst), STACK, (idx * REG_SIZE) as i32);
-        } else {
-            self.amd
-                .movsd_xmm_mem(ϕ(dst), STATES, (idx * REG_SIZE) as i32);
-        }
+        self.amd
+            .movsd_xmm_mem(ϕ(dst), STACK, (idx * REG_SIZE) as i32);
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        if idx < 256 {
-            self.amd
-                .movsd_mem_xmm(STACK, (idx * REG_SIZE) as i32, ϕ(dst));
-        } else {
-            self.amd
-                .movsd_mem_xmm(STATES, (idx * REG_SIZE) as i32, ϕ(dst));
-        }
+        self.amd
+            .movsd_mem_xmm(STACK, (idx * REG_SIZE) as i32, ϕ(dst));
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
@@ -703,12 +693,11 @@ impl AmdSSEGenerator {
         self.amd.mov(IDX, ARGS[2]); // third arg = index if indirect mode
         self.amd.mov(PARAMS, ARGS[3]); // fourth arg = params
 
-        prologue_stack(&mut self.amd, cap, REG_SIZE);
+        sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
     }
 
     fn epilogue_symbolica(&mut self, cap: usize, _count_params: usize, _count_obs: usize) {
-        epilogue_stack(&mut self.amd, cap, REG_SIZE);
-
+        add_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
         load_nonvolatile_regs(&mut self.amd);
         self.amd.pop(Amd::RBP);
         self.amd.ret();

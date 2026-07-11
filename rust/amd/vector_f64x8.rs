@@ -292,19 +292,11 @@ impl Generator for AmdVectorF64x8Generator {
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        if idx < 256 {
-            amd! {vmovupd zmm(ϕ(dst)), [r(STACK) + idx * REG_SIZE]; self.amd};
-        } else {
-            amd! {vmovupd zmm(ϕ(dst)), [r(STATES) + idx * REG_SIZE]; self.amd};
-        }
+        amd! {vmovupd zmm(ϕ(dst)), [r(STACK) + idx * REG_SIZE]; self.amd};
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        if idx < 256 {
-            amd! {vmovupd [r(STACK) + idx * REG_SIZE], zmm(ϕ(dst)); self.amd};
-        } else {
-            amd! {vmovupd [r(STATES) + idx * REG_SIZE], zmm(ϕ(dst)); self.amd};
-        }
+        amd! {vmovupd [r(STACK) + idx * REG_SIZE], zmm(ϕ(dst)); self.amd};
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
@@ -405,16 +397,30 @@ impl Generator for AmdVectorF64x8Generator {
         let xt = Reg::Gen(2);
         let yt = Reg::Gen(3);
 
-        self.times(xt, y1, y2);
-        self.times(yt, x1, y2);
-
-        if xd != x2 && xd != y1 {
-            self.fused_mul_sub(xd, x1, x2, xt);
-            self.fused_mul_add(yd, x2, y1, yt);
-        } else {
+        if xd != x1 && xd != x2 {
+            self.times(xd, y1, y2);
+            self.fused_mul_sub(xd, x1, x2, xd);
+            self.times(yd, x1, y2);
+            self.fused_mul_add(yd, x2, y1, yd);
+        } else if xd == x1 && xd != x2 {
+            self.times(xt, y1, y2);
             self.fused_mul_sub(xt, x1, x2, xt);
-            self.fused_mul_add(yd, x2, y1, yt);
+            self.times(yd, x2, y1);
+            self.fused_mul_add(yd, x1, y2, yd);
             self.fmov(xd, xt);
+        } else if xd != x1 && xd == x2 {
+            self.times(xt, y1, y2);
+            self.fused_mul_sub(xt, x1, x2, xt);
+            self.times(yd, x1, y2);
+            self.fused_mul_add(yd, x2, y1, yd);
+            self.fmov(xd, xt);
+        } else {
+            self.times(xt, y1, y2);
+            self.fused_mul_sub(xt, x1, x2, xt);
+            self.times(yt, x2, y1);
+            self.fused_mul_add(yt, x1, y2, yt);
+            self.fmov(xd, xt);
+            self.fmov(yd, yt);
         }
 
         true
@@ -844,7 +850,7 @@ impl AmdVectorF64x8Generator {
         amd! {mov r(Amd::RBP), r(Amd::RSP); self.amd};
         amd! {and r(Amd::RSP), 0xffffffc0; self.amd};
 
-        amd! {mov r(OUTS), r(ARGS[0]); self.amd}; // first arg = mem if direct mode, otherwise null
+        amd! {mov r(MEM), r(ARGS[0]); self.amd}; // first arg = mem if direct mode, otherwise null
         amd! {mov r(STATES), r(ARGS[1]); self.amd}; // second arg = states+obs if indirect mode, otherwise null
         amd! {mov r(IDX), r(ARGS[2]); self.amd}; // third arg = index if indirect mode
         amd! {mov r(PARAMS), r(ARGS[3]); self.amd}; // fourth arg = params
@@ -870,17 +876,17 @@ impl AmdVectorF64x8Generator {
         amd! {sub r(PARAMS), 8 * NUM_LANES as usize * count_params; self.amd};
 
         amd! {sub rsp, align_stack(count_obs as u32 * REG_SIZE); self.amd};
-        // amd! {mov r(STATES), r(MEM); self.amd};
+        amd! {mov r(STATES), r(MEM); self.amd};
         amd! {mov r(MEM), r(STACK); self.amd};
 
         self.set_label("@main");
 
-        prologue_stack(&mut self.amd, cap, REG_SIZE);
+        amd! {sub rsp, align_stack(cap as u32 * REG_SIZE); self.amd};
     }
 
     fn epilogue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
         // add_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
-        epilogue_stack(&mut self.amd, cap, REG_SIZE);
+        amd! {add rsp, align_stack(cap as u32 * REG_SIZE); self.amd};
 
         amd! {or r(IDX), r(IDX); self.amd};
         amd! {jz "@done"; self.amd};
@@ -890,11 +896,11 @@ impl AmdVectorF64x8Generator {
 
         for j in 0..NUM_LANES as usize {
             amd! {vmovsd xmm(RET), [r(MEM) + 8 * j as i32]; self.amd};
-            amd! {vmovsd [r(OUTS) + (8 * j * count_obs) as i32], xmm(0); self.amd};
+            amd! {vmovsd [r(STATES) + (8 * j * count_obs) as i32], xmm(0); self.amd};
         }
 
         amd! {add r(MEM), 8 * NUM_LANES; self.amd};
-        amd! {add r(OUTS), 8; self.amd};
+        amd! {add r(STATES), 8; self.amd};
         amd! {dec r(Amd::RCX); self.amd};
         amd! {jnz "@save"; self.amd};
 
