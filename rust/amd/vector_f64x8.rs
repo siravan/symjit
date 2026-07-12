@@ -9,13 +9,20 @@ use anyhow::{anyhow, Result};
 use super::asm::{Amd, RoundingMode};
 use super::*;
 
-const NUM_LANES: usize = 4;
+const NUM_LANES: usize = 8;
 const REG_SIZE: i32 = 8 * NUM_LANES as i32;
 const REG_USIZE: u32 = 8 * NUM_LANES as u32;
 
 macro_rules! binop {
     ($self:ident, $simd:ident, $dst:expr, $s1: expr, $s2: expr) => {
         $self.amd.$simd(ϕ($dst), ϕ($s1), ϕ($s2));
+    };
+}
+
+macro_rules! compare {
+    ($self:ident, $simd:ident, $dst:expr, $s1: expr, $s2: expr) => {
+        $self.amd.$simd(1, ϕ($s1), ϕ($s2));
+        $self.amd.vpmovm2q_qd(ϕ($dst), 1);
     };
 }
 
@@ -27,7 +34,7 @@ macro_rules! uniop {
 
 macro_rules! roundop {
     ($self:ident, $dst:expr, $s1: expr, $mode: expr) => {
-        $self.amd.vroundpd(ϕ($dst), ϕ($s1), $mode);
+        $self.amd.vroundqd(ϕ($dst), ϕ($s1), $mode);
     };
 }
 
@@ -46,15 +53,15 @@ macro_rules! fuseop {
     }};
 }
 
-pub struct AmdVectorF64x4Generator {
+pub struct AmdVectorF64x8Generator {
     amd: Amd,
     config: Config,
     last_load: usize,
 }
 
-impl AmdVectorF64x4Generator {
-    pub fn new(config: Config) -> AmdVectorF64x4Generator {
-        AmdVectorF64x4Generator {
+impl AmdVectorF64x8Generator {
+    pub fn new(config: Config) -> AmdVectorF64x8Generator {
+        AmdVectorF64x8Generator {
             amd: Amd::new(DataType::F64),
             config,
             last_load: 0,
@@ -70,7 +77,7 @@ impl AmdVectorF64x4Generator {
     }
 
     fn load_const_by_name(&mut self, dst: Reg, label: &str) {
-        self.amd.vbroadcastsd_label(ϕ(dst), label);
+        self.amd.vbroadcastsd_zmm_label(ϕ(dst), label);
     }
 
     fn vzeroupper(&mut self) {
@@ -80,8 +87,8 @@ impl AmdVectorF64x4Generator {
     fn call_vector_unary(&mut self, label: &str) {
         // reserves 64 bytes in the stack
         // 32 bytes for shadow store (mandatory in Windows)
-        // 32 bytes to save ymm0
-        self.amd.vmovpd_mem_ymm(STACK, REG_SIZE, 0);
+        // 32 bytes to save zmm0
+        self.amd.vmovqd_mem_zmm(STACK, REG_SIZE, 0);
 
         self.vzeroupper();
 
@@ -93,20 +100,20 @@ impl AmdVectorF64x4Generator {
             self.amd.vmovsd_mem_xmm(STACK, REG_SIZE + i * 8, 0);
         }
 
-        self.amd.vmovpd_ymm_mem(0, STACK, REG_SIZE);
+        self.amd.vmovqd_zmm_mem(0, STACK, REG_SIZE);
     }
 
     fn call_vector_binary(&mut self, label: &str) {
         // reserves 96 bytes in the stack
         // 32 bytes for shadow store (mandatory in Windows)
-        // 32 bytes to save ymm0
-        // 32 bytes to save ymm1
-        self.amd.vmovpd_mem_ymm(STACK, REG_SIZE, 0);
-        self.amd.vmovpd_mem_ymm(STACK, REG_SIZE * 2, 1);
+        // 32 bytes to save zmm0
+        // 32 bytes to save zmm1
+        self.amd.vmovqd_mem_zmm(STACK, REG_SIZE, 0);
+        self.amd.vmovqd_mem_zmm(STACK, REG_SIZE * 2, 1);
 
         self.vzeroupper();
 
-        for i in 0..4 {
+        for i in 0..NUM_LANES as i32 {
             if i > 0 {
                 self.amd.vmovsd_xmm_mem(0, STACK, REG_SIZE + i * 8);
                 self.amd.vmovsd_xmm_mem(1, STACK, REG_SIZE * 2 + i * 8);
@@ -115,12 +122,12 @@ impl AmdVectorF64x4Generator {
             self.amd.vmovsd_mem_xmm(STACK, REG_SIZE + i * 8, 0);
         }
 
-        self.amd.vmovpd_ymm_mem(0, STACK, REG_SIZE);
+        self.amd.vmovqd_zmm_mem(0, STACK, REG_SIZE);
     }
 
     fn call_complex_vector_unary(&mut self, label: &str) {
-        self.amd.vmovpd_mem_ymm(STACK, REG_SIZE * 2, 0);
-        self.amd.vmovpd_mem_ymm(STACK, REG_SIZE * 3, 1);
+        self.amd.vmovqd_mem_zmm(STACK, REG_SIZE * 2, 0);
+        self.amd.vmovqd_mem_zmm(STACK, REG_SIZE * 3, 1);
 
         self.vzeroupper();
 
@@ -144,15 +151,15 @@ impl AmdVectorF64x4Generator {
             self.amd.vmovsd_mem_xmm(STACK, REG_SIZE * 3 + i * 8, 1);
         }
 
-        self.amd.vmovpd_ymm_mem(0, STACK, REG_SIZE * 2);
-        self.amd.vmovpd_ymm_mem(1, STACK, REG_SIZE * 3);
+        self.amd.vmovqd_zmm_mem(0, STACK, REG_SIZE * 2);
+        self.amd.vmovqd_zmm_mem(1, STACK, REG_SIZE * 3);
     }
 
     fn call_complex_vector_binary(&mut self, label: &str) {
-        self.amd.vmovpd_mem_ymm(STACK, REG_SIZE * 2, 0);
-        self.amd.vmovpd_mem_ymm(STACK, REG_SIZE * 3, 1);
-        self.amd.vmovpd_mem_ymm(STACK, REG_SIZE * 4, 2);
-        self.amd.vmovpd_mem_ymm(STACK, REG_SIZE * 5, 3);
+        self.amd.vmovqd_mem_zmm(STACK, REG_SIZE * 2, 0);
+        self.amd.vmovqd_mem_zmm(STACK, REG_SIZE * 3, 1);
+        self.amd.vmovqd_mem_zmm(STACK, REG_SIZE * 4, 2);
+        self.amd.vmovqd_mem_zmm(STACK, REG_SIZE * 5, 3);
 
         self.vzeroupper();
 
@@ -181,8 +188,8 @@ impl AmdVectorF64x4Generator {
             self.amd.vmovsd_mem_xmm(STACK, REG_SIZE * 3 + i * 8, 1);
         }
 
-        self.amd.vmovpd_ymm_mem(0, STACK, REG_SIZE * 2);
-        self.amd.vmovpd_ymm_mem(1, STACK, REG_SIZE * 3);
+        self.amd.vmovqd_zmm_mem(0, STACK, REG_SIZE * 2);
+        self.amd.vmovqd_zmm_mem(1, STACK, REG_SIZE * 3);
     }
 
     fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
@@ -203,20 +210,20 @@ impl AmdVectorF64x4Generator {
             self.amd.or(Amd::RAX, Amd::RAX);
             self.amd.jz(&l1);
 
-            self.amd.vmovpd_ymm_mem(2, STACK, 4 * REG_SIZE);
-            self.amd.vmovpd_ymm_mem(3, STACK, 5 * REG_SIZE);
-            self.amd.vshufpd(0, 2, 3, 0);
-            self.amd.vshufpd(1, 2, 3, 0x0f);
+            self.amd.vmovqd_zmm_mem(2, STACK, 4 * REG_SIZE);
+            self.amd.vmovqd_zmm_mem(3, STACK, 5 * REG_SIZE);
+            self.amd.vshufqd(0, 2, 3, 0);
+            self.amd.vshufqd(1, 2, 3, 0xff);
 
             self.amd.jmp(&l2);
             self.set_label(&l1);
 
-            self.amd.vmovpd_ymm_mem(0, STACK, 4 * REG_SIZE);
-            self.amd.vmovpd_ymm_mem(1, STACK, 5 * REG_SIZE);
+            self.amd.vmovqd_zmm_mem(0, STACK, 4 * REG_SIZE);
+            self.amd.vmovqd_zmm_mem(1, STACK, 5 * REG_SIZE);
 
             self.set_label(&l2);
         } else {
-            self.amd.vmovpd_ymm_mem(0, STACK, 4 * REG_SIZE);
+            self.amd.vmovqd_zmm_mem(0, STACK, 4 * REG_SIZE);
         }
 
         Ok(())
@@ -228,7 +235,7 @@ impl AmdVectorF64x4Generator {
     }
 }
 
-impl Generator for AmdVectorF64x4Generator {
+impl Generator for AmdVectorF64x8Generator {
     fn bytes(&mut self) -> Vec<u8> {
         self.amd.a.bytes()
     }
@@ -274,7 +281,8 @@ impl Generator for AmdVectorF64x4Generator {
 
     /// jump to label if all bits of cond == is_else
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
-        self.amd.vmovmskpd(Amd::RAX, ϕ(cond));
+        self.amd.vpmovq2m_qd(1, ϕ(cond));
+        self.amd.kmovw_reg_k(Amd::RAX, 1);
         self.amd.and_imm(Amd::RAX, (1 << NUM_LANES) - 1);
 
         if is_else {
@@ -297,29 +305,29 @@ impl Generator for AmdVectorF64x4Generator {
 
     fn fmov(&mut self, dst: Reg, s1: Reg) {
         if dst != s1 {
-            self.amd.vmovapd(ϕ(dst), ϕ(s1));
+            self.amd.vmovaqd(ϕ(dst), ϕ(s1));
         }
     }
 
     fn fxchg(&mut self, s1: Reg, s2: Reg) {
-        self.amd.vxorpd(ϕ(s1), ϕ(s1), ϕ(s2));
-        self.amd.vxorpd(ϕ(s2), ϕ(s1), ϕ(s2));
-        self.amd.vxorpd(ϕ(s1), ϕ(s1), ϕ(s2));
+        self.amd.vxorqd(ϕ(s1), ϕ(s1), ϕ(s2));
+        self.amd.vxorqd(ϕ(s2), ϕ(s1), ϕ(s2));
+        self.amd.vxorqd(ϕ(s1), ϕ(s1), ϕ(s2));
     }
 
     fn load_const(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
         let label = format!("_const_{}_", idx);
-        self.amd.vbroadcastsd_label(ϕ(dst), label.as_str());
+        self.amd.vbroadcastsd_zmm_label(ϕ(dst), label.as_str());
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        self.amd.vmovpd_ymm_mem(ϕ(dst), MEM, idx as i32 * REG_SIZE);
+        self.amd.vmovqd_zmm_mem(ϕ(dst), MEM, idx as i32 * REG_SIZE);
     }
 
     fn save_mem(&mut self, dst: Reg, idx: u32) {
-        self.amd.vmovpd_mem_ymm(MEM, idx as i32 * REG_SIZE, ϕ(dst));
+        self.amd.vmovqd_mem_zmm(MEM, idx as i32 * REG_SIZE, ϕ(dst));
     }
 
     fn save_mem_result(&mut self, idx: u32) {
@@ -331,21 +339,21 @@ impl Generator for AmdVectorF64x4Generator {
 
         if self.config.symbolica() {
             self.amd
-                .vmovpd_ymm_mem(ϕ(dst), PARAMS, idx as i32 * REG_SIZE);
+                .vmovqd_zmm_mem(ϕ(dst), PARAMS, idx as i32 * REG_SIZE);
         } else {
-            self.amd.vbroadcastsd(ϕ(dst), PARAMS, 8 * idx as i32);
+            self.amd.vbroadcastsd_zmm(ϕ(dst), PARAMS, 8 * idx as i32);
         }
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
         self.amd
-            .vmovpd_ymm_mem(ϕ(dst), STACK, idx as i32 * REG_SIZE);
+            .vmovqd_zmm_mem(ϕ(dst), STACK, idx as i32 * REG_SIZE);
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
         self.amd
-            .vmovpd_mem_ymm(STACK, idx as i32 * REG_SIZE, ϕ(dst));
+            .vmovqd_mem_zmm(STACK, idx as i32 * REG_SIZE, ϕ(dst));
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
@@ -388,7 +396,7 @@ impl Generator for AmdVectorF64x4Generator {
     }
 
     fn root(&mut self, dst: Reg, s1: Reg) {
-        uniop!(self, vsqrtpd, dst, s1);
+        uniop!(self, vsqrtqd, dst, s1);
     }
 
     fn real_root(&mut self, dst: Reg, s1: Reg) {
@@ -427,19 +435,19 @@ impl Generator for AmdVectorF64x4Generator {
     }
 
     fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vaddpd, dst, s1, s2);
+        binop!(self, vaddqd, dst, s1, s2);
     }
 
     fn minus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vsubpd, dst, s1, s2);
+        binop!(self, vsubqd, dst, s1, s2);
     }
 
     fn times(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vmulpd, dst, s1, s2);
+        binop!(self, vmulqd, dst, s1, s2);
     }
 
     fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vdivpd, dst, s1, s2);
+        binop!(self, vdivqd, dst, s1, s2);
     }
 
     fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
@@ -517,43 +525,43 @@ impl Generator for AmdVectorF64x4Generator {
     }
 
     fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vcmpnlepd, dst, s1, s2);
+        compare!(self, vcmpnleqd, dst, s1, s2);
     }
 
     fn geq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vcmpnltpd, dst, s1, s2);
+        compare!(self, vcmpnltqd, dst, s1, s2);
     }
 
     fn lt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vcmpltpd, dst, s1, s2);
+        compare!(self, vcmpltqd, dst, s1, s2);
     }
 
     fn leq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vcmplepd, dst, s1, s2);
+        compare!(self, vcmpleqd, dst, s1, s2);
     }
 
     fn eq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vcmpeqpd, dst, s1, s2);
+        compare!(self, vcmpeqqd, dst, s1, s2);
     }
 
     fn neq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vcmpneqpd, dst, s1, s2);
+        compare!(self, vcmpneqqd, dst, s1, s2);
     }
 
     fn and(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vandpd, dst, s1, s2);
+        binop!(self, vandqd, dst, s1, s2);
     }
 
     fn andnot(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vandnpd, dst, s1, s2);
+        binop!(self, vandnqd, dst, s1, s2);
     }
 
     fn or(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vorpd, dst, s1, s2);
+        binop!(self, vorqd, dst, s1, s2);
     }
 
     fn xor(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vxorpd, dst, s1, s2);
+        binop!(self, vxorqd, dst, s1, s2);
     }
 
     fn not(&mut self, dst: Reg, s1: Reg) {
@@ -562,19 +570,19 @@ impl Generator for AmdVectorF64x4Generator {
     }
 
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        fuseop!(self, vfmadd132pd, vfmadd213pd, vfmadd231pd, dst, s1, s2, s3);
+        fuseop!(self, vfmadd132qd, vfmadd213qd, vfmadd231qd, dst, s1, s2, s3);
     }
 
     fn fused_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        fuseop!(self, vfmsub132pd, vfmsub213pd, vfmsub231pd, dst, s1, s2, s3);
+        fuseop!(self, vfmsub132qd, vfmsub213qd, vfmsub231qd, dst, s1, s2, s3);
     }
 
     fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
         fuseop!(
             self,
-            vfnmadd132pd,
-            vfnmadd213pd,
-            vfnmadd231pd,
+            vfnmadd132qd,
+            vfnmadd213qd,
+            vfnmadd231qd,
             dst,
             s1,
             s2,
@@ -585,9 +593,9 @@ impl Generator for AmdVectorF64x4Generator {
     fn fused_neg_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
         fuseop!(
             self,
-            vfnmsub132pd,
-            vfnmsub213pd,
-            vfnmsub231pd,
+            vfnmsub132qd,
+            vfnmsub213qd,
+            vfnmsub231qd,
             dst,
             s1,
             s2,
@@ -646,17 +654,19 @@ impl Generator for AmdVectorF64x4Generator {
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {
         if true_val == false_val {
             self.fmov(dst, true_val);
-        } else if dst != false_val {
-            self.load_stack(Reg::Temp, idx);
-            self.and(dst, Reg::Temp, true_val);
-            self.andnot(Reg::Temp, Reg::Temp, false_val);
-            self.or(dst, dst, Reg::Temp);
+        }
+
+        self.load_stack(Reg::Temp, idx);
+        self.amd.vpmovq2m_qd(1, ϕ(Reg::Temp));
+
+        if dst == true_val {
+            self.amd.knotw(1, 1);
+            self.amd.vmovaqd_masked(ϕ(dst), ϕ(false_val), 1, false);
+        } else if dst == false_val {
+            self.amd.vmovaqd_masked(ϕ(dst), ϕ(true_val), 1, false);
         } else {
-            // dst == false_val && dst != true_val
-            self.load_stack(Reg::Temp, idx);
-            self.andnot(dst, Reg::Temp, false_val);
-            self.and(Reg::Temp, Reg::Temp, true_val);
-            self.or(dst, dst, Reg::Temp);
+            self.amd.vmovaqd(ϕ(dst), ϕ(false_val));
+            self.amd.vmovaqd_masked(ϕ(dst), ϕ(true_val), 1, false);
         }
     }
 
@@ -740,7 +750,7 @@ impl Generator for AmdVectorF64x4Generator {
      *  4a. The actual temporary variables area.
      *  4b. A default spill area of `16 * REG_SIZE` bytes. It is generated by
      *      `SymbolTable::new` adding 16 dummy temp variables. The top 10 slots are used
-     *      to store callee-saved xmm/ymm registers (`save_used_registers`). The bottom
+     *      to store callee-saved xmm/zmm registers (`save_used_registers`). The bottom
      *      6 slots are the work area for various call routines, Specifically, the bottom
      *      32 bytes is reserved as the home area for Windows call ABI.
      */
@@ -770,14 +780,15 @@ impl Generator for AmdVectorF64x4Generator {
         sub_rsp(&mut self.amd, frame_size);
         self.amd.mov(MEM, STACK); // in indirect mode, MEM is allocated on the stack
 
-        // multiply IDX by 4 to convert from f64x4 index to f64 index
+        // multiply IDX by 8 to convert from f64x8 index to f64 index
+        self.amd.add(IDX, IDX);
         self.amd.add(IDX, IDX);
         self.amd.add(IDX, IDX);
 
         for i in 0..count_states {
             self.amd.mov_reg_mem(Amd::RAX, STATES, 2 * 8 * i as i32);
-            self.amd.vmovpd_ymm_indexed(RET, Amd::RAX, IDX, 8);
-            self.amd.vmovpd_mem_ymm(MEM, i as i32 * REG_SIZE, RET);
+            self.amd.vmovqd_zmm_indexed(RET, Amd::RAX, IDX, 8);
+            self.amd.vmovqd_mem_zmm(MEM, i as i32 * REG_SIZE, RET);
         }
 
         // may save idx (RDX) as double in RBP + 8/32 * count_states
@@ -809,8 +820,8 @@ impl Generator for AmdVectorF64x4Generator {
             self.amd
                 .mov_reg_mem(Amd::RCX, STATES, 2 * 8 * (count_states + i) as i32);
             self.amd
-                .vmovpd_ymm_mem(RET, MEM, (count_states + i) as i32 * REG_SIZE);
-            self.amd.vmovpd_indexed_ymm(Amd::RCX, IDX, 8, RET);
+                .vmovqd_zmm_mem(RET, MEM, (count_states + i) as i32 * REG_SIZE);
+            self.amd.vmovqd_indexed_zmm(Amd::RCX, IDX, 8, RET);
         }
 
         let frame_size = align_stack((count_states + count_obs) as u32 * REG_USIZE);
@@ -845,7 +856,7 @@ impl Generator for AmdVectorF64x4Generator {
     }
 }
 
-impl AmdVectorF64x4Generator {
+impl AmdVectorF64x8Generator {
     fn prologue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
         self.amd.push(Amd::RBP);
         save_nonvolatile_regs(&mut self.amd);
