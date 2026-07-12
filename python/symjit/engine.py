@@ -323,13 +323,13 @@ class RustyCompiler:
         model,
         ty="native",
         use_simd=True,
+        enable_simd512=False,
         use_threads=True,
         cse=True,
         fastmath=True,
         opt_level=1,
         convert=True,
         defuns=None,
-        sanitize=True,
         dtype="float64",
         action="compile",
         file="",
@@ -363,7 +363,7 @@ class RustyCompiler:
             | (0x00000002 if use_threads else 0)
             | (0x00000004 if cse else 0)
             | (0x00000008 if fastmath else 0)
-            | (0x00000010 if sanitize else 0)
+            | (0x00000010 if enable_simd512 else 0)
             | (0x00000020 if dtype == "complex128" else 0)
             | (0x00000040 if order == "c" else 0)
             | (0x00000080 if simd_branch else 0)

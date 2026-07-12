@@ -1,4 +1,5 @@
 import math
+import os
 import random
 import time
 
@@ -8,6 +9,8 @@ from symbolica import E
 
 P = 60
 N = 10000
+
+CONFIG = os.path.join(os.path.dirname(__file__), "symjit.toml")
 
 
 def build_evaluator_poly(num_terms: int, num_factors: int):

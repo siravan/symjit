@@ -30,7 +30,7 @@ def run():
     rng = np.random.default_rng(1349)
     inputs = rng.random((N, P)) + rng.random((N, P)) * 1j - (0.5 + 0.5j)
 
-    for k in range(31):
+    for k in range(28):
         print(f"{k}\t", end="")
         num_terms = math.floor(1.5**k)
         ev = build_evaluator_poly(num_terms, 10)

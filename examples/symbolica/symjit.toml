@@ -2,6 +2,7 @@ ty = "native"
 
 [options]
 use_simd = true
+enable_simd512 = true
 use_threads = false
 cse = true
 fastmath = true

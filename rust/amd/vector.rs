@@ -46,15 +46,15 @@ macro_rules! fuseop {
     }};
 }
 
-pub struct AmdVectorGenerator {
+pub struct AmdVectorF64x4Generator {
     amd: Amd,
     config: Config,
     last_load: usize,
 }
 
-impl AmdVectorGenerator {
-    pub fn new(config: Config) -> AmdVectorGenerator {
-        AmdVectorGenerator {
+impl AmdVectorF64x4Generator {
+    pub fn new(config: Config) -> AmdVectorF64x4Generator {
+        AmdVectorF64x4Generator {
             amd: Amd::new(DataType::F64),
             config,
             last_load: 0,
@@ -228,7 +228,7 @@ impl AmdVectorGenerator {
     }
 }
 
-impl Generator for AmdVectorGenerator {
+impl Generator for AmdVectorF64x4Generator {
     fn bytes(&mut self) -> Vec<u8> {
         self.amd.a.bytes()
     }
@@ -275,10 +275,10 @@ impl Generator for AmdVectorGenerator {
     /// jump to label if all bits of cond == is_else
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
         self.amd.vmovmskpd(Amd::RAX, ϕ(cond));
-        self.amd.and_imm(Amd::RAX, 15);
+        self.amd.and_imm(Amd::RAX, (1 << NUM_LANES) - 1);
 
         if is_else {
-            self.amd.cmp_imm(Amd::RAX, 15);
+            self.amd.cmp_imm(Amd::RAX, (1 << NUM_LANES) - 1);
         }
 
         self.amd.jz(label);
@@ -845,7 +845,7 @@ impl Generator for AmdVectorGenerator {
     }
 }
 
-impl AmdVectorGenerator {
+impl AmdVectorF64x4Generator {
     fn prologue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
         self.amd.push(Amd::RBP);
         save_nonvolatile_regs(&mut self.amd);

@@ -12,10 +12,12 @@ for _ in range(20):
 z = z.abs()
 
 ev = z.evaluator([c])
-f = compile_evaluator(ev, dtype="complex128", use_simd=True, direct=False)
+f = compile_evaluator(
+    ev, dtype="complex128", use_simd=True, direct=False, enable_simd512=True
+)
 
 # print(ev.get_instructions())
-# print(f.dumps("bytecode"))
+# print(f.dumps("simd"))
 
 A, B = np.meshgrid(np.arange(-2, 1, 0.002), np.arange(-1.5, 1.5, 0.002))
 C = (A + B * 1j).reshape((-1, 1))

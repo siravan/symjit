@@ -13,6 +13,7 @@ pub const USE_THREADS: u32 = 0x00000002;
 pub const CSE: u32 = 0x00000004;
 pub const FASTMATH: u32 = 0x00000008;
 
+pub const ENABLE_SIMD512: u32 = 0x00000010;
 pub const COMPLEX: u32 = 0x00000020;
 pub const SYMBOLICA: u32 = 0x00000040;
 pub const SIMD_BRANCH: u32 = 0x00000080;
@@ -55,6 +56,7 @@ struct ConfigToml {
 #[serde(default)]
 struct Options {
     use_simd: bool,
+    enable_simd512: bool,
     use_threads: bool,
     cse: bool,
     fastmath: bool,
@@ -115,6 +117,7 @@ impl Config {
         let mut config = Self::from_name(&c.ty, opt)?;
 
         config.set_simd(c.options.use_simd);
+        config.enable_simd512(c.options.enable_simd512);
         config.set_threads(c.options.use_threads);
         config.set_cse(c.options.cse);
         config.set_fastmath(c.options.fastmath);
@@ -153,6 +156,7 @@ impl Config {
 
         let options: Options = Options {
             use_simd: self.use_simd(),
+            enable_simd512: self.is_enabled_simd512(),
             use_threads: self.use_threads(),
             cse: self.cse(),
             fastmath: self.fastmath(),
@@ -227,6 +231,13 @@ impl Config {
         return false;
     }
 
+    fn cpu_has_avx512() -> bool {
+        #[cfg(target_arch = "x86_64")]
+        return is_x86_feature_detected!("avx512f");
+        #[cfg(not(target_arch = "x86_64"))]
+        return false;
+    }
+
     pub fn has_avx(&self) -> bool {
         self.is_amd64() && !matches!(self.ty, CompilerType::AmdSSE) && Self::cpu_has_avx()
     }
@@ -253,6 +264,14 @@ impl Config {
 
     pub fn use_simd(&self) -> bool {
         self.test(USE_SIMD) && (self.has_avx() || self.is_arm64())
+    }
+
+    pub fn is_enabled_simd512(&self) -> bool {
+        self.test(ENABLE_SIMD512)
+    }
+
+    pub fn use_simd512(&self) -> bool {
+        self.test(ENABLE_SIMD512) && self.test(USE_SIMD) && Self::cpu_has_avx512()
     }
 
     pub fn simd_branch(&self) -> bool {
@@ -389,6 +408,11 @@ impl Config {
         self.opt = (self.opt & !USE_SIMD) | if enabled { USE_SIMD } else { 0 };
     }
 
+    /// Enables SIMD mode.
+    pub fn enable_simd512(&mut self, enabled: bool) {
+        self.opt = (self.opt & !ENABLE_SIMD512) | if enabled { ENABLE_SIMD512 } else { 0 };
+    }
+
     /// Enables forced SIMD branching mode.
     pub fn set_simd_branch(&mut self, enabled: bool) {
         self.opt = (self.opt & !SIMD_BRANCH) | if enabled { SIMD_BRANCH } else { 0 };
@@ -457,6 +481,18 @@ impl Config {
     /// Print stats for debugging
     pub fn set_debug_stats(&mut self, enabled: bool) {
         self.opt = (self.opt & !DEBUG_STATS) | if enabled { DEBUG_STATS } else { 0 };
+    }
+
+    pub fn max_lanes(&self) -> usize {
+        if self.use_simd512() {
+            8
+        } else if self.use_simd() && self.has_avx() {
+            4
+        } else if self.use_simd() && self.is_arm64() {
+            2
+        } else {
+            1
+        }
     }
 }
 
