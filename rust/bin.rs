@@ -170,12 +170,28 @@ mod testing {
 
         Ok(())
     }
+
+    /*
+     * For profiling using Samply,
+     * 1. Build as cargo build --profile profiling
+     * 2. Profile as samply record ./target/profiling/symjit
+     */
+    pub fn profile() -> Result<()> {
+        let model = std::fs::read_to_string("3loop_instructions_2.txt")?;
+        for _ in 0..10 {
+            let mut compiler = Compiler::new();
+            compiler.translate(model.clone(), 0)?;
+        }
+        println!("compiled ok!");
+        Ok(())
+    }
 }
 
 use anyhow::Result;
 
 // run `cargo run --release --features testing` for testing
 fn main() -> Result<()> {
-    testing::main()?;
+    // testing::main()?;
+    testing::profile()?;
     Ok(())
 }
