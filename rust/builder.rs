@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 use std::io::{Read, Write};
 
-use crate::allocator::{ColoringAllocator, GreedyAllocator};
+use crate::allocator::GreedyAllocator;
 use crate::block::Block;
 use crate::compactor::Compactor;
 use crate::config::Config;
