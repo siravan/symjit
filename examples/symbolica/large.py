@@ -1,10 +1,13 @@
 import math
+import os
 
 import numpy as np
 from symbolica import E, S
 from symjit import compile_evaluator
 
-DEPTH = 15
+CONFIG = os.path.join(os.path.dirname(__file__), "symjit.toml")
+
+DEPTH = 14
 NCOLS = 2**DEPTH
 NROWS = 107
 
@@ -24,7 +27,7 @@ def large(a, b):
 
 
 ev = large(0, NCOLS).evaluator(xs, jit_compile=False)
-f = compile_evaluator(ev, dtype="complex128", direct=False)
+f = compile_evaluator(ev, dtype="complex128", ty=CONFIG)
 
 print(f"{len(f.dumps('simd'))} bytes")
 # print(f.dumps("simd"))

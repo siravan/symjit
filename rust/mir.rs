@@ -3062,20 +3062,33 @@ impl Mir {
     pub fn print_stats(&self, name: &str, size: usize) {
         let mut counts: HashMap<String, usize> = HashMap::new();
         let mut times2: usize = 0;
+        let mut stack_count: usize = 0;
 
         let mut iter = self.code.iter().peekable();
 
         while let Some(ins) = iter.next() {
-            if let Instruction::LoadMath {
-                op: ArithOp::Times, ..
-            } = ins
-            {
-                if let Some(Instruction::LoadMath {
+            match ins {
+                Instruction::LoadMath {
                     op: ArithOp::Times, ..
-                }) = iter.peek()
-                {
-                    times2 += 1;
+                } => {
+                    if let Some(Instruction::LoadMath {
+                        op: ArithOp::Times, ..
+                    }) = iter.peek()
+                    {
+                        times2 += 1;
+                    }
                 }
+                Instruction::Save {
+                    loc: Loc::Stack(idx),
+                    ..
+                }
+                | Instruction::SaveComplex {
+                    loc: Loc::Stack(idx),
+                    ..
+                } => {
+                    stack_count = stack_count.max(idx as usize);
+                }
+                _ => {}
             }
 
             let desc = ins.desc();
@@ -3092,6 +3105,7 @@ impl Mir {
         let mut fs = fs::File::create(name).unwrap();
         let _ = writeln!(fs, "#! stats");
         let _ = writeln!(fs, "{} instructions", self.code.ip);
+        let _ = writeln!(fs, "{} stack count", stack_count);
         let _ = writeln!(fs, "---------------------------------");
 
         for (k, v) in counts.iter() {
