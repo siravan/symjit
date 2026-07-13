@@ -36,7 +36,7 @@ impl Alloc {
 pub struct GreedyAllocator {
     pub code: MirWriter,       // the revised mir
     regs: Vec<Option<usize>>,  // map of logical registers to static ones
-    locs: HashMap<Loc, usize>, // map between locs and statics
+    locs: HashSet<Loc>, // map between locs and statics
     count_statics: usize,      // number of statis registers
     statics: Vec<Static>,      // the list of static registers
     allocs: Vec<Alloc>,        // allocation for logical registers
@@ -66,7 +66,7 @@ impl GreedyAllocator {
             code: MirWriter::new(),
             regs: vec![None; count_regs],
             count_statics: 0,
-            locs: HashMap::new(),
+            locs: HashSet::new(),
             statics: Vec::new(),
             allocs: vec![Alloc::new(); count_regs],
             config,
@@ -308,6 +308,7 @@ impl GreedyAllocator {
     }
 
     fn assign(&mut self, r: usize, s: usize, loc: Option<Loc>) -> Reg {
+        assert! (!self.allocs[r].owners.contains(&s));
         self.allocs[r].owners.insert(s);
         self.allocs[r].loc = loc;
         let reg = Reg::Gen(r as u8);
@@ -382,7 +383,7 @@ impl GreedyAllocator {
                     let (dst, moved) = self.allocate(dst, Some(loc));
                     if !moved {
                         self.push(Instruction::Load { dst, loc });
-                        self.locs.insert(loc, 0);
+                        self.locs.insert(loc);
                     }
                 }
                 Instruction::Save { src, loc } => {
@@ -409,8 +410,8 @@ impl GreedyAllocator {
                     let (yd, _) = self.allocate(yd, Some(loc.imag()));
                     if !moved {
                         self.push(Instruction::LoadComplex { xd, yd, loc });
-                        self.locs.insert(loc, 0);
-                        self.locs.insert(loc.imag(), 0);
+                        self.locs.insert(loc);
+                        self.locs.insert(loc.imag());
                     }
                 }
                 Instruction::SaveComplex { xs, ys, loc } => {
@@ -485,7 +486,7 @@ impl GreedyAllocator {
                             cond,
                         })
                     }
-                    self.locs.insert(cond, 0);
+                    self.locs.insert(cond);
                 }
                 Instruction::Branch { .. } => {
                     if let Instruction::Branch { label } = ins.clone() {
@@ -517,7 +518,7 @@ impl GreedyAllocator {
                     let s1 = self.deallocate(ip, s1);
                     let (dst, _) = self.allocate(dst, None);
                     self.push(Instruction::LoadMath { op, dst, s1, loc });
-                    self.locs.insert(loc, 0);
+                    self.locs.insert(loc);
                 }
                 Instruction::LoadConstMath { op, dst, s1, idx } => {
                     let s1 = self.deallocate(ip, s1);
@@ -590,7 +591,7 @@ impl GreedyAllocator {
                 // as Args are added to self.locs.
                 Instruction::Save { src, loc } => {
                     let keep = if let Loc::Stack(idx) = loc {
-                        idx < fixed || self.locs.contains_key(&loc)
+                        idx < fixed || self.locs.contains(&loc)
                     } else {
                         true
                     };
@@ -602,7 +603,7 @@ impl GreedyAllocator {
                 Instruction::SaveComplex { xs, ys, loc } => {
                     let keep = if let Loc::Stack(idx) = loc {
                         idx < fixed
-                            || (self.locs.contains_key(&loc) && self.locs.contains_key(&loc.imag()))
+                            || (self.locs.contains(&loc) && self.locs.contains(&loc.imag()))
                     } else {
                         true
                     };
