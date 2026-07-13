@@ -19,14 +19,14 @@ struct Static {
 
 #[derive(Debug, Clone)]
 struct Alloc {
-    owners: HashSet<usize>,
+    life: usize,
     loc: Option<Loc>,
 }
 
 impl Alloc {
     fn new() -> Alloc {
         Alloc {
-            owners: HashSet::new(),
+            life: 0, // number of Static variables assigned to this register (== self.owners.len() is order versions)
             loc: None,
         }
     }
@@ -34,12 +34,12 @@ impl Alloc {
 
 // #[derive(Clone)]
 pub struct GreedyAllocator {
-    pub code: MirWriter,       // the revised mir
-    regs: Vec<Option<usize>>,  // map of logical registers to static ones
-    locs: HashSet<Loc>, // map between locs and statics
-    count_statics: usize,      // number of statis registers
-    statics: Vec<Static>,      // the list of static registers
-    allocs: Vec<Alloc>,        // allocation for logical registers
+    pub code: MirWriter,      // the revised mir
+    regs: Vec<Option<usize>>, // map of logical registers to static ones
+    locs: HashSet<Loc>,       // locs currently in registers
+    count_statics: usize,     // number of statis registers
+    statics: Vec<Static>,     // the list of static registers
+    allocs: Vec<Alloc>,       // allocation for logical registers
     config: Config,
     count_regs: usize,
 }
@@ -292,24 +292,17 @@ impl GreedyAllocator {
 
     // returns the logical register corresponding to the static register
     // dst back to the pool.
-    fn deallocate(&mut self, ip: usize, dst: Reg) -> Reg {
+    fn deallocate(&mut self, dst: Reg) -> Reg {
         if let Reg::Static(s) = dst {
-            let s = s as usize;
-            let reg = self.statics[s].reg;
-            if self.statics[s].end == ip {
-                if let Reg::Gen(r) = reg {
-                    self.allocs[r as usize].owners.remove(&s);
-                }
-            }
-            reg
+            self.statics[s as usize].reg
         } else {
             dst
         }
     }
 
     fn assign(&mut self, r: usize, s: usize, loc: Option<Loc>) -> Reg {
-        assert! (!self.allocs[r].owners.contains(&s));
-        self.allocs[r].owners.insert(s);
+        // self.allocs[r].owners.insert(s);
+        self.allocs[r].life = self.allocs[r].life.max(self.statics[s].end);
         self.allocs[r].loc = loc;
         let reg = Reg::Gen(r as u8);
         self.statics[s].reg = reg;
@@ -318,29 +311,56 @@ impl GreedyAllocator {
 
     // allocates a new logical register from the pool and assigns it to
     // the static register dst, optionally with a location.
-    fn allocate(&mut self, dst: Reg, loc: Option<Loc>) -> (Reg, bool) {
+    fn allocate(&mut self, ip: usize, dst: Reg) -> (Reg, bool) {
         if let Reg::Static(s) = dst {
             let s = s as usize;
+            let mut q: Option<usize> = None;
 
-            if loc.is_some() {
-                if let Some(r) = self.allocs.iter().position(|x| x.loc == loc) {
-                    return (self.assign(r, s, loc), true);
+            for (r, alloc) in self.allocs.iter().enumerate() {
+                if alloc.life <= ip {
+                    if alloc.loc.is_none() {
+                        return (self.assign(r, s, None), false);
+                    } else if q.is_none() {
+                        q = Some(r);
+                    }
                 }
             }
 
-            if let Some(r) = self
-                .allocs
-                .iter()
-                .position(|x| x.owners.is_empty() && x.loc.is_none())
-            {
-                return (self.assign(r, s, loc), false);
+            return (
+                self.assign(q.expect("register pool is empty"), s, None),
+                false,
+            );
+        } else {
+            (dst, false)
+        }
+    }
+
+    fn allocate_loc(&mut self, ip: usize, dst: Reg, loc: Loc) -> (Reg, bool) {
+        if let Reg::Static(s) = dst {
+            let s = s as usize;
+            let mut p: Option<usize> = None;
+            let mut q: Option<usize> = None;
+
+            for (r, alloc) in self.allocs.iter().enumerate() {
+                if alloc.loc == Some(loc) {
+                    return (self.assign(r, s, Some(loc)), true);
+                } else if alloc.life <= ip {
+                    if alloc.loc.is_none() && p.is_none() {
+                        p = Some(r);
+                    } else if q.is_none() {
+                        q = Some(r);
+                    }
+                }
             }
 
-            if let Some(r) = self.allocs.iter().position(|x| x.owners.is_empty()) {
-                return (self.assign(r, s, loc), false);
+            if p.is_some() {
+                return (self.assign(p.unwrap(), s, Some(loc)), false);
+            } else {
+                return (
+                    self.assign(q.expect("register pool is empty"), s, Some(loc)),
+                    false,
+                );
             }
-
-            panic!("register pool is empty");
         } else {
             (dst, false)
         }
@@ -358,36 +378,36 @@ impl GreedyAllocator {
                 Instruction::Nop => self.push(Instruction::Nop),
                 Instruction::End => self.push(Instruction::End),
                 Instruction::Uni { op, dst, s1 } => {
-                    let s1 = self.deallocate(ip, s1);
-                    let (dst, _) = self.allocate(dst, None);
+                    let s1 = self.deallocate(s1);
+                    let (dst, _) = self.allocate(ip, dst);
                     self.push(Instruction::Uni { op, dst, s1 })
                 }
                 Instruction::Bi { op, dst, s1, s2 } => {
                     if self.config.is_sse() || self.config.is_arm64() {
-                        let (dst, _) = self.allocate(dst, None);
-                        let s1 = self.deallocate(ip, s1);
-                        let s2 = self.deallocate(ip, s2);
+                        let (dst, _) = self.allocate(ip, dst);
+                        let s1 = self.deallocate(s1);
+                        let s2 = self.deallocate(s2);
                         self.push(Instruction::Bi { op, dst, s1, s2 })
                     } else {
-                        let s1 = self.deallocate(ip, s1);
-                        let s2 = self.deallocate(ip, s2);
-                        let (dst, _) = self.allocate(dst, None);
+                        let s1 = self.deallocate(s1);
+                        let s2 = self.deallocate(s2);
+                        let (dst, _) = self.allocate(ip, dst);
                         self.push(Instruction::Bi { op, dst, s1, s2 })
                     }
                 }
                 Instruction::LoadConst { dst, idx } => {
-                    let (dst, _) = self.allocate(dst, None);
+                    let (dst, _) = self.allocate(ip, dst);
                     self.push(Instruction::LoadConst { dst, idx })
                 }
                 Instruction::Load { dst, loc } => {
-                    let (dst, moved) = self.allocate(dst, Some(loc));
+                    let (dst, moved) = self.allocate_loc(ip, dst, loc);
                     if !moved {
                         self.push(Instruction::Load { dst, loc });
                         self.locs.insert(loc);
                     }
                 }
                 Instruction::Save { src, loc } => {
-                    let src = self.deallocate(ip, src);
+                    let src = self.deallocate(src);
                     self.push(Instruction::Save { src, loc });
 
                     // this for loop is added due to a bug discovered while
@@ -406,8 +426,8 @@ impl GreedyAllocator {
                     }
                 }
                 Instruction::LoadComplex { xd, yd, loc } => {
-                    let (xd, moved) = self.allocate(xd, Some(loc));
-                    let (yd, _) = self.allocate(yd, Some(loc.imag()));
+                    let (xd, moved) = self.allocate_loc(ip, xd, loc);
+                    let (yd, _) = self.allocate_loc(ip, yd, loc.imag());
                     if !moved {
                         self.push(Instruction::LoadComplex { xd, yd, loc });
                         self.locs.insert(loc);
@@ -415,8 +435,8 @@ impl GreedyAllocator {
                     }
                 }
                 Instruction::SaveComplex { xs, ys, loc } => {
-                    let xs = self.deallocate(ip, xs);
-                    let ys = self.deallocate(ip, ys);
+                    let xs = self.deallocate(xs);
+                    let ys = self.deallocate(ys);
                     self.push(Instruction::SaveComplex { xs, ys, loc });
 
                     // this for loop is added due to a bug discovered while
@@ -441,22 +461,26 @@ impl GreedyAllocator {
                     }
                 }
                 Instruction::Mov { dst, s1 } => {
-                    let s1 = self.deallocate(ip, s1);
+                    let s1 = self.deallocate(s1);
 
-                    let loc = if let Reg::Gen(r) = s1 {
-                        self.allocs[r as usize].loc
+                    let (dst, _) = if let Reg::Gen(r) = s1 {
+                        let loc = self.allocs[r as usize].loc;
+                        if loc.is_some() {
+                            self.allocate_loc(ip, dst, loc.unwrap())
+                        } else {
+                            self.allocate(ip, dst)
+                        }
                     } else {
-                        None
+                        self.allocate(ip, dst)
                     };
 
-                    let (dst, _) = self.allocate(dst, loc);
                     self.push(Instruction::Mov { dst, s1 })
                 }
                 Instruction::Fused { op, dst, a, b, c } => {
-                    let a = self.deallocate(ip, a);
-                    let b = self.deallocate(ip, b);
-                    let c = self.deallocate(ip, c);
-                    let (dst, _) = self.allocate(dst, None);
+                    let a = self.deallocate(a);
+                    let b = self.deallocate(b);
+                    let c = self.deallocate(c);
+                    let (dst, _) = self.allocate(ip, dst);
                     self.push(Instruction::Fused { op, dst, a, b, c });
                 }
                 Instruction::IfElse {
@@ -466,9 +490,9 @@ impl GreedyAllocator {
                     cond,
                 } => {
                     if self.config.is_sse() {
-                        let (dst, _) = self.allocate(dst, None);
-                        let true_val = self.deallocate(ip, true_val);
-                        let false_val = self.deallocate(ip, false_val);
+                        let (dst, _) = self.allocate(ip, dst);
+                        let true_val = self.deallocate(true_val);
+                        let false_val = self.deallocate(false_val);
                         self.push(Instruction::IfElse {
                             dst,
                             true_val,
@@ -476,9 +500,9 @@ impl GreedyAllocator {
                             cond,
                         })
                     } else {
-                        let true_val = self.deallocate(ip, true_val);
-                        let false_val = self.deallocate(ip, false_val);
-                        let (dst, _) = self.allocate(dst, None);
+                        let true_val = self.deallocate(true_val);
+                        let false_val = self.deallocate(false_val);
+                        let (dst, _) = self.allocate(ip, dst);
                         self.push(Instruction::IfElse {
                             dst,
                             true_val,
@@ -501,7 +525,7 @@ impl GreedyAllocator {
                         is_else,
                     } = ins.clone()
                     {
-                        let cond = self.deallocate(ip, cond);
+                        let cond = self.deallocate(cond);
                         self.push(Instruction::BranchIf {
                             cond,
                             label,
@@ -515,14 +539,14 @@ impl GreedyAllocator {
                     self.reset_allocs();
                 }
                 Instruction::LoadMath { op, dst, s1, loc } => {
-                    let s1 = self.deallocate(ip, s1);
-                    let (dst, _) = self.allocate(dst, None);
+                    let s1 = self.deallocate(s1);
+                    let (dst, _) = self.allocate(ip, dst);
                     self.push(Instruction::LoadMath { op, dst, s1, loc });
                     self.locs.insert(loc);
                 }
                 Instruction::LoadConstMath { op, dst, s1, idx } => {
-                    let s1 = self.deallocate(ip, s1);
-                    let (dst, _) = self.allocate(dst, None);
+                    let s1 = self.deallocate(s1);
+                    let (dst, _) = self.allocate(ip, dst);
                     self.push(Instruction::LoadConstMath { op, dst, s1, idx });
                 }
                 Instruction::ComplexBi {
@@ -535,12 +559,12 @@ impl GreedyAllocator {
                     y2,
                 } => {
                     if self.config.is_sse() {
-                        let (xd, _) = self.allocate(xd, None);
-                        let (yd, _) = self.allocate(yd, None);
-                        let x1 = self.deallocate(ip, x1);
-                        let y1 = self.deallocate(ip, y1);
-                        let x2 = self.deallocate(ip, x2);
-                        let y2 = self.deallocate(ip, y2);
+                        let (xd, _) = self.allocate(ip, xd);
+                        let (yd, _) = self.allocate(ip, yd);
+                        let x1 = self.deallocate(x1);
+                        let y1 = self.deallocate(y1);
+                        let x2 = self.deallocate(x2);
+                        let y2 = self.deallocate(y2);
                         self.push(Instruction::ComplexBi {
                             op,
                             xd,
@@ -551,12 +575,12 @@ impl GreedyAllocator {
                             y2,
                         })
                     } else {
-                        let x1 = self.deallocate(ip, x1);
-                        let y1 = self.deallocate(ip, y1);
-                        let x2 = self.deallocate(ip, x2);
-                        let y2 = self.deallocate(ip, y2);
-                        let (xd, _) = self.allocate(xd, None);
-                        let (yd, _) = self.allocate(yd, None);
+                        let x1 = self.deallocate(x1);
+                        let y1 = self.deallocate(y1);
+                        let x2 = self.deallocate(x2);
+                        let y2 = self.deallocate(y2);
+                        let (xd, _) = self.allocate(ip, xd);
+                        let (yd, _) = self.allocate(ip, yd);
                         self.push(Instruction::ComplexBi {
                             op,
                             xd,
@@ -602,8 +626,7 @@ impl GreedyAllocator {
                 }
                 Instruction::SaveComplex { xs, ys, loc } => {
                     let keep = if let Loc::Stack(idx) = loc {
-                        idx < fixed
-                            || (self.locs.contains(&loc) && self.locs.contains(&loc.imag()))
+                        idx < fixed || (self.locs.contains(&loc) && self.locs.contains(&loc.imag()))
                     } else {
                         true
                     };
