@@ -1070,9 +1070,6 @@ impl Compiler {
         //let mut app = Application::new(prog, reals)?;
         let app = translator.compile()?;
 
-        println!("compiled by SymJit version {}", env!("CARGO_PKG_VERSION"));
-
-        //app.prepare_simd();
         Ok(app)
     }
 }
