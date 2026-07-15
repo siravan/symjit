@@ -47,10 +47,7 @@ fn ϕ(r: Reg) -> u8 {
         Reg::Temp => 1, // d1
         Reg::Left => 0,
         Reg::Right => 1,
-        Reg::Gen(dst) => {
-            assert!(dst < 30);
-            FMAP[dst as usize]
-        }
+        Reg::Gen(dst) => FMAP[dst as usize],
         Reg::Static(..) => panic!("passing static registers to codegen"),
     }
 }

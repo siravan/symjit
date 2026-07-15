@@ -3024,18 +3024,22 @@ impl Mir {
         }
 
         let mut fs = fs::File::create(name).unwrap();
-        let _ = writeln!(fs, "#! stats");
+        let _ = writeln!(fs, "---------------------------------");
+        let _ = writeln!(fs, "#! STATS");
+        let _ = writeln!(fs, "version = {}", env!("CARGO_PKG_VERSION"));
         let _ = writeln!(fs, "{} instructions", self.code.ip);
         let _ = writeln!(fs, "{} stack count", stack_count);
-        let _ = writeln!(fs, "---------------------------------");
+        let _ = writeln!(fs, "--------------");
 
         for (k, v) in counts.iter() {
             let _ = writeln!(fs, "{} x {}", k, v);
         }
         let _ = writeln!(fs, "times2 x {}", times2);
         let _ = writeln!(fs, "compiled size {} bytes", size);
+        let _ = writeln!(fs, "---------------------------------");
 
-        // self.config.to_toml("symjit.dump.toml");
+        let name = name.replace("_stats.txt", "_config.toml");
+        self.config.to_toml(&name);
     }
 }
 

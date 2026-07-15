@@ -526,19 +526,19 @@ impl Composer for Translator {
         let mut app = self.composer.compile()?;
 
         if self.config.debug_stats() {
-            app.dump("jit.stats.txt", "stats");
+            app.dump("stats.txt", "stats");
         };
 
         if self.config.debug_bytedode() {
-            app.dump("jit.bytecode.txt", "bytecode");
+            app.dump("bytecode.txt", "bytecode");
         };
 
         if self.config.debug_scalar() {
-            app.dump("jit.scalar.bin", "scalar");
+            app.dump("scalar.bin", "scalar");
         };
 
         if self.config.debug_scalar() {
-            app.dump("jit.simd.bin", "simd");
+            app.dump("simd.bin", "simd");
         };
 
         Ok(app)

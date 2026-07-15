@@ -191,7 +191,7 @@ use anyhow::Result;
 
 // run `cargo run --release --features testing` for testing
 fn main() -> Result<()> {
-    // testing::main()?;
-    testing::profile()?;
+    testing::main()?;
+    // testing::profile()?;
     Ok(())
 }

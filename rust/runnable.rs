@@ -2,6 +2,8 @@ use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 use std::io::{Read, Write};
 
+use rand::distr::{Alphanumeric, SampleString};
+
 use crate::amd::{
     AmdComplexGenerator, AmdSSEGenerator, AmdScalarGenerator, AmdVectorF64x4Generator,
     AmdVectorF64x8Generator,
@@ -583,6 +585,9 @@ impl Application {
     }
 
     pub fn dump(&mut self, name: &str, what: &str) -> bool {
+        let salt = Alphanumeric.sample_string(&mut rand::rng(), 8);
+        let name = &format!("symjit_{}_{}", salt, name);
+
         match what {
             "scalar" => {
                 if let Some(f) = &self.compiled {
