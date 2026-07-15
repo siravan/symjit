@@ -478,33 +478,37 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.emit(arm! {fmov q(4), q(ϕ(s3))});
-        self.emit(arm! {fmla q(4), q(ϕ(s1)), q(ϕ(s2))});
-        self.emit(arm! {fmov q(ϕ(dst)), q(4)});
+        assert!(s1 != Reg::Temp && s2 != Reg::Temp);
+        self.emit(arm! {fmov q(ϕ(Reg::Temp)), q(ϕ(s3))});
+        self.emit(arm! {fmla q(ϕ(Reg::Temp)), q(ϕ(s1)), q(ϕ(s2))});
+        self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(Reg::Temp))});
     }
 
     // fused_mul_sub is s1 * s2 - s3, corresponding to fnmsub in aarch64
     // and vmsub... in amd64
     fn fused_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.emit(arm! {fmov q(4), q(ϕ(s3))});
-        self.emit(arm! {fmls q(4), q(ϕ(s1)), q(ϕ(s2))});
-        self.emit(arm! {fneg q(ϕ(dst)), q(4)});
+        assert!(s1 != Reg::Temp && s2 != Reg::Temp);
+        self.emit(arm! {fmov q(ϕ(Reg::Temp)), q(ϕ(s3))});
+        self.emit(arm! {fmls q(ϕ(Reg::Temp)), q(ϕ(s1)), q(ϕ(s2))});
+        self.emit(arm! {fneg q(ϕ(dst)), q(ϕ(Reg::Temp))});
     }
 
     // fused_neg_mul_add is s3 - s1 * s2, corresponding to fmsub in aarch64
     // and vnmadd... in amd64
     fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.emit(arm! {fmov q(4), q(ϕ(s3))});
-        self.emit(arm! {fmls q(4), q(ϕ(s1)), q(ϕ(s2))});
-        self.emit(arm! {fmov q(ϕ(dst)), q(4)});
+        assert!(s1 != Reg::Temp && s2 != Reg::Temp);
+        self.emit(arm! {fmov q(ϕ(Reg::Temp)), q(ϕ(s3))});
+        self.emit(arm! {fmls q(ϕ(Reg::Temp)), q(ϕ(s1)), q(ϕ(s2))});
+        self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(Reg::Temp))});
     }
 
     // fused_neg_mul_sub is -s3 - s1 * s2, corresponding to fnmadd in aarch64
     // and vnmsub... in amd64
     fn fused_neg_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.emit(arm! {fmov q(4), q(ϕ(s3))});
-        self.emit(arm! {fmla q(4), q(ϕ(s1)), q(ϕ(s2))});
-        self.emit(arm! {fneg q(ϕ(dst)), q(4)});
+        assert!(s1 != Reg::Temp && s2 != Reg::Temp);
+        self.emit(arm! {fmov q(ϕ(Reg::Temp)), q(ϕ(s3))});
+        self.emit(arm! {fmla q(ϕ(Reg::Temp)), q(ϕ(s1)), q(ϕ(s2))});
+        self.emit(arm! {fneg q(ϕ(dst)), q(ϕ(Reg::Temp))});
     }
 
     fn add_consts(&mut self, consts: &[f64]) {
@@ -799,16 +803,18 @@ impl Generator for ArmSimdGenerator {
 
     fn save_used_registers(&mut self, used: &[u8]) {
         for r in used {
-            if *r >= 22 {
-                self.save_stack(reg(*r), *r as u32 - 14);
+            let phys_reg = FMAP[*r as usize];
+            if (8..=15).contains(&phys_reg) {
+                self.save_stack(reg(*r), phys_reg as u32);
             }
         }
     }
 
     fn load_used_registers(&mut self, used: &[u8]) {
         for r in used {
-            if *r >= 22 {
-                self.load_stack(reg(*r), *r as u32 - 14);
+            let phys_reg = FMAP[*r as usize];
+            if (8..=15).contains(&phys_reg) {
+                self.load_stack(reg(*r), phys_reg as u32);
             }
         }
     }

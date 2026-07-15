@@ -602,16 +602,18 @@ impl Generator for ArmGenerator {
 
     fn save_used_registers(&mut self, used: &[u8]) {
         for r in used {
-            if *r >= 22 - 3 {
-                self.save_stack(reg(*r), *r as u32 - 14 + 3);
+            let phys_reg = FMAP[*r as usize];
+            if (8..=15).contains(&phys_reg) {
+                self.save_stack(reg(*r), phys_reg as u32);
             }
         }
     }
 
     fn load_used_registers(&mut self, used: &[u8]) {
         for r in used {
-            if *r >= 22 - 3 {
-                self.load_stack(reg(*r), *r as u32 - 14 + 3);
+            let phys_reg = FMAP[*r as usize];
+            if (8..=15).contains(&phys_reg) {
+                self.load_stack(reg(*r), phys_reg as u32);
             }
         }
     }

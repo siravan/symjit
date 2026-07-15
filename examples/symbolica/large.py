@@ -7,9 +7,9 @@ from symjit import compile_evaluator
 
 CONFIG = os.path.join(os.path.dirname(__file__), "symjit.toml")
 
-DEPTH = 14
+DEPTH = 10
 NCOLS = 2**DEPTH
-NROWS = 107
+NROWS = 1
 
 xs = [S(f"x{i}") for i in range(NCOLS)]
 
@@ -23,15 +23,16 @@ def large(a, b):
         return large(a, n) + large(n, b)
     else:
         n = (a + b) // 2
-        return large(a, n) * large(n, b)
+        return large(a, n) / large(n, b)
 
 
 ev = large(0, NCOLS).evaluator(xs, jit_compile=False)
 f = compile_evaluator(ev, dtype="complex128", ty=CONFIG)
 
-print(f"{len(f.dumps('simd'))} bytes")
-# print(f.dumps("simd"))
-print(large(0, 16))
+# print(f"{len(f.dumps('simd'))} bytes")
+# print(f.dumps("bytecode"))
+# print(f.dumps("scalar"))
+# print(large(0, 16))
 
 X = np.random.rand(NROWS, NCOLS) + np.random.rand(NROWS, NCOLS) * 1j - (0.5 + 0.5j)
 

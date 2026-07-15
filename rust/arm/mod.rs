@@ -20,6 +20,15 @@ const SCRATCH3: u8 = 11;
 const COUNTER: u8 = 12;
 const TEMP: u8 = 1;
 
+/*
+ * registers v8 to v16 are ABI-preserved
+ * registers v29-v31 can be temporary
+ */
+const FMAP: [u8; 30] = [
+    2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 8, 9, 10, 11, 12, 13, 14,
+    15, 29, 30, 31,
+];
+
 const T0: u8 = 29;
 const T1: u8 = 30;
 const T2: u8 = 31;
@@ -40,15 +49,7 @@ fn ϕ(r: Reg) -> u8 {
         Reg::Right => 1,
         Reg::Gen(dst) => {
             assert!(dst < 30);
-            if dst < 6 {
-                dst + 2 // d2-d7
-            } else if dst < 22 - 3 {
-                dst + 10 // d16-28 (d29, d30, and d31 are scratch)
-            } else if dst < 30 - 3 {
-                dst - (14 - 3) // d8-d15 (non-volatile)
-            } else {
-                dst + 2
-            }
+            FMAP[dst as usize]
         }
         Reg::Static(..) => panic!("passing static registers to codegen"),
     }

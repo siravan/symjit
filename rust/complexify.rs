@@ -357,8 +357,8 @@ impl Generator for Complexifier {
             self.mir.neg(im(dst), im(dst));
             self.set_reg_complex(dst);
         } else {
-            self.mir.times(Self::T1, re(s1), re(s1));
-            self.mir.fused_mul_add(Self::T0, im(s1), im(s1), Self::T1);
+            self.mir.times(Self::T0, re(s1), re(s1));
+            self.mir.fused_mul_add(Self::T0, im(s1), im(s1), Self::T0);
             self.mir.divide(re(dst), re(s1), Self::T0);
             self.mir.divide(im(dst), im(s1), Self::T0);
             self.mir.neg(im(dst), im(dst));
@@ -716,21 +716,25 @@ impl Generator for Complexifier {
     }
 
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
+        assert!(s3 != Reg::Ret);
         self.times(Reg::Ret, s1, s2);
         self.plus(dst, Reg::Ret, s3);
     }
 
     fn fused_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
+        assert!(s3 != Reg::Ret);
         self.times(Reg::Ret, s1, s2);
         self.minus(dst, Reg::Ret, s3);
     }
 
     fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
+        assert!(s3 != Reg::Ret);
         self.times(Reg::Ret, s1, s2);
         self.minus(dst, s3, Reg::Ret);
     }
 
     fn fused_neg_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
+        assert!(s3 != Reg::Ret);
         self.times(Reg::Ret, s1, s2);
         self.plus(dst, Reg::Ret, s3);
         self.neg(dst, dst);

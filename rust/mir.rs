@@ -2391,7 +2391,7 @@ impl Mir {
             op: UniOp::Recip, ..
         } = *q0
         {
-            if !q1.regs().contains(&q0.dst()) {
+            if !q1.regs().contains(&q0.dst()) && !q1.regs().contains(&q0.s1()) {
                 if let Instruction::Bi {
                     op: BinOp::Times, ..
                 } = *q2
@@ -2422,7 +2422,7 @@ impl Mir {
                 op: BinOp::Plus, ..
             } = *q2
             {
-                if !q1.regs().contains(&q0.dst()) {
+                if !q1.regs().contains(&q0.dst()) && !q1.regs().contains(&q0.s1()) {
                     if q0.dst() == q2.s2() {
                         code.push(q1);
                         return Some(Instruction::Bi {
@@ -2875,64 +2875,6 @@ impl Mir {
         None
     }
 
-    fn fuse_sin_cos(
-        &self,
-        code: &mut MirWriter,
-        q0: &Instruction,
-        q1: &Instruction,
-        q2: &Instruction,
-        q3: &Instruction,
-        q4: &Instruction,
-    ) -> Option<Instruction> {
-        if self.config.is_complex() {
-            return None;
-        }
-
-        if let Instruction::Load { dst: Reg::Left, .. } = *q0 {
-            if let Instruction::Call { .. } = *q1 {
-                if let Instruction::Save { src: Reg::Ret, .. } = *q2 {
-                    if let Instruction::Load { dst: Reg::Left, .. } = *q3 {
-                        if let Instruction::Call { .. } = *q4 {
-                            if q1.check_label("cos")
-                                && q4.check_label("sin")
-                                && q0.loc() == q3.loc()
-                            {
-                                code.push(q0);
-                                code.push(&Instruction::Call {
-                                    label: "sin_cos".to_string(),
-                                    num_args: 1,
-                                });
-                                return Some(Instruction::Save {
-                                    src: Reg::Temp,
-                                    loc: q2.loc(),
-                                });
-                            } else if q1.check_label("sin")
-                                && q4.check_label("cos")
-                                && q0.loc() == q3.loc()
-                            {
-                                code.push(q0);
-                                code.push(&Instruction::Call {
-                                    label: "sin_cos".to_string(),
-                                    num_args: 1,
-                                });
-                                code.push(&Instruction::Save {
-                                    src: Reg::Ret,
-                                    loc: q2.loc(),
-                                });
-                                return Some(Instruction::Mov {
-                                    dst: Reg::Ret,
-                                    s1: Reg::Temp,
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        None
-    }
-
     fn fuse1(
         &self,
         code: &mut MirWriter,
@@ -2971,23 +2913,7 @@ impl Mir {
         }
     }
 
-    fn fuse2(
-        &self,
-        code: &mut MirWriter,
-        q0: &Instruction,
-        q1: &Instruction,
-        q2: &Instruction,
-        q3: &Instruction,
-        q4: &Instruction,
-    ) -> (Instruction, usize) {
-        if let Some(v) = self.fuse_sin_cos(code, q0, q1, q2, q3, q4) {
-            (v, 5)
-        } else {
-            (Instruction::Nop, 0)
-        }
-    }
-
-    pub fn optimize_peephole(&mut self, stage: usize) -> bool {
+    pub fn optimize_peephole(&mut self, _stage: usize) -> bool {
         let mut success = false;
 
         let mut code = MirWriter::new();
@@ -2999,12 +2925,7 @@ impl Mir {
         let mut q4: Instruction = iter.next().unwrap_or(Instruction::End).clone();
 
         while !matches!(q0, Instruction::End) {
-            let (top, num_consumed) = match stage {
-                1 => self.fuse1(&mut code, &q0, &q1, &q2, &q3, &q4),
-                2 => self.fuse2(&mut code, &q0, &q1, &q2, &q3, &q4),
-                _ => unreachable!(),
-            };
-
+            let (top, num_consumed) = self.fuse1(&mut code, &q0, &q1, &q2, &q3, &q4);
             success |= num_consumed > 1;
 
             match num_consumed {
