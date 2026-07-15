@@ -600,20 +600,20 @@ impl Generator for ArmGenerator {
         self.emit(arm! {ret});
     }
 
-    fn save_used_registers(&mut self, used: &[u8]) {
+    fn save_used_registers(&mut self, used: &[Reg]) {
         for r in used {
-            let phys_reg = FMAP[*r as usize];
+            let phys_reg = ϕ(*r);
             if (8..=15).contains(&phys_reg) {
-                self.save_stack(reg(*r), phys_reg as u32);
+                self.save_stack(*r, phys_reg as u32);
             }
         }
     }
 
-    fn load_used_registers(&mut self, used: &[u8]) {
+    fn load_used_registers(&mut self, used: &[Reg]) {
         for r in used {
-            let phys_reg = FMAP[*r as usize];
+            let phys_reg = ϕ(*r);
             if (8..=15).contains(&phys_reg) {
-                self.load_stack(reg(*r), phys_reg as u32);
+                self.load_stack(*r, phys_reg as u32);
             }
         }
     }

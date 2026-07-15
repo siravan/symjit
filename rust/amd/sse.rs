@@ -662,22 +662,24 @@ impl Generator for AmdSSEGenerator {
         self.amd.ret();
     }
 
-    fn save_used_registers(&mut self, used: &[u8]) {
-        let count_shadows = self.count_shadows();
-
-        for r in used {
-            if *r >= count_shadows {
-                self.save_stack(reg(*r), *r as u32 + 2);
+    fn save_used_registers(&mut self, used: &[Reg]) {
+        if cfg!(target_family = "windows") {
+            for r in used {
+                let phys_reg = ϕ(*r);
+                if (6..=15).contains(&phys_reg) {
+                    self.save_stack(*r, phys_reg as u32);
+                }
             }
         }
     }
 
-    fn load_used_registers(&mut self, used: &[u8]) {
-        let count_shadows = self.count_shadows();
-
-        for r in used {
-            if *r >= count_shadows {
-                self.load_stack(reg(*r), *r as u32 + 2);
+    fn load_used_registers(&mut self, used: &[Reg]) {
+        if cfg!(target_family = "windows") {
+            for r in used {
+                let phys_reg = ϕ(*r);
+                if (6..=15).contains(&phys_reg) {
+                    self.load_stack(*r, phys_reg as u32);
+                }
             }
         }
     }

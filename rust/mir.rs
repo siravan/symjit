@@ -385,19 +385,19 @@ impl Mir {
         }
     }
 
-    pub fn used_registers(&self) -> Vec<u8> {
+    pub fn used_registers(&self) -> Vec<Reg> {
         let mut mask: u32 = 0;
 
         for ins in self.code.iter() {
             mask |= Self::get_dst(&ins);
         }
 
-        let mut used: Vec<u8> = Vec::new();
+        let mut used: Vec<Reg> = Vec::new();
 
         // 32 is the max possible logical register count
         for i in 0..32 {
             if mask & (1 << i) != 0 {
-                used.push(i);
+                used.push(Reg::Gen(i));
             }
         }
 

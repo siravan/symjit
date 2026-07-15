@@ -793,8 +793,8 @@ impl Generator for Complexifier {
     ) {
     }
 
-    fn save_used_registers(&mut self, _used: &[u8]) {}
-    fn load_used_registers(&mut self, _used: &[u8]) {}
+    fn save_used_registers(&mut self, _used: &[Reg]) {}
+    fn load_used_registers(&mut self, _used: &[Reg]) {}
 
     fn fuse_load_math(&mut self) {}
 

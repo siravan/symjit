@@ -813,18 +813,24 @@ impl Generator for RiscV {
         self.emit(rvv! {ret});
     }
 
-    fn save_used_registers(&mut self, used: &[u8]) {
+    fn save_used_registers(&mut self, used: &[Reg]) {
         for r in used {
-            if *r >= 18 {
-                self.save_stack(reg(*r), *r as u32 - 14);
+            let phys_reg = ϕ(*r);
+            if (8..=9).contains(&phys_reg) {
+                self.save_stack(*r, (phys_reg - 4) as u32);
+            } else if (18..=27).contains(&phys_reg) {
+                self.save_stack(*r, (phys_reg - 12) as u32);
             }
         }
     }
 
-    fn load_used_registers(&mut self, used: &[u8]) {
+    fn load_used_registers(&mut self, used: &[Reg]) {
         for r in used {
-            if *r >= 18 {
-                self.load_stack(reg(*r), *r as u32 - 14);
+            let phys_reg = ϕ(*r);
+            if (8..=9).contains(&phys_reg) {
+                self.load_stack(*r, (phys_reg - 4) as u32);
+            } else if (18..=27).contains(&phys_reg) {
+                self.load_stack(*r, (phys_reg - 12) as u32);
             }
         }
     }
