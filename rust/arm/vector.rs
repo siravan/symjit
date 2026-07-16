@@ -842,7 +842,7 @@ impl ArmSimdGenerator {
         self.emit(arm! {mov x(SCRATCH2), x(PARAMS)});
         self.emit(arm! {mov x(PARAMS), sp});
 
-        if count_params >= 100 {
+        if count_params >= 16 {
             self.emit(arm! {mov x(SCRATCH3), x(PARAMS)});
             self.emit(arm! {movz x(COUNTER), #count_params & 0xffff});
             self.emit(arm! {movk_lsl16 x(COUNTER), #count_params >> 16});
@@ -883,7 +883,7 @@ impl ArmSimdGenerator {
         self.emit(arm! {tst x(IDX), x(IDX)});
         self.jump("@done", 0, |offset, _| arm! {b.eq label(offset)});
 
-        if count_obs >= 100 {
+        if count_obs >= 16 {
             self.emit(arm! {mov x(SCRATCH2), x(MEM)});
             self.emit(arm! {mov x(SCRATCH3), x(STATES)});
             self.emit(arm! {movz x(COUNTER), #count_obs & 0xffff});
