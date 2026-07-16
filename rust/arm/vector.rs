@@ -468,11 +468,7 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn xor(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        if s1 == s2 {
-            self.emit(arm! {fmov q(ϕ(dst)), #0.0});
-        } else {
-            self.emit(arm! {eor v(ϕ(dst)).16b, v(ϕ(s1)).16b, v(ϕ(s2)).16b});
-        }
+        self.emit(arm! {eor v(ϕ(dst)).16b, v(ϕ(s1)).16b, v(ϕ(s2)).16b});
     }
 
     fn not(&mut self, dst: Reg, s1: Reg) {
