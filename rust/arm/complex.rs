@@ -232,13 +232,13 @@ impl Generator for ArmComplexGenerator {
         self.emit(arm! {fsqrt d(T1), d(T1)});
         self.emit(arm! {fabs d(T2), d(ϕ(s1))});
         self.emit(arm! {fadd d(T1), d(T1), d(T2)});
-        self.emit(arm! {fmov d(T0), #2.0});
-        self.emit(arm! {fdiv d(T1), d(T1), d(T0)});
+        self.emit(arm! {fmov d(T0), #0.5});
+        self.emit(arm! {fmul d(T1), d(T1), d(T0)});
         self.emit(arm! {fsqrt d(T1), d(T1)});
 
         self.emit(arm! {zip2 q(T2), q(ϕ(s1)), q(ϕ(s1))});
         self.emit(arm! {fdiv d(T2), d(T2), d(T1)});
-        self.emit(arm! {fdiv d(T2), d(T2), d(T0)});
+        self.emit(arm! {fmul d(T2), d(T2), d(T0)});
 
         self.emit(arm! {fcmeq d(T0), d(T2), d(T2)});
         self.emit(arm! {and v(T2).8b, v(T2).8b, v(T0).8b});
@@ -269,9 +269,8 @@ impl Generator for ArmComplexGenerator {
     }
 
     fn half(&mut self, dst: Reg, s1: Reg) {
-        self.emit(arm! {fmov d(TEMP), #2.0});
-        self.emit(arm! {dup q(TEMP), q(TEMP)[0]});
-        self.emit(arm! {fdiv q(ϕ(dst)), q(ϕ(s1)), q(TEMP)});
+        self.emit(arm! {fmov q(TEMP), #0.5});
+        self.emit(arm! {fmul q(ϕ(dst)), q(ϕ(s1)), q(TEMP)});
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {
@@ -444,7 +443,11 @@ impl Generator for ArmComplexGenerator {
     }
 
     fn xor(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(arm! {eor v(ϕ(dst)).16b, v(ϕ(s1)).16b, v(ϕ(s2)).16b});
+        if s1 == s2 {
+            self.emit(arm! {fmov q(ϕ(dst)), #0.0});
+        } else {
+            self.emit(arm! {eor v(ϕ(dst)).16b, v(ϕ(s1)).16b, v(ϕ(s2)).16b});
+        }
     }
 
     fn not(&mut self, dst: Reg, s1: Reg) {

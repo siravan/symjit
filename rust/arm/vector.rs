@@ -310,15 +310,13 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
-        self.emit(arm! {fmov d(TEMP), #1.0});
-        self.emit(arm! {dup q(TEMP), q(TEMP)[0]});
+        self.emit(arm! {fmov q(TEMP), #1.0});
         self.emit(arm! {fdiv q(ϕ(dst)), q(TEMP), q(ϕ(s1))});
     }
 
     fn half(&mut self, dst: Reg, s1: Reg) {
-        self.emit(arm! {fmov d(TEMP), #2.0});
-        self.emit(arm! {dup q(TEMP), q(TEMP)[0]});
-        self.emit(arm! {fdiv q(ϕ(dst)), q(ϕ(s1)), q(TEMP)});
+        self.emit(arm! {fmov q(TEMP), #0.5});
+        self.emit(arm! {fmul q(ϕ(dst)), q(ϕ(s1)), q(TEMP)});
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {
@@ -470,7 +468,11 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn xor(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(arm! {eor v(ϕ(dst)).16b, v(ϕ(s1)).16b, v(ϕ(s2)).16b});
+        if s1 == s2 {
+            self.emit(arm! {fmov q(ϕ(dst)), #0.0});
+        } else {
+            self.emit(arm! {eor v(ϕ(dst)).16b, v(ϕ(s1)).16b, v(ϕ(s2)).16b});
+        }
     }
 
     fn not(&mut self, dst: Reg, s1: Reg) {
@@ -479,36 +481,36 @@ impl Generator for ArmSimdGenerator {
 
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
         assert!(s1 != Reg::Temp && s2 != Reg::Temp);
-        self.emit(arm! {fmov q(ϕ(Reg::Temp)), q(ϕ(s3))});
-        self.emit(arm! {fmla q(ϕ(Reg::Temp)), q(ϕ(s1)), q(ϕ(s2))});
-        self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(Reg::Temp))});
+        self.emit(arm! {fmov q(TEMP), q(ϕ(s3))});
+        self.emit(arm! {fmla q(TEMP), q(ϕ(s1)), q(ϕ(s2))});
+        self.emit(arm! {fmov q(ϕ(dst)), q(TEMP)});
     }
 
     // fused_mul_sub is s1 * s2 - s3, corresponding to fnmsub in aarch64
     // and vmsub... in amd64
     fn fused_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
         assert!(s1 != Reg::Temp && s2 != Reg::Temp);
-        self.emit(arm! {fmov q(ϕ(Reg::Temp)), q(ϕ(s3))});
-        self.emit(arm! {fmls q(ϕ(Reg::Temp)), q(ϕ(s1)), q(ϕ(s2))});
-        self.emit(arm! {fneg q(ϕ(dst)), q(ϕ(Reg::Temp))});
+        self.emit(arm! {fmov q(TEMP), q(ϕ(s3))});
+        self.emit(arm! {fmls q(TEMP), q(ϕ(s1)), q(ϕ(s2))});
+        self.emit(arm! {fneg q(ϕ(dst)), q(TEMP)});
     }
 
     // fused_neg_mul_add is s3 - s1 * s2, corresponding to fmsub in aarch64
     // and vnmadd... in amd64
     fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
         assert!(s1 != Reg::Temp && s2 != Reg::Temp);
-        self.emit(arm! {fmov q(ϕ(Reg::Temp)), q(ϕ(s3))});
-        self.emit(arm! {fmls q(ϕ(Reg::Temp)), q(ϕ(s1)), q(ϕ(s2))});
-        self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(Reg::Temp))});
+        self.emit(arm! {fmov q(TEMP), q(ϕ(s3))});
+        self.emit(arm! {fmls q(TEMP), q(ϕ(s1)), q(ϕ(s2))});
+        self.emit(arm! {fmov q(ϕ(dst)), q(TEMP)});
     }
 
     // fused_neg_mul_sub is -s3 - s1 * s2, corresponding to fnmadd in aarch64
     // and vnmsub... in amd64
     fn fused_neg_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
         assert!(s1 != Reg::Temp && s2 != Reg::Temp);
-        self.emit(arm! {fmov q(ϕ(Reg::Temp)), q(ϕ(s3))});
-        self.emit(arm! {fmla q(ϕ(Reg::Temp)), q(ϕ(s1)), q(ϕ(s2))});
-        self.emit(arm! {fneg q(ϕ(dst)), q(ϕ(Reg::Temp))});
+        self.emit(arm! {fmov q(TEMP), q(ϕ(s3))});
+        self.emit(arm! {fmla q(TEMP), q(ϕ(s1)), q(ϕ(s2))});
+        self.emit(arm! {fneg q(ϕ(dst)), q(TEMP)});
     }
 
     fn add_consts(&mut self, consts: &[f64]) {
@@ -663,7 +665,7 @@ impl Generator for ArmSimdGenerator {
             self.emit(arm! {bsl v(ϕ(dst)).16b, v(ϕ(true_val)).16b, v(ϕ(false_val)).16b});
         } else {
             self.load_stack(Reg::Temp, idx);
-            self.emit(arm! {bsl v(ϕ(Reg::Temp)).16b, v(ϕ(true_val)).16b, v(ϕ(false_val)).16b});
+            self.emit(arm! {bsl v(TEMP).16b, v(ϕ(true_val)).16b, v(ϕ(false_val)).16b});
             self.fmov(dst, Reg::Temp);
         }
     }

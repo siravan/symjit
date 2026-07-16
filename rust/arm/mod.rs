@@ -18,7 +18,7 @@ const SCRATCH1: u8 = 9;
 const SCRATCH2: u8 = 10;
 const SCRATCH3: u8 = 11;
 const COUNTER: u8 = 12;
-const TEMP: u8 = 1;
+const TEMP: u8 = ϕ(Reg::Temp);
 
 /*
  * registers v8 to v16 are ABI-preserved
@@ -41,7 +41,7 @@ pub use complex::ArmComplexGenerator;
 pub use scalar::ArmGenerator;
 pub use vector::ArmSimdGenerator;
 
-fn ϕ(r: Reg) -> u8 {
+const fn ϕ(r: Reg) -> u8 {
     match r {
         Reg::Ret => 0,  // d0
         Reg::Temp => 1, // d1

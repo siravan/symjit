@@ -252,8 +252,8 @@ impl Generator for ArmGenerator {
     }
 
     fn half(&mut self, dst: Reg, s1: Reg) {
-        self.emit(arm! {fmov d(TEMP), #2.0});
-        self.emit(arm! {fdiv d(ϕ(dst)), d(ϕ(s1)), d(TEMP)});
+        self.emit(arm! {fmov d(TEMP), #0.5});
+        self.emit(arm! {fmul d(ϕ(dst)), d(ϕ(s1)), d(TEMP)});
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {
@@ -394,7 +394,11 @@ impl Generator for ArmGenerator {
     }
 
     fn xor(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(arm! {eor v(ϕ(dst)).8b, v(ϕ(s1)).8b, v(ϕ(s2)).8b});
+        if s1 == s2 {
+            self.emit(arm! {fmov d(ϕ(dst)), #0.0});
+        } else {
+            self.emit(arm! {eor v(ϕ(dst)).8b, v(ϕ(s1)).8b, v(ϕ(s2)).8b});
+        }
     }
 
     fn not(&mut self, dst: Reg, s1: Reg) {
