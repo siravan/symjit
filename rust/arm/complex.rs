@@ -5,7 +5,7 @@ use crate::code::Func;
 use crate::config::{Config, SPILL_AREA};
 use crate::generator::{FuncletType, Generator};
 use crate::symbol::Loc;
-use crate::utils::{align_stack, is_external_func, reg, Reg};
+use crate::utils::{align_stack, is_external_func, Reg};
 
 use super::*;
 

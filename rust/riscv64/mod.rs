@@ -5,7 +5,7 @@ use crate::assembler::{Assembler, Jumper};
 use crate::config::Config;
 use crate::generator::{FuncletType, Generator};
 use crate::symbol::Loc;
-use crate::utils::{align_stack, reg, Reg};
+use crate::utils::{align_stack, Reg};
 use anyhow::Result;
 
 fn hi(x: u32) -> u32 {

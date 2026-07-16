@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt;
 
 use anyhow::Result;
@@ -326,10 +326,10 @@ impl GreedyAllocator {
                 }
             }
 
-            return (
+            (
                 self.assign(q.expect("register pool is empty"), s, None),
                 false,
-            );
+            )
         } else {
             (dst, false)
         }
@@ -353,13 +353,13 @@ impl GreedyAllocator {
                 }
             }
 
-            if p.is_some() {
-                return (self.assign(p.unwrap(), s, Some(loc)), false);
+            if let Some(p) = p {
+                (self.assign(p, s, Some(loc)), false)
             } else {
-                return (
+                (
                     self.assign(q.expect("register pool is empty"), s, Some(loc)),
                     false,
-                );
+                )
             }
         } else {
             (dst, false)
@@ -464,9 +464,8 @@ impl GreedyAllocator {
                     let s1 = self.deallocate(s1);
 
                     let (dst, _) = if let Reg::Gen(r) = s1 {
-                        let loc = self.allocs[r as usize].loc;
-                        if loc.is_some() {
-                            self.allocate_loc(ip, dst, loc.unwrap())
+                        if let Some(loc) = self.allocs[r as usize].loc {
+                            self.allocate_loc(ip, dst, loc)
                         } else {
                             self.allocate(ip, dst)
                         }

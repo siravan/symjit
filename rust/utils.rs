@@ -44,6 +44,7 @@ pub fn align_stack(n: u32) -> u32 {
 /*****************************************/
 
 #[derive(PartialEq)]
+#[allow(unused)]
 pub enum DataType {
     F32,
     F64,

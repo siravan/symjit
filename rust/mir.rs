@@ -1219,6 +1219,7 @@ impl Mir {
         Self::set(regs, dst, val);
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn exec_load_math(
         mem: &mut [f64],
         stack: &mut [f64],
@@ -1260,6 +1261,7 @@ impl Mir {
         Self::set(regs, dst, val);
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn exec_complex(
         regs: &mut [f64],
         op: ArithOp,
@@ -2009,14 +2011,6 @@ impl Instruction {
             Instruction::BranchIf { label, .. } => Some(label.to_string()),
             Instruction::Call { label, .. } => Some(label.to_string()),
             _ => None,
-        }
-    }
-
-    fn check_label(&self, s: &str) -> bool {
-        match self {
-            Instruction::Call { label, .. } => s == label,
-            Instruction::Label { label } => s == label,
-            _ => false,
         }
     }
 

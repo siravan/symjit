@@ -5,7 +5,7 @@ use crate::code::Func;
 use crate::config::{Config, SPILL_AREA};
 use crate::generator::{FuncletType, Generator};
 use crate::symbol::Loc;
-use crate::utils::{align_stack, is_external_func, reg, Reg};
+use crate::utils::{align_stack, is_external_func, Reg};
 
 use super::*;
 
@@ -468,7 +468,11 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn xor(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(arm! {eor v(ϕ(dst)).16b, v(ϕ(s1)).16b, v(ϕ(s2)).16b});
+        if s1 == s2 {
+            self.emit(arm! {movi q(ϕ(dst)), #0});
+        } else {
+            self.emit(arm! {eor v(ϕ(dst)).16b, v(ϕ(s1)).16b, v(ϕ(s2)).16b});
+        }
     }
 
     fn not(&mut self, dst: Reg, s1: Reg) {

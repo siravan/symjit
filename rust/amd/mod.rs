@@ -130,6 +130,7 @@ fn predefined_consts(amd: &mut Amd) {
  * vaddsd xmm2, xmm3, [rbp + 0x1234]
  *
  */
+#[allow(clippy::collapsible_if)]
 fn fuse_load_math(amd: &mut Amd, last_load: usize) {
     let ip0 = last_load; // the address of the last load instruction
     let ip1 = amd.a.ip() - 4; // the address of the last math op

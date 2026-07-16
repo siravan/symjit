@@ -18,6 +18,7 @@ pub struct Prefix {
     pp: u8,
 }
 
+#[allow(unused)]
 impl Prefix {
     pub fn new(reg: u8, vreg: u8, rm: u8) -> Prefix {
         assert!(reg < 32 && vreg < 32 && rm < 32);
@@ -74,7 +75,7 @@ impl Prefix {
         self
     }
 
-    pub fn set_mask(&mut self, maks: Masking) -> &mut Self {
+    fn set_mask(&mut self, maks: Masking) -> &mut Self {
         self.mask = maks;
         self
     }

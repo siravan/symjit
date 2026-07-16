@@ -144,7 +144,9 @@ impl Defuns {
         }
     }
 
-    pub fn add_func(&mut self, name: &str, p: *const usize, num_args: usize) {
+    /// # Safety
+    ///     p should points to a valid function
+    pub unsafe fn add_func(&mut self, name: &str, p: *const usize, num_args: usize) {
         match num_args {
             1 => {
                 let f: UnaryFunc = unsafe { std::mem::transmute(p) };

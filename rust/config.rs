@@ -8,30 +8,31 @@ use crate::code::VirtualTable;
 use crate::defuns::Defuns;
 use crate::utils::Storage;
 
-pub const USE_SIMD: u32 = 0x00000001;
-pub const USE_THREADS: u32 = 0x00000002;
-pub const CSE: u32 = 0x00000004;
-pub const FASTMATH: u32 = 0x00000008;
+pub const USE_SIMD: u32 = 0x0000_0001;
+pub const USE_THREADS: u32 = 0x0000_0002;
+pub const CSE: u32 = 0x0000_0004;
+pub const FASTMATH: u32 = 0x0000_0008;
 
-pub const ENABLE_SIMD512: u32 = 0x00000010;
-pub const COMPLEX: u32 = 0x00000020;
-pub const SYMBOLICA: u32 = 0x00000040;
-pub const SIMD_BRANCH: u32 = 0x00000080;
+pub const ENABLE_SIMD512: u32 = 0x0000_0010;
+pub const COMPLEX: u32 = 0x0000_0020;
+pub const SYMBOLICA: u32 = 0x0000_0040;
+pub const SIMD_BRANCH: u32 = 0x0000_0080;
 
-pub const COMPACT: u32 = 0x00001000;
-pub const COMPRESS: u32 = 0x00002000;
-pub const DIRECT: u32 = 0x00004000;
-pub const FAST_COMPLEX: u32 = 0x00008000;
+pub const COMPACT: u32 = 0x0000_1000;
+pub const COMPRESS: u32 = 0x0000_2000;
+pub const DIRECT: u32 = 0x0000_4000;
+pub const FAST_COMPLEX: u32 = 0x0000_8000;
 
-pub const DEBUG_BYTECODE: u32 = 0x000010000;
-pub const DEBUG_SCALAR: u32 = 0x000020000;
-pub const DEBUG_SIMD: u32 = 0x000040000;
-pub const DEBUG_STATS: u32 = 0x000080000;
+pub const DEBUG_BYTECODE: u32 = 0x0001_0000;
+pub const DEBUG_SCALAR: u32 = 0x0002_0000;
+pub const DEBUG_SIMD: u32 = 0x0004_0000;
+pub const DEBUG_STATS: u32 = 0x0008_0000;
+pub const DEBUG_LOCK: u32 = 0x0100_0000;
 
-pub const HUGE: u32 = 0x00100000;
-pub const PARALLEL_MUL: u32 = 0x00200000;
+pub const HUGE: u32 = 0x0010_0000;
+pub const PARALLEL_MUL: u32 = 0x0020_0000;
 
-pub const OPT_LEVEL_MASK: u32 = 0x00000f00;
+pub const OPT_LEVEL_MASK: u32 = 0x0000_0f00;
 pub const OPT_LEVEL_SHIFT: usize = 8;
 
 pub const SPILL_AREA: usize = 16;
@@ -79,6 +80,7 @@ struct DebugOptions {
     scalar: bool,
     simd: bool,
     stats: bool,
+    lock: bool,
 }
 
 impl Config {
@@ -137,6 +139,7 @@ impl Config {
         config.set_debug_scalar(c.debug.scalar);
         config.set_debug_simd(c.debug.simd);
         config.set_debug_stats(c.debug.stats);
+        config.set_debug_stats(c.debug.lock);
 
         Ok(config)
     }
@@ -177,6 +180,7 @@ impl Config {
             scalar: self.debug_scalar(),
             simd: self.debug_simd(),
             stats: self.debug_stats(),
+            lock: self.debug_lock(),
         };
 
         let c: ConfigToml = ConfigToml { ty, options, debug };
@@ -322,6 +326,10 @@ impl Config {
         self.test(DEBUG_STATS)
     }
 
+    pub fn debug_lock(&self) -> bool {
+        self.test(DEBUG_LOCK)
+    }
+
     pub fn opt_level(&self) -> u8 {
         let level = ((self.opt & OPT_LEVEL_MASK) >> OPT_LEVEL_SHIFT) as u8;
 
@@ -389,33 +397,45 @@ impl Config {
 
     /// Sets of optimization level. The valid values are 0, 1, 2, which roughly correspond to gcc O0, O1, and O2 levels.
     pub fn set_opt_level(&mut self, opt_level: u8) {
-        self.opt = (self.opt & !OPT_LEVEL_MASK) | ((opt_level as u32) << OPT_LEVEL_SHIFT);
+        if !self.debug_lock() {
+            self.opt = (self.opt & !OPT_LEVEL_MASK) | ((opt_level as u32) << OPT_LEVEL_SHIFT);
+        }
     }
 
     /// Enables Common-Subexpression-Elimination.
     pub fn set_cse(&mut self, enabled: bool) {
-        self.opt = (self.opt & !CSE) | if enabled { CSE } else { 0 };
+        if !self.debug_lock() {
+            self.opt = (self.opt & !CSE) | if enabled { CSE } else { 0 };
+        }
     }
 
     /// Enables fastmath mode. The main effect is to generate fused-multiply-addition
     /// instructions if possible.
     pub fn set_fastmath(&mut self, enabled: bool) {
-        self.opt = (self.opt & !FASTMATH) | if enabled { FASTMATH } else { 0 };
+        if !self.debug_lock() {
+            self.opt = (self.opt & !FASTMATH) | if enabled { FASTMATH } else { 0 };
+        }
     }
 
     /// Enables SIMD mode.
     pub fn set_simd(&mut self, enabled: bool) {
-        self.opt = (self.opt & !USE_SIMD) | if enabled { USE_SIMD } else { 0 };
+        if !self.debug_lock() {
+            self.opt = (self.opt & !USE_SIMD) | if enabled { USE_SIMD } else { 0 };
+        }
     }
 
     /// Enables SIMD mode.
     pub fn enable_simd512(&mut self, enabled: bool) {
-        self.opt = (self.opt & !ENABLE_SIMD512) | if enabled { ENABLE_SIMD512 } else { 0 };
+        if !self.debug_lock() {
+            self.opt = (self.opt & !ENABLE_SIMD512) | if enabled { ENABLE_SIMD512 } else { 0 };
+        }
     }
 
     /// Enables forced SIMD branching mode.
     pub fn set_simd_branch(&mut self, enabled: bool) {
-        self.opt = (self.opt & !SIMD_BRANCH) | if enabled { SIMD_BRANCH } else { 0 };
+        if !self.debug_lock() {
+            self.opt = (self.opt & !SIMD_BRANCH) | if enabled { SIMD_BRANCH } else { 0 };
+        }
     }
 
     /// Enables Complex Numbers.
@@ -425,12 +445,16 @@ impl Config {
 
     /// Enables Fast Complex (using SIMD instructions in the scalar code).
     pub fn set_fast_complex(&mut self, enabled: bool) {
-        self.opt = (self.opt & !FAST_COMPLEX) | if enabled { FAST_COMPLEX } else { 0 };
+        if !self.debug_lock() {
+            self.opt = (self.opt & !FAST_COMPLEX) | if enabled { FAST_COMPLEX } else { 0 };
+        }
     }
 
     /// Enables Multi-threading.
     pub fn set_threads(&mut self, enabled: bool) {
-        self.opt = (self.opt & !USE_THREADS) | if enabled { USE_THREADS } else { 0 };
+        if !self.debug_lock() {
+            self.opt = (self.opt & !USE_THREADS) | if enabled { USE_THREADS } else { 0 };
+        }
     }
 
     /// Enables Symbolica Mode.
@@ -440,27 +464,37 @@ impl Config {
 
     /// Compact stack frame.
     pub fn set_compact(&mut self, enabled: bool) {
-        self.opt = (self.opt & !COMPACT) | if enabled { COMPACT } else { 0 };
+        if !self.debug_lock() {
+            self.opt = (self.opt & !COMPACT) | if enabled { COMPACT } else { 0 };
+        }
     }
 
     /// Memory-saver mode for very large inputs.
     pub fn set_compress(&mut self, enabled: bool) {
-        self.opt = (self.opt & !COMPRESS) | if enabled { COMPRESS } else { 0 };
+        if !self.debug_lock() {
+            self.opt = (self.opt & !COMPRESS) | if enabled { COMPRESS } else { 0 };
+        }
     }
 
     /// Direct translation from Symbolica IR to Symjit IR.
     pub fn set_dicect(&mut self, enabled: bool) {
-        self.opt = (self.opt & !DIRECT) | if enabled { DIRECT } else { 0 };
+        if !self.debug_lock() {
+            self.opt = (self.opt & !DIRECT) | if enabled { DIRECT } else { 0 };
+        }
     }
 
     /// Huge paged to reduce TLB pressure.
     pub fn set_huge(&mut self, enabled: bool) {
-        self.opt = (self.opt & !HUGE) | if enabled { HUGE } else { 0 };
+        if !self.debug_lock() {
+            self.opt = (self.opt & !HUGE) | if enabled { HUGE } else { 0 };
+        }
     }
 
     /// Merge serial complex multiplications into parallel operation.
     pub fn set_parallel_mul(&mut self, enabled: bool) {
-        self.opt = (self.opt & !PARALLEL_MUL) | if enabled { PARALLEL_MUL } else { 0 };
+        if !self.debug_lock() {
+            self.opt = (self.opt & !PARALLEL_MUL) | if enabled { PARALLEL_MUL } else { 0 };
+        }
     }
 
     /// Dump bytecode for debugging
@@ -481,6 +515,11 @@ impl Config {
     /// Print stats for debugging
     pub fn set_debug_stats(&mut self, enabled: bool) {
         self.opt = (self.opt & !DEBUG_STATS) | if enabled { DEBUG_STATS } else { 0 };
+    }
+
+    /// Print stats for debugging
+    pub fn set_debug_lock(&mut self, enabled: bool) {
+        self.opt = (self.opt & !DEBUG_LOCK) | if enabled { DEBUG_LOCK } else { 0 };
     }
 
     pub fn max_lanes(&self) -> usize {

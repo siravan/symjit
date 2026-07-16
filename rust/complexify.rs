@@ -90,6 +90,7 @@ impl Complexifier {
         self.real_regs[ϕ(s1)]
     }
 
+    #[allow(unused)]
     fn set_loc_real(&mut self, loc: Loc) {
         self.real_locs.insert(loc);
     }
