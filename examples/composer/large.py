@@ -3,11 +3,12 @@ import math
 import numpy as np
 from symjit import Composer, compile_composer
 
-DEPTH = 16
+DEPTH = 13
 NCOLS = 2**DEPTH
-NROWS = 1
+NROWS = 128
 
-X = np.random.rand(NROWS, NCOLS) + np.random.rand(NROWS, NCOLS) * 1j - (0.5 + 0.5j)
+K = np.reshape(np.arange(NROWS * NCOLS), (NROWS, NCOLS))
+X = np.cos(K) + np.sin(K)**2 * 1j
 
 def large(cp: Composer, a: int, b: int):
     d = b - a
@@ -26,12 +27,13 @@ def large(cp: Composer, a: int, b: int):
 
 for depth in range(DEPTH+1):
     print(f"{depth}\t", end='')
-    cp = Composer(NCOLS, 1)
-    root, val = large(cp, 0, 2**depth)
+    ncols = 2**depth
+    cp = Composer(ncols, 1)
+    root, val = large(cp, 0, ncols)
     cp.assign(cp.out(0), root)
 
     f = compile_composer(cp, dtype="complex128")
-    B = f.evaluate_complex(X)
+    B = f.evaluate_complex(X[:, 0:ncols])
 
     np.testing.assert_array_almost_equal(val, B[0], verbose=True)
     print(f"{B[0]}; pass!")
