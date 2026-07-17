@@ -94,7 +94,6 @@ impl RiscV {
 }
 
 const FMAP: [u8; 30] = [
-    // used:
     RiscV::fa2,
     RiscV::fa3,
     RiscV::fa4,
@@ -109,11 +108,10 @@ const FMAP: [u8; 30] = [
     RiscV::ft5,
     RiscV::ft6,
     RiscV::ft7,
-    // available:
     RiscV::ft8,
-    RiscV::ft9,  // t
-    RiscV::ft10, // xt
-    RiscV::ft11, // yt
+    RiscV::ft9,
+    RiscV::ft10,
+    RiscV::ft11,
     RiscV::fs0,
     RiscV::fs1,
     RiscV::fs2,
@@ -444,31 +442,31 @@ impl Generator for RiscV {
     }
 
     fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
-        let xt = Self::ft10;
-        let yt = Self::ft11;
+        let xt = Reg::Gen(2);
+        let yt = Reg::Gen(3);
 
-        self.emit(rvv! {fmul.d f(xt), f(ϕ(y1)), f(ϕ(y2))});
-        self.emit(rvv! {fmsub.d f(xt), f(ϕ(x1)), f(ϕ(x2)), f(xt)});
-        self.emit(rvv! {fmul.d f(yt), f(ϕ(x1)), f(ϕ(y2))});
-        self.emit(rvv! {fmadd.d f(ϕ(yd)), f(ϕ(x2)), f(ϕ(y1)), f(yt)});
-        self.emit(rvv! {fmv.d f(ϕ(xd)), f(xt)});
+        self.times(xt, y1, y2);
+        self.fused_mul_sub(xt, x1, x2, xt);
+        self.times(yt, x1, y2);
+        self.fused_mul_add(yd, x2, y1, yt);
+        self.fmov(xd, xt);
 
         true
     }
 
     fn divide_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
-        let t = Self::ft9;
-        let xt = Self::ft10;
-        let yt = Self::ft11;
+        let xt = Reg::Gen(2);
+        let yt = Reg::Gen(3);
+        let t = Reg::Temp;
 
-        self.emit(rvv! {fmul.d f(xt), f(ϕ(x1)), f(ϕ(x2))});
-        self.emit(rvv! {fmadd.d f(xt), f(ϕ(y1)), f(ϕ(y2)), f(xt)});
-        self.emit(rvv! {fmul.d f(yt), f(ϕ(x1)), f(ϕ(y2))});
-        self.emit(rvv! {fmsub.d f(yt), f(ϕ(x2)), f(ϕ(y1)), f(yt)});
-        self.emit(rvv! {fmul.d f(t), f(ϕ(x2)), f(ϕ(x2))});
-        self.emit(rvv! {fmadd.d f(t), f(ϕ(y2)), f(ϕ(y2)), f(t)});
-        self.emit(rvv! {fdiv.d f(ϕ(xd)), f(xt), f(t)});
-        self.emit(rvv! {fdiv.d f(ϕ(yd)), f(yt), f(t)});
+        self.times(xt, y1, y2);
+        self.fused_mul_add(xt, x1, x2, xt);
+        self.times(yt, x1, y2);
+        self.fused_mul_sub(yt, x2, y1, yt);
+        self.times(t, x2, x2);
+        self.fused_mul_add(t, y2, y2, t);
+        self.divide(xd, xt, t);
+        self.divide(yd, yt, t);
 
         true
     }
