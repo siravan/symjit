@@ -306,7 +306,10 @@ impl Application {
                     8,
                 );
             } else if stack_size * std::mem::size_of::<f64x4>() > stack_limit {
-                eprintln!("SIMD (f64x8) request downgraded to scalar f64 due to the stack limit.");
+                eprintln!(
+                    "SIMD (f64x8) request downgraded to scalar f64 due to the stack limit (= {}).",
+                    stack_limit
+                );
                 return Err(anyhow!(
                     "Cannot use SIMD due to the stack limit (= {}).",
                     stack_limit

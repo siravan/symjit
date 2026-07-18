@@ -123,7 +123,9 @@ mod testing {
         let mut df = Defuns::new();
         df.add_unary("f_", f);
         df.add_binary("g_", g);
-        let mut comp = Compiler::with_config(Config::from_defuns(df)?);
+        let mut config = Config::from_defuns(df)?;
+        config.set_option("use_simd", true)?;
+        let mut comp = Compiler::with_config(config);
 
         let mut app = comp.compile(&[x], &[v])?;
         let res = app.call(&[p as f64]);
