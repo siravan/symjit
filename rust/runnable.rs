@@ -642,7 +642,6 @@ impl Application {
     }
 
     pub fn dump(&mut self, name: &str, what: &str) -> bool {
-        println!("dump {} to {}", what, name);
         match what {
             "scalar" => {
                 if let Some(f) = &self.compiled {

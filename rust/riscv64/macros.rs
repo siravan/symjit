@@ -91,6 +91,7 @@ macro_rules! jtype {
         let imm = $imm as i32;
 
         assert!(rd < 32);
+        assert!(imm < 1 << 20);
 
         $code
             | (rd << 7)

@@ -219,7 +219,7 @@ impl Config {
         config.set_debug_scalar(c.debug.scalar);
         config.set_debug_simd(c.debug.simd);
         config.set_debug_stats(c.debug.stats);
-        config.set_debug_stats(c.debug.lock);
+        config.set_debug_lock(c.debug.lock);
 
         Ok(config)
     }
