@@ -37,12 +37,14 @@ pub const OPT_LEVEL_SHIFT: usize = 8;
 
 pub const SPILL_AREA: usize = 16;
 pub const SLICE_CAP: usize = 64;
+pub const DEFAULT_STACK_LIMIT: usize = 1 << 20;
 
 #[derive(Debug, Clone)]
 pub struct Config {
     pub opt: u32,
     pub ty: CompilerType,
     pub df: Option<Arc<Defuns>>,
+    pub stack: usize,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -71,6 +73,7 @@ struct Options {
     huge: bool,
     parallel_mul: bool,
     opt_level: u8,
+    stack_limit: usize,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -87,7 +90,12 @@ impl Config {
     const MAGIC: usize = 0x802c3c77c7422e70;
 
     pub fn new(ty: CompilerType, opt: u32) -> Result<Config> {
-        Ok(Config { opt, ty, df: None })
+        Ok(Config {
+            opt,
+            ty,
+            df: None,
+            stack: DEFAULT_STACK_LIMIT,
+        })
     }
 
     pub fn from_name(ty: &str, opt: u32) -> Result<Config> {
@@ -134,6 +142,7 @@ impl Config {
         config.set_parallel_mul(c.options.parallel_mul);
 
         config.set_opt_level(c.options.opt_level);
+        config.set_stack_limit(c.options.stack_limit);
 
         config.set_debug_bytecode(c.debug.bytecode);
         config.set_debug_scalar(c.debug.scalar);
@@ -171,6 +180,7 @@ impl Config {
             direct: self.direct(),
             fast_complex: self.fast_complex(),
             opt_level: self.opt_level(),
+            stack_limit: self.stack_limit(),
             huge: self.huge(),
             parallel_mul: self.parallel_mul(),
         };
@@ -338,6 +348,10 @@ impl Config {
         } else {
             level
         }
+    }
+
+    pub fn stack_limit(&self) -> usize {
+        self.stack
     }
 
     pub fn compiler_type(&self) -> CompilerType {
@@ -523,6 +537,10 @@ impl Config {
         self.opt = (self.opt & !DEBUG_LOCK) | if enabled { DEBUG_LOCK } else { 0 };
     }
 
+    pub fn set_stack_limit(&mut self, stack_limit: usize) {
+        self.stack = stack_limit.max(DEFAULT_STACK_LIMIT);
+    }
+
     pub fn max_lanes(&self) -> usize {
         if self.use_simd512() {
             8
@@ -532,6 +550,77 @@ impl Config {
             2
         } else {
             1
+        }
+    }
+
+    pub fn set_option(&mut self, option: &str, req: bool) -> Result<bool> {
+        match option {
+            "use_simd" => {
+                self.set_simd(req);
+                Ok(self.use_simd())
+            }
+            "enable_simd512" => {
+                self.enable_simd512(req);
+                Ok(self.use_simd512())
+            }
+            "use_threads" => {
+                self.set_threads(req);
+                Ok(self.use_threads())
+            }
+            "cse" => {
+                self.set_cse(req);
+                Ok(self.cse())
+            }
+            "fastmath" => {
+                self.set_fastmath(req);
+                Ok(self.fastmath())
+            }
+            "complex" => {
+                self.set_complex(req);
+                Ok(self.is_complex())
+            }
+            "symbolica" => {
+                self.set_symbolica(req);
+                Ok(self.symbolica())
+            }
+            "simd_branch" => {
+                self.set_simd_branch(req);
+                Ok(self.simd_branch())
+            }
+            "compact" => {
+                self.set_compact(req);
+                Ok(self.compact())
+            }
+            "compress" => {
+                self.set_compress(req);
+                Ok(self.compress())
+            }
+            "direct" => {
+                self.set_dicect(req);
+                Ok(self.direct())
+            }
+            "fast_complex" => {
+                self.set_fast_complex(req);
+                Ok(self.fast_complex())
+            }
+            "huge" => {
+                self.set_huge(req);
+                Ok(self.huge())
+            }
+            "parallel_mul" => {
+                self.set_parallel_mul(req);
+                Ok(self.parallel_mul())
+            }
+            "is_amd64" => Ok(self.is_amd64()),
+            "is_arm64" => Ok(self.is_arm64()),
+            "is_riscv64" => Ok(self.is_riscv64()),
+            "cpu_has_avx" => Ok(Self::cpu_has_avx()),
+            "cpu_has_avx512" => Ok(Self::cpu_has_avx512()),
+            "is_sse" => Ok(self.is_sse()),
+            "is_bytecode" => Ok(self.is_bytecode()),
+            "is_debug" => Ok(self.is_debug()),
+            "may_fast" => Ok(self.may_fast()),
+            _ => Err(anyhow!("option {} is not recognized.", option)),
         }
     }
 }
@@ -703,6 +792,7 @@ impl Storage for Config {
             opt,
             ty,
             df: config.df.clone(),
+            stack: DEFAULT_STACK_LIMIT,
         })
     }
 }

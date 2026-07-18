@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use anyhow::{anyhow, Result};
 use num_complex::Complex;
+use rand::distr::{Alphanumeric, SampleString};
 
 use crate::applet::{recast_as_f64, recast_as_f64_mut};
 use crate::code::VirtualTable;
@@ -523,22 +524,24 @@ impl Composer for Translator {
     }
 
     fn compile(&mut self) -> Result<Application> {
+        let salt = Alphanumeric.sample_string(&mut rand::rng(), 8);
+
         let mut app = self.composer.compile()?;
 
         if self.config.debug_stats() {
-            app.dump("stats.txt", "stats");
+            app.dump(&format!("symjit_{}_stats.txt", salt), "stats");
         };
 
         if self.config.debug_bytedode() {
-            app.dump("bytecode.txt", "bytecode");
+            app.dump(&format!("symjit_{}_bytecode.txt", salt), "bytecode");
         };
 
         if self.config.debug_scalar() {
-            app.dump("scalar.bin", "scalar");
+            app.dump(&format!("symjit_{}_scalar.bin", salt), "scalar");
         };
 
         if self.config.debug_scalar() {
-            app.dump("simd.bin", "simd");
+            app.dump(&format!("symjit_{}_simd.bin", salt), "simd");
         };
 
         Ok(app)

@@ -18,7 +18,7 @@ def arch():
 
 
 
-DEPTH = 10
+DEPTH = 12
 NCOLS = 2**DEPTH
 NROWS = 10000
 
