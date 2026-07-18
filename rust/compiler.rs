@@ -532,7 +532,7 @@ impl Composer for Translator {
             app.dump(&format!("symjit_{}_stats.txt", salt), "stats");
         };
 
-        if self.config.debug_bytedode() {
+        if self.config.debug_bytecode() {
             app.dump(&format!("symjit_{}_bytecode.txt", salt), "bytecode");
         };
 

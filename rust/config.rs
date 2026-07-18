@@ -39,7 +39,7 @@ pub const SPILL_AREA: usize = 16;
 pub const SLICE_CAP: usize = 64;
 pub const DEFAULT_STACK_LIMIT: usize = 1 << 20;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Config {
     pub opt: u32,
     pub ty: CompilerType,
@@ -84,6 +84,77 @@ struct DebugOptions {
     simd: bool,
     stats: bool,
     lock: bool,
+}
+
+impl std::fmt::Debug for Config {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Config {{")?;
+
+        if self.use_simd() {
+            write!(f, "simd, ")?;
+        }
+        if self.use_simd512() {
+            write!(f, "simd512, ")?;
+        }
+        if self.use_threads() {
+            write!(f, "threads, ")?;
+        }
+        if self.cse() {
+            write!(f, "cse, ")?;
+        }
+        if self.fastmath() {
+            write!(f, "fastmath, ")?;
+        }
+        if self.is_complex() {
+            write!(f, "complex, ")?;
+        }
+        if self.symbolica() {
+            write!(f, "symbolica, ")?;
+        }
+        if self.simd_branch() {
+            write!(f, "simd_branch, ")?;
+        }
+        if self.compact() {
+            write!(f, "compact, ")?;
+        }
+        if self.compress() {
+            write!(f, "compress, ")?;
+        }
+        if self.direct() {
+            write!(f, "direct, ")?;
+        }
+        if self.fast_complex() {
+            write!(f, "fast_complex, ")?;
+        }
+        if self.huge() {
+            write!(f, "huge, ")?;
+        }
+        if self.parallel_mul() {
+            write!(f, "parallel_mul, ")?;
+        }
+        if self.debug_bytecode() {
+            write!(f, "debug_bytecode, ")?;
+        }
+        if self.debug_scalar() {
+            write!(f, "debug_scalar, ")?;
+        }
+        if self.debug_simd() {
+            write!(f, "debug_simd, ")?;
+        }
+        if self.debug_stats() {
+            write!(f, "debug_stats, ")?;
+        }
+        if self.debug_lock() {
+            write!(f, "debug_lock, ")?;
+        }
+
+        write!(
+            f,
+            "opt_level = {}, stack limit = {}}}",
+            self.opt_level(),
+            self.stack_limit()
+        )
+    }
 }
 
 impl Config {
@@ -186,7 +257,7 @@ impl Config {
         };
 
         let debug: DebugOptions = DebugOptions {
-            bytecode: self.debug_bytedode(),
+            bytecode: self.debug_bytecode(),
             scalar: self.debug_scalar(),
             simd: self.debug_simd(),
             stats: self.debug_stats(),
@@ -320,7 +391,7 @@ impl Config {
         self.test(PARALLEL_MUL)
     }
 
-    pub fn debug_bytedode(&self) -> bool {
+    pub fn debug_bytecode(&self) -> bool {
         self.test(DEBUG_BYTECODE)
     }
 
