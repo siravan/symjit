@@ -331,7 +331,6 @@ def triple_callable(**args):
 
 #############################################################################
 
-
 def Ω(b):
     if b:
         return "T"
@@ -401,7 +400,7 @@ def cases():
     return cases
 
 
-def test_model(f, label, log, pyback=True, bytecode=False, may_complex=True):
+def test_model(f, label, pyback=True, bytecode=False, may_complex=True):
     print(f"testing {label}")
     print("\td: dtype\t\t(R=float64, C=complex128)")
     print("\ty: ty\t\t(n: native, a: amd-sse, b: bytecode, d: debug)")
@@ -415,20 +414,6 @@ def test_model(f, label, log, pyback=True, bytecode=False, may_complex=True):
     X0, dt0 = f(backend="sympy")
     print(f"\tdone in {1e-6 * dt0:.3f} ms")
 
-    log.append(
-        {
-            "backend": "sympy",
-            "ty": "sympy",
-            "use_simd": False,
-            "use_threads": False,
-            "cse": False,
-            "fastmath": False,
-            "opt_level": 0,
-            "sanitize": False,
-            "dt": dt0 * 1e-6,
-        }
-    )
-
     for abbr, args in cases():
         if (args["ty"] not in ["bytecode", "debug"] or bytecode) and (
             args["dtype"] == "float64" or may_complex
@@ -441,10 +426,6 @@ def test_model(f, label, log, pyback=True, bytecode=False, may_complex=True):
             except AssertionError:
                 print(f"\t\033[31mfail\033[0m in {1e-6 * dt:.3f} ms")
 
-        a = args.copy()
-        a["dt"] = dt * 1e-6
-        log.append(a)
-
     print(f"\t\033[92mspeed-up ratio {dt0 / dt:.1f}\033[0m")
 
     if pyback and arch() != "riscv":
@@ -453,41 +434,21 @@ def test_model(f, label, log, pyback=True, bytecode=False, may_complex=True):
         np.testing.assert_array_almost_equal(X0, X)
         print(f"\tpass in {1e-6 * dt:.3f} ms")
 
-        log.append(
-            {
-                "backend": "python",
-                "ty": "",
-                "use_simd": False,
-                "use_threads": False,
-                "cse": False,
-                "fastmath": False,
-                "opt_level": 0,
-                "sanitize": False,
-                "dt": dt * 1e-6,
-            }
-        )
-
 
 ################################################################
 
-
-log = []
-test_model(mandelbrot, "mandelbrot", log)
-test_model(mandelbrot2, "mandelbrot2", log)
-test_model(mandelbrot3, "mandelbrot3", log, may_complex=False)
-test_model(pi, "pi", log)
-test_model(viete, "pi-viete", log)
-test_model(lemniscate, "lemniscate", log)
-test_model(binom, "binom", log)
-test_model(binom, "stress", log)
-test_model(power, "power", log)
-test_model(powi_mod, "powi_mod", log, pyback=False)
-test_model(fact, "fact", log)
+test_model(mandelbrot, "mandelbrot")
+test_model(mandelbrot2, "mandelbrot2")
+test_model(mandelbrot3, "mandelbrot3", may_complex=False)
+test_model(pi, "pi")
+test_model(viete, "pi-viete")
+test_model(lemniscate, "lemniscate")
+test_model(binom, "binom")
+test_model(binom, "stress")
+test_model(power, "power")
+test_model(powi_mod, "powi_mod", pyback=False)
+test_model(fact, "fact")
 
 if not use_complex:
-    test_model(sumprod, "sumprod", log, pyback=False)
-    test_model(triple_callable, "triple_callable", log, pyback=False, bytecode=False)
-
-# df = pd.DataFrame(log)
-# df.to_csv("runtests.csv")
-# print("timing information saved as `runtests.csv`")
+    test_model(sumprod, "sumprod", pyback=False)
+    test_model(triple_callable, "triple_callable", pyback=False, bytecode=False)

@@ -585,12 +585,14 @@ impl Application {
     }
 
     pub fn dump(&mut self, name: &str, what: &str) -> bool {
+        /*
         let salt = Alphanumeric.sample_string(&mut rand::rng(), 8);
         let name = if name.starts_with("symjit_") {
             name
         } else {
             &format!("symjit_{}_{}", salt, name)
         };
+        */
 
         match what {
             "scalar" => {

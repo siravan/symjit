@@ -167,7 +167,8 @@ impl Prefix {
     pub fn modrm_mem(&mut self, amd: &mut Amd, offset: i32) {
         let n = self.len as i32 / 8;
 
-        let compressed = offset & (n - 1) == 0 && offset / n < 256;
+        // compressed, aka, disp8*N mode
+        let compressed = offset & (n - 1) == 0 && offset / n < 128;
 
         if compressed {
             amd.append_byte(0x40 + ((self.reg & 7) << 3) + (self.rm & 7))
