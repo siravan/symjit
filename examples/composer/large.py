@@ -87,18 +87,21 @@ def cases():
         for use_threads in [False, True]:
             for cse in [False, True]:
                 for fastmath in [False, True]:
-                    for opt_level in [0, 1, 2, 3]:
-                        args = {
-                            "backend": "rust",
-                            "use_simd": False,
-                            "use_threads": use_threads,
-                            "cse": cse,
-                            "fastmath": fastmath,
-                            "opt_level": opt_level,
-                            "dtype": "complex128",
-                        }
-                        s = f"s=F:t={Ω(use_threads)}:c={Ω(cse)}:f={Ω(fastmath)},O={opt_level}"
-                        cases.append((s, args))
+                    for simd in [False, True]:
+                        for fast_complex in [False, True]:
+                            for opt_level in [0, 1, 2, 3]:
+                                args = {
+                                    "backend": "rust",
+                                    "use_simd": simd,
+                                    "use_threads": use_threads,
+                                    "cse": cse,
+                                    "fastmath": fastmath,
+                                    "fast_complex": fast_complex,
+                                    "opt_level": opt_level,
+                                    "dtype": "complex128",
+                                }
+                                s = f"s={Ω(simd)}:x={Ω(fast_complex)}:t={Ω(use_threads)}:c={Ω(cse)}:f={Ω(fastmath)},O={opt_level}"
+                                cases.append((s, args))
     return cases
 
 
@@ -106,6 +109,7 @@ def test_model():
     print("\td: dtype\t\t(R=float64, C=complex128)")
     print("\ty: ty\t\t(n: native, a: amd-sse, b: bytecode, d: debug)")
     print("\ts: simd\t\t(True/False) or (none/avx256/avx512)")
+    print("\tx: fast_complex\t\t(True/False)")
     print("\tt: threads\t(True/False)")
     print("\tc: cse\t\t(True/False)")
     print("\tf: fastmath\t(True/False)")

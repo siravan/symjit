@@ -98,6 +98,70 @@ fn save_d_to_mem(a: &mut Assembler, d: u8, base: u8, idx: u32) {
     }
 }
 
+fn load_paired_d_from_mem(a: &mut Assembler, d1: u8, d2: u8, base: u8, idx: u32) {
+    assert!(idx & 1 == 0);
+
+    match idx {
+        0..64 => emit(a, arm! {ldp d(d1), d(d2), [x(base), #8*idx]}),
+        64..256 => {
+            emit(a, arm! {add x(SCRATCH1), x(base), #8*idx});
+            emit(a, arm! {ldp d(d1), d(d2), [x(SCRATCH1), #0]});
+        }
+        256..4096 => {
+            emit(a, arm! {ldr d(d1), [x(base), #8*idx]});
+            emit(a, arm! {ldr d(d2), [x(base), #8*(idx+1)]});
+        }
+        4096..65536 => {
+            emit(a, arm! {movz x(SCRATCH1), #idx});
+            emit(a, arm! {add x(SCRATCH1), x(base), x(SCRATCH1), lsl #3});
+            emit(a, arm! {ldp d(d1), d(d2), [x(SCRATCH1), #0]});
+        }
+        65536..131072 => {
+            emit(a, arm! {movz x(SCRATCH1), #idx >> 1});
+            emit(a, arm! {add x(SCRATCH1), x(base), x(SCRATCH1), lsl #4});
+            emit(a, arm! {ldp d(d1), d(d2), [x(SCRATCH1), #0]});
+        }
+        idx => {
+            emit(a, arm! {movz x(SCRATCH1), #idx & 0xffff});
+            emit(a, arm! {movk_lsl16 x(SCRATCH1), #idx >> 16});
+            emit(a, arm! {add x(SCRATCH1), x(base), x(SCRATCH1), lsl #3});
+            emit(a, arm! {ldp d(d1), d(d2), [x(SCRATCH1), #0]});
+        }
+    }
+}
+
+fn save_paired_d_to_mem(a: &mut Assembler, d1: u8, d2: u8, base: u8, idx: u32) {
+    assert!(idx & 1 == 0);
+
+    match idx {
+        0..64 => emit(a, arm! {stp d(d1), d(d2), [x(base), #8*idx]}),
+        64..256 => {
+            emit(a, arm! {add x(SCRATCH1), x(base), #8*idx});
+            emit(a, arm! {stp d(d1), d(d2), [x(SCRATCH1), #0]});
+        }
+        256..4096 => {
+            emit(a, arm! {str d(d1), [x(base), #8*idx]});
+            emit(a, arm! {str d(d2), [x(base), #8*(idx+1)]});
+        }
+        4096..65536 => {
+            emit(a, arm! {movz x(SCRATCH1), #idx});
+            emit(a, arm! {add x(SCRATCH1), x(base), x(SCRATCH1), lsl #3});
+            emit(a, arm! {stp d(d1), d(d2), [x(SCRATCH1), #0]});
+        }
+        65536..131072 => {
+            emit(a, arm! {movz x(SCRATCH1), #idx >> 1});
+            emit(a, arm! {add x(SCRATCH1), x(base), x(SCRATCH1), lsl #4});
+            emit(a, arm! {stp d(d1), d(d2), [x(SCRATCH1), #0]});
+        }
+        idx => {
+            emit(a, arm! {movz x(SCRATCH1), #idx & 0xffff});
+            emit(a, arm! {movk_lsl16 x(SCRATCH1), #idx >> 16});
+            emit(a, arm! {add x(SCRATCH1), x(base), x(SCRATCH1), lsl #3});
+            emit(a, arm! {stp d(d1), d(d2), [x(SCRATCH1), #0]});
+        }
+    }
+}
+
 fn load_q_from_mem(a: &mut Assembler, d: u8, base: u8, idx: u32) {
     if idx < 4096 {
         emit(a, arm! {ldr q(d), [x(base), #16*idx]});
@@ -128,8 +192,12 @@ fn load_paired_q_from_mem(a: &mut Assembler, d1: u8, d2: u8, base: u8, idx: u32)
     assert!(idx & 1 == 0);
 
     match idx {
-        0..64 => emit(a, arm! {ldp q(d1), q(d2), [x(base), #32*idx]}),
-        64..4096 => {
+        0..64 => emit(a, arm! {ldp q(d1), q(d2), [x(base), #16*idx]}),
+        64..256 => {
+            emit(a, arm! {add x(SCRATCH1), x(base), #16*idx});
+            emit(a, arm! {ldp q(d1), q(d2), [x(SCRATCH1), #0]});
+        }
+        256..4096 => {
             emit(a, arm! {ldr q(d1), [x(base), #16*idx]});
             emit(a, arm! {ldr q(d2), [x(base), #16*(idx+1)]});
         }
@@ -156,8 +224,12 @@ fn save_paired_q_to_mem(a: &mut Assembler, d1: u8, d2: u8, base: u8, idx: u32) {
     assert!(idx & 1 == 0);
 
     match idx {
-        0..64 => emit(a, arm! {stp q(d1), q(d2), [x(base), #32*idx]}),
-        64..4096 => {
+        0..64 => emit(a, arm! {stp q(d1), q(d2), [x(base), #16*idx]}),
+        64..256 => {
+            emit(a, arm! {add x(SCRATCH1), x(base), #16*idx});
+            emit(a, arm! {stp q(d1), q(d2), [x(SCRATCH1), #0]});
+        }
+        256..4096 => {
             emit(a, arm! {str q(d1), [x(base), #16*idx]});
             emit(a, arm! {str q(d2), [x(base), #16*(idx+1)]});
         }

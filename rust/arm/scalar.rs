@@ -52,6 +52,15 @@ impl ArmGenerator {
         save_d_to_mem(&mut self.a, d, base, idx);
     }
 
+    fn load_paired_d_from_mem(&mut self, d1: u8, d2: u8, base: u8, idx: u32) {
+        load_paired_d_from_mem(&mut self.a, d1, d2, base, idx);
+    }
+
+    fn save_paired_d_to_mem(&mut self, d1: u8, d2: u8, base: u8, idx: u32) {
+        save_paired_d_to_mem(&mut self.a, d1, d2, base, idx);
+    }
+
+    /*
     fn load_q_from_mem(&mut self, d: u8, base: u8, idx: u32) {
         load_q_from_mem(&mut self.a, d, base, idx / 2);
     }
@@ -59,6 +68,7 @@ impl ArmGenerator {
     fn save_q_to_mem(&mut self, d: u8, base: u8, idx: u32) {
         save_q_to_mem(&mut self.a, d, base, idx / 2);
     }
+    */
 
     fn load_x_from_mem(&mut self, r: u8, base: u8, idx: u32) {
         load_x_from_mem(&mut self.a, r, base, idx);
@@ -202,28 +212,33 @@ impl Generator for ArmGenerator {
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        self.load_q_from_mem(ϕ(xd), MEM, idx);
-        self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xd))[1]});
+        // self.load_q_from_mem(ϕ(xd), MEM, idx);
+        // self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xd))[1]});
+        self.load_paired_d_from_mem(ϕ(xd), ϕ(yd), MEM, idx);
     }
 
     fn save_mem_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
-        self.emit(arm! {zip1 q(ϕ(xs)), q(ϕ(xs)), q(ϕ(ys))});
-        self.save_q_to_mem(ϕ(xs), MEM, idx);
+        // self.emit(arm! {zip1 q(ϕ(xs)), q(ϕ(xs)), q(ϕ(ys))});
+        // self.save_q_to_mem(ϕ(xs), MEM, idx);
+        self.save_paired_d_to_mem(ϕ(xs), ϕ(ys), MEM, idx);
     }
 
     fn load_param_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        self.load_q_from_mem(ϕ(xd), PARAMS, idx);
-        self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xd))[1]});
+        // self.load_q_from_mem(ϕ(xd), PARAMS, idx);
+        // self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xd))[1]});
+        self.load_paired_d_from_mem(ϕ(xd), ϕ(yd), PARAMS, idx);
     }
 
     fn load_stack_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        self.load_q_from_mem(ϕ(xd), SP, idx);
-        self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xd))[1]});
+        // self.load_q_from_mem(ϕ(xd), SP, idx);
+        // self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xd))[1]});
+        self.load_paired_d_from_mem(ϕ(xd), ϕ(yd), STACK, idx);
     }
 
     fn save_stack_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
-        self.emit(arm! {zip1 q(ϕ(xs)), q(ϕ(xs)), q(ϕ(ys))});
-        self.save_q_to_mem(ϕ(xs), SP, idx);
+        // self.emit(arm! {zip1 q(ϕ(xs)), q(ϕ(xs)), q(ϕ(ys))});
+        // self.save_q_to_mem(ϕ(xs), SP, idx);
+        self.save_paired_d_to_mem(ϕ(xs), ϕ(ys), STACK, idx);
     }
 
     fn save_stack_result(&mut self, idx: u32) {
@@ -297,21 +312,32 @@ impl Generator for ArmGenerator {
         let xt = Reg::Gen(2);
         let yt = Reg::Gen(3);
 
-        self.times(xt, y1, y2);
-        self.fused_mul_sub(xt, x1, x2, xt);
-        self.times(yt, x1, y2);
-        self.fused_mul_add(yd, x2, y1, yt);
-        self.fmov(xd, xt);
-
-        /*
-        self.emit(arm! {zip1 q(ϕ(x1)), q(ϕ(x1)), q(ϕ(y1))});
-        self.emit(arm! {zip1 q(ϕ(x2)), q(ϕ(x2)), q(ϕ(y2))});
-        self.xor(xt, xt, xt);
-        self.emit(arm! {fcmla q(ϕ(xt)), q(ϕ(x1)), q(ϕ(x2)), #0});
-        self.emit(arm! {fcmla q(ϕ(xt)), q(ϕ(x1)), q(ϕ(x2)), #90});
-        self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xt))[1]});
-        self.emit(arm! {dup q(ϕ(xd)), q(ϕ(xt))[0]});
-        */
+        if xd != x1 && xd != x2 {
+            self.times(xd, x1, x2); // xt := x1 * x2
+            self.emit(arm! {fmls q(ϕ(xd)), q(ϕ(y1)), q(ϕ(y2))}); // xt := x1 * x2 - y1 * y2
+            self.times(yd, x1, y2); // yt := x1 * y2
+            self.emit(arm! {fmla q(ϕ(yd)), q(ϕ(x2)), q(ϕ(y1))}); // xt := x1 * y2 + x2 * y1
+        } else if xd == x1 && xd != x2 {
+            self.times(xt, x1, x2); // xt := x1 * x2
+            self.emit(arm! {fmls q(ϕ(xt)), q(ϕ(y1)), q(ϕ(y2))}); // xt := x1 * x2 - y1 * y2
+            self.times(yd, x2, y1); // yt := x1 * y2
+            self.emit(arm! {fmla q(ϕ(yd)), q(ϕ(x1)), q(ϕ(y2))}); // xt := x1 * y2 + x2 * y1
+            self.fmov(xd, xt);
+        } else if xd != x1 && xd == x2 {
+            self.times(xt, x1, x2); // xt := x1 * x2
+            self.emit(arm! {fmls q(ϕ(xt)), q(ϕ(y1)), q(ϕ(y2))}); // xt := x1 * x2 - y1 * y2
+            self.times(yd, x1, y2); // yt := x1 * y2
+            self.emit(arm! {fmla q(ϕ(yd)), q(ϕ(x2)), q(ϕ(y1))}); // xt := x1 * y2 + x2 * y1
+            self.fmov(xd, xt);
+        } else {
+            // xd == x1 && xd == x2
+            self.times(xt, x1, x2); // xt := x1 * x2
+            self.emit(arm! {fmls q(ϕ(xt)), q(ϕ(y1)), q(ϕ(y2))}); // xt := x1 * x2 - y1 * y2
+            self.times(yt, x1, y2); // yt := x1 * y2
+            self.emit(arm! {fmla q(ϕ(yt)), q(ϕ(x2)), q(ϕ(y1))}); // xt := x1 * y2 + x2 * y1
+            self.fmov(xd, xt);
+            self.fmov(yd, yt);
+        }
 
         true
     }
@@ -537,12 +563,14 @@ impl Generator for ArmGenerator {
         count_obs: usize,
         _count_params: usize,
     ) {
-        self.emit(arm! {sub sp, sp, #48});
+        self.emit(arm! {sub sp, sp, #64});
         self.emit(arm! {str lr, [sp, #0]});
         self.emit(arm! {str x(MEM), [sp, #8]});
         self.emit(arm! {str x(PARAMS), [sp, #16]});
         self.emit(arm! {str x(STATES), [sp, #24]});
         self.emit(arm! {str x(IDX), [sp, #32]});
+        self.emit(arm! {str x(CALL), [sp, #40]});
+        self.emit(arm! {str x(STACK), [sp, #48]});
 
         self.emit(arm! {mov x(MEM), x(0)});
         self.emit(arm! {mov x(STATES), x(1)});
@@ -568,6 +596,7 @@ impl Generator for ArmGenerator {
 
         let stack_size = align_stack(cap as u32 * REG_SIZE);
         self.sub_stack(stack_size);
+        self.emit(arm! {mov x(STACK), sp});
     }
 
     fn epilogue_indirect(
@@ -595,12 +624,15 @@ impl Generator for ArmGenerator {
 
         self.set_label("@done");
 
-        self.emit(arm! {ldr x(IDX), [sp, #32]});
-        self.emit(arm! {ldr x(STATES), [sp, #24]});
-        self.emit(arm! {ldr x(PARAMS), [sp, #16]});
-        self.emit(arm! {ldr x(MEM), [sp, #8]});
         self.emit(arm! {ldr lr, [sp, #0]});
-        self.emit(arm! {add sp, sp, #48});
+        self.emit(arm! {ldr x(MEM), [sp, #8]});
+        self.emit(arm! {ldr x(PARAMS), [sp, #16]});
+        self.emit(arm! {ldr x(STATES), [sp, #24]});
+        self.emit(arm! {ldr x(IDX), [sp, #32]});
+        self.emit(arm! {ldr x(CALL), [sp, #40]});
+        self.emit(arm! {ldr x(STACK), [sp, #48]});
+
+        self.emit(arm! {add sp, sp, #64});
         self.emit(arm! {ret});
     }
 

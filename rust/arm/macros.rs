@@ -90,7 +90,7 @@ macro_rules! ofs2d {
 macro_rules! of7 {
     ($x:expr) => {{
         let x = $x;
-        assert!((x & 7 == 0) && (x <= 504));
+        assert!((x & 7 == 0) && (x < 512));
         (x as u32) << 12
     }};
 }
@@ -98,8 +98,8 @@ macro_rules! of7 {
 macro_rules! of7_2q {
     ($x:expr) => {{
         let x = $x;
-        assert!((x & 31 == 0) && (x < 2048));
-        (x as u32) << 10
+        assert!((x & 15 == 0) && (x < 1024));
+        (x as u32) << 11
     }};
 }
 
