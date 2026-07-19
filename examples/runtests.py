@@ -2,6 +2,7 @@ import math
 import platform
 import sys
 import time
+from statistics import mean, stdev
 
 import numpy as np
 
@@ -41,7 +42,7 @@ def func(states, p, **args):
     t0 = time.perf_counter_ns()
     f = compile_func(states, p, **args)
     t1 = time.perf_counter_ns()
-    print(f"{(t1 - t0) * 1e-6:.1f} ms\t", end="")
+    # print(f"{(t1 - t0) * 1e-6:.1f} ms\t", end="")
     return f
 
 
@@ -381,58 +382,118 @@ def cases():
     else:
         for dtype in dtypes:
             for ty in ["native", "bytecode", "debug"]:
-                for use_threads in [False, True]:
-                    for cse in [False, True]:
-                        for fastmath in [False, True]:
-                            for opt_level in [0, 1, 2, 3]:
-                                args = {
-                                    "backend": "rust",
-                                    "ty": ty,
-                                    "use_simd": False,
-                                    "use_threads": use_threads,
-                                    "cse": cse,
-                                    "fastmath": fastmath,
-                                    "opt_level": opt_level,
-                                    "dtype": dtype,
-                                }
-                                s = f"d={abbr_dtype(dtype)},y={abbr_ty(ty)}:s=F:t={Ω(use_threads)}:c={Ω(cse)}:f={Ω(fastmath)},O={opt_level}"
-                                cases.append((s, args))
+                for use_simd in [False, True]:
+                    for use_threads in [False, True]:
+                        for cse in [False, True]:
+                            for fastmath in [False, True]:
+                                for fast_complex in [False, True]:
+                                    for opt_level in [0, 1, 2, 3]:
+                                        args = {
+                                            "backend": "rust",
+                                            "ty": ty,
+                                            "use_simd": use_simd,
+                                            "use_threads": use_threads,
+                                            "cse": cse,
+                                            "fastmath": fastmath,
+                                            "fast_complex": fast_complex,
+                                            "opt_level": opt_level,
+                                            "dtype": dtype,
+                                        }
+                                        s = f"d={abbr_dtype(dtype)},y={abbr_ty(ty)}:s={Ω(use_simd)}:t={Ω(use_threads)}:c={Ω(cse)}:f={Ω(fastmath)}:x={Ω(fast_complex)},O={opt_level}"
+                                        cases.append((s, args))
     return cases
 
 
 def test_model(f, label, pyback=True, bytecode=False, may_complex=True):
     print(f"testing {label}")
-    print("\td: dtype\t\t(R=float64, C=complex128)")
-    print("\ty: ty\t\t(n: native, a: amd-sse, b: bytecode, d: debug)")
-    print("\ts: simd\t\t(True/False) or (none/avx256/avx512)")
-    print("\tt: threads\t(True/False)")
-    print("\tc: cse\t\t(True/False)")
-    print("\tf: fastmath\t(True/False)")
-    print("\tO: opt_level\t(0/1/2/3)")
+    # print("\td: dtype\t\t(R=float64, C=complex128)")
+    # print("\ty: ty\t\t(n: native, a: amd-sse, b: bytecode, d: debug)")
+    # print("\ts: simd\t\t(True/False) or (none/avx256/avx512)")
+    # print("\tt: threads\t(True/False)")
+    # print("\tc: cse\t\t(True/False)")
+    # print("\tf: fastmath\t(True/False)")
+    # print("\tx: fast_complex\t(True/False)")
+    # print("\tO: opt_level\t(0/1/2/3)")
 
     print("\tlambdify.......\t", end="")
     X0, dt0 = f(backend="sympy")
     print(f"\tdone in {1e-6 * dt0:.3f} ms")
 
+    table = []
+
     for abbr, args in cases():
         if (args["ty"] not in ["bytecode", "debug"] or bytecode) and (
             args["dtype"] == "float64" or may_complex
         ):
-            print(f"{abbr}\t", end="")
+            # print(f"{abbr}\t", end="")
             X, dt = f(**args)
             try:
                 np.testing.assert_array_almost_equal(X0, X.real)
-                print(f"\tpass in {1e-6 * dt:.3f} ms")
+                # print(f"\tpass in {1e-6 * dt:.3f} ms")
             except AssertionError:
-                print(f"\t\033[31mfail\033[0m in {1e-6 * dt:.3f} ms")
+                # print(f"\t\033[31mfail\033[0m in {1e-6 * dt:.3f} ms")
+                print(f"{abbr} \033[31mfails\033[0m in {1e-6 * dt:.3f} ms")
 
-    print(f"\t\033[92mspeed-up ratio {dt0 / dt:.1f}\033[0m")
+            table.append((args, dt * 1e-6))
+
+            if args["opt_level"] == 3:
+                pass
+                # print()
+
+    # print(f"\t\033[92mspeed-up ratio {dt0 / dt:.1f}\033[0m")
+
+    print_stats(table)
 
     if pyback and arch() != "riscv":
         print("\tpython.........", end="")
         X, dt = f(backend="python")
         np.testing.assert_array_almost_equal(X0, X)
         print(f"\tpass in {1e-6 * dt:.3f} ms")
+
+
+def tobulate(table, col, val, dtype):
+    x = [dt for (args, dt) in table if args[col] == val and args["dtype"] == dtype]
+    if len(x) == 0:
+        return math.nan
+    else:
+        return f"{mean(x):.2f}+/-{stdev(x):.2f}"
+
+def is_complex(table):
+    return any(args["dtype"] == "complex128" for (args, _) in table)
+
+def print_stats(table):
+    print("dtype = 'float64':")
+    print(f"\tsimd:         {tobulate(table, "use_simd", False, "float64")} vs {tobulate(table, "use_simd", True, "float64")}")
+    print(f"\tthreads:      {tobulate(table, "use_threads", False, "float64")} vs {tobulate(table, "use_threads", True, "float64")}")
+    print(f"\tcse:          {tobulate(table, "cse", False, "float64")} vs {tobulate(table, "cse", True, "float64")}")
+    print(f"\tfastmath:     {tobulate(table, "fastmath", False, "float64")} vs {tobulate(table, "fastmath", True, "float64")}")
+    print(f"\tfast_complex: {tobulate(table, "fast_complex", False, "float64")} vs {tobulate(table, "fast_complex", True, "float64")}")
+    print(f"""\topt_level:
+        \t0: {tobulate(table, "opt_level", 0, "float64")}
+        \t1: {tobulate(table, "opt_level", 1, "float64")}
+        \t2: {tobulate(table, "opt_level", 2, "float64")}
+        \t3: {tobulate(table, "opt_level", 3, "float64")}""")
+
+    if is_complex(table):
+        print()
+        print("dtype = 'complex128':")
+        print(f"\tsimd:         {tobulate(table, "use_simd", False, "complex128")} vs {tobulate(table, "use_simd", True, "complex128")}")
+        print(f"\tthreads:      {tobulate(table, "use_threads", False, "complex128")} vs {tobulate(table, "use_threads", True, "complex128")}")
+        print(f"\tcse:          {tobulate(table, "cse", False, "complex128")} vs {tobulate(table, "cse", True, "complex128")}")
+        print(f"\tfastmath:     {tobulate(table, "fastmath", False, "complex128")} vs {tobulate(table, "fastmath", True, "complex128")}")
+        print(f"\tfast_complex: {tobulate(table, "fast_complex", False, "complex128")} vs {tobulate(table, "fast_complex", True, "complex128")}")
+        print(f"""\topt_level:
+            \t0: {tobulate(table, "opt_level", 0, "complex128")}
+            \t1: {tobulate(table, "opt_level", 1, "complex128")}
+            \t2: {tobulate(table, "opt_level", 2, "complex128")}
+            \t3: {tobulate(table, "opt_level", 3, "complex128")}""")
+    # print("\ty: ty\t\t(n: native, a: amd-sse, b: bytecode, d: debug)")
+    # print("\ts: simd\t\t(True/False) or (none/avx256/avx512)")
+    # print("\tt: threads\t(True/False)")
+    # print("\tc: cse\t\t(True/False)")
+    # print("\tf: fastmath\t(True/False)")
+    # print("\tx: fast_complex\t(True/False)")
+    # print("\tO: opt_level\t(0/1/2/3)")
 
 
 ################################################################
