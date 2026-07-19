@@ -44,40 +44,6 @@ impl ArmGenerator {
         self.a.append_word(w);
     }
 
-    fn load_d_from_mem(&mut self, d: u8, base: u8, idx: u32) {
-        load_d_from_mem(&mut self.a, d, base, idx);
-    }
-
-    fn save_d_to_mem(&mut self, d: u8, base: u8, idx: u32) {
-        save_d_to_mem(&mut self.a, d, base, idx);
-    }
-
-    fn load_paired_d_from_mem(&mut self, d1: u8, d2: u8, base: u8, idx: u32) {
-        load_paired_d_from_mem(&mut self.a, d1, d2, base, idx);
-    }
-
-    fn save_paired_d_to_mem(&mut self, d1: u8, d2: u8, base: u8, idx: u32) {
-        save_paired_d_to_mem(&mut self.a, d1, d2, base, idx);
-    }
-
-    /*
-    fn load_q_from_mem(&mut self, d: u8, base: u8, idx: u32) {
-        load_q_from_mem(&mut self.a, d, base, idx / 2);
-    }
-
-    fn save_q_to_mem(&mut self, d: u8, base: u8, idx: u32) {
-        save_q_to_mem(&mut self.a, d, base, idx / 2);
-    }
-    */
-
-    fn load_x_from_mem(&mut self, r: u8, base: u8, idx: u32) {
-        load_x_from_mem(&mut self.a, r, base, idx);
-    }
-
-    fn load_x_from_label(&mut self, dst: u8, label: &str) {
-        load_x_from_label(&mut self.a, dst, label);
-    }
-
     fn sub_stack(&mut self, size: u32) {
         sub_stack(&mut self.a, size);
     }
@@ -87,7 +53,7 @@ impl ArmGenerator {
     }
 
     fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
-        self.load_x_from_label(0, &format!("_env_{}_", op));
+        load_x_from_label(&mut self.a, 0, &format!("_env_{}_", op));
         let ofs = SPILL_AREA as u32 * REG_SIZE;
         self.emit(arm! {add x(1), x(31), #ofs});
         self.emit(arm! {movz x(2), #num_args});
@@ -188,11 +154,11 @@ impl Generator for ArmGenerator {
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
-        self.load_d_from_mem(ϕ(dst), MEM, idx);
+        load_d_from_mem(&mut self.a, ϕ(dst), MEM, idx);
     }
 
     fn save_mem(&mut self, dst: Reg, idx: u32) {
-        self.save_d_to_mem(ϕ(dst), MEM, idx);
+        save_d_to_mem(&mut self.a, ϕ(dst), MEM, idx);
     }
 
     fn save_mem_result(&mut self, idx: u32) {
@@ -200,45 +166,35 @@ impl Generator for ArmGenerator {
     }
 
     fn load_param(&mut self, dst: Reg, idx: u32) {
-        self.load_d_from_mem(ϕ(dst), PARAMS, idx);
+        load_d_from_mem(&mut self.a, ϕ(dst), PARAMS, idx);
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
-        self.load_d_from_mem(ϕ(dst), SP, idx);
+        load_d_from_mem(&mut self.a, ϕ(dst), SP, idx);
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        self.save_d_to_mem(ϕ(dst), SP, idx);
+        save_d_to_mem(&mut self.a, ϕ(dst), SP, idx);
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        // self.load_q_from_mem(ϕ(xd), MEM, idx);
-        // self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xd))[1]});
-        self.load_paired_d_from_mem(ϕ(xd), ϕ(yd), MEM, idx);
+        load_paired_d_from_mem(&mut self.a, ϕ(xd), ϕ(yd), MEM, idx);
     }
 
     fn save_mem_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
-        // self.emit(arm! {zip1 q(ϕ(xs)), q(ϕ(xs)), q(ϕ(ys))});
-        // self.save_q_to_mem(ϕ(xs), MEM, idx);
-        self.save_paired_d_to_mem(ϕ(xs), ϕ(ys), MEM, idx);
+        save_paired_d_to_mem(&mut self.a, ϕ(xs), ϕ(ys), MEM, idx);
     }
 
     fn load_param_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        // self.load_q_from_mem(ϕ(xd), PARAMS, idx);
-        // self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xd))[1]});
-        self.load_paired_d_from_mem(ϕ(xd), ϕ(yd), PARAMS, idx);
+        load_paired_d_from_mem(&mut self.a, ϕ(xd), ϕ(yd), PARAMS, idx);
     }
 
     fn load_stack_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        // self.load_q_from_mem(ϕ(xd), SP, idx);
-        // self.emit(arm! {dup q(ϕ(yd)), q(ϕ(xd))[1]});
-        self.load_paired_d_from_mem(ϕ(xd), ϕ(yd), STACK, idx);
+        load_paired_d_from_mem(&mut self.a, ϕ(xd), ϕ(yd), STACK, idx);
     }
 
     fn save_stack_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
-        // self.emit(arm! {zip1 q(ϕ(xs)), q(ϕ(xs)), q(ϕ(ys))});
-        // self.save_q_to_mem(ϕ(xs), SP, idx);
-        self.save_paired_d_to_mem(ϕ(xs), ϕ(ys), STACK, idx);
+        save_paired_d_to_mem(&mut self.a, ϕ(xs), ϕ(ys), STACK, idx);
     }
 
     fn save_stack_result(&mut self, idx: u32) {
@@ -312,32 +268,10 @@ impl Generator for ArmGenerator {
         let xt = Reg::Gen(2);
         let yt = Reg::Gen(3);
 
-        if xd != x1 && xd != x2 {
-            self.times(xd, x1, x2); // xt := x1 * x2
-            self.emit(arm! {fmls q(ϕ(xd)), q(ϕ(y1)), q(ϕ(y2))}); // xt := x1 * x2 - y1 * y2
-            self.times(yd, x1, y2); // yt := x1 * y2
-            self.emit(arm! {fmla q(ϕ(yd)), q(ϕ(x2)), q(ϕ(y1))}); // xt := x1 * y2 + x2 * y1
-        } else if xd == x1 && xd != x2 {
-            self.times(xt, x1, x2); // xt := x1 * x2
-            self.emit(arm! {fmls q(ϕ(xt)), q(ϕ(y1)), q(ϕ(y2))}); // xt := x1 * x2 - y1 * y2
-            self.times(yd, x2, y1); // yt := x1 * y2
-            self.emit(arm! {fmla q(ϕ(yd)), q(ϕ(x1)), q(ϕ(y2))}); // xt := x1 * y2 + x2 * y1
-            self.fmov(xd, xt);
-        } else if xd != x1 && xd == x2 {
-            self.times(xt, x1, x2); // xt := x1 * x2
-            self.emit(arm! {fmls q(ϕ(xt)), q(ϕ(y1)), q(ϕ(y2))}); // xt := x1 * x2 - y1 * y2
-            self.times(yd, x1, y2); // yt := x1 * y2
-            self.emit(arm! {fmla q(ϕ(yd)), q(ϕ(x2)), q(ϕ(y1))}); // xt := x1 * y2 + x2 * y1
-            self.fmov(xd, xt);
-        } else {
-            // xd == x1 && xd == x2
-            self.times(xt, x1, x2); // xt := x1 * x2
-            self.emit(arm! {fmls q(ϕ(xt)), q(ϕ(y1)), q(ϕ(y2))}); // xt := x1 * x2 - y1 * y2
-            self.times(yt, x1, y2); // yt := x1 * y2
-            self.emit(arm! {fmla q(ϕ(yt)), q(ϕ(x2)), q(ϕ(y1))}); // xt := x1 * y2 + x2 * y1
-            self.fmov(xd, xt);
-            self.fmov(yd, yt);
-        }
+        self.times(xt, y1, y2);
+        self.times(yt, x1, y2);
+        self.fused_mul_add(yd, x2, y1, yt);
+        self.fused_mul_sub(xd, x1, x2, xt);
 
         true
     }
@@ -585,9 +519,9 @@ impl Generator for ArmGenerator {
         self.emit(arm! {mov x(MEM), sp});
 
         for i in 0..count_states {
-            self.load_x_from_mem(SCRATCH2, STATES, 2 * i as u32);
+            load_x_from_mem(&mut self.a, SCRATCH2, STATES, 2 * i as u32);
             self.emit(arm! {ldr d(0), [x(SCRATCH2), x(IDX), lsl #3]});
-            self.save_d_to_mem(0, MEM, i as u32);
+            save_d_to_mem(&mut self.a, 0, MEM, i as u32);
         }
 
         // TODO: may save idx (RDX) as double in RBP + 8/32 * count_states
@@ -613,9 +547,9 @@ impl Generator for ArmGenerator {
         self.jump("@done", 0, |offset, _| arm! {b.eq label(offset)});
 
         for i in 0..count_obs {
-            self.load_x_from_mem(SCRATCH2, STATES, 2 * (count_states + i) as u32);
+            load_x_from_mem(&mut self.a, SCRATCH2, STATES, 2 * (count_states + i) as u32);
             let k = (count_states + i) as u32;
-            self.load_d_from_mem(0, MEM, k);
+            load_d_from_mem(&mut self.a, 0, MEM, k);
             self.emit(arm! {str d(0), [x(SCRATCH2), x(IDX), lsl #3]});
         }
 

@@ -44,45 +44,13 @@ impl ArmSimdGenerator {
         self.a.append_word(w);
     }
 
-    fn load_d_from_mem(&mut self, d: u8, base: u8, idx: u32) {
-        load_d_from_mem(&mut self.a, d, base, idx);
-    }
-
-    fn save_d_to_mem(&mut self, d: u8, base: u8, idx: u32) {
-        save_d_to_mem(&mut self.a, d, base, idx);
-    }
-
-    fn load_q_from_mem(&mut self, d: u8, base: u8, idx: u32) {
-        load_q_from_mem(&mut self.a, d, base, idx);
-    }
-
-    fn save_q_to_mem(&mut self, d: u8, base: u8, idx: u32) {
-        save_q_to_mem(&mut self.a, d, base, idx);
-    }
-
-    fn load_paired_q_from_mem(&mut self, d1: u8, d2: u8, base: u8, idx: u32) {
-        load_paired_q_from_mem(&mut self.a, d1, d2, base, idx);
-    }
-
-    fn save_paired_q_to_mem(&mut self, d1: u8, d2: u8, base: u8, idx: u32) {
-        save_paired_q_to_mem(&mut self.a, d1, d2, base, idx);
-    }
-
-    fn load_x_from_mem(&mut self, r: u8, base: u8, idx: u32) {
-        load_x_from_mem(&mut self.a, r, base, idx);
-    }
-
-    fn load_x_from_label(&mut self, dst: u8, label: &str) {
-        load_x_from_label(&mut self.a, dst, label);
-    }
-
     fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
         let label = format!("_simd_{}_", op);
         load_long(&mut self.a, CALL, &label);
 
         let ofs = SPILL_AREA as u32 * REG_SIZE;
 
-        self.load_x_from_label(0, &format!("_env_{}_", op));
+        load_x_from_label(&mut self.a, 0, &format!("_env_{}_", op));
         self.emit(arm! {add x(1), x(SP), #ofs});
         self.emit(arm! {movz x(2), #num_args});
         self.emit(arm! {add x(3), x(SP), #0});
@@ -228,11 +196,11 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
-        self.load_q_from_mem(ϕ(dst), MEM, idx);
+        load_q_from_mem(&mut self.a, ϕ(dst), MEM, idx);
     }
 
     fn save_mem(&mut self, dst: Reg, idx: u32) {
-        self.save_q_to_mem(ϕ(dst), MEM, idx);
+        save_q_to_mem(&mut self.a, ϕ(dst), MEM, idx);
     }
 
     fn save_mem_result(&mut self, idx: u32) {
@@ -241,36 +209,32 @@ impl Generator for ArmSimdGenerator {
 
     fn load_param(&mut self, dst: Reg, idx: u32) {
         if self.config.symbolica() {
-            self.load_q_from_mem(ϕ(dst), PARAMS, idx);
+            load_q_from_mem(&mut self.a, ϕ(dst), PARAMS, idx);
         } else {
-            self.load_d_from_mem(ϕ(dst), PARAMS, idx);
+            load_d_from_mem(&mut self.a, ϕ(dst), PARAMS, idx);
             self.emit(arm! {dup q(ϕ(dst)), q(ϕ(dst))[0]});
         }
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
-        self.load_q_from_mem(ϕ(dst), SP, idx);
+        load_q_from_mem(&mut self.a, ϕ(dst), SP, idx);
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        self.save_q_to_mem(ϕ(dst), SP, idx);
+        save_q_to_mem(&mut self.a, ϕ(dst), SP, idx);
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        // self.load_mem(xd, idx);
-        // self.load_mem(yd, idx + 1);
-        self.load_paired_q_from_mem(ϕ(xd), ϕ(yd), MEM, idx);
+        load_paired_q_from_mem(&mut self.a, ϕ(xd), ϕ(yd), MEM, idx);
     }
 
     fn save_mem_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
-        // self.save_mem(xs, idx);
-        // self.save_mem(ys, idx + 1);
-        self.save_paired_q_to_mem(ϕ(xs), ϕ(ys), MEM, idx);
+        save_paired_q_to_mem(&mut self.a, ϕ(xs), ϕ(ys), MEM, idx);
     }
 
     fn load_param_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
         if self.config.symbolica() {
-            self.load_paired_q_from_mem(ϕ(xd), ϕ(yd), PARAMS, idx);
+            load_paired_q_from_mem(&mut self.a, ϕ(xd), ϕ(yd), PARAMS, idx);
         } else {
             self.load_param(xd, idx);
             self.load_param(yd, idx + 1);
@@ -280,13 +244,13 @@ impl Generator for ArmSimdGenerator {
     fn load_stack_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
         // self.load_stack(xd, idx);
         // self.load_stack(yd, idx + 1);
-        self.load_paired_q_from_mem(ϕ(xd), ϕ(yd), STACK, idx);
+        load_paired_q_from_mem(&mut self.a, ϕ(xd), ϕ(yd), STACK, idx);
     }
 
     fn save_stack_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
         // self.save_stack(xs, idx);
         // self.save_stack(ys, idx + 1);
-        self.save_paired_q_to_mem(ϕ(xs), ϕ(ys), STACK, idx);
+        save_paired_q_to_mem(&mut self.a, ϕ(xs), ϕ(ys), STACK, idx);
     }
 
     fn save_stack_result(&mut self, idx: u32) {
@@ -745,9 +709,9 @@ impl Generator for ArmSimdGenerator {
         // self.emit(arm! {lsr x(IDX), x(IDX), #1});
 
         for i in 0..count_states {
-            self.load_x_from_mem(SCRATCH2, STATES, 2 * i as u32);
+            load_x_from_mem(&mut self.a, SCRATCH2, STATES, 2 * i as u32);
             self.emit(arm! {ldr q(0), [x(SCRATCH2), x(IDX), lsl #4]});
-            self.save_q_to_mem(0, MEM, i as u32);
+            save_q_to_mem(&mut self.a, 0, MEM, i as u32);
         }
 
         // TODO: may save idx (RDX) as double in RBP + 8/32 * count_states
@@ -780,9 +744,9 @@ impl Generator for ArmSimdGenerator {
         self.jump("@done", 0, |offset, _| arm! {b.eq label(offset)});
 
         for i in 0..count_obs {
-            self.load_x_from_mem(SCRATCH2, STATES, 2 * (count_states + i) as u32);
+            load_x_from_mem(&mut self.a, SCRATCH2, STATES, 2 * (count_states + i) as u32);
             let k = (count_states + i) as u32;
-            self.load_q_from_mem(0, MEM, k);
+            load_q_from_mem(&mut self.a, 0, MEM, k);
             self.emit(arm! {str q(0), [x(SCRATCH2), x(IDX), lsl #4]});
         }
 
@@ -852,10 +816,10 @@ impl ArmSimdGenerator {
             self.emit(arm! {movk_lsl16 x(COUNTER), #count_params >> 16});
 
             self.set_label("@load");
-            self.load_d_from_mem(0, SCRATCH2, 0);
-            self.load_d_from_mem(1, SCRATCH2, count_params as u32);
+            load_d_from_mem(&mut self.a, 0, SCRATCH2, 0);
+            load_d_from_mem(&mut self.a, 1, SCRATCH2, count_params as u32);
             self.emit(arm! {zip1 q(0), q(0), q(1)});
-            self.save_q_to_mem(0, SCRATCH3, 0);
+            save_q_to_mem(&mut self.a, 0, SCRATCH3, 0);
             self.emit(arm! {add x(SCRATCH2), x(SCRATCH2), #8});
             self.emit(arm! {add x(SCRATCH3), x(SCRATCH3), #16});
             self.emit(arm! {subs x(COUNTER), x(COUNTER), #1});
@@ -863,8 +827,8 @@ impl ArmSimdGenerator {
         } else {
             for j in 0..2 {
                 for i in 0..count_params {
-                    self.load_d_from_mem(0, SCRATCH2, (i + j * count_params) as u32);
-                    self.save_d_to_mem(0, PARAMS, (i * 2 + j) as u32);
+                    load_d_from_mem(&mut self.a, 0, SCRATCH2, (i + j * count_params) as u32);
+                    save_d_to_mem(&mut self.a, 0, PARAMS, (i * 2 + j) as u32);
                 }
             }
         }
@@ -894,10 +858,10 @@ impl ArmSimdGenerator {
             self.emit(arm! {movk_lsl16 x(COUNTER), #count_obs >> 16});
 
             self.set_label("@save");
-            self.load_q_from_mem(0, SCRATCH2, 0);
+            load_q_from_mem(&mut self.a, 0, SCRATCH2, 0);
             self.emit(arm! {dup q(1), q(0)[1]});
-            self.save_d_to_mem(0, SCRATCH3, 0);
-            self.save_d_to_mem(1, SCRATCH3, count_obs as u32);
+            save_d_to_mem(&mut self.a, 0, SCRATCH3, 0);
+            save_d_to_mem(&mut self.a, 1, SCRATCH3, count_obs as u32);
             self.emit(arm! {add x(SCRATCH2), x(SCRATCH2), #16});
             self.emit(arm! {add x(SCRATCH3), x(SCRATCH3), #8});
             self.emit(arm! {subs x(COUNTER), x(COUNTER), #1});
@@ -905,8 +869,8 @@ impl ArmSimdGenerator {
         } else {
             for j in 0..2 {
                 for i in 0..count_obs {
-                    self.load_d_from_mem(0, MEM, (i * 2 + j) as u32);
-                    self.save_d_to_mem(0, STATES, (i + j * count_obs) as u32);
+                    load_d_from_mem(&mut self.a, 0, MEM, (i * 2 + j) as u32);
+                    save_d_to_mem(&mut self.a, 0, STATES, (i + j * count_obs) as u32);
                 }
             }
         }

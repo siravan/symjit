@@ -365,20 +365,22 @@ def cases():
                     for use_threads in [False, True]:
                         for cse in [False, True]:
                             for fastmath in [False, True]:
-                                for opt_level in [0, 1, 2, 3]:
-                                    args = {
-                                        "backend": "rust",
-                                        "ty": ty,
-                                        "use_simd": use_simd != "f64",
-                                        "enable_simd512": use_simd == "f64x8",
-                                        "use_threads": use_threads,
-                                        "cse": cse,
-                                        "fastmath": fastmath,
-                                        "opt_level": opt_level,
-                                        "dtype": dtype,
-                                    }
-                                    s = f"d={abbr_dtype(dtype)},y={abbr_ty(ty)}:s={use_simd}:t={Ω(use_threads)}:c={Ω(cse)}:f={Ω(fastmath)},O={opt_level}"
-                                    cases.append((s, args))
+                                for fast_complex in [False, True]:
+                                    for opt_level in [0, 1, 2, 3]:
+                                        args = {
+                                            "backend": "rust",
+                                            "ty": ty,
+                                            "use_simd": use_simd != "f64",
+                                            "enable_simd512": use_simd == "f64x8",
+                                            "use_threads": use_threads,
+                                            "cse": cse,
+                                            "fastmath": fastmath,
+                                            "fast_complex": fast_complex,
+                                            "opt_level": opt_level,
+                                            "dtype": dtype,
+                                        }
+                                        s = f"d={abbr_dtype(dtype)},y={abbr_ty(ty)}:s={use_simd}:t={Ω(use_threads)}:c={Ω(cse)}:f={Ω(fastmath)}:x={Ω(fast_complex)},O={opt_level}"
+                                        cases.append((s, args))
     else:
         for dtype in dtypes:
             for ty in ["native", "bytecode", "debug"]:
@@ -487,13 +489,6 @@ def print_stats(table):
             \t1: {tobulate(table, "opt_level", 1, "complex128")}
             \t2: {tobulate(table, "opt_level", 2, "complex128")}
             \t3: {tobulate(table, "opt_level", 3, "complex128")}""")
-    # print("\ty: ty\t\t(n: native, a: amd-sse, b: bytecode, d: debug)")
-    # print("\ts: simd\t\t(True/False) or (none/avx256/avx512)")
-    # print("\tt: threads\t(True/False)")
-    # print("\tc: cse\t\t(True/False)")
-    # print("\tf: fastmath\t(True/False)")
-    # print("\tx: fast_complex\t(True/False)")
-    # print("\tO: opt_level\t(0/1/2/3)")
 
 
 ################################################################
