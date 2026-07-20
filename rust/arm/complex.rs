@@ -152,11 +152,11 @@ impl Generator for ArmComplexGenerator {
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
-        load_q_from_mem(&mut self.a, ϕ(dst), MEM, idx);
+        load_q_from_mem(&mut self.a, ϕ(dst), MEM, idx / 2);
     }
 
     fn save_mem(&mut self, dst: Reg, idx: u32) {
-        save_q_to_mem(&mut self.a, ϕ(dst), MEM, idx);
+        save_q_to_mem(&mut self.a, ϕ(dst), MEM, idx / 2);
     }
 
     fn save_mem_result(&mut self, idx: u32) {
@@ -164,15 +164,15 @@ impl Generator for ArmComplexGenerator {
     }
 
     fn load_param(&mut self, dst: Reg, idx: u32) {
-        load_q_from_mem(&mut self.a, ϕ(dst), PARAMS, idx);
+        load_q_from_mem(&mut self.a, ϕ(dst), PARAMS, idx / 2);
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
-        load_q_from_mem(&mut self.a, ϕ(dst), SP, idx);
+        load_q_from_mem(&mut self.a, ϕ(dst), SP, idx / 2);
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        save_q_to_mem(&mut self.a, ϕ(dst), SP, idx);
+        save_q_to_mem(&mut self.a, ϕ(dst), SP, idx / 2);
     }
 
     fn load_mem_complex(&mut self, _xd: Reg, _yd: Reg, _idx: u32) {}
