@@ -708,8 +708,8 @@ impl Generator for AmdVectorF64x8Generator {
             // +1 for RBP in the stack
             // -4 for the first four arguments passed in XMM0-XMM3
             self.amd
-                .vmovsd_xmm_mem(0, MEM, (frame_size + (i + 2) * REG_SIZE) as i32);
-            self.amd.vmovsd_mem_xmm(MEM, (i * REG_SIZE) as i32, 0);
+                .vmovsd_xmm_mem(0, MEM, (frame_size + (i + 2) * REG_USIZE) as i32);
+            self.amd.vmovsd_mem_xmm(MEM, (i * REG_USIZE) as i32, 0);
         }
     }
 
