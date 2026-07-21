@@ -624,75 +624,72 @@ impl Config {
         }
     }
 
-    pub fn set_option(&mut self, option: &str, req: bool) -> Result<bool> {
+    pub fn set_option(&mut self, option: &str, val: &str) -> Result<()> {
         match option {
             "use_simd" => {
-                self.set_simd(req);
-                Ok(self.use_simd())
+                self.set_simd(val.parse::<bool>()?);
             }
             "enable_simd512" => {
-                self.enable_simd512(req);
-                Ok(self.use_simd512())
+                self.enable_simd512(val.parse::<bool>()?);
             }
             "use_threads" => {
-                self.set_threads(req);
-                Ok(self.use_threads())
+                self.set_threads(val.parse::<bool>()?);
             }
             "cse" => {
-                self.set_cse(req);
-                Ok(self.cse())
+                self.set_cse(val.parse::<bool>()?);
             }
             "fastmath" => {
-                self.set_fastmath(req);
-                Ok(self.fastmath())
+                self.set_fastmath(val.parse::<bool>()?);
             }
             "complex" => {
-                self.set_complex(req);
-                Ok(self.is_complex())
+                self.set_complex(val.parse::<bool>()?);
             }
             "symbolica" => {
-                self.set_symbolica(req);
-                Ok(self.symbolica())
+                self.set_symbolica(val.parse::<bool>()?);
             }
             "simd_branch" => {
-                self.set_simd_branch(req);
-                Ok(self.simd_branch())
+                self.set_simd_branch(val.parse::<bool>()?);
             }
             "compact" => {
-                self.set_compact(req);
-                Ok(self.compact())
+                self.set_compact(val.parse::<bool>()?);
             }
             "compress" => {
-                self.set_compress(req);
-                Ok(self.compress())
+                self.set_compress(val.parse::<bool>()?);
             }
             "direct" => {
-                self.set_dicect(req);
-                Ok(self.direct())
+                self.set_dicect(val.parse::<bool>()?);
             }
             "fast_complex" => {
-                self.set_fast_complex(req);
-                Ok(self.fast_complex())
+                self.set_fast_complex(val.parse::<bool>()?);
             }
             "huge" => {
-                self.set_huge(req);
-                Ok(self.huge())
+                self.set_huge(val.parse::<bool>()?);
             }
             "parallel_mul" => {
-                self.set_parallel_mul(req);
-                Ok(self.parallel_mul())
+                self.set_parallel_mul(val.parse::<bool>()?);
             }
-            "is_amd64" => Ok(self.is_amd64()),
-            "is_arm64" => Ok(self.is_arm64()),
-            "is_riscv64" => Ok(self.is_riscv64()),
-            "cpu_has_avx" => Ok(Self::cpu_has_avx()),
-            "cpu_has_avx512" => Ok(Self::cpu_has_avx512()),
-            "is_sse" => Ok(self.is_sse()),
-            "is_bytecode" => Ok(self.is_bytecode()),
-            "is_debug" => Ok(self.is_debug()),
-            "may_fast" => Ok(self.may_fast()),
-            _ => Err(anyhow!("option {} is not recognized.", option)),
+            "opt_level" => {
+                self.set_opt_level(val.parse::<u8>()?);
+            }
+            "stack_limit" => {
+                self.set_stack_limit(val.parse::<usize>()?);
+            }
+            "debug_bytecode" => {
+                self.set_debug_bytecode(val.parse::<bool>()?);
+            }
+            "debug_scalar" => {
+                self.set_debug_scalar(val.parse::<bool>()?);
+            }
+            "debug_simd" => {
+                self.set_debug_simd(val.parse::<bool>()?);
+            }
+            "debug_stats" => {
+                self.set_debug_stats(val.parse::<bool>()?);
+            }
+            _ => return Err(anyhow!("option {} is not recognized.", option)),
         }
+
+        Ok(())
     }
 }
 

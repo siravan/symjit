@@ -439,11 +439,11 @@ def test_model(f, label, pyback=True, bytecode=False, may_complex=True):
             table.append((args, dt * 1e-6))
 
             if args["opt_level"] == 3:
-                pass
-                # print()
+                print(".", end='', flush=True)
 
     # print(f"\t\033[92mspeed-up ratio {dt0 / dt:.1f}\033[0m")
 
+    print()
     print_stats(table)
 
     if pyback and arch() != "riscv":
