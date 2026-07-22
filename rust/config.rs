@@ -563,7 +563,15 @@ impl Config {
     }
 
     /// Direct translation from Symbolica IR to Symjit IR.
+    /// This is a typo but is kept for compatibility.
     pub fn set_dicect(&mut self, enabled: bool) {
+        if !self.debug_lock() {
+            self.opt = (self.opt & !DIRECT) | if enabled { DIRECT } else { 0 };
+        }
+    }
+
+    /// Direct translation from Symbolica IR to Symjit IR.
+    pub fn set_direct(&mut self, enabled: bool) {
         if !self.debug_lock() {
             self.opt = (self.opt & !DIRECT) | if enabled { DIRECT } else { 0 };
         }

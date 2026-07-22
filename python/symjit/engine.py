@@ -338,6 +338,7 @@ class RustyCompiler:
         simd_branch=False,
         fast_complex=True,
         direct=False,
+        compact=True,
         compress=False,
         huge=False,
         parallel_mul=True,
@@ -367,6 +368,7 @@ class RustyCompiler:
             | (0x00000020 if dtype == "complex128" else 0)
             | (0x00000040 if order == "c" else 0)
             | (0x00000080 if simd_branch else 0)
+            | (0x00001000 if compact else 0)
             | (0x00002000 if compress else 0)
             | (0x00004000 if direct else 0)
             | (0x00008000 if fast_complex else 0)

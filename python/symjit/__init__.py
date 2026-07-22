@@ -43,6 +43,7 @@ def compile_func(
     opt_level=2,
     defuns=None,
     dtype="float64",
+    compact=True,
     compress=False,
     fast_complex=True,
     huge=False,
@@ -77,14 +78,16 @@ def compile_func(
     dtype (default `float64`): the data type. Possibilities are `float64` and `complex128`.
     use_simd (default `True`): generates SIMD code for vectorized operations. Currently supports
         AVX on x86-64 and NEON on aarch64 systems.
+    enable_avx512 (default `False`): allows using AVX512 (f64x8) SIMD type when available.
     use_threads (default `True`): use multi-threading to speed up parallel operations when called
         on numpy arrays.
     cse (default `True`): performs common-subexpression elimination.
-    fastmath (default False): use fastmath floating point operations, especially fused multiply-addition.
-    fast_complex (default True): use f64x2 SIMD instructions for complex operations.
-    parallel_mul (default True): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
-    huge (default False): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
-    compress (default False): compress binary size by converting inline operations to calls.
+    fastmath (default `True`): use fastmath floating point operations, especially fused multiply-addition.
+    fast_complex (default `True`): use f64x2 SIMD instructions for complex operations.
+    parallel_mul (default `True`): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
+    huge (default `False`): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
+    compress (default `False`): compress binary size by converting inline operations to calls.
+    compact (default `True`): compacts the stack frame by reusing temporary variables.
     opt_level (default 2): optimization level (0, 1, 2, or 3). Broadly the numbers are parallel to -O0, -O1, -O2, and -O3
         options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
         Levels 2 and 3 use improved graph-coloring algorithms for better register allocation.
@@ -118,6 +121,7 @@ def compile_func(
             defuns=defuns,
             enable_simd512=enable_simd512,
             dtype=dtype,
+            compact=compact,
             compress=compress,
             fast_complex=fast_complex,
             huge=huge,
@@ -165,10 +169,11 @@ def compile_ode(
     opt_level=2,
     defuns=None,
     dtype="float64",
+    compact=True,
+    compress=False,
     fast_complex=True,
     huge=False,
     parallel_mul=True,
-    compress=False,
 ):
     """Compile a symbolic ODE model into an executable form suitable for
     passung to scipy.integrate.solve_ivp.
@@ -187,14 +192,16 @@ def compile_ode(
     dtype (default `float64`): the data type. Possibilities are `float64` and `complex128`.
     use_simd (default `True`): generates SIMD code for vectorized operations. Currently
         supports AVX on x86-64 and NEON on aarch64 systems.
+    enable_avx512 (default `False`): allows using AVX512 (f64x8) SIMD type when available.
     use_threads (default `True`): use multi-threading to speed up parallel operations
         when called on numpy arrays.
     cse (default `True`): performs common-subexpression elimination.
     fastmath (default `True`): use fastmath floating point operations, especially fused multiply-addition.
-    fast_complex (default True): use f64x2 SIMD instructions for complex operations.
-    parallel_mul (default True): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
-    huge (default False): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
-    compress (default False): compress binary size by converting inline operations to calls.
+    fast_complex (default `True`): use f64x2 SIMD instructions for complex operations.
+    parallel_mul (default `True`): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
+    huge (default `False`): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
+    compress (default `False`): compress binary size by converting inline operations to calls.
+    compact (default `True`): compacts the stack frame by reusing temporary variables.
     opt_level (default 2): optimization level (0, 1, 2, or 3). Broadly the numbers are parallel to -O0, -O1, -O2, and -O3
         options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
         Levels 2 and 3 use improved graph-coloring algorithms for better register allocation.
@@ -239,6 +246,7 @@ def compile_ode(
             huge=huge,
             parallel_mul=parallel_mul,
             compress=compress,
+            compact=compact,
         )
     elif can_use_python(backend):
         model = pyengine.tree.model_ode(iv, states, odes, params)
@@ -271,6 +279,7 @@ def compile_jac(
     huge=False,
     parallel_mul=True,
     compress=False,
+    compact=True,
 ):
     """Genenrates and compiles Jacobian for an ODE system.
         iv: a single symbol, the independent variable.
@@ -284,14 +293,16 @@ def compile_jac(
         dtype (default `float64`): the data type. Possibilities are `float64` and `complex128`.
         use_simd (default `True`): generates SIMD code for vectorized operations. Currently
             supports AVX on x86-64 and NEON on aarch64 systems.
+        enable_avx512 (default `False`): allows using AVX512 (f64x8) SIMD type when available.
         use_threads (default `True`): use multi-threading to speed up parallel operations when called
             on numpy arrays.
         cse (default `True`): performs common-subexpression elimination.
         fastmath (default `True`): use fastmath floating point operations, especially fused multiply-addition.
-        fast_complex (default True): use f64x2 SIMD instructions for complex operations.
-        parallel_mul (default True): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
-        huge (default False): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
-        compress (default False): compress binary size by converting inline operations to calls.
+        fast_complex (default `True`): use f64x2 SIMD instructions for complex operations.
+        parallel_mul (default `True`): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
+        huge (default `False`): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
+        compress (default `False`): compress binary size by converting inline operations to calls.
+        compact (default `True`): compacts the stack frame by reusing temporary variables.
         opt_level (default 2): optimization level (0, 1, 2, or 3). Broadly the numbers are parallel to -O0, -O1, -O2, and -O3
             options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
             Levels 2 and 3 use improved graph-coloring algorithms for better register allocation.
@@ -322,6 +333,7 @@ def compile_jac(
             huge=huge,
             parallel_mul=parallel_mul,
             compress=compress,
+            compact=compact,
         )
     elif can_use_python(backend):
         model = pyengine.tree.model_jac(iv, states, odes, params)
@@ -366,6 +378,7 @@ def compile_json(
     huge=False,
     parallel_mul=True,
     compress=False,
+    compact=True,
     backend="rust",
 ):
     """Compiles CellML models
@@ -391,6 +404,7 @@ def compile_json(
             huge=huge,
             parallel_mul=parallel_mul,
             compress=compress,
+            compact=compact,
         )
 
         if compiler.count_diffs == 0:
@@ -427,6 +441,7 @@ def compile_evaluator(
     huge=False,
     parallel_mul=True,
     compress=False,
+    compact=True,
 ):
     """Compiles an Evaluator object generated by Symbolica.
 
@@ -446,13 +461,15 @@ def compile_evaluator(
     dtype (default `float64`): the data type. Possibilities are `float64` and `complex128`.
     use_simd (default `True`): generates SIMD code for vectorized operations. Currently supports
         AVX on x86-64 and NEON on aarch64 systems.
+    enable_avx512 (default `False`): allows using AVX512 (f64x8) SIMD type when available.
     use_threads (default `False`): currently not supported for the Symbolica bridge.
     cse (default `False`): performs common-subexpression elimination.
-    fastmath (default False): use fastmath floating point operations, especially fused multiply-addition.
-    fast_complex (default True): use f64x2 SIMD instructions for complex operations.
-    parallel_mul (default True): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
-    huge (default False): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
-    compress (default False): compress binary size by converting inline operations to calls.
+    fastmath (default `False`): use fastmath floating point operations, especially fused multiply-addition.
+    fast_complex (default `True`): use f64x2 SIMD instructions for complex operations.
+    parallel_mul (default `True`): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
+    huge (default `False`): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
+    compress (default `False`): compress binary size by converting inline operations to calls.
+    compact (default `True`): compacts the stack frame by reusing temporary variables.
     opt_level (default 2): optimization level (0, 1, 2, or 3). Broadly the numbers are parallel to -O0, -O1, -O2, and -O3
         options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
         Levels 2 and 3 use improved graph-coloring algorithms for better register allocation.
@@ -502,6 +519,7 @@ def compile_evaluator(
             huge=huge,
             parallel_mul=parallel_mul,
             compress=compress,
+            compact=compact,
         )
     else:  # order == "fortran"
         compiler = engine.RustyCompiler(
@@ -525,6 +543,7 @@ def compile_evaluator(
             huge=huge,
             parallel_mul=parallel_mul,
             compress=compress,
+            compact=compact,
         )
 
         if dtype == "complex128":
@@ -551,7 +570,7 @@ def compile_composer(
     use_simd=True,
     enable_simd512=False,
     use_threads=True,
-    cse=False,
+    cse=True,
     fastmath=True,
     backend="rust",
     opt_level=2,
@@ -561,6 +580,7 @@ def compile_composer(
     huge=False,
     parallel_mul=True,
     compress=False,
+    compact=True,
 ):
     """Compiles a Composer object.
 
@@ -580,13 +600,15 @@ def compile_composer(
     dtype (default `float64`): the data type. Possibilities are `float64` and `complex128`.
     use_simd (default `True`): generates SIMD code for vectorized operations. Currently supports
         AVX on x86-64 and NEON on aarch64 systems.
-    use_threads (default `False`): currently not supported for the Symbolica bridge.
-    cse (default `False`): performs common-subexpression elimination.
-    fastmath (default False): use fastmath floating point operations, especially fused multiply-addition.
-    fast_complex (default True): use f64x2 SIMD instructions for complex operations.
-    parallel_mul (default True): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
-    huge (default False): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
-    compress (default False): compress binary size by converting inline operations to calls.
+    enable_avx512 (default `False`): allows using AVX512 (f64x8) SIMD type when available.
+    use_threads (default `True`): currently not supported for the Symbolica bridge.
+    cse (default `True`): performs common-subexpression elimination.
+    fastmath (default `False`): use fastmath floating point operations, especially fused multiply-addition.
+    fast_complex (default `True`): use f64x2 SIMD instructions for complex operations.
+    parallel_mul (default `True`): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
+    huge (default `False`): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
+    compress (default `False`): compress binary size by converting inline operations to calls.
+    compact (default `True`): compacts the stack frame by reusing temporary variables.
     opt_level (default 2): optimization level (0, 1, 2, or 3). Broadly the numbers are parallel to -O0, -O1, -O2, and -O3
         options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
         Levels 2 and 3 use improved graph-coloring algorithms for better register allocation.
@@ -632,6 +654,7 @@ def compile_composer(
         huge=huge,
         parallel_mul=parallel_mul,
         compress=compress,
+        compact=compact,
     )
 
 

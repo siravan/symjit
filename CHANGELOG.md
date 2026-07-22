@@ -1,3 +1,30 @@
+# Version 2.21.0
+
+* New stable release.
+* `set_option` signature changed.
+
+# Version 2.20.4
+
+* aarch64 paired load/save improved.
+
+# Version 2.20.3
+
+* Stack limit added.
+
+# Version 2.20.2
+
+* `load/save_registers` updated for 32-reg allocations.
+
+# Version 2.20.1
+
+* Peephone fuse_recip3 bug fixed.
+* `fuse_sincos` removed.
+
+# Version 2.20.0
+
+* AVX512 f64x8 added.
+* x64 backend updated.
+
 # Version 2.19.2
 
 * Real log/ln bug fixed.

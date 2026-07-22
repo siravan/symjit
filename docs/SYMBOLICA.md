@@ -4,7 +4,7 @@
 
 # Symbolica
 
-In addition to Sympy, *SymJit* can generate code from [Symbolica](https://symbolica.io/)'s expressions. Symbolica is a modern computer algebra written in Rust with a Python binding. Considering that both *SymJit* and Symbolica are written in Rust, they can interact at multiple levels. However, here we limit the discussion to high-level interaction using Python. 
+In addition to Sympy, *SymJit* can generate code from [Symbolica](https://symbolica.io/)'s expressions. Symbolica is a modern computer algebra written in Rust with a Python binding. Considering that both *SymJit* and Symbolica are written in Rust, they can interact at multiple levels. 
 
 ## Using Symbolica `Evaluator`
 
