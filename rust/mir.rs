@@ -2978,6 +2978,7 @@ impl Mir {
         let mut counts: HashMap<String, usize> = HashMap::new();
         let mut times2: usize = 0;
         let mut stack_count: usize = 0;
+        let mut hist: [usize; 32] = [0; 32];
 
         let mut iter = self.code.iter().peekable();
 
@@ -3006,6 +3007,12 @@ impl Mir {
                 _ => {}
             }
 
+            for r in ins.regs() {
+                if let Reg::Gen(r) = r {
+                    hist[r as usize] += 1;
+                }
+            }
+
             let desc = ins.desc();
             match counts.get_mut(&desc) {
                 Some(k) => {
@@ -3032,8 +3039,12 @@ impl Mir {
         let _ = writeln!(fs, "compiled size {} bytes", size);
         let _ = writeln!(fs, "---------------------------------");
 
-        let name = name.replace("_stats.txt", "_config.toml");
-        self.config.to_toml(&name);
+        for i in 0..32 {
+            println!("reg({}) usage is {}", i, hist[i]);
+        }
+
+        // let name = name.replace("_stats.txt", "_config.toml");
+        // self.config.to_toml(&name);
     }
 }
 

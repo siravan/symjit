@@ -320,7 +320,7 @@ impl GreedyAllocator {
                 if alloc.life <= ip {
                     if alloc.loc.is_none() {
                         return (self.assign(r, s, None), false);
-                    } else if q.is_none() {
+                    } else if q.is_none() || rand::random_bool(0.2) {
                         q = Some(r);
                     }
                 }
