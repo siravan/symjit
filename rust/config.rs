@@ -461,7 +461,8 @@ impl Config {
     pub fn count_scratch(&self) -> u8 {
         if !self.is_complex() {
             self.available_registers() - 2
-        } else if self.fast_complex() && !self.use_simd() && (self.is_arm64() || self.is_riscv64())
+        } else if self.fast_complex() && !self.use_simd()
+        /*&& (self.is_arm64() || self.is_riscv64())*/
         {
             self.available_registers() - 5
         } else {
