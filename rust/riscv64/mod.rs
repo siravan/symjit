@@ -808,6 +808,7 @@ impl Generator for RiscV {
         self.emit(rvv! {ld x(PARAMS), x(Self::sp), 32});
 
         self.add_stack(64);
+        self.emit(rvv! {xor x(RiscV::ra), x(RiscV::ra), x(RiscV::ra)});
         self.emit(rvv! {ret});
     }
 

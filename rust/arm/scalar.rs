@@ -481,6 +481,7 @@ impl Generator for ArmGenerator {
         self.emit(arm! {ldr x(MEM), [sp, #8]});
         self.emit(arm! {ldr lr, [sp, #0]});
         self.emit(arm! {add sp, sp, #16});
+        self.emit(arm! {eor x(0), x(0), x(0)});
         self.emit(arm! {ret});
     }
 
@@ -567,6 +568,7 @@ impl Generator for ArmGenerator {
         self.emit(arm! {ldr x(STACK), [sp, #48]});
 
         self.emit(arm! {add sp, sp, #64});
+        self.emit(arm! {eor x(0), x(0), x(0)});
         self.emit(arm! {ret});
     }
 

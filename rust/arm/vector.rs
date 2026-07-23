@@ -91,6 +91,18 @@ impl ArmSimdGenerator {
         }
         self.emit(arm! {add sp, sp, #size & 0x0fff});
     }
+
+    fn find_temp(s1: Reg, s2: Reg) -> Reg {
+        if s1 != Reg::Temp && s2 != Reg::Temp {
+            Reg::Temp
+        } else if s1 != Reg::Gen(2) && s2 != Reg::Gen(2) {
+            Reg::Gen(2)
+        } else if s1 != Reg::Gen(3) && s2 != Reg::Gen(3) {
+            Reg::Gen(3)
+        } else {
+            panic!("cannot find a temporary register");
+        }
+    }
 }
 
 impl Generator for ArmSimdGenerator {
@@ -444,37 +456,62 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        assert!(s1 != Reg::Temp && s2 != Reg::Temp);
-        self.emit(arm! {fmov q(TEMP), q(ϕ(s3))});
-        self.emit(arm! {fmla q(TEMP), q(ϕ(s1)), q(ϕ(s2))});
-        self.emit(arm! {fmov q(ϕ(dst)), q(TEMP)});
+        if dst == s3 {
+            self.emit(arm! {fmla q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
+        } else if s1 != dst && s2 != dst {
+            self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(s3))});
+            self.emit(arm! {fmla q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
+        } else {
+            let t = Self::find_temp(s1, s2);
+            self.emit(arm! {fmov q(ϕ(t)), q(ϕ(s3))});
+            self.emit(arm! {fmla q(ϕ(t)), q(ϕ(s1)), q(ϕ(s2))});
+            self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(t))});
+        }
     }
 
     // fused_mul_sub is s1 * s2 - s3, corresponding to fnmsub in aarch64
     // and vmsub... in amd64
     fn fused_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        assert!(s1 != Reg::Temp && s2 != Reg::Temp);
-        self.emit(arm! {fmov q(TEMP), q(ϕ(s3))});
-        self.emit(arm! {fmls q(TEMP), q(ϕ(s1)), q(ϕ(s2))});
-        self.emit(arm! {fneg q(ϕ(dst)), q(TEMP)});
+        if s1 != dst && s2 != dst {
+            self.emit(arm! {fneg q(ϕ(dst)), q(ϕ(s3))});
+            self.emit(arm! {fmla q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
+        } else {
+            let t = Self::find_temp(s1, s2);
+            self.emit(arm! {fneg q(ϕ(t)), q(ϕ(s3))});
+            self.emit(arm! {fmla q(ϕ(t)), q(ϕ(s1)), q(ϕ(s2))});
+            self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(t))});
+        }
     }
 
     // fused_neg_mul_add is s3 - s1 * s2, corresponding to fmsub in aarch64
     // and vnmadd... in amd64
     fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
         assert!(s1 != Reg::Temp && s2 != Reg::Temp);
-        self.emit(arm! {fmov q(TEMP), q(ϕ(s3))});
-        self.emit(arm! {fmls q(TEMP), q(ϕ(s1)), q(ϕ(s2))});
-        self.emit(arm! {fmov q(ϕ(dst)), q(TEMP)});
+        if dst == s3 {
+            self.emit(arm! {fmls q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
+        } else if s1 != dst && s2 != dst {
+            self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(s3))});
+            self.emit(arm! {fmls q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
+        } else {
+            let t = Self::find_temp(s1, s2);
+            self.emit(arm! {fmov q(ϕ(t)), q(ϕ(s3))});
+            self.emit(arm! {fmls q(ϕ(t)), q(ϕ(s1)), q(ϕ(s2))});
+            self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(t))});
+        }
     }
 
     // fused_neg_mul_sub is -s3 - s1 * s2, corresponding to fnmadd in aarch64
     // and vnmsub... in amd64
     fn fused_neg_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        assert!(s1 != Reg::Temp && s2 != Reg::Temp);
-        self.emit(arm! {fmov q(TEMP), q(ϕ(s3))});
-        self.emit(arm! {fmla q(TEMP), q(ϕ(s1)), q(ϕ(s2))});
-        self.emit(arm! {fneg q(ϕ(dst)), q(TEMP)});
+        if s1 != dst && s2 != dst {
+            self.emit(arm! {fneg q(ϕ(dst)), q(ϕ(s3))});
+            self.emit(arm! {fmls q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
+        } else {
+            let t = Self::find_temp(s1, s2);
+            self.emit(arm! {fneg q(ϕ(t)), q(ϕ(s3))});
+            self.emit(arm! {fmls q(ϕ(t)), q(ϕ(s1)), q(ϕ(s2))});
+            self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(t))});
+        }
     }
 
     fn add_consts(&mut self, consts: &[f64]) {
