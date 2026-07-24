@@ -222,35 +222,23 @@ impl Node {
         top: &mut Mir,
         spiller: &mut Spiller,
     ) -> Result<u8> {
-        self.compile(mir, 0, top, spiller)
+        self.compile(mir, top, spiller)
     }
 
-    pub fn compile(
-        &self,
-        mir: &mut Mir,
-        base: u8,
-        top: &mut Mir,
-        spiller: &mut Spiller,
-    ) -> Result<u8> {
+    pub fn compile(&self, mir: &mut Mir, top: &mut Mir, spiller: &mut Spiller) -> Result<u8> {
         match self {
             Node::Void => Ok(0),
-            Node::Const { .. } => self.compile_const(mir, base, top, spiller),
-            Node::Var { .. } => self.compile_var(mir, base, top, spiller),
-            Node::Unary { .. } => self.compile_unary(mir, base, top, spiller),
-            Node::Binary { .. } => self.compile_binary(mir, base, top, spiller),
+            Node::Const { .. } => self.compile_const(mir, top, spiller),
+            Node::Var { .. } => self.compile_var(mir, top, spiller),
+            Node::Unary { .. } => self.compile_unary(mir, top, spiller),
+            Node::Binary { .. } => self.compile_binary(mir, top, spiller),
         }
     }
 
-    fn compile_const(
-        &self,
-        mir: &mut Mir,
-        base: u8,
-        top: &mut Mir,
-        spiller: &mut Spiller,
-    ) -> Result<u8> {
+    fn compile_const(&self, mir: &mut Mir, top: &mut Mir, spiller: &mut Spiller) -> Result<u8> {
         if let Node::Const { idx, .. } = &self {
-            mir.load_const(reg(base), *idx);
-            Ok(base)
+            mir.load_const(reg(0), *idx);
+            Ok(0)
         } else {
             unreachable!();
         }
@@ -271,16 +259,10 @@ impl Node {
     ///     1. At the encounter with a variable, load it into a temporary (cache) register
     ///     2. During the subsequent encounters, use the value in the register
     ///     3. After the last encounter, return the register to the pool of available registers
-    fn compile_var(
-        &self,
-        mir: &mut Mir,
-        base: u8,
-        top: &mut Mir,
-        spiller: &mut Spiller,
-    ) -> Result<u8> {
+    fn compile_var(&self, mir: &mut Mir, top: &mut Mir, spiller: &mut Spiller) -> Result<u8> {
         if let Node::Var { sym, .. } = &self {
             let sym = sym.borrow();
-            let dst = Self::load_var(mir, base, &sym.loc);
+            let dst = Self::load_var(mir, 0, &sym.loc);
 
             Ok(dst)
         } else {
@@ -288,17 +270,11 @@ impl Node {
         }
     }
 
-    fn compile_unary(
-        &self,
-        mir: &mut Mir,
-        base: u8,
-        top: &mut Mir,
-        spiller: &mut Spiller,
-    ) -> Result<u8> {
+    fn compile_unary(&self, mir: &mut Mir, top: &mut Mir, spiller: &mut Spiller) -> Result<u8> {
         if let Node::Unary { op, arg, power, .. } = self {
             // let dst = base + self.ershov_number() - 1;
             let dst = spiller.effective(self.ershov_number());
-            let r = arg.compile(mir, base, top, spiller)?;
+            let r = arg.compile(mir, top, spiller)?;
 
             match op.as_str() {
                 "neg" => mir.neg(reg(dst), reg(r)),
@@ -330,13 +306,7 @@ impl Node {
         }
     }
 
-    fn compile_binary(
-        &self,
-        mir: &mut Mir,
-        base: u8,
-        top: &mut Mir,
-        spiller: &mut Spiller,
-    ) -> Result<u8> {
+    fn compile_binary(&self, mir: &mut Mir, top: &mut Mir, spiller: &mut Spiller) -> Result<u8> {
         if let Node::Binary {
             op, left, right, ..
         } = self
@@ -363,19 +333,19 @@ impl Node {
             let r;
 
             if el == er {
-                l = left.compile(mir, base, top, spiller)?;
+                l = left.compile(mir, top, spiller)?;
                 assert!(dst > l);
                 mir.fmov(reg(l + 1), reg(l));
-                r = right.compile(mir, base, top, spiller)?;
-                self.emit_binop(mir, base, dst, l + 1, r)?;
+                r = right.compile(mir, top, spiller)?;
+                self.emit_binop(mir, dst, l + 1, r)?;
             } else if el > er {
-                l = left.compile(mir, base, top, spiller)?;
-                r = right.compile(mir, base, top, spiller)?;
-                self.emit_binop(mir, base, dst, l, r)?;
+                l = left.compile(mir, top, spiller)?;
+                r = right.compile(mir, top, spiller)?;
+                self.emit_binop(mir, dst, l, r)?;
             } else {
-                r = right.compile(mir, base, top, spiller)?;
-                l = left.compile(mir, base, top, spiller)?;
-                self.emit_binop(mir, base, dst, l, r)?;
+                r = right.compile(mir, top, spiller)?;
+                l = left.compile(mir, top, spiller)?;
+                self.emit_binop(mir, dst, l, r)?;
             }
 
             // self.emit_binop(mir, base, dst, l, r)
@@ -385,7 +355,7 @@ impl Node {
         }
     }
 
-    fn emit_binop(&self, mir: &mut Mir, base: u8, dst: u8, l: u8, r: u8) -> Result<u8> {
+    fn emit_binop(&self, mir: &mut Mir, dst: u8, l: u8, r: u8) -> Result<u8> {
         if let Node::Binary {
             op,
             left,
@@ -423,6 +393,7 @@ impl Node {
         }
     }
 
+    /*
     fn alloc(
         &self,
         mir: &mut Mir,
@@ -458,6 +429,7 @@ impl Node {
 
         Ok((dst, l, r))
     }
+    */
 
     fn is_leaf_var(&self) -> bool {
         matches!(self, Node::Var { .. })
