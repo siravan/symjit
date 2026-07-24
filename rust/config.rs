@@ -207,7 +207,7 @@ impl Config {
         config.set_simd_branch(c.options.simd_branch);
         config.set_compact(c.options.compact);
         config.set_compress(c.options.compress);
-        config.set_dicect(c.options.direct);
+        config.set_direct(c.options.direct);
         config.set_fast_complex(c.options.fast_complex);
         config.set_huge(c.options.huge);
         config.set_parallel_mul(c.options.parallel_mul);
@@ -666,7 +666,7 @@ impl Config {
                 self.set_compress(val.parse::<bool>()?);
             }
             "direct" => {
-                self.set_dicect(val.parse::<bool>()?);
+                self.set_direct(val.parse::<bool>()?);
             }
             "fast_complex" => {
                 self.set_fast_complex(val.parse::<bool>()?);

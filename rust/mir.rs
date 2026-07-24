@@ -3045,6 +3045,7 @@ impl Mir {
         let _ = writeln!(fs, "compiled size {} bytes", size);
         let _ = writeln!(fs, "---------------------------------");
 
+        /*
         for i in 0..32 {
             println!("reg({}) usage is {}", i, hist[i]);
         }
