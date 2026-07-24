@@ -118,6 +118,12 @@ impl MirWriter {
         }
     }
 
+    pub fn append(&mut self, other: &mut MirWriter) {
+        self.buf.append(&mut other.buf);
+        self.ip += other.ip;
+        other.ip = 0;
+    }
+
     pub fn push(&mut self, ins: &Instruction) {
         self.ip += 1;
         match ins {

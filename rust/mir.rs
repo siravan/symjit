@@ -335,6 +335,11 @@ impl Mir {
         }
     }
 
+    pub fn append(&mut self, other: &mut Mir) {
+        assert!(other.labels.is_empty() && other.consts.is_empty());
+        self.code.append(&mut other.code);
+    }
+
     fn push(&mut self, ins: Instruction) {
         self.code.push(&ins)
     }
@@ -3045,14 +3050,14 @@ impl Mir {
         let _ = writeln!(fs, "compiled size {} bytes", size);
         let _ = writeln!(fs, "---------------------------------");
 
-        /*
+
         for i in 0..32 {
             println!("reg({}) usage is {}", i, hist[i]);
         }
-        */
 
         // let name = name.replace("_stats.txt", "_config.toml");
         // self.config.to_toml(&name);
+        */
     }
 }
 

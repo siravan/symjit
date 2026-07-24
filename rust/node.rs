@@ -301,12 +301,7 @@ impl Node {
 
     fn compile_binary(&self, mir: &mut Mir, base: u8) -> Result<u8> {
         if let Node::Binary {
-            op,
-            left,
-            right,
-            power,
-            cond,
-            ..
+            op, left, right, ..
         } = self
         {
             if mir.config.is_amd64() {
@@ -321,6 +316,22 @@ impl Node {
 
             let (dst, l, r) = self.alloc(mir, base, left, right)?;
 
+            self.emit_binop(mir, base, dst, l, r)
+        } else {
+            unreachable!();
+        }
+    }
+
+    fn emit_binop(&self, mir: &mut Mir, base: u8, dst: u8, l: u8, r: u8) -> Result<u8> {
+        if let Node::Binary {
+            op,
+            left,
+            right,
+            power,
+            cond,
+            ..
+        } = self
+        {
             match op.as_str() {
                 "plus" => mir.plus(reg(dst), reg(l), reg(r)),
                 "minus" => mir.minus(reg(dst), reg(l), reg(r)),
