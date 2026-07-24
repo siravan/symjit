@@ -1,6 +1,7 @@
 use anyhow::Result;
 
 use super::utils::{is_external_func, reg};
+use crate::config::SPILL_AREA;
 use crate::mir::Mir;
 use crate::node::Node;
 use crate::symbol::Loc;
@@ -45,9 +46,14 @@ impl Statement {
     }
 
     pub fn compile(&mut self, ir: &mut Mir) -> Result<()> {
+        let mut tree = Mir::new(ir.config.clone());
+        let mut spiller = Spiller::new(ir.config.count_scratch());
+
         match self {
             Statement::Assign { lhs, rhs } => {
-                let r = rhs.compile_tree(ir)?;
+                let r = rhs.compile_tree(&mut tree, ir, &mut spiller)?;
+                ir.append(&mut tree);
+                spiller.reset();
                 Self::save(ir, r, lhs);
             }
             Statement::Call {
@@ -61,7 +67,9 @@ impl Statement {
                     ir.call(op.as_str(), (r - l) as usize)?;
                     Self::save_result(ir, lhs);
                 } else {
-                    let _ = arg.compile_tree(ir)?;
+                    let _ = arg.compile_tree(&mut tree, ir, &mut spiller)?;
+                    ir.append(&mut tree);
+                    spiller.reset();
                     ir.call(op.as_str(), *num_args)?;
                     Self::save_result(ir, lhs);
                 }
@@ -77,7 +85,9 @@ impl Statement {
                 label,
                 is_else,
             } => {
-                let cond = cond.compile_tree(ir)?;
+                let cond = cond.compile_tree(&mut tree, ir, &mut spiller)?;
+                ir.append(&mut tree);
+                spiller.reset();
                 ir.branch_if(reg(cond), label, *is_else);
             }
         };
@@ -103,5 +113,41 @@ impl Statement {
                 Loc::Param(_) => unreachable!(),
             }
         }
+    }
+}
+
+/* Spiller */
+
+#[derive(Debug, Clone)]
+pub struct Spiller {
+    count_scratch: u8,
+    count_temp: u8,
+}
+
+impl Spiller {
+    pub fn new(count_scratch: u8) -> Spiller {
+        Spiller {
+            count_scratch,
+            count_temp: 0,
+        }
+    }
+
+    pub fn effective(&self, e: u8) -> u8 {
+        (e - 1) % (self.count_scratch - 1)
+    }
+
+    pub fn anchor(&self) -> u8 {
+        self.count_scratch - 1
+    }
+
+    pub fn next_temp(&mut self) -> Loc {
+        assert!(self.count_temp < 32);
+        let l = Loc::Stack(SPILL_AREA as u32 + self.count_temp as u32);
+        self.count_temp += 1;
+        l
+    }
+
+    pub fn reset(&mut self) {
+        self.count_temp = 0;
     }
 }
