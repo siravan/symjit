@@ -13,7 +13,7 @@ use num_traits::identities::Zero;
 use crate::code::{Func, VirtualTable};
 use crate::complexify::Complexifier;
 use crate::config::Config;
-use crate::config::SPILL_AREA;
+use crate::config::ABI_AREA;
 use crate::generator::FuncletType;
 use crate::generator::Generator;
 use crate::machine::MachineCode;
@@ -1417,7 +1417,7 @@ impl Mir {
                             let mut val: Complex<f64> = Complex::default();
                             f(
                                 *env,
-                                stack.as_ptr().add(SPILL_AREA),
+                                stack.as_ptr().add(ABI_AREA),
                                 *num_args,
                                 &mut val as *mut _ as *mut f64,
                             );

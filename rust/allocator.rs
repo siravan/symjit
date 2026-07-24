@@ -3,7 +3,7 @@ use std::fmt;
 
 use anyhow::Result;
 
-use crate::config::{Config, SLICE_CAP, SPILL_AREA};
+use crate::config::{Config, ABI_AREA, SLICE_CAP};
 use crate::mir::{Instruction, Mir};
 use crate::serializer::MirWriter;
 use crate::symbol::Loc;
@@ -602,9 +602,9 @@ impl GreedyAllocator {
     fn contract(&mut self) -> Result<()> {
         let code = std::mem::take(&mut self.code);
         let fixed = if self.config.is_complex() {
-            (2 * SLICE_CAP + SPILL_AREA) as u32
+            (2 * SLICE_CAP + ABI_AREA) as u32
         } else {
-            (SLICE_CAP + SPILL_AREA) as u32
+            (SLICE_CAP + ABI_AREA) as u32
         };
 
         for ins in code.iter() {

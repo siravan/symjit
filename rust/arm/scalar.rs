@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use crate::assembler::{Assembler, Jumper};
 use crate::code::Func;
-use crate::config::{Config, SPILL_AREA};
+use crate::config::{Config, ABI_AREA};
 use crate::generator::{FuncletType, Generator};
 use crate::symbol::Loc;
 use crate::utils::{align_stack, is_external_func, Reg};
@@ -54,7 +54,7 @@ impl ArmGenerator {
 
     fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
         load_x_from_label(&mut self.a, 0, &format!("_env_{}_", op));
-        let ofs = SPILL_AREA as u32 * REG_SIZE;
+        let ofs = ABI_AREA as u32 * REG_SIZE;
         self.emit(arm! {add x(1), x(31), #ofs});
         self.emit(arm! {movz x(2), #num_args});
         self.emit(arm! {add x(3), x(SP), #0});

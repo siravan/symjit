@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 use super::utils::{is_external_func, reg};
-use crate::config::SPILL_AREA;
+use crate::config::{ABI_AREA, SLICE_CAP};
 use crate::mir::Mir;
 use crate::node::Node;
 use crate::symbol::Loc;
@@ -136,15 +136,11 @@ impl Spiller {
         (e - 1) % (self.count_scratch - 1)
     }
 
-    pub fn anchor(&self) -> u8 {
-        self.count_scratch - 1
-    }
-
-    pub fn next_temp(&mut self) -> Loc {
+    pub fn next_temp(&mut self) -> u32 {
         assert!(self.count_temp < 32);
-        let l = Loc::Stack(SPILL_AREA as u32 + self.count_temp as u32);
+        let idx = (ABI_AREA + SLICE_CAP) as u32 + self.count_temp as u32;
         self.count_temp += 1;
-        l
+        idx
     }
 
     pub fn reset(&mut self) {

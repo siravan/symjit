@@ -1,5 +1,5 @@
 use crate::code::Func;
-use crate::config::{Config, SPILL_AREA};
+use crate::config::{Config, ABI_AREA};
 use crate::generator::{FuncletType, Generator};
 use crate::symbol::Loc;
 use crate::utils::align_stack;
@@ -74,7 +74,7 @@ impl AmdComplexGenerator {
     }
 
     fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
-        let cap = SPILL_AREA as u32;
+        let cap = ABI_AREA as u32;
 
         self.amd.mov_reg_label(ARGS[0], &format!("_env_{}_", op));
         self.amd.lea_mem(ARGS[1], STACK, (cap * REG_SIZE) as i32);

@@ -4,7 +4,7 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
-use crate::config::{SLICE_CAP, SPILL_AREA};
+use crate::config::{ABI_AREA, SLICE_CAP, SPILL_ARENA};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Loc {
@@ -84,7 +84,7 @@ impl SymbolTable {
            2. To preserve registers XMM6-XMM15 in Windows (if needed).
         */
 
-        for i in 0..SPILL_AREA {
+        for i in 0..ABI_AREA {
             s.add_stack(&format!("μ{}", i));
         }
 
@@ -94,6 +94,10 @@ impl SymbolTable {
 
         for i in 0..SLICE_CAP {
             s.add_stack(&format!("__Arg{}", i));
+        }
+
+        for i in 0..SPILL_ARENA {
+            s.add_stack(&format!("ρ{}", i));
         }
 
         s

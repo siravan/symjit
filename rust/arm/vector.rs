@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 
 use crate::assembler::{Assembler, Jumper};
 use crate::code::Func;
-use crate::config::{Config, SPILL_AREA};
+use crate::config::{Config, ABI_AREA};
 use crate::generator::{FuncletType, Generator};
 use crate::symbol::Loc;
 use crate::utils::{align_stack, is_external_func, Reg};
@@ -48,7 +48,7 @@ impl ArmSimdGenerator {
         let label = format!("_simd_{}_", op);
         load_long(&mut self.a, CALL, &label);
 
-        let ofs = SPILL_AREA as u32 * REG_SIZE;
+        let ofs = ABI_AREA as u32 * REG_SIZE;
 
         load_x_from_label(&mut self.a, 0, &format!("_env_{}_", op));
         self.emit(arm! {add x(1), x(SP), #ofs});

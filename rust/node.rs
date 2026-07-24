@@ -334,10 +334,16 @@ impl Node {
 
             if el == er {
                 l = left.compile(mir, top, spiller)?;
-                assert!(dst > l);
                 mir.fmov(reg(l + 1), reg(l));
                 r = right.compile(mir, top, spiller)?;
-                self.emit_binop(mir, dst, l + 1, r)?;
+                self.emit_binop(mir, l + 1, l + 1, r)?;
+
+                if dst != l + 1 {
+                    let t = spiller.next_temp();
+                    mir.save_stack(reg(l + 1), t);
+                    top.append(mir);
+                    mir.load_stack(reg(dst), t);
+                }
             } else if el > er {
                 l = left.compile(mir, top, spiller)?;
                 r = right.compile(mir, top, spiller)?;

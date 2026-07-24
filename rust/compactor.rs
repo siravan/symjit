@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::collections::HashMap;
 
-use crate::config::{Config, SLICE_CAP, SPILL_AREA};
+use crate::config::{Config, ABI_AREA, SLICE_CAP};
 use crate::mir::{Instruction, Mir};
 use crate::serializer::MirWriter;
 use crate::symbol::Loc;
@@ -21,9 +21,9 @@ pub struct Compactor {
 impl Compactor {
     pub fn new(config: Config) -> Compactor {
         let fixed = if config.is_complex() {
-            (2 * SLICE_CAP + SPILL_AREA) as u32
+            (2 * SLICE_CAP + ABI_AREA) as u32
         } else {
-            (SLICE_CAP + SPILL_AREA) as u32
+            (SLICE_CAP + ABI_AREA) as u32
         };
 
         Compactor {
