@@ -96,10 +96,6 @@ impl SymbolTable {
             s.add_stack(&format!("__Arg{}", i));
         }
 
-        for i in 0..SPILL_ARENA {
-            s.add_stack(&format!("ρ{}", i));
-        }
-
         s
     }
 

@@ -214,6 +214,34 @@ impl Node {
         }
     }
 
+    fn recalc_ershov(&mut self, count_scratch: u8) -> u8 {
+        match self {
+            Node::Void => 0,
+            Node::Const { .. } | Node::Var { .. } => 1,
+            Node::Unary { arg, ershov, .. } => {
+                let e = arg.recalc_ershov(count_scratch);
+                *ershov = e;
+                e
+            }
+            Node::Binary {
+                left,
+                right,
+                ershov,
+                ..
+            } => {
+                let l = left.recalc_ershov(count_scratch);
+                let r = right.recalc_ershov(count_scratch);
+                let mut e = if l == r { l + 1 } else { l.max(r) };
+                e = if e == count_scratch { 1 } else { e };
+                if e != *ershov {
+                    println!("e = {}, old ershov = {}", e, *ershov);
+                }
+                *ershov = e;
+                e
+            }
+        }
+    }
+
     /// The main entry point to compile an expression tree
     /// should be called on the root of the expression tree
     pub fn compile_tree(
@@ -222,10 +250,11 @@ impl Node {
         top: &mut Mir,
         spiller: &mut Spiller,
     ) -> Result<u8> {
+        // self.recalc_ershov(spiller.count_scratch);
         self.compile(mir, top, spiller)
     }
 
-    pub fn compile(&self, mir: &mut Mir, top: &mut Mir, spiller: &mut Spiller) -> Result<u8> {
+    fn compile(&self, mir: &mut Mir, top: &mut Mir, spiller: &mut Spiller) -> Result<u8> {
         match self {
             Node::Void => Ok(0),
             Node::Const { .. } => self.compile_const(mir, top, spiller),
@@ -273,8 +302,10 @@ impl Node {
     fn compile_unary(&self, mir: &mut Mir, top: &mut Mir, spiller: &mut Spiller) -> Result<u8> {
         if let Node::Unary { op, arg, power, .. } = self {
             // let dst = base + self.ershov_number() - 1;
-            let dst = spiller.effective(self.ershov_number());
+            // let dst = spiller.effective(self.ershov_number());
+            // let dst = self.ershov_number() - 1;
             let r = arg.compile(mir, top, spiller)?;
+            let dst = r;
 
             match op.as_str() {
                 "neg" => mir.neg(reg(dst), reg(r)),
@@ -324,40 +355,71 @@ impl Node {
             */
 
             // let (dst, l, r) = self.alloc(mir, base, left, right, top, spiller)?;
+            //
+            let s = spiller.count_scratch - 1;
 
             let el = left.ershov_number();
             let er = right.ershov_number();
-            let dst = spiller.effective(self.ershov_number());
+            let dst;
 
             let l;
             let r;
 
             if el == er {
                 l = left.compile(mir, top, spiller)?;
-                mir.fmov(reg(l + 1), reg(l));
-                r = right.compile(mir, top, spiller)?;
-                self.emit_binop(mir, l + 1, l + 1, r)?;
-
-                if dst != l + 1 {
-                    let t = spiller.next_temp();
-                    mir.save_stack(reg(l + 1), t);
-                    top.append(mir);
-                    mir.load_stack(reg(dst), t);
+                if l == s {
+                    let (t, r) = self.spill(mir, top, spiller, l, right)?;
+                    dst = self.emit_binop(mir, s, t, r)?;
+                } else {
+                    mir.fmov(reg(l + 1), reg(l));
+                    let r = right.compile(mir, top, spiller)?;
+                    dst = self.emit_binop(mir, l + 1, l + 1, r)?;
                 }
             } else if el > er {
                 l = left.compile(mir, top, spiller)?;
-                r = right.compile(mir, top, spiller)?;
-                self.emit_binop(mir, dst, l, r)?;
+                if l == s {
+                    let (t, r) = self.spill(mir, top, spiller, l, right)?;
+                    dst = self.emit_binop(mir, s, t, r)?;
+                } else {
+                    r = right.compile(mir, top, spiller)?;
+                    dst = self.emit_binop(mir, l, l, r)?;
+                }
             } else {
                 r = right.compile(mir, top, spiller)?;
-                l = left.compile(mir, top, spiller)?;
-                self.emit_binop(mir, dst, l, r)?;
+                if r == s {
+                    let (t, l) = self.spill(mir, top, spiller, r, left)?;
+                    dst = self.emit_binop(mir, s, l, t)?;
+                } else {
+                    l = left.compile(mir, top, spiller)?;
+                    dst = self.emit_binop(mir, r, l, r)?;
+                }
             }
 
             // self.emit_binop(mir, base, dst, l, r)
             Ok(dst)
         } else {
             unreachable!();
+        }
+    }
+
+    fn spill(
+        &self,
+        mir: &mut Mir,
+        top: &mut Mir,
+        spiller: &mut Spiller,
+        l: u8,
+        right: &Node,
+    ) -> Result<(u8, u8)> {
+        let t = spiller.push();
+        mir.save_stack(reg(l), t);
+        let r = right.compile(mir, top, spiller)?;
+        spiller.pop();
+        if r == 0 {
+            mir.load_stack(reg(1), t);
+            Ok((1, r))
+        } else {
+            mir.load_stack(reg(0), t);
+            Ok((0, r))
         }
     }
 

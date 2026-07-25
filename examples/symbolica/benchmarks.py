@@ -7,7 +7,7 @@ import numpy as np
 import symjit
 from symbolica import E
 
-P = 60
+P = 32
 N = 10000
 
 CONFIG = os.path.join(os.path.dirname(__file__), "symjit.toml")
@@ -61,6 +61,11 @@ def run():
         t_symjit_cfg = (time.time() - t_start) * 1000000.0 / N
 
         threashold = 1e-14 * math.sqrt(num_terms)
+
+        # print()
+        # print(res_eager, res_symjit_no_simd)
+        # print(res_eager, res_symjit_simd)
+        # print(res_eager, res_symjit_cfg)
 
         valid = (
             abs(res_eager - res_symjit_no_simd) < threashold

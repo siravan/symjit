@@ -203,7 +203,8 @@ impl Block {
             return self.break_call_binary(op, left, right);
         }
 
-        let count_scratch = SPILL_ARENA as u8; // self.config.count_scratch();
+        let count_scratch = 16 as u8; // self.config.count_scratch();
+                                      // let count_scratch = self.config.count_scratch();
 
         let right = if left.ershov_number() == count_scratch - 1
             && right.ershov_number() == count_scratch - 1

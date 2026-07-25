@@ -1,7 +1,7 @@
 ty = "native"
 
 [options]
-use_simd = false
+use_simd = true
 enable_simd512 = true
 use_threads = false
 cse = true
