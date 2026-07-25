@@ -4,7 +4,7 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
-use crate::config::{ABI_AREA, SLICE_CAP, SPILL_ARENA};
+use crate::config::{ABI_AREA, SLICE_CAP};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Loc {

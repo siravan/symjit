@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 use super::utils::{is_external_func, reg};
-use crate::config::{Config, SPILL_ARENA};
+use crate::config::SPILL_ARENA;
 use crate::mir::Mir;
 use crate::node::Node;
 use crate::symbol::Loc;
@@ -45,8 +45,8 @@ impl Statement {
         }
     }
 
-    pub fn compile(&mut self, ir: &mut Mir) -> Result<()> {
-        let mut spiller = Spiller::new(ir.config.clone());
+    pub fn compile(&mut self, ir: &mut Mir, count_scratch: u8) -> Result<()> {
+        let mut spiller = Spiller::new(ir.config.is_amd64(), count_scratch, ir.config.is_complex());
 
         match self {
             Statement::Assign { lhs, rhs } => {
@@ -116,30 +116,26 @@ impl Statement {
 
 #[derive(Debug, Clone)]
 pub struct Spiller {
-    config: Config,
+    pub is_amd64: bool,
     pub count_scratch: u8,
+    pub is_complex: bool,
     count_temp: u8,
 }
 
 impl Spiller {
-    pub fn new(config: Config) -> Spiller {
-        let count_scratch = config.count_scratch();
-
+    pub fn new(is_amd64: bool, count_scratch: u8, is_complex: bool) -> Spiller {
         Spiller {
-            config,
+            is_amd64,
             count_scratch,
+            is_complex,
             count_temp: 0,
         }
-    }
-
-    pub fn effective(&self, e: u8) -> u8 {
-        (e - 1) % (self.count_scratch - 1)
     }
 
     pub fn push(&mut self) -> u32 {
         assert!(self.count_temp < 32);
         let idx = SPILL_ARENA as u32 + self.count_temp as u32;
-        if self.config.is_complex() {
+        if self.is_complex {
             self.count_temp += 2;
         } else {
             self.count_temp += 1;
@@ -148,7 +144,7 @@ impl Spiller {
     }
 
     pub fn pop(&mut self) {
-        if self.config.is_complex() {
+        if self.is_complex {
             self.count_temp -= 2;
         } else {
             self.count_temp -= 1;

@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use crate::config::{Config, ABI_AREA, SPILL_ARENA};
+use crate::config::Config;
 use crate::mir::Mir;
 use crate::node::Node;
 use crate::statement::Statement;
@@ -66,9 +66,9 @@ impl Block {
 
     // **************** Compile the Block! *********************
 
-    pub fn compile(&mut self, ir: &mut Mir) -> Result<()> {
+    pub fn compile(&mut self, ir: &mut Mir, count_scratch: u8) -> Result<()> {
         for stmt in self.stmts.iter_mut() {
-            stmt.compile(ir)?;
+            stmt.compile(ir, count_scratch)?
         }
 
         Ok(())

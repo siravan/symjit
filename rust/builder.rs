@@ -280,9 +280,9 @@ impl Builder {
         Ok(node)
     }
 
-    pub fn compile_mir(&mut self, mir: &mut Mir) -> Result<()> {
+    pub fn compile_mir(&mut self, mir: &mut Mir, count_scratch: u8) -> Result<()> {
         self.block().eliminate();
-        self.block().compile(mir)
+        self.block().compile(mir, count_scratch)
     }
 
     pub fn optimize_mir(&mut self, mir: &mut Mir) -> Result<()> {

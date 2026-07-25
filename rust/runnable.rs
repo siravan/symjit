@@ -82,7 +82,8 @@ impl Application {
         }
 
         let mut mir = Mir::new(prog.config().clone());
-        prog.builder.compile_mir(&mut mir)?;
+        prog.builder
+            .compile_mir(&mut mir, prog.config().count_scratch())?;
         prog.builder.optimize_mir(&mut mir)?;
         Self::with_mir(prog, reals, mir)
     }
