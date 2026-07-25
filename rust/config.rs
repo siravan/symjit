@@ -35,7 +35,7 @@ pub const PARALLEL_MUL: u32 = 0x0020_0000;
 pub const OPT_LEVEL_MASK: u32 = 0x0000_0f00;
 pub const OPT_LEVEL_SHIFT: usize = 8;
 
-pub const ABI_AREA: usize = 48;
+pub const ABI_AREA: usize = 16 + 32 * 2;
 pub const SLICE_CAP: usize = 32;
 pub const SPILL_ARENA: usize = 16;
 pub const DEFAULT_STACK_LIMIT: usize = 1 << 20;

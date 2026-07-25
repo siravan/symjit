@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use crate::config::{Config, SPILL_ARENA};
+use crate::config::{Config, ABI_AREA, SPILL_ARENA};
 use crate::mir::Mir;
 use crate::node::Node;
 use crate::statement::Statement;
@@ -203,7 +203,7 @@ impl Block {
             return self.break_call_binary(op, left, right);
         }
 
-        let count_scratch = 16 as u8; // self.config.count_scratch();
+        let count_scratch = 32 as u8; // self.config.count_scratch();
                                       // let count_scratch = self.config.count_scratch();
 
         let right = if left.ershov_number() == count_scratch - 1

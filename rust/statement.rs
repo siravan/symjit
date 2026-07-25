@@ -46,13 +46,11 @@ impl Statement {
     }
 
     pub fn compile(&mut self, ir: &mut Mir) -> Result<()> {
-        let mut tree = Mir::new(ir.config.clone());
         let mut spiller = Spiller::new(ir.config.clone());
 
         match self {
             Statement::Assign { lhs, rhs } => {
-                let r = rhs.compile_tree(&mut tree, ir, &mut spiller)?;
-                ir.append(&mut tree);
+                let r = rhs.compile_tree(ir, &mut spiller)?;
                 spiller.reset();
                 Self::save(ir, r, lhs);
             }
@@ -67,8 +65,7 @@ impl Statement {
                     ir.call(op.as_str(), (r - l) as usize)?;
                     Self::save_result(ir, lhs);
                 } else {
-                    let _ = arg.compile_tree(&mut tree, ir, &mut spiller)?;
-                    ir.append(&mut tree);
+                    let _ = arg.compile_tree(ir, &mut spiller)?;
                     spiller.reset();
                     ir.call(op.as_str(), *num_args)?;
                     Self::save_result(ir, lhs);
@@ -85,8 +82,7 @@ impl Statement {
                 label,
                 is_else,
             } => {
-                let cond = cond.compile_tree(&mut tree, ir, &mut spiller)?;
-                ir.append(&mut tree);
+                let cond = cond.compile_tree(ir, &mut spiller)?;
                 spiller.reset();
                 ir.branch_if(reg(cond), label, *is_else);
             }

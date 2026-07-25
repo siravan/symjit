@@ -214,57 +214,24 @@ impl Node {
         }
     }
 
-    fn recalc_ershov(&mut self, count_scratch: u8) -> u8 {
-        match self {
-            Node::Void => 0,
-            Node::Const { .. } | Node::Var { .. } => 1,
-            Node::Unary { arg, ershov, .. } => {
-                let e = arg.recalc_ershov(count_scratch);
-                *ershov = e;
-                e
-            }
-            Node::Binary {
-                left,
-                right,
-                ershov,
-                ..
-            } => {
-                let l = left.recalc_ershov(count_scratch);
-                let r = right.recalc_ershov(count_scratch);
-                let mut e = if l == r { l + 1 } else { l.max(r) };
-                e = if e == count_scratch { 1 } else { e };
-                if e != *ershov {
-                    println!("e = {}, old ershov = {}", e, *ershov);
-                }
-                *ershov = e;
-                e
-            }
-        }
-    }
-
     /// The main entry point to compile an expression tree
     /// should be called on the root of the expression tree
-    pub fn compile_tree(
-        &mut self,
-        mir: &mut Mir,
-        top: &mut Mir,
-        spiller: &mut Spiller,
-    ) -> Result<u8> {
+    pub fn compile_tree(&mut self, mir: &mut Mir, spiller: &mut Spiller) -> Result<u8> {
         // self.recalc_ershov(spiller.count_scratch);
-        self.compile(mir, top, spiller)
+        self.compile(mir, spiller)
     }
 
-    fn compile(&self, mir: &mut Mir, top: &mut Mir, spiller: &mut Spiller) -> Result<u8> {
+    fn compile(&self, mir: &mut Mir, spiller: &mut Spiller) -> Result<u8> {
         match self {
             Node::Void => Ok(0),
-            Node::Const { .. } => self.compile_const(mir, top, spiller),
-            Node::Var { .. } => self.compile_var(mir, top, spiller),
-            Node::Unary { .. } => self.compile_unary(mir, top, spiller),
-            Node::Binary { .. } => self.compile_binary(mir, top, spiller),
+            Node::Const { .. } => self.compile_const(mir),
+            Node::Var { .. } => self.compile_var(mir),
+            Node::Unary { .. } => self.compile_unary(mir, spiller),
+            Node::Binary { .. } => self.compile_binary(mir, spiller),
         }
     }
 
-    fn compile_const(&self, mir: &mut Mir, top: &mut Mir, spiller: &mut Spiller) -> Result<u8> {
+    fn compile_const(&self, mir: &mut Mir) -> Result<u8> {
         if let Node::Const { idx, .. } = &self {
             mir.load_const(reg(0), *idx);
             Ok(0)
@@ -288,7 +255,7 @@ impl Node {
     ///     1. At the encounter with a variable, load it into a temporary (cache) register
     ///     2. During the subsequent encounters, use the value in the register
     ///     3. After the last encounter, return the register to the pool of available registers
-    fn compile_var(&self, mir: &mut Mir, top: &mut Mir, spiller: &mut Spiller) -> Result<u8> {
+    fn compile_var(&self, mir: &mut Mir) -> Result<u8> {
         if let Node::Var { sym, .. } = &self {
             let sym = sym.borrow();
             let dst = Self::load_var(mir, 0, &sym.loc);
@@ -299,12 +266,12 @@ impl Node {
         }
     }
 
-    fn compile_unary(&self, mir: &mut Mir, top: &mut Mir, spiller: &mut Spiller) -> Result<u8> {
+    fn compile_unary(&self, mir: &mut Mir, spiller: &mut Spiller) -> Result<u8> {
         if let Node::Unary { op, arg, power, .. } = self {
             // let dst = base + self.ershov_number() - 1;
             // let dst = spiller.effective(self.ershov_number());
             // let dst = self.ershov_number() - 1;
-            let r = arg.compile(mir, top, spiller)?;
+            let r = arg.compile(mir, spiller)?;
             let dst = r;
 
             match op.as_str() {
@@ -337,22 +304,20 @@ impl Node {
         }
     }
 
-    fn compile_binary(&self, mir: &mut Mir, top: &mut Mir, spiller: &mut Spiller) -> Result<u8> {
+    fn compile_binary(&self, mir: &mut Mir, spiller: &mut Spiller) -> Result<u8> {
         if let Node::Binary {
             op, left, right, ..
         } = self
         {
-            /*
             if mir.config.is_amd64() {
-                if let Ok(dst) = self.load_math(mir, base, op, left, right) {
+                if let Ok(dst) = self.load_math(mir, op, left, right, spiller) {
                     return Ok(dst);
                 }
 
-                if let Ok(dst) = self.load_const_math(mir, base, op, left, right) {
+                if let Ok(dst) = self.load_const_math(mir, op, left, right, spiller) {
                     return Ok(dst);
                 }
             }
-            */
 
             // let (dst, l, r) = self.alloc(mir, base, left, right, top, spiller)?;
             //
@@ -360,40 +325,36 @@ impl Node {
 
             let el = left.ershov_number();
             let er = right.ershov_number();
-            let dst;
 
-            let l;
-            let r;
-
-            if el == er {
-                l = left.compile(mir, top, spiller)?;
+            let dst = if el == er {
+                let l = left.compile(mir, spiller)?;
                 if l == s {
-                    let (t, r) = self.spill(mir, top, spiller, l, right)?;
-                    dst = self.emit_binop(mir, s, t, r)?;
+                    let (t, r) = self.spill(mir, spiller, l, right)?;
+                    self.emit_binop(mir, s, t, r)?
                 } else {
                     mir.fmov(reg(l + 1), reg(l));
-                    let r = right.compile(mir, top, spiller)?;
-                    dst = self.emit_binop(mir, l + 1, l + 1, r)?;
+                    let r = right.compile(mir, spiller)?;
+                    self.emit_binop(mir, l + 1, l + 1, r)?
                 }
             } else if el > er {
-                l = left.compile(mir, top, spiller)?;
+                let l = left.compile(mir, spiller)?;
                 if l == s {
-                    let (t, r) = self.spill(mir, top, spiller, l, right)?;
-                    dst = self.emit_binop(mir, s, t, r)?;
+                    let (t, r) = self.spill(mir, spiller, l, right)?;
+                    self.emit_binop(mir, s, t, r)?
                 } else {
-                    r = right.compile(mir, top, spiller)?;
-                    dst = self.emit_binop(mir, l, l, r)?;
+                    let r = right.compile(mir, spiller)?;
+                    self.emit_binop(mir, l, l, r)?
                 }
             } else {
-                r = right.compile(mir, top, spiller)?;
+                let r = right.compile(mir, spiller)?;
                 if r == s {
-                    let (t, l) = self.spill(mir, top, spiller, r, left)?;
-                    dst = self.emit_binop(mir, s, l, t)?;
+                    let (t, l) = self.spill(mir, spiller, r, left)?;
+                    self.emit_binop(mir, s, l, t)?
                 } else {
-                    l = left.compile(mir, top, spiller)?;
-                    dst = self.emit_binop(mir, r, l, r)?;
+                    let l = left.compile(mir, spiller)?;
+                    self.emit_binop(mir, r, l, r)?
                 }
-            }
+            };
 
             // self.emit_binop(mir, base, dst, l, r)
             Ok(dst)
@@ -402,19 +363,15 @@ impl Node {
         }
     }
 
-    fn spill(
-        &self,
-        mir: &mut Mir,
-        top: &mut Mir,
-        spiller: &mut Spiller,
-        l: u8,
-        right: &Node,
-    ) -> Result<(u8, u8)> {
+    fn spill(&self, mir: &mut Mir, spiller: &mut Spiller, l: u8, right: &Node) -> Result<(u8, u8)> {
         let t = spiller.push();
         mir.save_stack(reg(l), t);
-        let r = right.compile(mir, top, spiller)?;
+        let r = right.compile(mir, spiller)?;
         spiller.pop();
-        if r == 0 {
+
+        if r < l {
+            Ok((l, r))
+        } else if r == 0 {
             mir.load_stack(reg(1), t);
             Ok((1, r))
         } else {
@@ -425,12 +382,7 @@ impl Node {
 
     fn emit_binop(&self, mir: &mut Mir, dst: u8, l: u8, r: u8) -> Result<u8> {
         if let Node::Binary {
-            op,
-            left,
-            right,
-            power,
-            cond,
-            ..
+            op, power, cond, ..
         } = self
         {
             match op.as_str() {
@@ -511,57 +463,10 @@ impl Node {
         }
     }
 
-    /*
-    fn load_math(
-        &self,
-        mir: &mut Mir,
-        base: u8,
-        op: &str,
-        left: &Node,
-        right: &Node,
-    ) -> Result<u8> {
-        let dst = base + self.ershov_number() - 1;
-
-        if (op == "plus"
-            || op == "times"
-            || op == "minus"
-            || (op == "divide" && !mir.config.is_complex()))    // because complex division uses re(Reg::Temp)
-            && right.is_leaf_var()
-        {
-            let l = left.compile(mir, base)?;
-            let t = right.compile_leaf_var().unwrap();
-
-            match op {
-                "plus" => mir.plus_load(reg(dst), reg(l), t),
-                "minus" => mir.minus_load(reg(dst), reg(l), t),
-                "times" => mir.times_load(reg(dst), reg(l), t),
-                "divide" => mir.divide_load(reg(dst), reg(l), t),
-                _ => unreachable!(),
-            }
-            return Ok(dst);
-        }
-
-        if (op == "plus" || op == "times") && left.is_leaf_var() {
-            let r = right.compile(mir, base)?;
-            let t = left.compile_leaf_var().unwrap();
-
-            match op {
-                "plus" => mir.plus_load(reg(dst), reg(r), t),
-                "times" => mir.times_load(reg(dst), reg(r), t),
-                _ => unreachable!(),
-            }
-            return Ok(dst);
-        }
-
-        Err(anyhow!("cannot fuse!"))
-    }
-    */
-
     pub fn is_leaf_const(&self) -> bool {
         matches!(self, Node::Const { .. })
     }
 
-    /*
     fn compile_leaf_const(&self) -> Option<u32> {
         if let Node::Const { idx, .. } = self {
             Some(*idx)
@@ -570,47 +475,86 @@ impl Node {
         }
     }
 
-    fn load_const_math(
+    fn load_math(
         &self,
         mir: &mut Mir,
-        base: u8,
         op: &str,
         left: &Node,
         right: &Node,
+        spiller: &mut Spiller,
     ) -> Result<u8> {
-        let dst = base + self.ershov_number() - 1;
-
-        if (op == "plus" || op == "times" || op == "minus" || op == "divide")
-            && right.is_leaf_const()
+        if (op == "plus"
+            || op == "times"
+            || op == "minus"
+            || (op == "divide" && !mir.config.is_complex()))    // because complex division uses re(Reg::Temp)
+            && right.is_leaf_var()
         {
-            let l = left.compile(mir, base)?;
-            let idx = right.compile_leaf_const().unwrap();
+            let l = left.compile(mir, spiller)?;
+            let t = right.compile_leaf_var().unwrap();
 
             match op {
-                "plus" => mir.plus_load_const(reg(dst), reg(l), idx),
-                "minus" => mir.minus_load_const(reg(dst), reg(l), idx),
-                "times" => mir.times_load_const(reg(dst), reg(l), idx),
-                "divide" => mir.divide_load_const(reg(dst), reg(l), idx),
+                "plus" => mir.plus_load(reg(l), reg(l), t),
+                "minus" => mir.minus_load(reg(l), reg(l), t),
+                "times" => mir.times_load(reg(l), reg(l), t),
+                "divide" => mir.divide_load(reg(l), reg(l), t),
                 _ => unreachable!(),
             }
-            return Ok(dst);
+            return Ok(l);
         }
 
-        if (op == "plus" || op == "times") && left.is_leaf_const() {
-            let r = right.compile(mir, base)?;
-            let idx = left.compile_leaf_const().unwrap();
+        if (op == "plus" || op == "times") && left.is_leaf_var() {
+            let r = right.compile(mir, spiller)?;
+            let t = left.compile_leaf_var().unwrap();
 
             match op {
-                "plus" => mir.plus_load_const(reg(dst), reg(r), idx),
-                "times" => mir.times_load_const(reg(dst), reg(r), idx),
+                "plus" => mir.plus_load(reg(r), reg(r), t),
+                "times" => mir.times_load(reg(r), reg(r), t),
                 _ => unreachable!(),
             }
-            return Ok(dst);
+            return Ok(r);
         }
 
         Err(anyhow!("cannot fuse!"))
     }
-    */
+
+    fn load_const_math(
+        &self,
+        mir: &mut Mir,
+        op: &str,
+        left: &Node,
+        right: &Node,
+        spiller: &mut Spiller,
+    ) -> Result<u8> {
+        if (op == "plus" || op == "times" || op == "minus" || op == "divide")
+            && right.is_leaf_const()
+        {
+            let l = left.compile(mir, spiller)?;
+            let idx = right.compile_leaf_const().unwrap();
+
+            match op {
+                "plus" => mir.plus_load_const(reg(l), reg(l), idx),
+                "minus" => mir.minus_load_const(reg(l), reg(l), idx),
+                "times" => mir.times_load_const(reg(l), reg(l), idx),
+                "divide" => mir.divide_load_const(reg(l), reg(l), idx),
+                _ => unreachable!(),
+            }
+            return Ok(l);
+        }
+
+        if (op == "plus" || op == "times") && left.is_leaf_const() {
+            let r = right.compile(mir, spiller)?;
+            let idx = left.compile_leaf_const().unwrap();
+
+            match op {
+                "plus" => mir.plus_load_const(reg(r), reg(r), idx),
+                "times" => mir.times_load_const(reg(r), reg(r), idx),
+                _ => unreachable!(),
+            }
+            return Ok(r);
+        }
+
+        Err(anyhow!("cannot fuse!"))
+    }
 
     pub fn address(&self) -> Result<usize> {
         if let Node::Var { sym, .. } = &self {
