@@ -81,7 +81,7 @@ pub enum FusedOp {
     NegMulSub = 3, // -a * b - c
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Hash, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum FuncletOp {
     Times,
@@ -1637,7 +1637,10 @@ impl Mir {
 
         ir.branch("@funclets");
 
-        for f in funclets.iter() {
+        let mut funclets: Vec<_> = funclets.into_iter().collect();
+        funclets.sort_unstable();
+
+        for f in &funclets {
             // println!("{:?}", &f);
             match f {
                 (FuncletOp::Times, args) => {
