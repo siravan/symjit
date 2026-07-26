@@ -499,9 +499,12 @@ impl Composer for DirectTranslator {
         prog.builder.ft = self.ft.clone();
 
         let mut mir: Mir = std::mem::take(&mut self.mir);
-        prog.builder.optimize_mir(&mut mir)?;
-        prog.builder.optimize_mir(&mut mir)?;
-        let mut app = Application::with_mir(prog, self.reals.clone(), mir)?;
+        prog.builder
+            .optimize_mir(&mut mir, self.mir.config.count_scratch())?;
+        prog.builder
+            .optimize_mir(&mut mir, self.mir.config.count_scratch())?;
+
+        let mut app = Application::with_mir(prog, self.reals.clone(), mir.clone(), mir)?;
         app.prepare_simd();
 
         Ok(app)

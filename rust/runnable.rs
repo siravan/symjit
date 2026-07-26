@@ -68,7 +68,8 @@ pub struct Application {
     pub first_obs: usize,
     pub first_diff: usize,
     pub reals: HashSet<Loc>,
-    pub original: Option<Mir>,
+    pub mir_short: Mir,
+    pub mir_tall: Mir,
 }
 
 impl Application {
@@ -77,18 +78,47 @@ impl Application {
          * Stop-gap measure. A better solution would be to add `times_real`,
          * `divide_real`, and `load_param_real` to generators.
          */
+
         if !reals.is_empty() {
             prog.builder.config.set_fast_complex(false);
         }
 
-        let mut mir = Mir::new(prog.config().clone());
+        let config = prog.config().clone();
+
+        let count_scratch_short = if config.is_complex() { 5 } else { 14 };
+        let count_scratch_tall = if config.is_complex() {
+            if !config.is_amd64() && config.opt_level() == 3 {
+                13
+            } else {
+                11
+            }
+        } else {
+            30
+        };
+
+        let mut mir_short = Mir::new(prog.config().clone());
+
         prog.builder
-            .compile_mir(&mut mir, prog.config().count_scratch())?;
-        prog.builder.optimize_mir(&mut mir)?;
-        Self::with_mir(prog, reals, mir)
+            .compile_mir(&mut mir_short, count_scratch_short)?;
+        prog.builder
+            .optimize_mir(&mut mir_short, count_scratch_short)?;
+
+        let mut mir_tall = Mir::new(prog.config().clone());
+
+        prog.builder
+            .compile_mir(&mut mir_tall, count_scratch_tall)?;
+        prog.builder
+            .optimize_mir(&mut mir_tall, count_scratch_tall)?;
+
+        Self::with_mir(prog, reals, mir_short, mir_tall)
     }
 
-    pub fn with_mir(mut prog: Program, reals: HashSet<Loc>, mut mir: Mir) -> Result<Application> {
+    pub fn with_mir(
+        mut prog: Program,
+        reals: HashSet<Loc>,
+        mir_short: Mir,
+        mir_tall: Mir,
+    ) -> Result<Application> {
         let first_state = 0;
         let first_param = 0;
         let first_obs = first_state + prog.count_states;
@@ -102,27 +132,26 @@ impl Application {
         let params = vec![0.0; count_params + 1];
 
         let config = prog.config().clone();
-        let mut original: Option<Mir> = None;
-        let compiled: Option<MachineCode<f64>>;
 
-        if config.is_complex() {
-            original = Some(mir.clone());
-            let complexified = Complexifier::new(&reals, config.clone()).complexify(&mir)?;
-
-            if config.fast_complex() {
-                let mut c = config.clone();
-                c.set_simd(false);
-                let n = c.count_scratch() as usize;
-                crate::allocator::GreedyAllocator::new(c, n).optimize(&mut mir)?;
-                compiled = Self::compile_ty(&config, &mir, &mut prog)?;
+        let mir = if config.is_complex() {
+            if config.is_amd64() {
+                Complexifier::new(&reals, config.clone()).complexify(&mir_short)?
             } else {
-                compiled = Self::compile_ty(&config, &complexified, &mut prog)?;
+                Complexifier::new(&reals, config.clone()).complexify(&mir_tall)?
             }
-
-            mir = complexified;
         } else {
-            compiled = Self::compile_ty(&config, &mir, &mut prog)?;
-        }
+            if config.is_amd64() {
+                mir_short.clone()
+            } else {
+                mir_tall.clone()
+            }
+        };
+
+        let compiled = if config.is_complex() && config.fast_complex() {
+            Self::compile_ty(&config, &mir_tall, &mut prog)?
+        } else {
+            Self::compile_ty(&config, &mir, &mut prog)?
+        };
 
         let use_simd = config.use_simd() && prog.count_loops == 0;
         let use_threads = config.use_threads();
@@ -156,7 +185,8 @@ impl Application {
             count_diffs,
             config,
             reals,
-            original,
+            mir_short,
+            mir_tall,
         })
     }
 
@@ -746,7 +776,7 @@ impl Storage for Application {
     fn save(&self, stream: &mut impl Write) -> Result<()> {
         stream.write_all(&Self::MAGIC.to_le_bytes())?;
 
-        let version: usize = 3;
+        let version: usize = 4;
         stream.write_all(&version.to_le_bytes())?;
 
         self.prog.save(stream)?;
@@ -771,10 +801,8 @@ impl Storage for Application {
 
         stream.write_all(&mask.to_le_bytes())?;
 
-        match &self.original {
-            Some(mir) => mir.save(stream)?,
-            None => self.bytecode.mir.save(stream)?,
-        }
+        self.mir_short.save(stream)?;
+        self.mir_tall.save(stream)?;
 
         save_reals(stream, &self.reals)?;
 
@@ -792,7 +820,7 @@ impl Storage for Application {
 
         stream.read_exact(&mut bytes)?;
 
-        if usize::from_le_bytes(bytes) != 3 {
+        if usize::from_le_bytes(bytes) != 4 {
             return Err(anyhow!("invalid sjb version"));
         }
 
@@ -801,11 +829,12 @@ impl Storage for Application {
         stream.read_exact(&mut bytes)?;
         let mask = usize::from_le_bytes(bytes);
 
-        let mir = Mir::load(stream, prog.config())?;
+        let mir_short = Mir::load(stream, prog.config())?;
+        let mir_tall = Mir::load(stream, prog.config())?;
 
         let reals = load_reals(stream)?;
 
-        let mut app = Application::with_mir(prog, reals, mir)?;
+        let mut app = Application::with_mir(prog, reals, mir_short, mir_tall)?;
 
         if mask & 2 != 0 {
             app.prepare_fast();

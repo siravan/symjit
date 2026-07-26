@@ -285,7 +285,7 @@ impl Builder {
         self.block().compile(mir, count_scratch)
     }
 
-    pub fn optimize_mir(&mut self, mir: &mut Mir) -> Result<()> {
+    pub fn optimize_mir(&mut self, mir: &mut Mir, count_scratch: u8) -> Result<()> {
         let opt_level = self.config.opt_level();
 
         if opt_level >= 1 {
@@ -299,8 +299,7 @@ impl Builder {
         }
 
         if opt_level >= 2 {
-            GreedyAllocator::new(self.config.clone(), self.config.count_scratch() as usize)
-                .optimize(mir)?;
+            GreedyAllocator::new(self.config.clone(), count_scratch as usize).optimize(mir)?;
         }
 
         if opt_level >= 3 {
