@@ -34,6 +34,8 @@ const T1: u8 = 30;
 const T2: u8 = 31;
 
 mod complex;
+#[cfg(all(test, target_arch = "aarch64"))]
+mod funclet_tests;
 mod scalar;
 mod vector;
 
@@ -317,4 +319,40 @@ fn add_stack(a: &mut Assembler, size: u32) {
         emit(a, arm! {add sp, sp, #size >> 12, lsl #12});
     }
     emit(a, arm! {add sp, sp, #size & 0x0fff});
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+    use crate::generator::{FuncletType, Generator};
+
+    fn first_funclet_call<G: Generator>(mut generator: G) -> u32 {
+        generator.call_funclet("target");
+        generator.branch("done");
+        generator.set_label("target");
+        generator.ret();
+        generator.set_label("done");
+        generator.seal();
+
+        let bytes = generator.bytes();
+        u32::from_le_bytes(bytes[..4].try_into().unwrap())
+    }
+
+    #[test]
+    fn generators_emit_relative_funclet_calls() {
+        let config = Config::default();
+
+        let scalar = ArmGenerator::new(config.clone());
+        assert!(matches!(scalar.support_funclet(), FuncletType::Complex));
+        assert_eq!(first_funclet_call(scalar), 0x9400_0002);
+
+        let vector = ArmSimdGenerator::new(config.clone());
+        assert!(matches!(vector.support_funclet(), FuncletType::Complex));
+        assert_eq!(first_funclet_call(vector), 0x9400_0002);
+
+        let complex = ArmComplexGenerator::new(config);
+        assert!(matches!(complex.support_funclet(), FuncletType::Real));
+        assert_eq!(first_funclet_call(complex), 0x9400_0002);
+    }
 }
