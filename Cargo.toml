@@ -42,4 +42,4 @@ default = []
 [lib]
 # name = "_lib"
 path = "rust/lib.rs"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
