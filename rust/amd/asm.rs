@@ -461,6 +461,12 @@ impl Amd {
         self.modrm_mem(reg, rm, offset);
     }
 
+    pub fn vbroadcastsd_indexed(&mut self, reg: u8, base: u8, index: u8, scale: u8) {
+        self.vex3pd(reg, 0, base, index, 2);
+        self.append_byte(0x19);
+        self.modrm_sib(reg, base, index, scale);
+    }
+
     pub fn vbroadcastsd_label(&mut self, reg: u8, label: &str) {
         self.vex3pd(reg, 0, 0, 0, 2);
         self.append_byte(0x19);
@@ -1082,6 +1088,15 @@ impl Amd {
         self.modrm_mem(reg, rm, offset);
     }
 
+    pub fn mov_u32_reg_mem(&mut self, reg: u8, rm: u8, offset: i32) {
+        let rex = 0x40 + ((rm & 8) >> 3) + ((reg & 8) >> 1);
+        if rex != 0x40 {
+            self.append_byte(rex);
+        }
+        self.append_byte(0x8b);
+        self.modrm_mem(reg, rm, offset);
+    }
+
     pub fn lea_mem(&mut self, reg: u8, rm: u8, offset: i32) {
         self.rex(reg, rm);
         self.append_byte(0x8d);
@@ -1103,7 +1118,7 @@ impl Amd {
     }
 
     pub fn lea_indexed(&mut self, reg: u8, base: u8, index: u8, scale: u8) {
-        self.rex(reg, 0);
+        self.rex_index(reg, base, index);
         self.append_byte(0x8d);
         self.modrm_sib(reg, base, index, scale);
     }
@@ -1178,6 +1193,18 @@ impl Amd {
     pub fn add(&mut self, reg: u8, rm: u8) {
         self.rex(reg, rm);
         self.append_byte(0x03);
+        self.modrm_reg(reg, rm);
+    }
+
+    pub fn imul(&mut self, reg: u8, rm: u8) {
+        self.rex(reg, rm);
+        self.append_bytes(&[0x0f, 0xaf]);
+        self.modrm_reg(reg, rm);
+    }
+
+    pub fn cmp(&mut self, reg: u8, rm: u8) {
+        self.rex(reg, rm);
+        self.append_byte(0x3b);
         self.modrm_reg(reg, rm);
     }
 

@@ -10,6 +10,7 @@ use asm::Amd;
 mod complex;
 mod scalar;
 mod sse;
+mod table;
 mod vector;
 mod vector_f64x8;
 

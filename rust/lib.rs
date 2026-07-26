@@ -311,6 +311,7 @@ mod composer;
 mod config;
 mod defuns;
 mod direct;
+mod direct_table;
 pub mod expr;
 mod generator;
 pub mod instruction;
@@ -346,6 +347,13 @@ pub use direct::{
     DIRECT_COMPLEX_SCALE_IMAG_SCALAR, DIRECT_COMPLEX_SCALE_REAL_SCALAR,
     DIRECT_COMPLEX_SCALE_SCALAR_COUNT, DIRECT_NO_ALIAS, DIRECT_STATUS_EXECUTION_FAILED,
     DIRECT_STATUS_INVALID_ARGUMENT, DIRECT_STATUS_INVALID_CONTEXT, DIRECT_STATUS_OK,
+};
+pub use direct_table::{
+    DirectTableApplet, DirectTableApplication, DirectTableApplicationMetadata,
+    DirectTableAttachmentLayout, DirectTableCallFunction, DirectTableCallViewV1,
+    DirectTableCallable, DirectTableCallableHandle, DirectTableCodeShape,
+    DirectTableDestinationOperation, DirectTableInvocationLayout, DirectTableParameterBinding,
+    DIRECT_TABLE_BINDING_ABI, DIRECT_TABLE_DESCRIPTOR_ABI, DIRECT_TABLE_DESCRIPTOR_MAX_BYTES,
 };
 pub use expr::{double, int, var, Expr};
 pub use instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};

@@ -35,6 +35,7 @@ const T2: u8 = 31;
 
 mod complex;
 mod scalar;
+mod table;
 mod vector;
 
 pub use complex::ArmComplexGenerator;

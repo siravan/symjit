@@ -78,6 +78,14 @@ macro_rules! ofs {
     }};
 }
 
+macro_rules! ofs4 {
+    ($x:expr) => {{
+        let x = $x;
+        assert!((x & 3 == 0) && (x < 16384));
+        (x as u32) << 8
+    }};
+}
+
 macro_rules! ofs2d {
     ($x:expr) => {{
         let x = $x;
@@ -177,6 +185,9 @@ macro_rules! arm {
     (ldr x($rd:expr), [x($rn:expr), x($rm:expr), lsl #3]) => {
         0xf8607800 | rd!($rd) | rn!($rn) | rm!($rm)
     };
+    (ldr w($rd:expr), [x($rn:expr), #$ofs:expr]) => {
+        0xb9400000 | rd!($rd) | rn!($rn) | ofs4!($ofs)
+    };
 
     (ldr d($rd:expr), label($ofs:expr)) => {
         0x5c000000 | rd!($rd) | ofs_pc!($ofs)
@@ -195,7 +206,6 @@ macro_rules! arm {
     (str x($rd:expr), [x($rn:expr), #$ofs:expr]) => {
         0xf9000000 | rd!($rd) | rn!($rn) | ofs!($ofs)
     };
-
     // paired-registers load/store instructions
     (ldp d($rd:expr), d($rd2:expr), [x($rn:expr), #$of7:expr]) => {
         0x6d400000 | rd!($rd) | rd2!($rd2) | rn!($rn) | of7!($of7)
@@ -437,6 +447,14 @@ macro_rules! arm {
 
     (adds x($rd:expr), x($rn:expr), x($rm:expr)) => {
         0xab000000 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
+    (mul x($rd:expr), x($rn:expr), x($rm:expr)) => {
+        0x9b007c00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
+    (cmp x($rn:expr), x($rm:expr)) => {
+        0xeb00001f | rn!($rn) | rm!($rm)
     };
 
     (lsr x($rd:expr), x($rn:expr), #1) => {
