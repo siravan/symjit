@@ -7,7 +7,6 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
 
 // use crate::generator::Generator;
-use crate::config::Config;
 use crate::mir::Mir;
 use crate::statement::Spiller;
 use crate::symbol::{Loc, Symbol};
@@ -233,12 +232,12 @@ impl Node {
                 ershov,
                 ..
             } => {
-                let e = if Self::can_load_math(op, left, right, &spiller)
-                    || Self::can_load_const_math(op, left, right, &spiller)
+                let e = if Self::can_load_math(op, left, right, spiller)
+                    || Self::can_load_const_math(op, left, right, spiller)
                 {
                     left.recalc_ershov(spiller)
-                } else if Self::can_load_math_rev(op, left, right, &spiller)
-                    || Self::can_load_const_math_rev(op, left, right, &spiller)
+                } else if Self::can_load_math_rev(op, left, right, spiller)
+                    || Self::can_load_const_math_rev(op, left, right, spiller)
                 {
                     right.recalc_ershov(spiller)
                 } else {
@@ -491,7 +490,7 @@ impl Node {
         right: &Node,
         spiller: &mut Spiller,
     ) -> Result<Option<u8>> {
-        if Self::can_load_math(op, left, right, &spiller) {
+        if Self::can_load_math(op, left, right, spiller) {
             let l = left.compile(mir, spiller)?;
             let t = right.compile_leaf_var().unwrap();
 
@@ -505,7 +504,7 @@ impl Node {
             return Ok(Some(l));
         }
 
-        if Self::can_load_math_rev(op, left, right, &spiller) {
+        if Self::can_load_math_rev(op, left, right, spiller) {
             let r = right.compile(mir, spiller)?;
             let t = left.compile_leaf_var().unwrap();
 
@@ -528,7 +527,7 @@ impl Node {
         right: &Node,
         spiller: &mut Spiller,
     ) -> Result<Option<u8>> {
-        if Self::can_load_const_math(op, left, right, &spiller) {
+        if Self::can_load_const_math(op, left, right, spiller) {
             let l = left.compile(mir, spiller)?;
             let idx = right.compile_leaf_const().unwrap();
 
@@ -542,7 +541,7 @@ impl Node {
             return Ok(Some(l));
         }
 
-        if Self::can_load_const_math_rev(op, left, right, &spiller) {
+        if Self::can_load_const_math_rev(op, left, right, spiller) {
             let r = right.compile(mir, spiller)?;
             let idx = left.compile_leaf_const().unwrap();
 
