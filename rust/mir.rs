@@ -1815,9 +1815,20 @@ impl Mir {
                 Instruction::SaveComplex { xs, ys, loc } => {
                     match loc {
                         Loc::Mem(idx) => {
-                            // ir.save_mem(*xs, *idx);
-                            // ir.save_mem(*ys, 1 + *idx);
-                            ir.save_mem_complex(*xs, *ys, *idx);
+                            if self.config.direct_arena() {
+                                crate::direct::emit_direct_complex_destination(
+                                    ir,
+                                    *xs,
+                                    *ys,
+                                    *idx,
+                                    self.config.direct_arena_operation(),
+                                    self.config.direct_arena_identity_output(),
+                                )?;
+                            } else {
+                                // ir.save_mem(*xs, *idx);
+                                // ir.save_mem(*ys, 1 + *idx);
+                                ir.save_mem_complex(*xs, *ys, *idx);
+                            }
                         }
                         Loc::Stack(idx) => {
                             // ir.save_stack(*xs, *idx);

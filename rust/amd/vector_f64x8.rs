@@ -323,11 +323,21 @@ impl Generator for AmdVectorF64x8Generator {
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        self.amd.vmovqd_zmm_mem(ϕ(dst), MEM, idx as i32 * REG_SIZE);
+        if self.config.direct_arena() {
+            self.amd.mov_reg_mem(Amd::RAX, STATES, (idx * 16) as i32);
+            self.amd.vmovqd_zmm_indexed(ϕ(dst), Amd::RAX, IDX, 8);
+        } else {
+            self.amd.vmovqd_zmm_mem(ϕ(dst), MEM, idx as i32 * REG_SIZE);
+        }
     }
 
     fn save_mem(&mut self, dst: Reg, idx: u32) {
-        self.amd.vmovqd_mem_zmm(MEM, idx as i32 * REG_SIZE, ϕ(dst));
+        if self.config.direct_arena() {
+            self.amd.mov_reg_mem(Amd::RAX, STATES, (idx * 16) as i32);
+            self.amd.vmovqd_indexed_zmm(Amd::RAX, IDX, 8, ϕ(dst));
+        } else {
+            self.amd.vmovqd_mem_zmm(MEM, idx as i32 * REG_SIZE, ϕ(dst));
+        }
     }
 
     fn save_mem_result(&mut self, idx: u32) {
@@ -337,7 +347,10 @@ impl Generator for AmdVectorF64x8Generator {
     fn load_param(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
 
-        if self.config.symbolica() {
+        if self.config.direct_arena() {
+            self.amd.mov_reg_mem(Amd::RAX, PARAMS, (idx * 8) as i32);
+            self.amd.vbroadcastsd_zmm(ϕ(dst), Amd::RAX, 0);
+        } else if self.config.symbolica() {
             self.amd
                 .vmovqd_zmm_mem(ϕ(dst), PARAMS, idx as i32 * REG_SIZE);
         } else {
@@ -773,6 +786,14 @@ impl Generator for AmdVectorF64x8Generator {
         self.amd.mov(IDX, ARGS[2]); // third arg = index if indirect mode
         self.amd.mov(PARAMS, ARGS[3]); // fourth arg = params
 
+        if self.config.direct_arena() {
+            self.amd.add(IDX, IDX);
+            self.amd.add(IDX, IDX);
+            self.amd.add(IDX, IDX);
+            sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_USIZE));
+            return;
+        }
+
         self.amd.or(STATES, STATES);
         self.amd.jz("@main");
 
@@ -813,20 +834,22 @@ impl Generator for AmdVectorF64x8Generator {
 
         add_rsp(&mut self.amd, align_stack(cap as u32 * REG_USIZE));
 
-        self.amd.or(STATES, STATES);
-        self.amd.jz("@done");
+        if !self.config.direct_arena() {
+            self.amd.or(STATES, STATES);
+            self.amd.jz("@done");
 
-        for i in 0..count_obs {
-            self.amd
-                .mov_reg_mem(Amd::RCX, STATES, 2 * 8 * (count_states + i) as i32);
-            self.amd
-                .vmovqd_zmm_mem(RET, MEM, (count_states + i) as i32 * REG_SIZE);
-            self.amd.vmovqd_indexed_zmm(Amd::RCX, IDX, 8, RET);
+            for i in 0..count_obs {
+                self.amd
+                    .mov_reg_mem(Amd::RCX, STATES, 2 * 8 * (count_states + i) as i32);
+                self.amd
+                    .vmovqd_zmm_mem(RET, MEM, (count_states + i) as i32 * REG_SIZE);
+                self.amd.vmovqd_indexed_zmm(Amd::RCX, IDX, 8, RET);
+            }
+
+            let frame_size = align_stack((count_states + count_obs) as u32 * REG_USIZE);
+            add_rsp(&mut self.amd, frame_size);
+            self.set_label("@done");
         }
-
-        let frame_size = align_stack((count_states + count_obs) as u32 * REG_USIZE);
-        add_rsp(&mut self.amd, frame_size);
-        self.set_label("@done");
 
         self.vzeroupper();
 

@@ -12,8 +12,8 @@ use super::*;
 const REG_SIZE: u32 = 8;
 
 pub struct ArmGenerator {
-    a: Assembler,
-    config: Config,
+    pub(super) a: Assembler,
+    pub(super) config: Config,
 }
 
 impl ArmGenerator {
@@ -154,11 +154,21 @@ impl Generator for ArmGenerator {
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
-        load_d_from_mem(&mut self.a, ϕ(dst), MEM, idx);
+        if self.config.direct_arena() {
+            load_x_from_mem(&mut self.a, SCRATCH2, STATES, 2 * idx);
+            self.emit(arm! {ldr d(ϕ(dst)), [x(SCRATCH2), x(IDX), lsl #3]});
+        } else {
+            load_d_from_mem(&mut self.a, ϕ(dst), MEM, idx);
+        }
     }
 
     fn save_mem(&mut self, dst: Reg, idx: u32) {
-        save_d_to_mem(&mut self.a, ϕ(dst), MEM, idx);
+        if self.config.direct_arena() {
+            load_x_from_mem(&mut self.a, SCRATCH2, STATES, 2 * idx);
+            self.emit(arm! {str d(ϕ(dst)), [x(SCRATCH2), x(IDX), lsl #3]});
+        } else {
+            save_d_to_mem(&mut self.a, ϕ(dst), MEM, idx);
+        }
     }
 
     fn save_mem_result(&mut self, idx: u32) {
@@ -166,7 +176,12 @@ impl Generator for ArmGenerator {
     }
 
     fn load_param(&mut self, dst: Reg, idx: u32) {
-        load_d_from_mem(&mut self.a, ϕ(dst), PARAMS, idx);
+        if self.config.direct_arena() {
+            load_x_from_mem(&mut self.a, SCRATCH2, PARAMS, idx);
+            load_d_from_mem(&mut self.a, ϕ(dst), SCRATCH2, 0);
+        } else {
+            load_d_from_mem(&mut self.a, ϕ(dst), PARAMS, idx);
+        }
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
@@ -178,11 +193,21 @@ impl Generator for ArmGenerator {
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        load_paired_d_from_mem(&mut self.a, ϕ(xd), ϕ(yd), MEM, idx);
+        if self.config.direct_arena() {
+            self.load_mem(xd, idx);
+            self.load_mem(yd, idx + 1);
+        } else {
+            load_paired_d_from_mem(&mut self.a, ϕ(xd), ϕ(yd), MEM, idx);
+        }
     }
 
     fn save_mem_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
-        save_paired_d_to_mem(&mut self.a, ϕ(xs), ϕ(ys), MEM, idx);
+        if self.config.direct_arena() {
+            self.save_mem(xs, idx);
+            self.save_mem(ys, idx + 1);
+        } else {
+            save_paired_d_to_mem(&mut self.a, ϕ(xs), ϕ(ys), MEM, idx);
+        }
     }
 
     fn load_param_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
@@ -512,6 +537,13 @@ impl Generator for ArmGenerator {
         self.emit(arm! {mov x(IDX), x(2)});
         self.emit(arm! {mov x(PARAMS), x(3)});
 
+        if self.config.direct_arena() {
+            let stack_size = align_stack(cap as u32 * REG_SIZE);
+            self.sub_stack(stack_size);
+            self.emit(arm! {mov x(STACK), sp});
+            return;
+        }
+
         self.emit(arm! {tst x(STATES), x(STATES)});
         self.jump("@main", 0, |offset, _| arm! {b.eq label(offset)});
 
@@ -541,23 +573,27 @@ impl Generator for ArmGenerator {
         count_obs: usize,
         _count_params: usize,
     ) {
+        self.set_label("@epilogue");
+
         let stack_size = align_stack(cap as u32 * REG_SIZE);
         self.add_stack(stack_size);
 
-        self.emit(arm! {tst x(STATES), x(STATES)});
-        self.jump("@done", 0, |offset, _| arm! {b.eq label(offset)});
+        if !self.config.direct_arena() {
+            self.emit(arm! {tst x(STATES), x(STATES)});
+            self.jump("@done", 0, |offset, _| arm! {b.eq label(offset)});
 
-        for i in 0..count_obs {
-            load_x_from_mem(&mut self.a, SCRATCH2, STATES, 2 * (count_states + i) as u32);
-            let k = (count_states + i) as u32;
-            load_d_from_mem(&mut self.a, 0, MEM, k);
-            self.emit(arm! {str d(0), [x(SCRATCH2), x(IDX), lsl #3]});
+            for i in 0..count_obs {
+                load_x_from_mem(&mut self.a, SCRATCH2, STATES, 2 * (count_states + i) as u32);
+                let k = (count_states + i) as u32;
+                load_d_from_mem(&mut self.a, 0, MEM, k);
+                self.emit(arm! {str d(0), [x(SCRATCH2), x(IDX), lsl #3]});
+            }
+
+            let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
+            self.add_stack(frame_size);
+
+            self.set_label("@done");
         }
-
-        let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        self.add_stack(frame_size);
-
-        self.set_label("@done");
 
         self.emit(arm! {ldr lr, [sp, #0]});
         self.emit(arm! {ldr x(MEM), [sp, #8]});
@@ -588,5 +624,21 @@ impl Generator for ArmGenerator {
                 self.load_stack(*r, phys_reg as u32);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn direct_prologue_initializes_the_spill_stack_register() {
+        let mut config = Config::default();
+        config.set_direct_arena(true);
+        let mut generator = ArmGenerator::new(config);
+        generator.prologue_indirect(32, 0, 0, 0);
+
+        let expected = arm! {mov x(STACK), sp}.to_le_bytes();
+        assert_eq!(&generator.a.buf[generator.a.buf.len() - 4..], &expected);
     }
 }

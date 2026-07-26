@@ -45,7 +45,7 @@ macro_rules! fuseop {
 }
 
 pub struct AmdScalarGenerator {
-    amd: Amd,
+    pub(super) amd: Amd,
     config: Config,
     last_load: usize,
 }
@@ -187,13 +187,25 @@ impl Generator for AmdScalarGenerator {
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        self.amd
-            .vmovsd_xmm_mem(ϕ(dst), MEM, (idx * REG_SIZE) as i32);
+        if self.config.direct_arena() {
+            self.amd
+                .mov_reg_mem(Amd::RAX, STATES, (idx * 2 * REG_SIZE) as i32);
+            self.amd.vmovsd_xmm_indexed(ϕ(dst), Amd::RAX, IDX, 8);
+        } else {
+            self.amd
+                .vmovsd_xmm_mem(ϕ(dst), MEM, (idx * REG_SIZE) as i32);
+        }
     }
 
     fn save_mem(&mut self, dst: Reg, idx: u32) {
-        self.amd
-            .vmovsd_mem_xmm(MEM, (idx * REG_SIZE) as i32, ϕ(dst));
+        if self.config.direct_arena() {
+            self.amd
+                .mov_reg_mem(Amd::RAX, STATES, (idx * 2 * REG_SIZE) as i32);
+            self.amd.vmovsd_indexed_xmm(Amd::RAX, IDX, 8, ϕ(dst));
+        } else {
+            self.amd
+                .vmovsd_mem_xmm(MEM, (idx * REG_SIZE) as i32, ϕ(dst));
+        }
     }
 
     fn save_mem_result(&mut self, idx: u32) {
@@ -202,8 +214,13 @@ impl Generator for AmdScalarGenerator {
 
     fn load_param(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        self.amd
-            .vmovsd_xmm_mem(ϕ(dst), PARAMS, (idx * REG_SIZE) as i32);
+        if self.config.direct_arena() {
+            self.amd.mov_reg_mem(Amd::RAX, PARAMS, (idx * 8) as i32);
+            self.amd.vmovsd_xmm_mem(ϕ(dst), Amd::RAX, 0);
+        } else {
+            self.amd
+                .vmovsd_xmm_mem(ϕ(dst), PARAMS, (idx * REG_SIZE) as i32);
+        }
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
@@ -218,13 +235,23 @@ impl Generator for AmdScalarGenerator {
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        self.amd.vmovdd_xmm_mem(ϕ(xd), MEM, (idx * REG_SIZE) as i32);
-        self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
+        if self.config.direct_arena() {
+            self.load_mem(xd, idx);
+            self.load_mem(yd, idx + 1);
+        } else {
+            self.amd.vmovdd_xmm_mem(ϕ(xd), MEM, (idx * REG_SIZE) as i32);
+            self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
+        }
     }
 
     fn save_mem_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
-        self.amd.vunpckldd(ϕ(xs), ϕ(xs), ϕ(ys));
-        self.amd.vmovdd_mem_xmm(MEM, (idx * REG_SIZE) as i32, ϕ(xs));
+        if self.config.direct_arena() {
+            self.save_mem(xs, idx);
+            self.save_mem(ys, idx + 1);
+        } else {
+            self.amd.vunpckldd(ϕ(xs), ϕ(xs), ϕ(ys));
+            self.amd.vmovdd_mem_xmm(MEM, (idx * REG_SIZE) as i32, ϕ(xs));
+        }
     }
 
     fn load_param_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
@@ -634,6 +661,11 @@ impl Generator for AmdScalarGenerator {
         self.amd.mov(IDX, ARGS[2]); // third arg = index if indirect mode
         self.amd.mov(PARAMS, ARGS[3]); // fourth arg = params
 
+        if self.config.direct_arena() {
+            sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
+            return;
+        }
+
         self.amd.or(STATES, STATES);
         self.amd.jz("@main");
 
@@ -670,20 +702,22 @@ impl Generator for AmdScalarGenerator {
 
         add_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
 
-        self.amd.or(STATES, STATES);
-        self.amd.jz("@done");
+        if !self.config.direct_arena() {
+            self.amd.or(STATES, STATES);
+            self.amd.jz("@done");
 
-        for i in 0..count_obs {
-            self.amd
-                .mov_reg_mem(Amd::RCX, STATES, 2 * 8 * (count_states + i) as i32);
-            let k = (count_states + i) as u32 * REG_SIZE;
-            self.amd.vmovsd_xmm_mem(RET, MEM, k as i32);
-            self.amd.vmovsd_indexed_xmm(Amd::RCX, IDX, 8, RET);
+            for i in 0..count_obs {
+                self.amd
+                    .mov_reg_mem(Amd::RCX, STATES, 2 * 8 * (count_states + i) as i32);
+                let k = (count_states + i) as u32 * REG_SIZE;
+                self.amd.vmovsd_xmm_mem(RET, MEM, k as i32);
+                self.amd.vmovsd_indexed_xmm(Amd::RCX, IDX, 8, RET);
+            }
+
+            let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
+            add_rsp(&mut self.amd, frame_size);
+            self.set_label("@done");
         }
-
-        let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        add_rsp(&mut self.amd, frame_size);
-        self.set_label("@done");
 
         self.vzeroupper();
 

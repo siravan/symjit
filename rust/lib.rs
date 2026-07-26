@@ -310,6 +310,7 @@ mod complexify;
 mod composer;
 mod config;
 mod defuns;
+mod direct;
 pub mod expr;
 mod generator;
 pub mod instruction;
@@ -338,6 +339,14 @@ pub use compiler::{Compiler, FastFunc, Translator};
 pub use composer::Composer;
 pub use config::Config;
 pub use defuns::Defuns;
+pub use direct::{
+    DirectApplet, DirectApplication, DirectApplicationMetadata, DirectCallFunction, DirectCallable,
+    DirectCallableHandle, DirectDestinationOperation, DirectInputBinding, DirectInputSnapshot,
+    DirectOutputScale, DirectPlane, DirectScalar, DIRECT_APPLICATION_STORAGE_ABI,
+    DIRECT_COMPLEX_SCALE_IMAG_SCALAR, DIRECT_COMPLEX_SCALE_REAL_SCALAR,
+    DIRECT_COMPLEX_SCALE_SCALAR_COUNT, DIRECT_NO_ALIAS, DIRECT_STATUS_EXECUTION_FAILED,
+    DIRECT_STATUS_INVALID_ARGUMENT, DIRECT_STATUS_INVALID_CONTEXT, DIRECT_STATUS_OK,
+};
 pub use expr::{double, int, var, Expr};
 pub use instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
 pub use num_complex::{Complex, ComplexFloat};
@@ -345,6 +354,65 @@ pub use runnable::{Application, CompilerType};
 pub use serializer::MirWriter;
 pub use types::{ElemType, Element};
 pub use utils::{Compiled, Storage};
+
+#[cfg(test)]
+pub(crate) mod allocation_probe {
+    use std::alloc::{GlobalAlloc, Layout, System};
+    use std::cell::Cell;
+
+    thread_local! {
+        static ACTIVE: Cell<bool> = const { Cell::new(false) };
+        static ALLOCATIONS: Cell<usize> = const { Cell::new(0) };
+    }
+
+    struct CountingSystem;
+
+    impl CountingSystem {
+        fn record_allocation() {
+            if ACTIVE.try_with(Cell::get).unwrap_or(false) {
+                let _ = ALLOCATIONS.try_with(|count| count.set(count.get() + 1));
+            }
+        }
+    }
+
+    unsafe impl GlobalAlloc for CountingSystem {
+        unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+            let pointer = unsafe { System.alloc(layout) };
+            Self::record_allocation();
+            pointer
+        }
+
+        unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+            let pointer = unsafe { System.alloc_zeroed(layout) };
+            Self::record_allocation();
+            pointer
+        }
+
+        unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, size: usize) -> *mut u8 {
+            let pointer = unsafe { System.realloc(pointer, layout, size) };
+            Self::record_allocation();
+            pointer
+        }
+
+        unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
+            unsafe { System.dealloc(pointer, layout) };
+        }
+    }
+
+    #[global_allocator]
+    static TEST_ALLOCATOR: CountingSystem = CountingSystem;
+
+    pub(crate) fn count_allocations<R>(run: impl FnOnce() -> R) -> (R, usize) {
+        ALLOCATIONS.with(|count| count.set(0));
+        ACTIVE.with(|active| {
+            assert!(!active.replace(true), "allocation probe cannot be nested");
+        });
+        let result = run();
+        ACTIVE.with(|active| active.set(false));
+        let allocations = ALLOCATIONS.with(Cell::get);
+        (result, allocations)
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum CompilerStatus {

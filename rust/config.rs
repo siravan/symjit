@@ -31,6 +31,10 @@ pub const DEBUG_LOCK: u32 = 0x0100_0000;
 
 pub const HUGE: u32 = 0x0010_0000;
 pub const PARALLEL_MUL: u32 = 0x0020_0000;
+pub const DIRECT_ARENA: u32 = 0x0040_0000;
+pub const DIRECT_ARENA_IDENTITY_OUTPUT: u32 = 0x0080_0000;
+pub const DIRECT_ARENA_OPERATION_MASK: u32 = 0x0600_0000;
+pub const DIRECT_ARENA_OPERATION_SHIFT: usize = 25;
 
 pub const OPT_LEVEL_MASK: u32 = 0x0000_0f00;
 pub const OPT_LEVEL_SHIFT: usize = 8;
@@ -72,6 +76,7 @@ struct Options {
     fast_complex: bool,
     huge: bool,
     parallel_mul: bool,
+    direct_arena: bool,
     opt_level: u8,
     stack_limit: usize,
 }
@@ -211,6 +216,7 @@ impl Config {
         config.set_fast_complex(c.options.fast_complex);
         config.set_huge(c.options.huge);
         config.set_parallel_mul(c.options.parallel_mul);
+        config.set_direct_arena(c.options.direct_arena);
 
         config.set_opt_level(c.options.opt_level);
         config.set_stack_limit(c.options.stack_limit);
@@ -254,6 +260,7 @@ impl Config {
             stack_limit: self.stack_limit(),
             huge: self.huge(),
             parallel_mul: self.parallel_mul(),
+            direct_arena: self.direct_arena(),
         };
 
         let debug: DebugOptions = DebugOptions {
@@ -324,7 +331,11 @@ impl Config {
     }
 
     pub fn has_avx(&self) -> bool {
-        self.is_amd64() && !matches!(self.ty, CompilerType::AmdSSE) && Self::cpu_has_avx()
+        // An explicit AmdAVX target is a code-generation contract, unlike
+        // Native, whose feature set is selected from the build host.
+        self.is_amd64()
+            && (matches!(self.ty, CompilerType::AmdAVX)
+                || (!matches!(self.ty, CompilerType::AmdSSE) && Self::cpu_has_avx()))
     }
 
     pub fn is_sse(&self) -> bool {
@@ -389,6 +400,21 @@ impl Config {
 
     pub fn parallel_mul(&self) -> bool {
         self.test(PARALLEL_MUL)
+    }
+
+    /// Uses pointer descriptors for scalar inputs to a direct arena application.
+    pub fn direct_arena(&self) -> bool {
+        self.test(DIRECT_ARENA)
+    }
+
+    /// Destination operation used by a direct arena application.
+    pub fn direct_arena_operation(&self) -> u8 {
+        ((self.opt & DIRECT_ARENA_OPERATION_MASK) >> DIRECT_ARENA_OPERATION_SHIFT) as u8
+    }
+
+    /// Stores outputs without complex-scalar scaling.
+    pub fn direct_arena_identity_output(&self) -> bool {
+        self.test(DIRECT_ARENA_IDENTITY_OUTPUT)
     }
 
     pub fn debug_bytecode(&self) -> bool {
@@ -589,6 +615,28 @@ impl Config {
         if !self.debug_lock() {
             self.opt = (self.opt & !PARALLEL_MUL) | if enabled { PARALLEL_MUL } else { 0 };
         }
+    }
+
+    /// Enables the direct arena scalar-input ABI.
+    pub fn set_direct_arena(&mut self, enabled: bool) {
+        self.opt = (self.opt & !DIRECT_ARENA) | if enabled { DIRECT_ARENA } else { 0 };
+    }
+
+    /// Sets the direct arena destination operation encoded in portable MIR.
+    pub fn set_direct_arena_operation(&mut self, operation: u8) {
+        assert!(operation <= 1, "invalid direct arena destination operation");
+        self.opt = (self.opt & !DIRECT_ARENA_OPERATION_MASK)
+            | ((operation as u32) << DIRECT_ARENA_OPERATION_SHIFT);
+    }
+
+    /// Selects identity output scaling independently of the operation.
+    pub fn set_direct_arena_identity_output(&mut self, enabled: bool) {
+        self.opt = (self.opt & !DIRECT_ARENA_IDENTITY_OUTPUT)
+            | if enabled {
+                DIRECT_ARENA_IDENTITY_OUTPUT
+            } else {
+                0
+            };
     }
 
     /// Dump bytecode for debugging

@@ -12,8 +12,8 @@ use super::*;
 const REG_SIZE: u32 = 16;
 
 pub struct ArmSimdGenerator {
-    a: Assembler,
-    config: Config,
+    pub(super) a: Assembler,
+    pub(super) config: Config,
 }
 
 impl ArmSimdGenerator {
@@ -208,11 +208,21 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
-        load_q_from_mem(&mut self.a, ϕ(dst), MEM, idx);
+        if self.config.direct_arena() {
+            load_x_from_mem(&mut self.a, SCRATCH2, STATES, 2 * idx);
+            self.emit(arm! {ldr q(ϕ(dst)), [x(SCRATCH2), x(IDX), lsl #4]});
+        } else {
+            load_q_from_mem(&mut self.a, ϕ(dst), MEM, idx);
+        }
     }
 
     fn save_mem(&mut self, dst: Reg, idx: u32) {
-        save_q_to_mem(&mut self.a, ϕ(dst), MEM, idx);
+        if self.config.direct_arena() {
+            load_x_from_mem(&mut self.a, SCRATCH2, STATES, 2 * idx);
+            self.emit(arm! {str q(ϕ(dst)), [x(SCRATCH2), x(IDX), lsl #4]});
+        } else {
+            save_q_to_mem(&mut self.a, ϕ(dst), MEM, idx);
+        }
     }
 
     fn save_mem_result(&mut self, idx: u32) {
@@ -220,7 +230,11 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn load_param(&mut self, dst: Reg, idx: u32) {
-        if self.config.symbolica() {
+        if self.config.direct_arena() {
+            load_x_from_mem(&mut self.a, SCRATCH2, PARAMS, idx);
+            load_d_from_mem(&mut self.a, ϕ(dst), SCRATCH2, 0);
+            self.emit(arm! {dup q(ϕ(dst)), q(ϕ(dst))[0]});
+        } else if self.config.symbolica() {
             load_q_from_mem(&mut self.a, ϕ(dst), PARAMS, idx);
         } else {
             load_d_from_mem(&mut self.a, ϕ(dst), PARAMS, idx);
@@ -237,11 +251,21 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        load_paired_q_from_mem(&mut self.a, ϕ(xd), ϕ(yd), MEM, idx);
+        if self.config.direct_arena() {
+            self.load_mem(xd, idx);
+            self.load_mem(yd, idx + 1);
+        } else {
+            load_paired_q_from_mem(&mut self.a, ϕ(xd), ϕ(yd), MEM, idx);
+        }
     }
 
     fn save_mem_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
-        save_paired_q_to_mem(&mut self.a, ϕ(xs), ϕ(ys), MEM, idx);
+        if self.config.direct_arena() {
+            self.save_mem(xs, idx);
+            self.save_mem(ys, idx + 1);
+        } else {
+            save_paired_q_to_mem(&mut self.a, ϕ(xs), ϕ(ys), MEM, idx);
+        }
     }
 
     fn load_param_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
@@ -735,6 +759,13 @@ impl Generator for ArmSimdGenerator {
         self.emit(arm! {mov x(IDX), x(2)});
         self.emit(arm! {mov x(PARAMS), x(3)});
 
+        if self.config.direct_arena() {
+            let stack_size = align_stack(cap as u32 * REG_SIZE);
+            self.sub_stack(stack_size);
+            self.emit(arm! {mov x(STACK), sp});
+            return;
+        }
+
         self.emit(arm! {tst x(STATES), x(STATES)});
         self.jump("@main", 0, |offset, _| arm! {b.eq label(offset)});
 
@@ -777,20 +808,22 @@ impl Generator for ArmSimdGenerator {
         let stack_size = align_stack(cap as u32 * REG_SIZE);
         self.add_stack(stack_size);
 
-        self.emit(arm! {tst x(STATES), x(STATES)});
-        self.jump("@done", 0, |offset, _| arm! {b.eq label(offset)});
+        if !self.config.direct_arena() {
+            self.emit(arm! {tst x(STATES), x(STATES)});
+            self.jump("@done", 0, |offset, _| arm! {b.eq label(offset)});
 
-        for i in 0..count_obs {
-            load_x_from_mem(&mut self.a, SCRATCH2, STATES, 2 * (count_states + i) as u32);
-            let k = (count_states + i) as u32;
-            load_q_from_mem(&mut self.a, 0, MEM, k);
-            self.emit(arm! {str q(0), [x(SCRATCH2), x(IDX), lsl #4]});
+            for i in 0..count_obs {
+                load_x_from_mem(&mut self.a, SCRATCH2, STATES, 2 * (count_states + i) as u32);
+                let k = (count_states + i) as u32;
+                load_q_from_mem(&mut self.a, 0, MEM, k);
+                self.emit(arm! {str q(0), [x(SCRATCH2), x(IDX), lsl #4]});
+            }
+
+            let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
+            self.add_stack(frame_size);
+
+            self.set_label("@done");
         }
-
-        let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        self.add_stack(frame_size);
-
-        self.set_label("@done");
 
         self.emit(arm! {ldr lr, [sp, #0]});
         self.emit(arm! {ldr x(MEM), [sp, #8]});

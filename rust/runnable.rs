@@ -87,7 +87,32 @@ impl Application {
         Self::with_mir(prog, reals, mir)
     }
 
-    pub fn with_mir(mut prog: Program, reals: HashSet<Loc>, mut mir: Mir) -> Result<Application> {
+    pub fn with_mir(prog: Program, reals: HashSet<Loc>, mir: Mir) -> Result<Application> {
+        Self::with_mir_kind(prog, reals, mir, false)
+    }
+
+    /// Builds an application from MIR that has already passed through the
+    /// complexifier. Direct-Arena lowering uses this to preserve complex O3
+    /// funclets without complexifying the fused stage a second time.
+    pub(crate) fn with_precomplexified_mir(
+        prog: Program,
+        reals: HashSet<Loc>,
+        mir: Mir,
+    ) -> Result<Application> {
+        if !prog.config().is_complex() {
+            return Err(anyhow!(
+                "precomplexified MIR requires a complex application configuration"
+            ));
+        }
+        Self::with_mir_kind(prog, reals, mir, true)
+    }
+
+    fn with_mir_kind(
+        mut prog: Program,
+        reals: HashSet<Loc>,
+        mut mir: Mir,
+        precomplexified: bool,
+    ) -> Result<Application> {
         let first_state = 0;
         let first_param = 0;
         let first_obs = first_state + prog.count_states;
@@ -104,7 +129,7 @@ impl Application {
         let mut original: Option<Mir> = None;
         let compiled: Option<MachineCode<f64>>;
 
-        if config.is_complex() {
+        if config.is_complex() && !precomplexified {
             original = Some(mir.clone());
             let complexified = Complexifier::new(&reals, config.clone()).complexify(&mir)?;
 

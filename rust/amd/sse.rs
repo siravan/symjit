@@ -193,11 +193,23 @@ impl Generator for AmdSSEGenerator {
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        self.amd.movsd_xmm_mem(ϕ(dst), MEM, (idx * REG_SIZE) as i32);
+        if self.config.direct_arena() {
+            self.amd
+                .mov_reg_mem(Amd::RAX, STATES, (idx * 2 * REG_SIZE) as i32);
+            self.amd.movsd_xmm_indexed(ϕ(dst), Amd::RAX, IDX, 8);
+        } else {
+            self.amd.movsd_xmm_mem(ϕ(dst), MEM, (idx * REG_SIZE) as i32);
+        }
     }
 
     fn save_mem(&mut self, dst: Reg, idx: u32) {
-        self.amd.movsd_mem_xmm(MEM, (idx * REG_SIZE) as i32, ϕ(dst));
+        if self.config.direct_arena() {
+            self.amd
+                .mov_reg_mem(Amd::RAX, STATES, (idx * 2 * REG_SIZE) as i32);
+            self.amd.movsd_indexed_xmm(Amd::RAX, IDX, 8, ϕ(dst));
+        } else {
+            self.amd.movsd_mem_xmm(MEM, (idx * REG_SIZE) as i32, ϕ(dst));
+        }
     }
 
     fn save_mem_result(&mut self, idx: u32) {
@@ -207,7 +219,10 @@ impl Generator for AmdSSEGenerator {
     fn load_param(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
 
-        if self.config.symbolica() {
+        if self.config.direct_arena() {
+            self.amd.mov_reg_mem(Amd::RAX, PARAMS, (idx * 8) as i32);
+            self.amd.movsd_xmm_mem(ϕ(dst), Amd::RAX, 0);
+        } else if self.config.symbolica() {
             self.amd
                 .movsd_xmm_mem(ϕ(dst), PARAMS, (idx * REG_SIZE) as i32);
         } else {
@@ -606,6 +621,11 @@ impl Generator for AmdSSEGenerator {
         self.amd.mov(IDX, ARGS[2]); // third arg = index if indirect mode
         self.amd.mov(PARAMS, ARGS[3]); // fourth arg = params
 
+        if self.config.direct_arena() {
+            sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
+            return;
+        }
+
         self.amd.or(STATES, STATES);
         self.amd.jz("@main");
 
@@ -642,20 +662,22 @@ impl Generator for AmdSSEGenerator {
 
         add_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
 
-        self.amd.or(STATES, STATES);
-        self.amd.jz("@done");
+        if !self.config.direct_arena() {
+            self.amd.or(STATES, STATES);
+            self.amd.jz("@done");
 
-        for i in 0..count_obs {
-            self.amd
-                .mov_reg_mem(Amd::RCX, STATES, 2 * 8 * (count_states + i) as i32);
-            let k = (count_states + i) as u32 * REG_SIZE;
-            self.amd.movsd_xmm_mem(RET, MEM, k as i32);
-            self.amd.movsd_indexed_xmm(Amd::RCX, IDX, 8, RET);
+            for i in 0..count_obs {
+                self.amd
+                    .mov_reg_mem(Amd::RCX, STATES, 2 * 8 * (count_states + i) as i32);
+                let k = (count_states + i) as u32 * REG_SIZE;
+                self.amd.movsd_xmm_mem(RET, MEM, k as i32);
+                self.amd.movsd_indexed_xmm(Amd::RCX, IDX, 8, RET);
+            }
+
+            let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
+            add_rsp(&mut self.amd, frame_size);
+            self.set_label("@done");
         }
-
-        let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        add_rsp(&mut self.amd, frame_size);
-        self.set_label("@done");
 
         load_nonvolatile_regs(&mut self.amd);
         self.amd.pop(Amd::RBP);
