@@ -378,6 +378,11 @@ macro_rules! arm {
             assert!(ofs.abs() < 1 << 27);
             0x14000000 | (ofs as u32 >> 2) & 0x03ffffff
     }};
+    (bl label($ofs:expr)) => {{
+            let ofs = $ofs;
+            assert!(ofs.abs() < 1 << 27);
+            0x94000000 | (ofs as u32 >> 2) & 0x03ffffff
+    }};
     (b.eq label($ofs:expr)) => { 0x54000000 | ofs_pc!($ofs) };
     (b.ne label($ofs:expr)) => { 0x54000001 | ofs_pc!($ofs) };
     (b.lt label($ofs:expr)) => { 0x5400000B | ofs_pc!($ofs) };

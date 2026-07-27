@@ -86,7 +86,7 @@ impl Generator for ArmGenerator {
     }
 
     fn support_funclet(&self) -> FuncletType {
-        FuncletType::None
+        FuncletType::Complex
     }
 
     fn seal(&mut self) {
@@ -432,8 +432,8 @@ impl Generator for ArmGenerator {
         Ok(())
     }
 
-    fn call_funclet(&mut self, _label: &str) {
-        todo!();
+    fn call_funclet(&mut self, label: &str) {
+        self.jump(label, 0, |offset, _| arm! {bl label(offset)});
     }
 
     fn ret(&mut self) {
