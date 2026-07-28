@@ -2,7 +2,7 @@ use crate::code::Func;
 use crate::config::{Config, ABI_AREA};
 use crate::generator::{FuncletType, Generator, StackRegions};
 use crate::symbol::Loc;
-use crate::utils::{align_stack, reg};
+use crate::utils::align_stack;
 use crate::utils::{is_external_func, DataType, Reg};
 use anyhow::Result;
 
@@ -545,6 +545,8 @@ impl Generator for AmdScalarGenerator {
     #[cfg(target_family = "unix")]
     fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
         self.amd.push(Amd::RBP);
+        self.amd.push(STACK);
+        self.amd.push(MEM);
         self.amd.mov(Amd::RBP, SP);
 
         let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
@@ -562,11 +564,16 @@ impl Generator for AmdScalarGenerator {
     #[cfg(target_family = "windows")]
     fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
         self.amd.push(Amd::RBP);
+        self.amd.push(STACK);
+        self.amd.push(MEM);
+        self.amd.mov(Amd::RBP, SP);
 
         let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
         sub_rsp(&mut self.amd, frame_size);
         self.amd.mov(MEM, SP);
+
         sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
+        self.amd.mov(STACK, SP);
 
         for i in 0..count_states.min(4) {
             self.amd
@@ -584,14 +591,20 @@ impl Generator for AmdScalarGenerator {
                 .vmovsd_xmm_mem(0, MEM, (frame_size + (i + 2) * REG_SIZE) as i32);
             self.amd.vmovsd_mem_xmm(MEM, (i * REG_SIZE) as i32, 0);
         }
-
-        self.amd.mov(STACK, SP);
     }
 
-    fn epilogue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize, idx_ret: i32) {
+    fn epilogue_fast(
+        &mut self,
+        _cap: usize,
+        _count_states: usize,
+        _count_obs: usize,
+        idx_ret: i32,
+    ) {
         self.amd.vmovsd_xmm_mem(0, MEM, idx_ret * REG_SIZE as i32);
         self.vzeroupper();
         self.amd.mov(SP, Amd::RBP);
+        self.amd.pop(MEM);
+        self.amd.pop(STACK);
         self.amd.pop(Amd::RBP);
         self.amd.ret();
     }
@@ -606,9 +619,9 @@ impl Generator for AmdScalarGenerator {
         let regions = StackRegions::new(cap, count_states, count_obs, count_params);
 
         if self.config.symbolica() {
-            return self.prologue_symbolica(&regions);
+            self.prologue_symbolica(&regions)
         } else {
-            return self.prologue_sympy(&regions);
+            self.prologue_sympy(&regions)
         }
     }
 
@@ -622,9 +635,9 @@ impl Generator for AmdScalarGenerator {
         let regions = StackRegions::new(cap, count_states, count_obs, count_params);
 
         if self.config.symbolica() {
-            return self.epilogue_symbolica(&regions);
+            self.epilogue_symbolica(&regions)
         } else {
-            return self.epilogue_sympy(&regions);
+            self.epilogue_sympy(&regions)
         }
     }
 
@@ -677,8 +690,6 @@ impl AmdScalarGenerator {
         self.amd.xor(Amd::RAX, Amd::RAX);
         self.set_label("@epilogue");
 
-        free_stack(&mut self.amd);
-
         self.amd.or(STATES, STATES);
         self.amd.jz("@done");
 
@@ -703,7 +714,6 @@ impl AmdScalarGenerator {
     fn epilogue_symbolica(&mut self, _regions: &StackRegions) {
         self.amd.xor(Amd::RAX, Amd::RAX);
         self.set_label("@epilogue");
-        // free_stack(&mut self.amd);
         load_nonvolatile_regs(&mut self.amd);
         self.amd.ret();
     }

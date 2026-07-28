@@ -362,7 +362,6 @@ impl Builder {
         count_obs: usize,
         idx_ret: i32,
     ) -> Result<()> {
-        self.block().eliminate();
         let cap = self.stack_size();
         ir.prologue_fast(cap, count_states, count_obs);
 

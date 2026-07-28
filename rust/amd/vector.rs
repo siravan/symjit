@@ -11,7 +11,7 @@ use super::*;
 
 const NUM_LANES: u32 = 4;
 const REG_SIZE: i32 = 8 * NUM_LANES as i32;
-const REG_USIZE: u32 = 8 * NUM_LANES as u32;
+const REG_USIZE: u32 = 8 * NUM_LANES;
 
 macro_rules! binop {
     ($self:ident, $simd:ident, $dst:expr, $s1: expr, $s2: expr) => {
@@ -671,60 +671,23 @@ impl Generator for AmdVectorF64x4Generator {
     /****************** Prologues/Epilogues ********************/
 
     #[cfg(target_family = "unix")]
-    fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
-        self.amd.push(Amd::RBP);
-
-        let frame_size = align_stack((count_states + count_obs) as u32 * REG_USIZE);
-        sub_rsp(&mut self.amd, frame_size);
-        self.amd.mov(MEM, SP);
-        sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_USIZE));
-
-        for i in 0..count_states {
-            self.amd.movsd_mem_xmm(MEM, (i * 8) as i32, i as u8);
-        }
-
-        self.amd.mov(STACK, SP);
+    fn prologue_fast(&mut self, _cap: usize, _count_states: usize, _count_obs: usize) {
+        unreachable!()
     }
 
     #[cfg(target_family = "windows")]
     fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
-        self.amd.push(Amd::RBP);
-
-        let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE as u32);
-        sub_rsp(&mut self.amd, frame_size);
-        self.amd.mov(MEM, SP);
-        sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_USIZE));
-
-        for i in 0..count_states.min(4) {
-            self.amd
-                .movsd_mem_xmm(MEM, (i as u32 * REG_USIZE) as i32, i as u8);
-        }
-
-        for i in 4..count_states {
-            let i = i as u32;
-            // the offset of the fifth or eighth arguments:
-            // +4 for the 32-byte home
-            // +1 for the return address in the stack
-            // +1 for RBP in the stack
-            // -4 for the first four arguments passed in XMM0-XMM3
-            self.amd
-                .vmovsd_xmm_mem(0, MEM, (frame_size + (i + 2) * REG_USIZE) as i32);
-            self.amd.vmovsd_mem_xmm(MEM, (i * REG_USIZE) as i32, 0);
-        }
-
-        self.amd.mov(STACK, SP);
+        unreachable!()
     }
 
-    fn epilogue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize, idx_ret: i32) {
-        self.vzeroupper();
-        self.amd.movsd_xmm_mem(0, MEM, idx_ret * REG_SIZE);
-
-        let total_size = align_stack(cap as u32 * REG_USIZE)
-            + align_stack((count_states + count_obs) as u32 * REG_USIZE);
-        add_rsp(&mut self.amd, total_size);
-
-        self.amd.pop(Amd::RBP);
-        self.amd.ret();
+    fn epilogue_fast(
+        &mut self,
+        _cap: usize,
+        _count_states: usize,
+        _count_obs: usize,
+        _idx_ret: i32,
+    ) {
+        unreachable!()
     }
 
     fn prologue_indirect(
@@ -737,9 +700,9 @@ impl Generator for AmdVectorF64x4Generator {
         let regions = StackRegions::new(cap, count_states, count_obs, count_params);
 
         if self.config.symbolica() {
-            return self.prologue_symbolica(&regions);
+            self.prologue_symbolica(&regions)
         } else {
-            return self.prologue_sympy(&regions);
+            self.prologue_sympy(&regions)
         }
     }
 
@@ -753,9 +716,9 @@ impl Generator for AmdVectorF64x4Generator {
         let regions = StackRegions::new(cap, count_states, count_obs, count_params);
 
         if self.config.symbolica() {
-            return self.epilogue_symbolica(&regions);
+            self.epilogue_symbolica(&regions)
         } else {
-            return self.epilogue_sympy(&regions);
+            self.epilogue_sympy(&regions)
         }
     }
 
@@ -811,8 +774,6 @@ impl AmdVectorF64x4Generator {
         self.amd.xor(Amd::RAX, Amd::RAX);
         self.set_label("@epilogue");
 
-        free_stack(&mut self.amd);
-
         self.amd.or(STATES, STATES);
         self.amd.jz("@done");
 
@@ -866,8 +827,6 @@ impl AmdVectorF64x4Generator {
     fn epilogue_symbolica(&mut self, regions: &StackRegions) {
         self.amd.xor(Amd::RAX, Amd::RAX);
         self.set_label("@epilogue");
-
-        free_stack(&mut self.amd);
 
         for j in 0..NUM_LANES {
             for i in 0..regions.count_obs {

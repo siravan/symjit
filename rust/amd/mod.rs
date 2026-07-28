@@ -65,15 +65,10 @@ fn load_nonvolatile_regs(amd: &mut Amd) {
     amd.pop(Amd::RBP);
 }
 
-fn allocate_stack(amd: &mut Amd, size: u32, with_arena: bool) {
-    amd.mov_mem_reg(Amd::RBP, 0x28, SP);
+fn allocate_stack(amd: &mut Amd, size: u32, _with_arena: bool) {
     amd.sub_rsp(align_stack(size));
-    // amd.and_imm(SP, 0xffffffc0);
+    amd.and_imm(SP, 0xffffffc0);
     amd.mov(STACK, SP);
-}
-
-fn free_stack(amd: &mut Amd) {
-    amd.mov_reg_mem(SP, Amd::RBP, 0x28);
 }
 
 #[cfg(target_family = "unix")]
@@ -97,11 +92,13 @@ fn sub_rsp(amd: &mut Amd, mut size: u32) {
     amd.sub_rsp(size);
 }
 
+/*
 fn add_rsp(amd: &mut Amd, size: u32) {
     if size != 0 {
         amd.add_rsp(size);
     }
 }
+*/
 
 /*
  *  ϕ translates a logical register number (in Reg) to a physical
