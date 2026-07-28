@@ -507,9 +507,11 @@ impl Application {
         // SIMD compilation is lazy!
         if self.compiled_simd.is_none() && self.use_simd {
             if self.config.has_avx() {
-                self.compiled_simd = Self::compile_avx_simd(&self.mir_short, &mut self.prog).ok();
+                self.compiled_simd =
+                    Self::compile_avx_simd(&self.bytecode.mir, &mut self.prog).ok();
             } else if self.config.is_arm64() {
-                self.compiled_simd = Self::compile_arm_simd(&self.mir_tall, &mut self.prog).ok();
+                self.compiled_simd =
+                    Self::compile_arm_simd(&self.bytecode.mir, &mut self.prog).ok();
             }
         };
     }
