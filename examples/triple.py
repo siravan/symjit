@@ -26,6 +26,7 @@ t1 = time.perf_counter_ns()
 print(f"{u[0]}\tcallable:\tdone in {(t1 - t0) * 1e-6:.1f} ms")
 
 h = f.callable_quad()
+print(f.dumps('fast'))
 t0 = time.perf_counter_ns()
 u = tplquad(h, 0, math.pi, 0, math.pi, 0, math.pi)
 t1 = time.perf_counter_ns()

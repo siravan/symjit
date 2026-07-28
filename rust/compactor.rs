@@ -192,7 +192,7 @@ impl Compactor {
                         // forward jump
                         self.labels.insert(label.into());
                     } else {
-                        // end of a backward loop
+                        // end of backward loop
                         self.depth -= 1;
                     };
 

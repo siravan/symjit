@@ -10,6 +10,30 @@ pub enum FuncletType {
     Complex,
 }
 
+#[derive(Clone, Debug)]
+pub struct StackRegions {
+    pub cap: u32,
+    pub count_states: u32,
+    pub count_obs: u32,
+    pub count_params: u32,
+}
+
+impl StackRegions {
+    pub fn new(
+        cap: usize,
+        count_states: usize,
+        count_obs: usize,
+        count_params: usize,
+    ) -> StackRegions {
+        StackRegions {
+            cap: cap as u32,
+            count_states: count_states as u32,
+            count_obs: count_obs as u32,
+            count_params: count_params as u32,
+        }
+    }
+}
+
 #[allow(dead_code)]
 pub trait Generator {
     fn count_shadows(&self) -> u8;
