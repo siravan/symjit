@@ -535,10 +535,9 @@ impl Generator for ArmComplexGenerator {
 
     fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
         self.emit(arm! {sub sp, sp, #32});
-        self.emit(arm! {str lr, [sp, #0]});
-        self.emit(arm! {str x(FP), [sp, #8]});
-        self.emit(arm! {str x(MEM), [sp, #16]});
-        self.emit(arm! {str x(MEM), [sp, #24]});
+        self.emit(arm! {stp lr, x(FP), [sp, #0]});
+        self.emit(arm! {stp x(MEM), x(STACK), [sp, #16]});
+        self.emit(arm! {mov x(FP), sp});
 
         let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
         self.sub_stack(frame_size);
@@ -563,10 +562,9 @@ impl Generator for ArmComplexGenerator {
         self.emit(arm! {ldr q(0), [x(MEM), #8*idx_ret]});
 
         self.emit(arm! {mov sp, x(FP)});
-        self.emit(arm! {ldr lr, [sp, #0]});
-        self.emit(arm! {ldr x(FP), [sp, #8]});
-        self.emit(arm! {ldr x(MEM), [sp, #16]});
-        self.emit(arm! {ldr x(STACK), [sp, #24]});
+        self.emit(arm! {ldp lr, x(FP), [sp, #0]});
+        self.emit(arm! {ldp x(MEM), x(STACK), [sp, #16]});
+        self.emit(arm! {add sp, sp, #32});
         self.emit(arm! {eor x(0), x(0), x(0)});
         self.emit(arm! {ret});
     }
@@ -612,6 +610,9 @@ impl Generator for ArmComplexGenerator {
         count_obs: usize,
         _count_params: usize,
     ) {
+        self.emit(arm! {eor x(0), x(0), x(0)});
+        self.set_label("@epilogue");
+
         self.emit(arm! {tst x(STATES), x(STATES)});
         self.jump("@done", 0, |offset, _| arm! {b.eq label(offset)});
 

@@ -81,6 +81,7 @@ fn load_nonvolatile_regs(a: &mut Assembler) {
     emit(a, arm! {ldp x(MEM), x(STATES), [sp, #16]});
     emit(a, arm! {ldp x(IDX), x(PARAMS), [sp, #32]});
     emit(a, arm! {ldp x(CALL), x(STACK), [sp, #48]});
+    emit(a, arm! {add sp, sp, #64});
 }
 
 fn allocate_stack(a: &mut Assembler, size: u32, _with_arena: bool) {

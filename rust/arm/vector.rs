@@ -832,6 +832,9 @@ impl ArmSimdGenerator {
     }
 
     fn epilogue_symbolica(&mut self, regions: &StackRegions) {
+        self.emit(arm! {eor x(0), x(0), x(0)});
+        self.set_label("@epilogue");
+
         self.emit(arm! {tst x(IDX), x(IDX)});
         self.jump("@done", 0, |offset, _| arm! {b.eq label(offset)});
 
