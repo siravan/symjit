@@ -3,7 +3,7 @@ use anyhow::{anyhow, Result};
 use crate::assembler::{Assembler, Jumper};
 use crate::code::Func;
 use crate::config::{Config, ABI_AREA};
-use crate::generator::{FuncletType, Generator};
+use crate::generator::{FuncletType, Generator, StackRegions};
 use crate::symbol::Loc;
 use crate::utils::{align_stack, is_external_func, Reg};
 
@@ -85,12 +85,14 @@ impl ArmSimdGenerator {
         }
     }
 
+    /*
     fn add_stack(&mut self, size: u32) {
         if size >> 12 != 0 {
             self.emit(arm! {add sp, sp, #size >> 12, lsl #12});
         }
         self.emit(arm! {add sp, sp, #size & 0x0fff});
     }
+    */
 
     fn find_temp(s1: Reg, s2: Reg) -> Reg {
         if s1 != Reg::Temp && s2 != Reg::Temp {
@@ -673,43 +675,20 @@ impl Generator for ArmSimdGenerator {
 
     /**************************************************/
 
-    fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
-        self.emit(arm! {sub sp, sp, #32});
-        self.emit(arm! {str lr, [sp, #0]});
-        self.emit(arm! {str x(MEM), [sp, #8]});
-        self.emit(arm! {str x(CALL), [sp, #16]});
-
-        let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        self.sub_stack(frame_size);
-        self.emit(arm! {mov x(MEM), sp});
-        let stack_size = align_stack(cap as u32 * REG_SIZE);
-        self.sub_stack(stack_size);
-
-        for i in 0..count_states {
-            self.emit(arm! {str d(i), [x(MEM), #REG_SIZE*(i as u32)]});
-        }
+    fn prologue_fast(&mut self, _cap: usize, _count_states: usize, _count_obs: usize) {
+        unreachable!()
     }
 
-    fn epilogue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize, idx_ret: i32) {
-        self.emit(arm! {ldr d(0), [x(MEM), #8*idx_ret]});
-
-        let total_size = align_stack(cap as u32 * REG_SIZE)
-            + align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        self.add_stack(total_size);
-
-        self.emit(arm! {ldr lr, [sp, #0]});
-        self.emit(arm! {ldr x(MEM), [sp, #8]});
-        self.emit(arm! {ldr x(CALL), [sp, #16]});
-        self.emit(arm! {add sp, sp, #32});
-        self.emit(arm! {ret});
+    fn epilogue_fast(
+        &mut self,
+        _cap: usize,
+        _count_states: usize,
+        _count_obs: usize,
+        _idx_ret: i32,
+    ) {
+        unreachable!()
     }
 
-    /*
-     * MEM => first arg = mem if direct mode, otherwise null
-     * STATES => second arg = states+obs if indirect mode, otherwise null
-     * IDX => third arg = index if indirect mode
-     * PARAMS => fourth arg = params
-     */
     fn prologue_indirect(
         &mut self,
         cap: usize,
@@ -717,47 +696,13 @@ impl Generator for ArmSimdGenerator {
         count_obs: usize,
         count_params: usize,
     ) {
+        let regions = StackRegions::new(cap, count_states, count_obs, count_params);
+
         if self.config.symbolica() {
-            return self.prologue_symbolica(cap, count_params, count_obs);
+            self.prologue_symbolica(&regions)
+        } else {
+            self.prologue_sympy(&regions)
         }
-
-        self.emit(arm! {sub sp, sp, #64});
-        self.emit(arm! {str lr, [sp, #0]});
-        self.emit(arm! {str x(MEM), [sp, #8]});
-        self.emit(arm! {str x(PARAMS), [sp, #16]});
-        self.emit(arm! {str x(STATES), [sp, #24]});
-        self.emit(arm! {str x(IDX), [sp, #32]});
-        self.emit(arm! {str x(CALL), [sp, #40]});
-        self.emit(arm! {str x(STACK), [sp, #48]});
-
-        self.emit(arm! {mov x(MEM), x(0)});
-        self.emit(arm! {mov x(STATES), x(1)});
-        self.emit(arm! {mov x(IDX), x(2)});
-        self.emit(arm! {mov x(PARAMS), x(3)});
-
-        self.emit(arm! {tst x(STATES), x(STATES)});
-        self.jump("@main", 0, |offset, _| arm! {b.eq label(offset)});
-
-        let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        self.sub_stack(frame_size);
-        self.emit(arm! {mov x(MEM), sp});
-
-        // dividing IDX by 2 to convert from indexing f64 to f64x2
-        // self.emit(arm! {lsr x(IDX), x(IDX), #1});
-
-        for i in 0..count_states {
-            load_x_from_mem(&mut self.a, SCRATCH2, STATES, 2 * i as u32);
-            self.emit(arm! {ldr q(0), [x(SCRATCH2), x(IDX), lsl #4]});
-            save_q_to_mem(&mut self.a, 0, MEM, i as u32);
-        }
-
-        // TODO: may save idx (RDX) as double in RBP + 8/32 * count_states
-
-        self.set_label("@main");
-
-        let stack_size = align_stack(cap as u32 * REG_SIZE);
-        self.sub_stack(stack_size);
-        self.emit(arm! {mov x(STACK), sp});
     }
 
     fn epilogue_indirect(
@@ -767,41 +712,13 @@ impl Generator for ArmSimdGenerator {
         count_obs: usize,
         count_params: usize,
     ) {
-        self.emit(arm! {eor x(0), x(0), x(0)});
-        self.set_label("@epilogue");
+        let regions = StackRegions::new(cap, count_states, count_obs, count_params);
 
         if self.config.symbolica() {
-            return self.epilogue_symbolica(cap, count_params, count_obs);
+            self.epilogue_symbolica(&regions)
+        } else {
+            self.epilogue_sympy(&regions)
         }
-
-        let stack_size = align_stack(cap as u32 * REG_SIZE);
-        self.add_stack(stack_size);
-
-        self.emit(arm! {tst x(STATES), x(STATES)});
-        self.jump("@done", 0, |offset, _| arm! {b.eq label(offset)});
-
-        for i in 0..count_obs {
-            load_x_from_mem(&mut self.a, SCRATCH2, STATES, 2 * (count_states + i) as u32);
-            let k = (count_states + i) as u32;
-            load_q_from_mem(&mut self.a, 0, MEM, k);
-            self.emit(arm! {str q(0), [x(SCRATCH2), x(IDX), lsl #4]});
-        }
-
-        let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        self.add_stack(frame_size);
-
-        self.set_label("@done");
-
-        self.emit(arm! {ldr lr, [sp, #0]});
-        self.emit(arm! {ldr x(MEM), [sp, #8]});
-        self.emit(arm! {ldr x(PARAMS), [sp, #16]});
-        self.emit(arm! {ldr x(STATES), [sp, #24]});
-        self.emit(arm! {ldr x(IDX), [sp, #32]});
-        self.emit(arm! {ldr x(CALL), [sp, #40]});
-        self.emit(arm! {ldr x(STACK), [sp, #48]});
-
-        self.emit(arm! {add sp, sp, #64});
-        self.emit(arm! {ret});
     }
 
     fn save_used_registers(&mut self, used: &[Reg]) {
@@ -824,37 +741,71 @@ impl Generator for ArmSimdGenerator {
 }
 
 impl ArmSimdGenerator {
-    fn prologue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
-        self.emit(arm! {sub sp, sp, #64});
-        self.emit(arm! {str lr, [sp, #0]});
-        self.emit(arm! {str x(MEM), [sp, #8]});
-        self.emit(arm! {str x(PARAMS), [sp, #16]});
-        self.emit(arm! {str x(STATES), [sp, #24]});
-        self.emit(arm! {str x(IDX), [sp, #32]});
-        self.emit(arm! {str x(CALL), [sp, #40]});
-        self.emit(arm! {str x(STACK), [sp, #48]});
+    fn prologue_sympy(&mut self, regions: &StackRegions) {
+        save_nonvolatile_regs(&mut self.a);
 
-        self.emit(arm! {mov x(MEM), x(0)});
-        self.emit(arm! {mov x(STATES), x(1)});
-        self.emit(arm! {mov x(IDX), x(2)});
-        self.emit(arm! {mov x(PARAMS), x(3)});
+        self.emit(arm! {tst x(STATES), x(STATES)});
+        self.jump("@main", 0, |offset, _| arm! {b.eq label(offset)});
+
+        let frame_size = align_stack((regions.count_states + regions.count_obs) * REG_SIZE);
+        self.sub_stack(frame_size);
+        self.emit(arm! {mov x(MEM), sp});
+
+        for i in 0..regions.count_states {
+            load_x_from_mem(&mut self.a, SCRATCH2, STATES, 2 * i as u32);
+            self.emit(arm! {ldr q(0), [x(SCRATCH2), x(IDX), lsl #4]});
+            save_q_to_mem(&mut self.a, 0, MEM, i as u32);
+        }
+
+        self.set_label("@main");
+
+        let stack_size = align_stack(regions.cap * REG_SIZE);
+        allocate_stack(&mut self.a, stack_size, false);
+    }
+
+    fn epilogue_sympy(&mut self, regions: &StackRegions) {
+        self.emit(arm! {eor x(0), x(0), x(0)});
+        self.set_label("@epilogue");
+
+        self.emit(arm! {tst x(STATES), x(STATES)});
+        self.jump("@done", 0, |offset, _| arm! {b.eq label(offset)});
+
+        for i in 0..regions.count_obs {
+            load_x_from_mem(
+                &mut self.a,
+                SCRATCH2,
+                STATES,
+                2 * (regions.count_states + i) as u32,
+            );
+            let k = (regions.count_states + i) as u32;
+            load_q_from_mem(&mut self.a, 0, MEM, k);
+            self.emit(arm! {str q(0), [x(SCRATCH2), x(IDX), lsl #4]});
+        }
+
+        self.set_label("@done");
+        load_nonvolatile_regs(&mut self.a);
+        self.emit(arm! {ret});
+    }
+
+    fn prologue_symbolica(&mut self, regions: &StackRegions) {
+        save_nonvolatile_regs(&mut self.a);
 
         self.emit(arm! {tst x(IDX), x(IDX)});
         self.jump("@main", 0, |offset, _| arm! {b.eq label(offset)});
 
-        let frame_size = align_stack(count_params as u32 * REG_SIZE);
+        let frame_size = align_stack(regions.count_params as u32 * REG_SIZE);
         self.sub_stack(frame_size);
         self.emit(arm! {mov x(SCRATCH2), x(PARAMS)});
         self.emit(arm! {mov x(PARAMS), sp});
 
-        if count_params >= 16 {
+        if regions.count_params >= 16 {
             self.emit(arm! {mov x(SCRATCH3), x(PARAMS)});
-            self.emit(arm! {movz x(COUNTER), #count_params & 0xffff});
-            self.emit(arm! {movk_lsl16 x(COUNTER), #count_params >> 16});
+            self.emit(arm! {movz x(COUNTER), #regions.count_params & 0xffff});
+            self.emit(arm! {movk_lsl16 x(COUNTER), #regions.count_params >> 16});
 
             self.set_label("@load");
             load_d_from_mem(&mut self.a, 0, SCRATCH2, 0);
-            load_d_from_mem(&mut self.a, 1, SCRATCH2, count_params as u32);
+            load_d_from_mem(&mut self.a, 1, SCRATCH2, regions.count_params);
             self.emit(arm! {zip1 q(0), q(0), q(1)});
             save_q_to_mem(&mut self.a, 0, SCRATCH3, 0);
             self.emit(arm! {add x(SCRATCH2), x(SCRATCH2), #8});
@@ -863,69 +814,53 @@ impl ArmSimdGenerator {
             self.jump("@load", 0, |offset, _| arm! {b.ne label(offset)});
         } else {
             for j in 0..2 {
-                for i in 0..count_params {
-                    load_d_from_mem(&mut self.a, 0, SCRATCH2, (i + j * count_params) as u32);
+                for i in 0..regions.count_params {
+                    load_d_from_mem(&mut self.a, 0, SCRATCH2, i + j * regions.count_params);
                     save_d_to_mem(&mut self.a, 0, PARAMS, (i * 2 + j) as u32);
                 }
             }
         }
 
-        self.sub_stack(align_stack(count_obs as u32 * REG_SIZE));
+        self.sub_stack(align_stack(regions.count_obs * REG_SIZE));
         self.emit(arm! {mov x(STATES), x(MEM)});
         self.emit(arm! {mov x(MEM), sp});
 
         self.set_label("@main");
 
-        let stack_size = align_stack(cap as u32 * REG_SIZE);
-        self.sub_stack(stack_size);
-        self.emit(arm! {mov x(STACK), sp});
+        let stack_size = align_stack(regions.cap as u32 * REG_SIZE);
+        allocate_stack(&mut self.a, stack_size, true);
     }
 
-    fn epilogue_symbolica(&mut self, cap: usize, count_params: usize, count_obs: usize) {
-        let stack_size = align_stack(cap as u32 * REG_SIZE);
-        self.add_stack(stack_size);
-
+    fn epilogue_symbolica(&mut self, regions: &StackRegions) {
         self.emit(arm! {tst x(IDX), x(IDX)});
         self.jump("@done", 0, |offset, _| arm! {b.eq label(offset)});
 
-        if count_obs >= 16 {
+        if regions.count_obs >= 16 {
             self.emit(arm! {mov x(SCRATCH2), x(MEM)});
             self.emit(arm! {mov x(SCRATCH3), x(STATES)});
-            self.emit(arm! {movz x(COUNTER), #count_obs & 0xffff});
-            self.emit(arm! {movk_lsl16 x(COUNTER), #count_obs >> 16});
+            self.emit(arm! {movz x(COUNTER), #regions.count_obs & 0xffff});
+            self.emit(arm! {movk_lsl16 x(COUNTER), #regions.count_obs >> 16});
 
             self.set_label("@save");
             load_q_from_mem(&mut self.a, 0, SCRATCH2, 0);
             self.emit(arm! {dup q(1), q(0)[1]});
             save_d_to_mem(&mut self.a, 0, SCRATCH3, 0);
-            save_d_to_mem(&mut self.a, 1, SCRATCH3, count_obs as u32);
+            save_d_to_mem(&mut self.a, 1, SCRATCH3, regions.count_obs);
             self.emit(arm! {add x(SCRATCH2), x(SCRATCH2), #16});
             self.emit(arm! {add x(SCRATCH3), x(SCRATCH3), #8});
             self.emit(arm! {subs x(COUNTER), x(COUNTER), #1});
             self.jump("@save", 0, |offset, _| arm! {b.ne label(offset)});
         } else {
             for j in 0..2 {
-                for i in 0..count_obs {
-                    load_d_from_mem(&mut self.a, 0, MEM, (i * 2 + j) as u32);
-                    save_d_to_mem(&mut self.a, 0, STATES, (i + j * count_obs) as u32);
+                for i in 0..regions.count_obs {
+                    load_d_from_mem(&mut self.a, 0, MEM, i * 2 + j);
+                    save_d_to_mem(&mut self.a, 0, STATES, i + j * regions.count_obs);
                 }
             }
         }
 
-        let frame_size =
-            align_stack(count_params as u32 * REG_SIZE) + align_stack(count_obs as u32 * REG_SIZE);
-        self.add_stack(frame_size);
         self.set_label("@done");
-
-        self.emit(arm! {ldr lr, [sp, #0]});
-        self.emit(arm! {ldr x(MEM), [sp, #8]});
-        self.emit(arm! {ldr x(PARAMS), [sp, #16]});
-        self.emit(arm! {ldr x(STATES), [sp, #24]});
-        self.emit(arm! {ldr x(IDX), [sp, #32]});
-        self.emit(arm! {ldr x(CALL), [sp, #40]});
-        self.emit(arm! {ldr x(STACK), [sp, #48]});
-
-        self.emit(arm! {add sp, sp, #64});
+        load_nonvolatile_regs(&mut self.a);
         self.emit(arm! {ret});
     }
 }

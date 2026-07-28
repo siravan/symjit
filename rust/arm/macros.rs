@@ -127,6 +127,21 @@ macro_rules! arm {
     (mov x($rd:expr), sp) => {
         arm! { add x($rd), x(31), #0 }
     };
+    (mov sp, x($rd:expr)) => {
+        arm! { add x(31), x($rd), #0 }
+    };
+    (ldp lr, x($x:expr), [sp, #$imm:expr]) => {
+        arm! { ldp x(30), x($x), [x(31), #$imm] }
+    };
+    (stp lr, x($x:expr), [sp, #$imm:expr]) => {
+        arm! { stp x(30), x($x), [x(31), #$imm] }
+    };
+    (ldp x($x1:expr), x($x2:expr), [sp, #$imm:expr]) => {
+        arm! { ldp x($x1), x($x2), [x(31), #$imm] }
+    };
+    (stp x($x1:expr), x($x2:expr), [sp, #$imm:expr]) => {
+        arm! { stp x($x1), x($x2), [x(31), #$imm] }
+    };
 
     // main rules
     (fmov d($rd:expr), d($rn:expr)) => {

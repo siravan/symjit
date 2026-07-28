@@ -243,15 +243,23 @@ impl Generator for AmdScalarGenerator {
     }
 
     fn load_stack_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        self.amd
-            .vmovdd_xmm_mem(ϕ(xd), STACK, (idx * REG_SIZE) as i32);
+        if idx < 16 {
+            self.amd.vmovdd_xmm_mem(ϕ(xd), SP, (idx * REG_SIZE) as i32);
+        } else {
+            self.amd
+                .vmovdd_xmm_mem(ϕ(xd), STACK, (idx * REG_SIZE) as i32);
+        }
         self.amd.vshufdd(ϕ(yd), ϕ(xd), ϕ(xd), 1);
     }
 
     fn save_stack_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
         self.amd.vunpckldd(ϕ(xs), ϕ(xs), ϕ(ys));
-        self.amd
-            .vmovdd_mem_xmm(STACK, (idx * REG_SIZE) as i32, ϕ(xs));
+        if idx < 16 {
+            self.amd.vmovdd_mem_xmm(SP, (idx * REG_SIZE) as i32, ϕ(xs));
+        } else {
+            self.amd
+                .vmovdd_mem_xmm(STACK, (idx * REG_SIZE) as i32, ϕ(xs));
+        }
     }
 
     fn save_stack_result(&mut self, idx: u32) {
