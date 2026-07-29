@@ -6,6 +6,7 @@ use crate::code::Func;
 use crate::utils::Reg;
 
 const SP: u8 = 31;
+const FP: u8 = 29;
 
 const MEM: u8 = 19; // first arg = mem if direct mode, otherwise null
 const PARAMS: u8 = 20; // fourth arg = params
@@ -56,6 +57,36 @@ const fn ϕ(r: Reg) -> u8 {
 
 fn emit(a: &mut Assembler, w: u32) {
     a.append_word(w);
+}
+
+fn save_nonvolatile_regs(a: &mut Assembler) {
+    emit(a, arm! {sub sp, sp, #64});
+    emit(a, arm! {stp lr, x(FP), [sp, #0]});
+    emit(a, arm! {stp x(MEM), x(STATES), [sp, #16]});
+    emit(a, arm! {stp x(IDX), x(PARAMS), [sp, #32]});
+    emit(a, arm! {stp x(CALL), x(STACK), [sp, #48]});
+
+    emit(a, arm! {mov x(FP), sp});
+
+    emit(a, arm! {mov x(MEM), x(0)});
+    emit(a, arm! {mov x(STATES), x(1)});
+    emit(a, arm! {mov x(IDX), x(2)});
+    emit(a, arm! {mov x(PARAMS), x(3)});
+}
+
+fn load_nonvolatile_regs(a: &mut Assembler) {
+    emit(a, arm! {mov sp, x(FP)});
+
+    emit(a, arm! {ldp lr, x(FP), [sp, #0]});
+    emit(a, arm! {ldp x(MEM), x(STATES), [sp, #16]});
+    emit(a, arm! {ldp x(IDX), x(PARAMS), [sp, #32]});
+    emit(a, arm! {ldp x(CALL), x(STACK), [sp, #48]});
+    emit(a, arm! {add sp, sp, #64});
+}
+
+fn allocate_stack(a: &mut Assembler, size: u32, _with_arena: bool) {
+    sub_stack(a, size);
+    emit(a, arm! {mov x(STACK), sp});
 }
 
 fn load_long(a: &mut Assembler, reg: u8, label: &str) {
@@ -314,12 +345,14 @@ fn sub_stack(a: &mut Assembler, size: u32) {
     }
 }
 
+/*
 fn add_stack(a: &mut Assembler, size: u32) {
     if size >> 12 != 0 {
         emit(a, arm! {add sp, sp, #size >> 12, lsl #12});
     }
     emit(a, arm! {add sp, sp, #size & 0x0fff});
 }
+*/
 
 #[cfg(test)]
 mod tests {

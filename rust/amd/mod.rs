@@ -1,5 +1,5 @@
 use crate::code::Func;
-use crate::utils::Reg;
+use crate::utils::{align_stack, Reg};
 
 mod asm;
 mod f64x8;
@@ -29,36 +29,46 @@ const ARGS: [u8; 4] = [Amd::RDI, Amd::RSI, Amd::RDX, Amd::RCX];
 
 const RET: u8 = 0;
 
-const MEM: u8 = Amd::RBP;
-const STATES: u8 = Amd::R13;
-const IDX: u8 = Amd::R12;
-const PARAMS: u8 = Amd::RBX;
-const STACK: u8 = Amd::RSP;
+const MEM: u8 = Amd::R13;
+const STATES: u8 = Amd::R14;
+const IDX: u8 = Amd::R12; // modrm_mem does not handle R12 correctly, therefore IDX, which is not a pointer, is assigned to R12
+const PARAMS: u8 = Amd::R15;
+const STACK: u8 = Amd::RBX;
+const SP: u8 = Amd::RSP;
 
 fn save_nonvolatile_regs(amd: &mut Amd) {
-    if cfg!(target_family = "windows") {
-        amd.mov_mem_reg(STACK, 0x10, PARAMS);
-        amd.mov_mem_reg(STACK, 0x18, IDX);
-        amd.mov_mem_reg(STACK, 0x20, STATES);
-    } else {
-        amd.sub_rsp(32);
-        amd.mov_mem_reg(STACK, 0x08, PARAMS);
-        amd.mov_mem_reg(STACK, 0x10, IDX);
-        amd.mov_mem_reg(STACK, 0x18, STATES);
-    }
+    amd.push(Amd::RBP);
+    amd.sub_rsp(48);
+    amd.mov_mem_reg(SP, 0x00, MEM);
+    amd.mov_mem_reg(SP, 0x08, STATES);
+    amd.mov_mem_reg(SP, 0x10, IDX);
+    amd.mov_mem_reg(SP, 0x18, PARAMS);
+    amd.mov_mem_reg(SP, 0x20, STACK);
+    // note that [SP + 0x28] is reserved for allocate_stack
+    amd.mov(Amd::RBP, SP);
+
+    amd.mov(MEM, ARGS[0]); // first arg = mem if direct mode, otherwise null
+    amd.mov(STATES, ARGS[1]); // second arg = states+obs if indirect mode, otherwise null or arena
+    amd.mov(IDX, ARGS[2]); // third arg = index if indirect mode
+    amd.mov(PARAMS, ARGS[3]); // fourth arg = params
 }
 
 fn load_nonvolatile_regs(amd: &mut Amd) {
-    if cfg!(target_family = "windows") {
-        amd.mov_reg_mem(PARAMS, STACK, 0x10);
-        amd.mov_reg_mem(IDX, STACK, 0x18);
-        amd.mov_reg_mem(STATES, STACK, 0x20);
-    } else {
-        amd.mov_reg_mem(PARAMS, STACK, 0x08);
-        amd.mov_reg_mem(IDX, STACK, 0x10);
-        amd.mov_reg_mem(STATES, STACK, 0x18);
-        amd.add_rsp(32);
-    }
+    amd.vzeroupper();
+    amd.mov(SP, Amd::RBP);
+    amd.mov_reg_mem(MEM, SP, 0x00);
+    amd.mov_reg_mem(STATES, SP, 0x08);
+    amd.mov_reg_mem(IDX, SP, 0x10);
+    amd.mov_reg_mem(PARAMS, SP, 0x18);
+    amd.mov_reg_mem(STACK, SP, 0x20);
+    amd.add_rsp(48);
+    amd.pop(Amd::RBP);
+}
+
+fn allocate_stack(amd: &mut Amd, size: u32, _with_arena: bool) {
+    amd.sub_rsp(align_stack(size));
+    amd.and_imm(SP, 0xffffffc0);
+    amd.mov(STACK, SP);
 }
 
 #[cfg(target_family = "unix")]
@@ -82,11 +92,13 @@ fn sub_rsp(amd: &mut Amd, mut size: u32) {
     amd.sub_rsp(size);
 }
 
+/*
 fn add_rsp(amd: &mut Amd, size: u32) {
     if size != 0 {
         amd.add_rsp(size);
     }
 }
+*/
 
 /*
  *  ϕ translates a logical register number (in Reg) to a physical

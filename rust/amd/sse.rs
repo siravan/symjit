@@ -1,6 +1,6 @@
 use crate::code::Func;
-use crate::config::{Config, SPILL_AREA};
-use crate::generator::{FuncletType, Generator};
+use crate::config::{Config, ABI_AREA};
+use crate::generator::{FuncletType, Generator, StackRegions};
 use crate::symbol::Loc;
 use crate::utils::align_stack;
 use crate::utils::{is_external_func, DataType, Reg};
@@ -83,12 +83,12 @@ impl AmdSSEGenerator {
     }
 
     fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
-        let cap = SPILL_AREA as u32;
+        let cap = ABI_AREA as u32;
 
         self.amd.mov_reg_label(ARGS[0], &format!("_env_{}_", op));
         self.amd.lea_mem(ARGS[1], STACK, (cap * REG_SIZE) as i32);
         self.amd.mov_imm(ARGS[2], num_args as u32);
-        self.amd.lea_mem(ARGS[3], STACK, 4 * REG_SIZE as i32);
+        self.amd.lea_mem(ARGS[3], SP, 4 * REG_SIZE as i32);
 
         self.amd.call_indirect(&format!("_func_{}_", op));
         self.load_stack(Reg::Ret, 4);
@@ -217,13 +217,22 @@ impl Generator for AmdSSEGenerator {
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-        self.amd
-            .movsd_xmm_mem(ϕ(dst), STACK, (idx * REG_SIZE) as i32);
+
+        if idx < ABI_AREA as u32 {
+            self.amd.movsd_xmm_mem(ϕ(dst), SP, (idx * REG_SIZE) as i32);
+        } else {
+            self.amd
+                .movsd_xmm_mem(ϕ(dst), STACK, (idx * REG_SIZE) as i32);
+        }
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        self.amd
-            .movsd_mem_xmm(STACK, (idx * REG_SIZE) as i32, ϕ(dst));
+        if idx < ABI_AREA as u32 {
+            self.amd.movsd_mem_xmm(SP, (idx * REG_SIZE) as i32, ϕ(dst));
+        } else {
+            self.amd
+                .movsd_mem_xmm(STACK, (idx * REG_SIZE) as i32, ϕ(dst));
+        }
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
@@ -466,9 +475,9 @@ impl Generator for AmdSSEGenerator {
         }
 
         if cfg!(target_family = "windows") {
-            self.amd.lea_mem(Amd::R8, STACK, 32);
+            self.amd.lea_mem(Amd::R8, SP, 32);
         } else {
-            self.amd.lea_mem(Amd::RDI, STACK, 32);
+            self.amd.lea_mem(Amd::RDI, SP, 32);
         }
 
         self.amd.call_indirect(&label);
@@ -509,11 +518,16 @@ impl Generator for AmdSSEGenerator {
     #[cfg(target_family = "unix")]
     fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
         self.amd.push(Amd::RBP);
+        self.amd.push(STACK);
+        self.amd.push(MEM);
+        self.amd.mov(Amd::RBP, SP);
 
         let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
         sub_rsp(&mut self.amd, frame_size);
-        self.amd.mov(MEM, STACK);
+        self.amd.mov(MEM, SP);
+
         sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
+        self.amd.mov(STACK, SP);
 
         for i in 0..count_states {
             self.amd.movsd_mem_xmm(MEM, (i * 8) as i32, i as u8);
@@ -523,11 +537,16 @@ impl Generator for AmdSSEGenerator {
     #[cfg(target_family = "windows")]
     fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
         self.amd.push(Amd::RBP);
+        self.amd.push(STACK);
+        self.amd.push(MEM);
+        self.amd.mov(Amd::RBP, SP);
 
         let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
         sub_rsp(&mut self.amd, frame_size);
-        self.amd.mov(MEM, STACK);
+        self.amd.mov(MEM, SP);
+
         sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
+        self.amd.mov(STACK, SP);
 
         for i in 0..count_states.min(4) {
             self.amd
@@ -547,46 +566,21 @@ impl Generator for AmdSSEGenerator {
         }
     }
 
-    fn epilogue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize, idx_ret: i32) {
+    fn epilogue_fast(
+        &mut self,
+        _cap: usize,
+        _count_states: usize,
+        _count_obs: usize,
+        idx_ret: i32,
+    ) {
         self.amd.movsd_xmm_mem(0, MEM, idx_ret * REG_SIZE as i32);
-
-        let total_size = align_stack(cap as u32 * REG_SIZE)
-            + align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        add_rsp(&mut self.amd, total_size);
-
+        self.amd.mov(SP, Amd::RBP);
+        self.amd.pop(MEM);
+        self.amd.pop(STACK);
         self.amd.pop(Amd::RBP);
         self.amd.ret();
     }
 
-    /*
-     * prologue_indirect generates the stack frame. It works in two modes:
-     *  * Direct mode: MEM (state variables + obs) is passed directly as the first
-     *      argument. The second argument is null.
-     *  * Indirect mode: the second argument is a pointer to an array of pointers
-     *      to states and obs. The third argument is the index into these arrays.
-     *      MEM is allocated on the stack and filled based on the second and thirds args.
-     *
-     * Noth that the second argument determines whether it is the direct (args[1] == null) or indirect mode.
-     * In both modes, the fourth argument points to an array of params.
-     *
-     * # Stack Frame Layout:
-     *
-     * x86-64 stack frame is composed of four segments. The length of each segment should
-     *      be a multiple of 16.
-     *  1. The return addess + old RBP (16 bytes).
-     *  2. General registers area (32 bytes in Linux, uses the home area in Windows).
-     *      call to `save_nonvolatile_regs`.
-     *  3. Optional mem area to store state variables and observables in vectorized calls.
-     *      Of length `frame_size`, which is aligned to 16 by calling `align_stack`.
-     *  4. The temporary variables area of size `align_stack(cap * REG_SIZE)`.
-     *      It has two sub-segments:
-     *  4a. The actual temporary variables area.
-     *  4b. A default spill area of `16 * REG_SIZE` bytes. It is generated by
-     *      `SymbolTable::new` adding 16 dummy temp variables. The top 10 slots are used
-     *      to store callee-saved xmm/ymm registers (`save_used_registers`). The bottom
-     *      6 slots are the work area for various call routines, Specifically, the bottom
-     *      32 bytes is reserved as the home area for Windows call ABI.
-     */
     fn prologue_indirect(
         &mut self,
         cap: usize,
@@ -594,36 +588,13 @@ impl Generator for AmdSSEGenerator {
         count_obs: usize,
         count_params: usize,
     ) {
+        let regions = StackRegions::new(cap, count_states, count_obs, count_params);
+
         if self.config.symbolica() {
-            return self.prologue_symbolica(cap, count_params, count_obs);
+            self.prologue_symbolica(&regions)
+        } else {
+            self.prologue_sympy(&regions)
         }
-
-        self.amd.push(Amd::RBP);
-        save_nonvolatile_regs(&mut self.amd);
-
-        self.amd.mov(MEM, ARGS[0]); // first arg = mem if direct mode, otherwise null
-        self.amd.mov(STATES, ARGS[1]); // second arg = states+obs if indirect mode, otherwise null
-        self.amd.mov(IDX, ARGS[2]); // third arg = index if indirect mode
-        self.amd.mov(PARAMS, ARGS[3]); // fourth arg = params
-
-        self.amd.or(STATES, STATES);
-        self.amd.jz("@main");
-
-        let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        sub_rsp(&mut self.amd, frame_size);
-        self.amd.mov(MEM, STACK); // in indirect mode, MEM is allocated on the stack
-
-        for i in 0..count_states {
-            self.amd.mov_reg_mem(Amd::RAX, STATES, 2 * 8 * i as i32);
-            let k = i as u32 * REG_SIZE;
-            self.amd.movsd_xmm_indexed(RET, Amd::RAX, IDX, 8);
-            self.amd.movsd_mem_xmm(MEM, k as i32, RET);
-        }
-
-        // may save idx (RDX) as double in RBP + 8/32 * count_states
-
-        self.set_label("@main");
-        sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
     }
 
     fn epilogue_indirect(
@@ -633,33 +604,13 @@ impl Generator for AmdSSEGenerator {
         count_obs: usize,
         count_params: usize,
     ) {
-        self.amd.xor(Amd::RAX, Amd::RAX);
-        self.set_label("@epilogue");
+        let regions = StackRegions::new(cap, count_states, count_obs, count_params);
 
         if self.config.symbolica() {
-            return self.epilogue_symbolica(cap, count_params, count_obs);
+            self.epilogue_symbolica(&regions)
+        } else {
+            self.epilogue_sympy(&regions)
         }
-
-        add_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
-
-        self.amd.or(STATES, STATES);
-        self.amd.jz("@done");
-
-        for i in 0..count_obs {
-            self.amd
-                .mov_reg_mem(Amd::RCX, STATES, 2 * 8 * (count_states + i) as i32);
-            let k = (count_states + i) as u32 * REG_SIZE;
-            self.amd.movsd_xmm_mem(RET, MEM, k as i32);
-            self.amd.movsd_indexed_xmm(Amd::RCX, IDX, 8, RET);
-        }
-
-        let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        add_rsp(&mut self.amd, frame_size);
-        self.set_label("@done");
-
-        load_nonvolatile_regs(&mut self.amd);
-        self.amd.pop(Amd::RBP);
-        self.amd.ret();
     }
 
     fn save_used_registers(&mut self, used: &[Reg]) {
@@ -686,22 +637,57 @@ impl Generator for AmdSSEGenerator {
 }
 
 impl AmdSSEGenerator {
-    fn prologue_symbolica(&mut self, cap: usize, _count_params: usize, _count_obs: usize) {
-        self.amd.push(Amd::RBP);
+    fn prologue_sympy(&mut self, regions: &StackRegions) {
         save_nonvolatile_regs(&mut self.amd);
 
-        self.amd.mov(MEM, ARGS[0]); // first arg = mem if direct mode, otherwise null
-        self.amd.mov(STATES, ARGS[1]); // second arg = states+obs if indirect mode, otherwise null
-        self.amd.mov(IDX, ARGS[2]); // third arg = index if indirect mode
-        self.amd.mov(PARAMS, ARGS[3]); // fourth arg = params
+        self.amd.or(STATES, STATES);
+        self.amd.jz("@main");
 
-        sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
+        let frame_size = align_stack((regions.count_states + regions.count_obs) * REG_SIZE);
+        sub_rsp(&mut self.amd, frame_size);
+        self.amd.mov(MEM, SP); // in indirect mode, MEM is allocated on the stack
+
+        for i in 0..regions.count_states {
+            self.amd.mov_reg_mem(Amd::RAX, STATES, 2 * 8 * i as i32);
+            let k = i * REG_SIZE;
+            self.amd.movsd_xmm_indexed(RET, Amd::RAX, IDX, 8);
+            self.amd.movsd_mem_xmm(MEM, k as i32, RET);
+        }
+
+        self.set_label("@main");
+        allocate_stack(&mut self.amd, regions.cap * REG_SIZE, false);
     }
 
-    fn epilogue_symbolica(&mut self, cap: usize, _count_params: usize, _count_obs: usize) {
-        add_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
+    fn epilogue_sympy(&mut self, regions: &StackRegions) {
+        self.amd.xor(Amd::RAX, Amd::RAX);
+        self.set_label("@epilogue");
+
+        self.amd.or(STATES, STATES);
+        self.amd.jz("@done");
+
+        for i in 0..regions.count_obs {
+            self.amd
+                .mov_reg_mem(Amd::RCX, STATES, 2 * 8 * (regions.count_states + i) as i32);
+            let k = (regions.count_states + i) * REG_SIZE;
+            self.amd.movsd_xmm_mem(RET, MEM, k as i32);
+            self.amd.movsd_indexed_xmm(Amd::RCX, IDX, 8, RET);
+        }
+
+        self.set_label("@done");
+
         load_nonvolatile_regs(&mut self.amd);
-        self.amd.pop(Amd::RBP);
+        self.amd.ret();
+    }
+
+    fn prologue_symbolica(&mut self, regions: &StackRegions) {
+        save_nonvolatile_regs(&mut self.amd);
+        allocate_stack(&mut self.amd, regions.cap * REG_SIZE, true);
+    }
+
+    fn epilogue_symbolica(&mut self, _regions: &StackRegions) {
+        self.amd.xor(Amd::RAX, Amd::RAX);
+        self.set_label("@epilogue");
+        load_nonvolatile_regs(&mut self.amd);
         self.amd.ret();
     }
 }

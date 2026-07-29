@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use crate::assembler::{Assembler, Jumper};
 use crate::code::Func;
-use crate::config::{Config, SPILL_AREA};
+use crate::config::{Config, ABI_AREA};
 use crate::generator::{FuncletType, Generator};
 use crate::symbol::Loc;
 use crate::utils::{align_stack, is_external_func, Reg};
@@ -13,14 +13,14 @@ const REG_SIZE: u32 = 8;
 
 pub struct ArmComplexGenerator {
     a: Assembler,
-    // config: Config,
+    config: Config,
 }
 
 impl ArmComplexGenerator {
-    pub fn new(_config: Config) -> ArmComplexGenerator {
+    pub fn new(config: Config) -> ArmComplexGenerator {
         ArmComplexGenerator {
             a: Assembler::new(),
-            // config,
+            config,
         }
     }
 
@@ -48,14 +48,16 @@ impl ArmComplexGenerator {
         sub_stack(&mut self.a, size);
     }
 
+    /*
     fn add_stack(&mut self, size: u32) {
         add_stack(&mut self.a, size);
     }
+    */
 
     fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
         load_x_from_label(&mut self.a, 0, &format!("_env_{}_", op));
-        let ofs = SPILL_AREA as u32 * REG_SIZE;
-        self.emit(arm! {add x(1), x(31), #ofs});
+        let ofs = ABI_AREA as u32 * REG_SIZE;
+        self.emit(arm! {add x(1), x(STACK), #ofs});
         self.emit(arm! {movz x(2), #num_args});
         self.emit(arm! {add x(3), x(SP), #0});
 
@@ -168,11 +170,19 @@ impl Generator for ArmComplexGenerator {
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
-        load_q_from_mem(&mut self.a, ϕ(dst), SP, idx / 2);
+        if idx < 16 {
+            load_q_from_mem(&mut self.a, ϕ(dst), SP, idx / 2);
+        } else {
+            load_q_from_mem(&mut self.a, ϕ(dst), STACK, idx / 2);
+        }
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        save_q_to_mem(&mut self.a, ϕ(dst), SP, idx / 2);
+        if idx < 16 {
+            save_q_to_mem(&mut self.a, ϕ(dst), SP, idx / 2);
+        } else {
+            save_q_to_mem(&mut self.a, ϕ(dst), STACK, idx / 2);
+        }
     }
 
     fn load_mem_complex(&mut self, _xd: Reg, _yd: Reg, _idx: u32) {}
@@ -524,31 +534,37 @@ impl Generator for ArmComplexGenerator {
     /**************************************************/
 
     fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
-        self.emit(arm! {sub sp, sp, #16});
-        self.emit(arm! {str lr, [sp, #0]});
-        self.emit(arm! {str x(MEM), [sp, #8]});
+        self.emit(arm! {sub sp, sp, #32});
+        self.emit(arm! {stp lr, x(FP), [sp, #0]});
+        self.emit(arm! {stp x(MEM), x(STACK), [sp, #16]});
+        self.emit(arm! {mov x(FP), sp});
 
         let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
         self.sub_stack(frame_size);
         self.emit(arm! {mov x(MEM), sp});
+
         let stack_size = align_stack(cap as u32 * REG_SIZE);
         self.sub_stack(stack_size);
+        self.emit(arm! {mov x(STACK), sp});
 
-        for i in 0..count_states {
-            self.emit(arm! {str d(i), [x(MEM), #8*i]});
+        for i in (0..count_states).step_by(2) {
+            self.emit(arm! {str q(i), [x(MEM), #8*i]});
         }
     }
 
-    fn epilogue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize, idx_ret: i32) {
-        self.emit(arm! {ldr d(0), [x(MEM), #8*idx_ret]});
+    fn epilogue_fast(
+        &mut self,
+        _cap: usize,
+        _count_states: usize,
+        _count_obs: usize,
+        idx_ret: i32,
+    ) {
+        self.emit(arm! {ldr q(0), [x(MEM), #8*idx_ret]});
 
-        let total_size = align_stack(cap as u32 * REG_SIZE)
-            + align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        self.add_stack(total_size);
-
-        self.emit(arm! {ldr x(MEM), [sp, #8]});
-        self.emit(arm! {ldr lr, [sp, #0]});
-        self.emit(arm! {add sp, sp, #16});
+        self.emit(arm! {mov sp, x(FP)});
+        self.emit(arm! {ldp lr, x(FP), [sp, #0]});
+        self.emit(arm! {ldp x(MEM), x(STACK), [sp, #16]});
+        self.emit(arm! {add sp, sp, #32});
         self.emit(arm! {eor x(0), x(0), x(0)});
         self.emit(arm! {ret});
     }
@@ -566,17 +582,7 @@ impl Generator for ArmComplexGenerator {
         count_obs: usize,
         _count_params: usize,
     ) {
-        self.emit(arm! {sub sp, sp, #48});
-        self.emit(arm! {str lr, [sp, #0]});
-        self.emit(arm! {str x(MEM), [sp, #8]});
-        self.emit(arm! {str x(PARAMS), [sp, #16]});
-        self.emit(arm! {str x(STATES), [sp, #24]});
-        self.emit(arm! {str x(IDX), [sp, #32]});
-
-        self.emit(arm! {mov x(MEM), x(0)});
-        self.emit(arm! {mov x(STATES), x(1)});
-        self.emit(arm! {mov x(IDX), x(2)});
-        self.emit(arm! {mov x(PARAMS), x(3)});
+        save_nonvolatile_regs(&mut self.a);
 
         self.emit(arm! {tst x(STATES), x(STATES)});
         self.jump("@main", 0, |offset, _| arm! {b.eq label(offset)});
@@ -591,23 +597,21 @@ impl Generator for ArmComplexGenerator {
             save_d_to_mem(&mut self.a, 0, MEM, i as u32);
         }
 
-        // TODO: may save idx (RDX) as double in RBP + 8/32 * count_states
-
         self.set_label("@main");
 
         let stack_size = align_stack(cap as u32 * REG_SIZE);
-        self.sub_stack(stack_size);
+        allocate_stack(&mut self.a, stack_size, self.config.symbolica());
     }
 
     fn epilogue_indirect(
         &mut self,
-        cap: usize,
+        _cap: usize,
         count_states: usize,
         count_obs: usize,
         _count_params: usize,
     ) {
-        let stack_size = align_stack(cap as u32 * REG_SIZE);
-        self.add_stack(stack_size);
+        self.emit(arm! {eor x(0), x(0), x(0)});
+        self.set_label("@epilogue");
 
         self.emit(arm! {tst x(STATES), x(STATES)});
         self.jump("@done", 0, |offset, _| arm! {b.eq label(offset)});
@@ -619,18 +623,9 @@ impl Generator for ArmComplexGenerator {
             self.emit(arm! {str d(0), [x(SCRATCH2), x(IDX), lsl #3]});
         }
 
-        let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
-        self.add_stack(frame_size);
-
         self.set_label("@done");
 
-        self.emit(arm! {ldr x(IDX), [sp, #32]});
-        self.emit(arm! {ldr x(STATES), [sp, #24]});
-        self.emit(arm! {ldr x(PARAMS), [sp, #16]});
-        self.emit(arm! {ldr x(MEM), [sp, #8]});
-        self.emit(arm! {ldr lr, [sp, #0]});
-        self.emit(arm! {add sp, sp, #48});
-        self.emit(arm! {eor x(0), x(0), x(0)});
+        load_nonvolatile_regs(&mut self.a);
         self.emit(arm! {ret});
     }
 
