@@ -3,22 +3,22 @@ use std::collections::HashSet;
 use std::io::{Read, Write};
 use wide::{f64x2, f64x4, f64x8};
 
-use crate::amd::{
+use super::amd::{
     AmdComplexGenerator, AmdSSEGenerator, AmdScalarGenerator, AmdVectorF64x4Generator,
     AmdVectorF64x8Generator,
 };
-use crate::applet::Applet;
-use crate::arm::{ArmComplexGenerator, ArmGenerator, ArmSimdGenerator};
-use crate::complexify::Complexifier;
-use crate::config::Config;
-use crate::generator::Generator;
-use crate::machine::MachineCode;
-use crate::matrix::{combine_matrixes, Matrix};
-use crate::mir::{CompiledMir, Mir};
-use crate::model::Program;
-use crate::riscv64::RiscV;
-use crate::symbol::Loc;
-use crate::utils::*;
+use super::applet::Applet;
+use super::arm::{ArmComplexGenerator, ArmGenerator, ArmSimdGenerator};
+use super::complexify::Complexifier;
+use super::config::Config;
+use super::generator::Generator;
+use super::machine::MachineCode;
+use super::matrix::{combine_matrixes, Matrix};
+use super::mir::{CompiledMir, Mir};
+use super::model::Program;
+use super::riscv64::RiscV;
+use super::symbol::Loc;
+use super::utils::*;
 
 use rayon::prelude::*;
 
@@ -112,7 +112,7 @@ impl Application {
                 let mut c = config.clone();
                 c.set_simd(false);
                 let n = c.count_scratch() as usize;
-                crate::allocator::GreedyAllocator::new(c, n).optimize(&mut mir)?;
+                super::allocator::GreedyAllocator::new(c, n).optimize(&mut mir)?;
                 compiled = Self::compile_ty(&config, &mir, &mut prog)?;
             } else {
                 compiled = Self::compile_ty(&config, &complexified, &mut prog)?;

@@ -1,12 +1,12 @@
 use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 
-use crate::code::Func;
-use crate::config::Config;
-use crate::generator::{FuncletType, Generator};
-use crate::mir::Mir;
-use crate::symbol::Loc;
-use crate::utils::Reg;
+use super::code::Func;
+use super::config::Config;
+use super::generator::{FuncletType, Generator};
+use super::mir::Mir;
+use super::symbol::Loc;
+use super::utils::Reg;
 
 fn re(reg: Reg) -> Reg {
     match reg {

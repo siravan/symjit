@@ -1,11 +1,11 @@
 use anyhow::Result;
 
-use crate::assembler::{Assembler, Jumper};
-use crate::code::Func;
-use crate::config::{Config, ABI_AREA};
-use crate::generator::{FuncletType, Generator};
-use crate::symbol::Loc;
-use crate::utils::{align_stack, is_external_func, Reg};
+use super::super::assembler::{Assembler, Jumper};
+use super::super::code::Func;
+use super::super::config::{Config, ABI_AREA};
+use super::super::generator::{FuncletType, Generator};
+use super::super::symbol::Loc;
+use super::super::utils::{align_stack, is_external_func, Reg};
 
 use super::*;
 

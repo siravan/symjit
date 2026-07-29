@@ -2,14 +2,14 @@ use anyhow::{anyhow, Result};
 use num_complex::Complex;
 use std::collections::HashSet;
 
-use crate::code::VirtualTable;
-use crate::config::{Config, SLICE_CAP};
-use crate::instruction::{BuiltinSymbol, Slot};
-use crate::mir::Mir;
-use crate::model::{CellModel, Program};
-use crate::runnable::Application;
-use crate::symbol::Loc;
-use crate::utils::*;
+use super::code::VirtualTable;
+use super::config::{Config, SLICE_CAP};
+use super::instruction::{BuiltinSymbol, Slot};
+use super::mir::Mir;
+use super::model::{CellModel, Program};
+use super::runnable::Application;
+use super::symbol::Loc;
+use super::utils::*;
 
 pub trait Composer {
     fn append_constant(&mut self, z: Complex<f64>) -> Result<usize>;

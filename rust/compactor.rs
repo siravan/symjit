@@ -1,10 +1,10 @@
 use anyhow::Result;
 use std::collections::HashMap;
 
-use crate::config::{Config, SLICE_CAP, SPILL_AREA};
-use crate::mir::{Instruction, Mir};
-use crate::serializer::MirWriter;
-use crate::symbol::Loc;
+use super::config::{Config, SLICE_CAP, SPILL_AREA};
+use super::mir::{Instruction, Mir};
+use super::serializer::MirWriter;
+use super::symbol::Loc;
 
 // #[derive(Debug)]
 pub struct Compactor {

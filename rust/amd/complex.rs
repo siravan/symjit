@@ -1,9 +1,9 @@
-use crate::code::Func;
-use crate::config::{Config, ABI_AREA};
-use crate::generator::{FuncletType, Generator, StackRegions};
-use crate::symbol::Loc;
-use crate::utils::align_stack;
-use crate::utils::{is_external_func, DataType, Reg};
+use super::super::code::Func;
+use super::super::config::{Config, ABI_AREA};
+use super::super::generator::{FuncletType, Generator, StackRegions};
+use super::super::symbol::Loc;
+use super::super::utils::align_stack;
+use super::super::utils::{is_external_func, DataType, Reg};
 use anyhow::Result;
 
 use super::asm::{Amd, RoundingMode};

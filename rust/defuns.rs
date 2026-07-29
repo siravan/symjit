@@ -9,9 +9,9 @@ use wide::{f64x2, f64x4};
 
 type ExternalFunction<T> = Box<dyn Fn(&[T]) -> T + Send + Sync>;
 
-use crate::code::{BinaryFunc, BinaryFuncCplx, Func, UnaryFunc, UnaryFuncCplx, VirtualTable};
-use crate::config::SLICE_CAP;
-use crate::types::{ElemType, Element};
+use super::code::{BinaryFunc, BinaryFuncCplx, Func, UnaryFunc, UnaryFuncCplx, VirtualTable};
+use super::config::SLICE_CAP;
+use super::types::{ElemType, Element};
 
 #[derive(Debug, Clone)]
 pub struct RawBox {

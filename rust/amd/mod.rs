@@ -1,5 +1,5 @@
-use crate::code::Func;
-use crate::utils::{align_stack, Reg};
+use super::code::Func;
+use super::utils::{align_stack, Reg};
 
 mod asm;
 mod f64x8;

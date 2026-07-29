@@ -2,15 +2,15 @@ use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 use std::io::{Read, Write};
 
-use crate::allocator::GreedyAllocator;
-use crate::block::Block;
-use crate::compactor::Compactor;
-use crate::config::Config;
-use crate::generator::Generator;
-use crate::mir::Mir;
-use crate::node::Node;
-use crate::symbol::SymbolTable;
-use crate::utils::Storage;
+use super::allocator::GreedyAllocator;
+use super::block::Block;
+use super::compactor::Compactor;
+use super::config::Config;
+use super::generator::Generator;
+use super::mir::Mir;
+use super::node::Node;
+use super::symbol::SymbolTable;
+use super::utils::Storage;
 
 #[derive(Debug, Clone)]
 pub struct Builder {

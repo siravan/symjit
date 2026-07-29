@@ -6,10 +6,10 @@ use std::fmt;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
 
-// use crate::generator::Generator;
-use crate::mir::Mir;
-use crate::symbol::{Loc, Symbol};
-use crate::utils::reg;
+// use super::generator::Generator;
+use super::mir::Mir;
+use super::symbol::{Loc, Symbol};
+use super::utils::reg;
 
 const COMMUTATIVE: &[&str] = &["plus", "times", "eq", "neq", "and", "or", "xor"];
 

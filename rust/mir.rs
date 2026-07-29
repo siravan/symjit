@@ -10,17 +10,17 @@ use anyhow::Result;
 use num_complex::Complex;
 use num_traits::identities::Zero;
 
-use crate::code::{Func, VirtualTable};
-use crate::complexify::Complexifier;
-use crate::config::Config;
-use crate::config::SPILL_AREA;
-use crate::generator::FuncletType;
-use crate::generator::Generator;
-use crate::machine::MachineCode;
-use crate::serializer::MirWriter;
-use crate::symbol::Loc;
-use crate::utils::is_external_func;
-use crate::utils::{bool_to_f64, Compiled, CompiledFunc, Reg};
+use super::code::{Func, VirtualTable};
+use super::complexify::Complexifier;
+use super::config::Config;
+use super::config::SPILL_AREA;
+use super::generator::FuncletType;
+use super::generator::Generator;
+use super::machine::MachineCode;
+use super::serializer::MirWriter;
+use super::symbol::Loc;
+use super::utils::is_external_func;
+use super::utils::{bool_to_f64, Compiled, CompiledFunc, Reg};
 
 #[derive(Clone, Copy, Debug, PartialEq, Hash)]
 #[repr(u8)]

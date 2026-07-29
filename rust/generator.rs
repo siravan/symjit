@@ -1,8 +1,8 @@
 use anyhow::Result;
 
-use crate::code::Func;
-use crate::symbol::Loc;
-use crate::utils::Reg;
+use super::code::Func;
+use super::symbol::Loc;
+use super::utils::Reg;
 
 pub enum FuncletType {
     None,

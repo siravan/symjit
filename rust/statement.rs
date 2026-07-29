@@ -1,9 +1,9 @@
 use anyhow::Result;
 
+use super::mir::Mir;
+use super::node::Node;
+use super::symbol::Loc;
 use super::utils::{is_external_func, reg};
-use crate::mir::Mir;
-use crate::node::Node;
-use crate::symbol::Loc;
 
 #[derive(Debug, Clone)]
 pub enum Statement {

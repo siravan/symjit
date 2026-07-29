@@ -2,8 +2,8 @@ use anyhow::Result;
 use std::fmt;
 use std::io::{Read, Write};
 
-use crate::config::Config;
-use crate::machine::MachineCode;
+use super::config::Config;
+use super::machine::MachineCode;
 
 pub type CompiledFunc<T> = fn(*const T, *const &mut [T], usize, *const T) -> i32;
 

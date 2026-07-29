@@ -2,10 +2,10 @@ use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 
-use crate::config::Config;
-use crate::mir::{ArithOp, BinOp, FusedOp, Instruction, Mir, UniOp};
-use crate::symbol::Loc;
-use crate::utils::*;
+use super::config::Config;
+use super::mir::{ArithOp, BinOp, FusedOp, Instruction, Mir, UniOp};
+use super::symbol::Loc;
+use super::utils::*;
 
 const REG_GENERAL: u8 = 0x40;
 const REG_STATIC: u8 = 0x80;

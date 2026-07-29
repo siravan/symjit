@@ -4,18 +4,18 @@ use anyhow::{anyhow, Result};
 use num_complex::Complex;
 use rand::distr::{Alphanumeric, SampleString};
 
-use crate::applet::{recast_as_f64, recast_as_f64_mut};
-use crate::code::VirtualTable;
-use crate::composer::{Composer, DirectTranslator};
-use crate::config::{Config, SLICE_CAP};
-use crate::expr::Expr;
-use crate::instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
-use crate::model::{CellModel, Equation, Program, Variable};
-use crate::parser::Parser;
-use crate::symbol::Loc;
-use crate::types::Element;
-use crate::utils::Compiled;
-use crate::Application;
+use super::applet::{recast_as_f64, recast_as_f64_mut};
+use super::code::VirtualTable;
+use super::composer::{Composer, DirectTranslator};
+use super::config::{Config, SLICE_CAP};
+use super::expr::Expr;
+use super::instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
+use super::model::{CellModel, Equation, Program, Variable};
+use super::parser::Parser;
+use super::symbol::Loc;
+use super::types::Element;
+use super::utils::Compiled;
+use super::Application;
 
 // #[derive(Debug)]
 pub struct Compiler {

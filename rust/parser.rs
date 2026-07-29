@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 
-use crate::instruction::{
+use super::instruction::{
     ComplexRational, ConstType, Instruction, Rational, Slot, SymbolicaModel, Value,
 };
 

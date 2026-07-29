@@ -1,12 +1,12 @@
-use crate::runnable::CompilerType;
+use super::runnable::CompilerType;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::sync::Arc;
 
-use crate::code::VirtualTable;
-use crate::defuns::Defuns;
-use crate::utils::Storage;
+use super::code::VirtualTable;
+use super::defuns::Defuns;
+use super::utils::Storage;
 
 pub const USE_SIMD: u32 = 0x0000_0001;
 pub const USE_THREADS: u32 = 0x0000_0002;

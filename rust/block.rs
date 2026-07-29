@@ -4,11 +4,11 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use crate::config::Config;
-use crate::mir::Mir;
-use crate::node::Node;
-use crate::statement::Statement;
-use crate::symbol::{Loc, Symbol, SymbolTable};
+use super::config::Config;
+use super::mir::Mir;
+use super::node::Node;
+use super::statement::Statement;
+use super::symbol::{Loc, Symbol, SymbolTable};
 
 //****************************************************//
 

@@ -5,8 +5,8 @@ use std::ops::{Neg, Not};
 
 use anyhow::{anyhow, Result};
 
-use crate::model::{Equation, Variable};
-use crate::utils::bool_to_f64;
+use super::model::{Equation, Variable};
+use super::utils::bool_to_f64;
 
 /// The elements of the top-level expression trees
 ///

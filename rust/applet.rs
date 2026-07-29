@@ -1,11 +1,11 @@
 use anyhow::{anyhow, Result};
 use rayon::prelude::*;
 
-use crate::config::Config;
-use crate::machine::MachineCode;
-use crate::runnable::Application;
-use crate::types::{ElemType, Element};
-use crate::utils::*;
+use super::config::Config;
+use super::machine::MachineCode;
+use super::runnable::Application;
+use super::types::{ElemType, Element};
+use super::utils::*;
 
 #[derive(Clone)]
 #[repr(C)]

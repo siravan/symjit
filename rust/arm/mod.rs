@@ -1,9 +1,9 @@
 #[macro_use]
 mod macros;
 
-use crate::assembler::Assembler;
-use crate::code::Func;
-use crate::utils::Reg;
+use super::assembler::Assembler;
+use super::code::Func;
+use super::utils::Reg;
 
 const SP: u8 = 31;
 const FP: u8 = 29;
@@ -356,9 +356,9 @@ fn add_stack(a: &mut Assembler, size: u32) {
 
 #[cfg(test)]
 mod tests {
+    use super::super::config::Config;
+    use super::super::generator::{FuncletType, Generator};
     use super::*;
-    use crate::config::Config;
-    use crate::generator::{FuncletType, Generator};
 
     fn first_funclet_call<G: Generator>(mut generator: G) -> u32 {
         generator.call_funclet("target");

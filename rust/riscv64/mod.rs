@@ -1,11 +1,11 @@
 #[macro_use]
 mod macros;
 
-use crate::assembler::{Assembler, Jumper};
-use crate::config::Config;
-use crate::generator::{FuncletType, Generator};
-use crate::symbol::Loc;
-use crate::utils::{align_stack, Reg};
+use super::assembler::{Assembler, Jumper};
+use super::config::Config;
+use super::generator::{FuncletType, Generator};
+use super::symbol::Loc;
+use super::utils::{align_stack, Reg};
 use anyhow::Result;
 
 fn hi(x: u32) -> u32 {
@@ -602,7 +602,7 @@ impl Generator for RiscV {
         }
     }
 
-    fn add_func(&mut self, f: &str, p: crate::code::Func) {
+    fn add_func(&mut self, f: &str, p: super::code::Func) {
         let label = format!("_func_{}_", f);
         self.set_label(label.as_str());
         self.append_quad(p.func_ptr());
