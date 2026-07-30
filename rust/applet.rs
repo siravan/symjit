@@ -3,6 +3,7 @@ use rayon::prelude::*;
 
 use super::config::Config;
 use super::machine::MachineCode;
+use super::matrix::{combine_matrixes, Matrix};
 use super::runnable::Application;
 use super::types::{ElemType, Element};
 use super::utils::*;
@@ -14,11 +15,13 @@ pub struct Applet {
     pub compiled_simd: Option<MachineCode<f64>>,
     pub use_simd: bool,
     pub use_threads: bool,
-    pub count_states: usize,
-    pub count_params: usize,
-    pub count_obs: usize,
-    pub count_diffs: usize,
     pub config: Config,
+    pub params: Vec<f64>,
+    pub first_state: usize,
+    pub first_obs: usize,
+    pub count_states: usize,
+    pub count_obs: usize,
+    pub count_params: usize,
 }
 
 impl Applet {
@@ -32,11 +35,13 @@ impl Applet {
             compiled_simd: app.compiled_simd,
             use_simd: app.use_simd,
             use_threads: app.use_threads,
-            count_states: app.count_states,
-            count_params: app.count_params,
-            count_obs: app.count_obs,
-            count_diffs: app.count_diffs,
             config: app.config.clone(),
+            params: app.params.clone(),
+            first_state: app.first_state,
+            first_obs: app.first_obs,
+            count_states: app.count_states,
+            count_obs: app.count_obs,
+            count_params: app.count_params,
         })
     }
 
@@ -260,6 +265,113 @@ impl Applet {
                 self.evaluate_matrix_without_threads_simd(args, outs, n, transpose);
             } else {
                 self.evaluate_matrix_without_threads(args, outs, n);
+            }
+        }
+    }
+
+    /* P-kernel execution */
+
+    pub fn exec_vectorized(&mut self, states: &mut Matrix, obs: &mut Matrix) {
+        if let Some(compiled) = &self.compiled {
+            if !compiled.support_indirect() {
+                self.exec_vectorized_simple(states, obs);
+                return;
+            }
+
+            // self.prepare_simd();
+
+            if let Some(simd) = &self.compiled_simd {
+                self.exec_vectorized_simd(states, obs, self.use_threads, simd.count_lanes());
+            } else {
+                self.exec_vectorized_scalar(states, obs, self.use_threads);
+            }
+        }
+    }
+
+    fn exec_vectorized_simple(&mut self, states: &Matrix, obs: &mut Matrix) {
+        assert!(states.ncols == obs.ncols);
+        let n = states.ncols;
+        let params = &self.params[..];
+
+        if let Some(compiled) = &mut self.compiled {
+            for t in 0..n {
+                {
+                    let mem = compiled.mem_mut();
+                    for i in 0..self.count_states {
+                        mem[self.first_state + i] = states.get(i, t);
+                    }
+                }
+
+                compiled.exec(params);
+
+                {
+                    let mem = compiled.mem_mut();
+                    for i in 0..self.count_obs {
+                        obs.set(i, t, mem[self.first_obs + i]);
+                    }
+                }
+            }
+        }
+    }
+
+    fn exec_single(t: usize, v: &Matrix, params: &[f64], f: CompiledFunc<f64>) {
+        let p = v.p.as_ptr();
+        f(std::ptr::null(), p, t, params.as_ptr());
+    }
+
+    fn exec_vectorized_scalar(&mut self, states: &mut Matrix, obs: &mut Matrix, threads: bool) {
+        if let Some(compiled) = &mut self.compiled {
+            assert!(states.ncols == obs.ncols);
+            let n = states.ncols;
+            let f = compiled.func();
+            let params = &self.params[..];
+            let v = combine_matrixes(states, obs);
+
+            if threads {
+                (0..n)
+                    .into_par_iter()
+                    .for_each(|t| Self::exec_single(t, &v, params, f));
+            } else {
+                (0..n)
+                    //.into_iter()
+                    .for_each(|t| Self::exec_single(t, &v, params, f));
+            }
+        }
+    }
+
+    fn exec_vectorized_simd(
+        &mut self,
+        states: &mut Matrix,
+        obs: &mut Matrix,
+        threads: bool,
+        l: usize,
+    ) {
+        if let Some(compiled) = &mut self.compiled {
+            assert!(states.ncols == obs.ncols);
+            let n = states.ncols;
+            let params = &self.params[..];
+            let n0 = l * (n / l);
+            let v = combine_matrixes(states, obs);
+
+            if let Some(g) = &mut self.compiled_simd {
+                let f = g.func();
+                if threads {
+                    (0..n / l)
+                        .into_par_iter()
+                        .for_each(|t| Self::exec_single(t, &v, params, f));
+                } else {
+                    (0..n / l).for_each(|t| Self::exec_single(t, &v, params, f));
+                }
+            }
+
+            let f = compiled.func();
+
+            if threads {
+                (n0..n)
+                    .into_par_iter()
+                    .for_each(|t| Self::exec_single(t, &v, params, f));
+            } else {
+                (n0..n).for_each(|t| Self::exec_single(t, &v, params, f));
             }
         }
     }

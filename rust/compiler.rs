@@ -819,7 +819,7 @@ impl IndirectTranslator {
 
         let mut states: Vec<Variable> = Vec::new();
 
-        if !self.config.symbolica() {
+        if !self.config.symbolica() || self.config.direct_arena() {
             (params, states) = (states, params)
         }
 
