@@ -737,6 +737,7 @@ impl Generator for RiscV {
         self.emit(rvv! {sd x(Self::fp), x(Self::sp), 8});
         self.emit(rvv! {sd x(MEM), x(Self::sp), 16});
         self.emit(rvv! {sd x(STACK), x(Self::sp), 24});
+        self.emit(rvv! {mv x(Self::fp), x(Self::sp)});
 
         let frame_size = align_stack((count_states + count_obs) as u32 * self.reg_size());
         self.sub_stack(frame_size);
@@ -765,7 +766,10 @@ impl Generator for RiscV {
         self.emit(rvv! {ld x(Self::fp), x(Self::sp), 8});
         self.emit(rvv! {ld x(MEM), x(Self::sp), 16});
         self.emit(rvv! {ld x(STACK), x(Self::sp), 24});
-        self.emit(rvv! {xor x(RiscV::ra), x(RiscV::ra), x(RiscV::ra)});
+
+        self.add_stack(32);
+
+        self.emit(rvv! {xor x(RiscV::a0), x(RiscV::a0), x(RiscV::a0)});
         self.emit(rvv! {ret});
     }
 
@@ -855,7 +859,7 @@ impl Generator for RiscV {
 
         self.set_label("@done");
         load_nonvolatile_regs(&mut self.a);
-        self.emit(rvv! {xor x(RiscV::ra), x(RiscV::ra), x(RiscV::ra)});
+        self.emit(rvv! {xor x(RiscV::a0), x(RiscV::a0), x(RiscV::a0)});
         self.emit(rvv! {ret});
     }
 
