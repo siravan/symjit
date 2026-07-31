@@ -330,7 +330,6 @@ mod utils;
 #[allow(non_upper_case_globals)]
 mod riscv64;
 
-use matrix::Matrix;
 use model::{CellModel, Program};
 
 pub use applet::Applet;
@@ -340,7 +339,7 @@ pub use config::Config;
 pub use defuns::Defuns;
 pub use expr::{double, int, var, Expr};
 pub use instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
-pub use num_complex::{Complex, ComplexFloat};
+pub use matrix::Matrix;
 pub use runnable::{Application, CompilerType};
 pub use serializer::MirWriter;
 pub use types::{ElemType, Element};

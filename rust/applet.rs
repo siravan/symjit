@@ -358,9 +358,9 @@ impl Applet {
                 if threads {
                     (0..n / l)
                         .into_par_iter()
-                        .for_each(|t| Self::exec_single(t, &v, params, f));
+                        .for_each(|t| Self::exec_single(t * l, &v, params, f));
                 } else {
-                    (0..n / l).for_each(|t| Self::exec_single(t, &v, params, f));
+                    (0..n / l).for_each(|t| Self::exec_single(t * l, &v, params, f));
                 }
             }
 
@@ -373,6 +373,24 @@ impl Applet {
             } else {
                 (n0..n).for_each(|t| Self::exec_single(t, &v, params, f));
             }
+        }
+    }
+
+    pub fn scalar_kernel(&self) -> Option<CompiledFunc<f64>> {
+        if let Some(compiled) = &self.compiled {
+            let f = compiled.func();
+            Some(f)
+        } else {
+            None
+        }
+    }
+
+    pub fn simd_kernel(&self) -> Option<CompiledFunc<f64>> {
+        if let Some(compiled) = &self.compiled_simd {
+            let f = compiled.func();
+            Some(f)
+        } else {
+            None
         }
     }
 }

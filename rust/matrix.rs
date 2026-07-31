@@ -21,7 +21,10 @@ impl<'a> Matrix<'a> {
         Matrix { p, ncols }
     }
 
-    pub fn add_row(&mut self, v: *mut f64, n: usize) {
+    /// # Safety
+    /// v should point to a valid memory area of at least size n, which should
+    /// stay alive for the duration of the Matrix life
+    pub unsafe fn add_row(&mut self, v: *mut f64, n: usize) {
         self.ncols = if self.p.is_empty() {
             n
         } else {

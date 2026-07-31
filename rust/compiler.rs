@@ -804,22 +804,31 @@ impl IndirectTranslator {
             }
         }
 
+        let mut params: Vec<Variable> = Vec::new();
+
         // Important! Outs are cached and should be written to final outputs.
         for k in 0..self.outs.len() {
             let out = Expr::var(&format!("Out{}", k));
 
             if let Some(eq) = self.outs.get(&k) {
-                self.eqs.push(Expr::equation(&out, eq));
+                if self.config.direct_arena() && !self.config.direct_arena_identity_output() {
+                    let coef = Expr::var(&format!("Coef{}", k));
+                    params.push(coef.to_variable()?);
+                    self.eqs
+                        .push(Expr::equation(&out, &Expr::binary("times", eq, &coef)));
+                } else {
+                    self.eqs.push(Expr::equation(&out, eq));
+                }
             }
         }
 
-        let mut params: Vec<Variable> = (0..=self.count_params.max(self.num_params.max(1) - 1))
+        let mut states: Vec<Variable> = (0..=self.count_params.max(self.num_params.max(1) - 1))
             .map(|idx| self.expr(&Slot::Param(idx), false).to_variable().unwrap())
             .collect();
 
-        let mut states: Vec<Variable> = Vec::new();
+        // let mut states: Vec<Variable> = Vec::new();
 
-        if !self.config.symbolica() || self.config.direct_arena() {
+        if self.config.symbolica() && !self.config.direct_arena() {
             (params, states) = (states, params)
         }
 

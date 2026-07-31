@@ -1,5 +1,5 @@
 use super::super::code::Func;
-use super::super::config::{Config, ABI_AREA};
+use super::super::config::{Config, KernelType, ABI_AREA};
 use super::super::generator::{FuncletType, Generator, StackRegions};
 use super::super::symbol::Loc;
 use super::super::utils::align_stack;
@@ -695,7 +695,7 @@ impl Generator for AmdComplexGenerator {
     ) {
         let regions = StackRegions::new(cap, count_states, count_obs, count_params);
 
-        if self.config.symbolica() {
+        if matches!(self.config.kernel_type(), KernelType::RowFirst) {
             self.prologue_symbolica(&regions)
         } else {
             self.prologue_sympy(&regions)
@@ -711,7 +711,7 @@ impl Generator for AmdComplexGenerator {
     ) {
         let regions = StackRegions::new(cap, count_states, count_obs, count_params);
 
-        if self.config.symbolica() {
+        if matches!(self.config.kernel_type(), KernelType::RowFirst) {
             self.epilogue_symbolica(&regions)
         } else {
             self.epilogue_sympy(&regions)

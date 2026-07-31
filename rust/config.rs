@@ -93,6 +93,12 @@ struct DebugOptions {
     lock: bool,
 }
 
+#[derive(Debug)]
+pub enum KernelType {
+    ColumnFirst(bool),
+    RowFirst,
+}
+
 impl std::fmt::Debug for Config {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Config {{")?;
@@ -469,6 +475,14 @@ impl Config {
         }
     }
 
+    pub fn kernel_type(&self) -> KernelType {
+        if self.symbolica() && !self.direct_arena() {
+            KernelType::RowFirst
+        } else {
+            KernelType::ColumnFirst(false)
+        }
+    }
+
     pub fn native_compiler_type(&self) -> CompilerType {
         let config = Config::new(CompilerType::Native, self.opt).unwrap();
         config.compiler_type()
@@ -762,7 +776,8 @@ impl Default for Config {
                     | FAST_COMPLEX
                     // | DIRECT
                     | PARALLEL_MUL
-                    | (2 << OPT_LEVEL_SHIFT),
+                    | (2 << OPT_LEVEL_SHIFT)
+                    | DIRECT_ARENA_IDENTITY_OUTPUT,
             )
             .unwrap()
             // config.to_toml("symjit.toml");
