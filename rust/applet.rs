@@ -393,6 +393,40 @@ impl Applet {
             None
         }
     }
+
+    /// Returns the scalar indirect direct-arena P-kernel with a stable raw
+    /// plane descriptor.
+    ///
+    /// This supports arenas which bind an allocation more than once. The
+    /// returned function performs no validation; the `Applet` and its
+    /// executable mapping must outlive every invocation.
+    pub fn scalar_plane_kernel(&self) -> Option<CompiledPlaneFunc<f64>> {
+        let compiled = self.compiled.as_ref()?;
+        if !self.config.direct_arena() || !compiled.support_indirect() {
+            return None;
+        }
+        let kernel = compiled.func();
+        Some(unsafe {
+            std::mem::transmute::<CompiledFunc<f64>, CompiledPlaneFunc<f64>>(kernel)
+        })
+    }
+
+    /// Returns the SIMD indirect direct-arena P-kernel with a stable raw plane
+    /// descriptor.
+    ///
+    /// SIMD indices are actual, lane-aligned row indices whose full lane-width
+    /// range must be valid. The `Applet` and executable mapping must outlive
+    /// every invocation; compiled code reports the lane width.
+    pub fn simd_plane_kernel(&self) -> Option<CompiledPlaneFunc<f64>> {
+        let compiled = self.compiled_simd.as_ref()?;
+        if !self.config.direct_arena() || !compiled.support_indirect() {
+            return None;
+        }
+        let kernel = compiled.func();
+        Some(unsafe {
+            std::mem::transmute::<CompiledFunc<f64>, CompiledPlaneFunc<f64>>(kernel)
+        })
+    }
 }
 
 pub fn recast_as_f64<T>(v: &[T]) -> &[f64]

@@ -343,7 +343,7 @@ pub use matrix::Matrix;
 pub use runnable::{Application, CompilerType};
 pub use serializer::MirWriter;
 pub use types::{ElemType, Element};
-pub use utils::{Compiled, Storage};
+pub use utils::{Compiled, CompiledPlaneFunc, PlaneDescriptor, Storage};
 
 #[derive(Debug, Clone, Copy)]
 pub enum CompilerStatus {
