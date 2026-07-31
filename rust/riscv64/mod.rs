@@ -7,7 +7,6 @@ use super::generator::{FuncletType, Generator};
 use super::symbol::Loc;
 use super::utils::{align_stack, Reg};
 use anyhow::Result;
-use libc::STATX_ATIME;
 
 fn hi(x: u32) -> u32 {
     if x & 0x0800 != 0 {
