@@ -763,8 +763,13 @@ impl Config {
 
 impl Default for Config {
     fn default() -> Config {
-        if std::fs::exists("symjit.toml").unwrap() {
-            Self::from_toml("symjit.toml", 0).unwrap()
+        let toml = match std::env::var("SYMJIT_TOML") {
+            Ok(toml) => toml,
+            Err(_) => "symjit.toml".into(),
+        };
+
+        if std::fs::exists(&toml).unwrap() {
+            Self::from_toml(&toml, 0).unwrap()
         } else {
             Config::new(
                 CompilerType::Native,

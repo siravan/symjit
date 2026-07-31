@@ -406,9 +406,7 @@ impl Applet {
             return None;
         }
         let kernel = compiled.func();
-        Some(unsafe {
-            std::mem::transmute::<CompiledFunc<f64>, CompiledPlaneFunc<f64>>(kernel)
-        })
+        Some(unsafe { std::mem::transmute::<CompiledFunc<f64>, CompiledPlaneFunc<f64>>(kernel) })
     }
 
     /// Returns the SIMD indirect direct-arena P-kernel with a stable raw plane
@@ -423,9 +421,7 @@ impl Applet {
             return None;
         }
         let kernel = compiled.func();
-        Some(unsafe {
-            std::mem::transmute::<CompiledFunc<f64>, CompiledPlaneFunc<f64>>(kernel)
-        })
+        Some(unsafe { std::mem::transmute::<CompiledFunc<f64>, CompiledPlaneFunc<f64>>(kernel) })
     }
 }
 

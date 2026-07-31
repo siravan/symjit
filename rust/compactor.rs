@@ -1,5 +1,5 @@
 use anyhow::Result;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use super::config::{Config, SLICE_CAP, SPILL_AREA};
 use super::mir::{Instruction, Mir};
@@ -13,8 +13,9 @@ pub struct Compactor {
     live: HashMap<Loc, usize>, // the map of live Stack slots and their last used position
     stack: HashMap<Loc, Loc>,  // the map of old Stack slots to new Stack slots
     pool: Vec<Loc>,            // the pool of Stack slots available to reuse
-    count_stack: u32,          // next stack id to use if the pool is empty
-    depth: isize,              // loop depth
+    labels: HashSet<String>,
+    count_stack: u32, // next stack id to use if the pool is empty
+    depth: isize,     // loop depth
     fixed: u32,
 }
 
@@ -32,6 +33,7 @@ impl Compactor {
             live: HashMap::new(),
             stack: HashMap::new(),
             pool: Vec::new(),
+            labels: HashSet::new(),
             count_stack: fixed,
             depth: 0,
             fixed,
@@ -175,13 +177,25 @@ impl Compactor {
                     });
                 }
                 Instruction::Label { label } => {
-                    self.depth += 1;
+                    if !self.labels.contains(label) {
+                        // beginning of a backward loop
+                        self.labels.insert(label.into());
+                        self.depth += 1;
+                    };
+
                     self.push(Instruction::Label {
                         label: label.clone(),
                     });
                 }
                 Instruction::Branch { label } => {
-                    self.depth -= 1;
+                    if !self.labels.contains(label) {
+                        // forward jump
+                        self.labels.insert(label.into());
+                    } else {
+                        // end of backward loop
+                        self.depth -= 1;
+                    };
+
                     self.push(Instruction::Branch {
                         label: label.clone(),
                     });
@@ -191,7 +205,12 @@ impl Compactor {
                     label,
                     is_else,
                 } => {
-                    self.depth -= 1;
+                    if !self.labels.contains(label) {
+                        self.labels.insert(label.into());
+                    } else {
+                        self.depth -= 1;
+                    };
+
                     self.push(Instruction::BranchIf {
                         cond: *cond,
                         label: label.clone(),
