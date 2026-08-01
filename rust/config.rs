@@ -80,6 +80,7 @@ struct Options {
     huge: bool,
     parallel_mul: bool,
     direct_arena: bool,
+    direct_arena_identity_output: bool,
     opt_level: u8,
     stack_limit: usize,
 }
@@ -226,6 +227,7 @@ impl Config {
         config.set_huge(c.options.huge);
         config.set_parallel_mul(c.options.parallel_mul);
         config.set_direct_arena(c.options.direct_arena);
+        config.set_direct_arena_identity_output(c.options.direct_arena_identity_output);
 
         config.set_opt_level(c.options.opt_level);
         config.set_stack_limit(c.options.stack_limit);
@@ -270,6 +272,7 @@ impl Config {
             huge: self.huge(),
             parallel_mul: self.parallel_mul(),
             direct_arena: self.direct_arena(),
+            direct_arena_identity_output: self.direct_arena_identity_output(),
         };
 
         let debug: DebugOptions = DebugOptions {
@@ -419,7 +422,8 @@ impl Config {
 
     /// Stores outputs without complex-scalar scaling.
     pub fn direct_arena_identity_output(&self) -> bool {
-        self.test(DIRECT_ARENA_IDENTITY_OUTPUT)
+        true
+        //self.test(DIRECT_ARENA_IDENTITY_OUTPUT)
     }
 
     pub fn debug_bytecode(&self) -> bool {
