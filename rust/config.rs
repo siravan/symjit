@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use super::code::VirtualTable;
 use super::defuns::Defuns;
+use super::operation::Operation;
 use super::utils::Storage;
 
 pub const USE_SIMD: u32 = 0x0000_0001;
@@ -842,12 +843,18 @@ const BINARY: &[&str] = &[
 ];
 
 impl Config {
-    pub fn is_intrinsic_unary(&self, op: &str) -> bool {
-        UNARY.contains(&op)
+    pub fn is_intrinsic_unary(&self, op: &Operation) -> bool {
+        match op {
+            Operation::Op(s) => UNARY.contains(&s.as_str()),
+            _ => false,
+        }
     }
 
-    pub fn is_intrinsic_binary(&self, op: &str) -> bool {
-        BINARY.contains(&op)
+    pub fn is_intrinsic_binary(&self, op: &Operation) -> bool {
+        match op {
+            Operation::Plus | Operation::Minus | Operation::Times | Operation::Divide => true,
+            Operation::Op(s) => BINARY.contains(&s.as_str()),
+        }
     }
 
     pub fn symbolica_fun(&self, fun: &str, is_real: bool) -> String {
@@ -869,9 +876,11 @@ impl Config {
                 op => op,
             };
 
-            if self.is_intrinsic_unary(op)
-                || self.is_intrinsic_binary(op)
-                || (!self.is_complex() && VirtualTable::from_str(op).is_ok())
+            let oper = Operation::new(op);
+
+            if self.is_intrinsic_unary(&oper)
+                || self.is_intrinsic_binary(&oper)
+                || (!self.is_complex() && VirtualTable::from_str(&op).is_ok())
                 || (self.is_complex() && VirtualTable::from_str(&format!("cplx_{}", op)).is_ok())
             {
                 op.into()

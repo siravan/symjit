@@ -6,6 +6,7 @@ use super::builder::Builder;
 use super::config::Config;
 use super::expr::Expr;
 use super::node::Node;
+use super::operation::Operation;
 use super::utils::Storage;
 
 pub trait Transformer {
@@ -224,13 +225,13 @@ impl Expr {
 
     fn transform_unary(&self, builder: &mut Builder, op: &str, args: &[Expr]) -> Result<Node> {
         let x = args[0].transform(builder)?;
-        builder.add_unary(op, x)
+        builder.add_unary(Operation::new_checked(op), x)
     }
 
     fn transform_binary(&self, builder: &mut Builder, op: &str, args: &[Expr]) -> Result<Node> {
         let l = args[0].transform(builder)?;
         let r = args[1].transform(builder)?;
-        builder.add_binary(op, l, r)
+        builder.add_binary(Operation::new_checked(op), l, r)
     }
 
     /// Ternary operator is the conditional select operator
@@ -265,12 +266,12 @@ impl Expr {
         } else if n == 2 {
             let x = args[0].transform(builder)?;
             let y = args[1].transform(builder)?;
-            let z = builder.create_binary(op, x, y)?;
+            let z = builder.create_binary(Operation::new_checked(op), x, y)?;
             Ok(z)
         } else {
             let x = self.transform_poly(builder, op, &args[..n >> 1])?;
             let y = self.transform_poly(builder, op, &args[n >> 1..])?;
-            let z = builder.create_binary(op, x, y)?;
+            let z = builder.create_binary(Operation::new_checked(op), x, y)?;
             Ok(z)
         }
 
@@ -287,10 +288,11 @@ impl Expr {
             .block()
             .create_tmp_named(&args[1].normal_var().unwrap());
         let start = args[2].transform(builder)?;
-        let (accum_var, loop_id) = builder.add_loop_prefix(op, var.clone(), start)?;
+        let (accum_var, loop_id) =
+            builder.add_loop_prefix(Operation::new(op), var.clone(), start)?;
         let eq = args[0].transform(builder)?;
         let end = args[3].transform(builder)?;
-        builder.add_loop_body(op, eq, var, end, accum_var, loop_id)
+        builder.add_loop_body(Operation::new(op), eq, var, end, accum_var, loop_id)
     }
 }
 

@@ -2,6 +2,7 @@ use anyhow::Result;
 
 use super::mir::Mir;
 use super::node::Node;
+use super::operation::Operation;
 use super::symbol::Loc;
 use super::utils::{is_external_func, reg};
 
@@ -12,7 +13,7 @@ pub enum Statement {
         rhs: Node,
     },
     Call {
-        op: String,
+        op: Operation,
         lhs: Node,
         arg: Node,
         num_args: usize,
@@ -35,9 +36,9 @@ impl Statement {
         Statement::Assign { lhs, rhs }
     }
 
-    pub fn call(op: &str, lhs: Node, arg: Node, num_args: usize) -> Statement {
+    pub fn call(op: Operation, lhs: Node, arg: Node, num_args: usize) -> Statement {
         Statement::Call {
-            op: op.to_string(),
+            op,
             lhs,
             arg,
             num_args,
@@ -56,7 +57,7 @@ impl Statement {
                 arg,
                 num_args,
             } => {
-                if is_external_func(op) {
+                if is_external_func(op.as_str()) {
                     let (l, r) = arg.call_external()?;
                     ir.call(op.as_str(), (r - l) as usize)?;
                     Self::save_result(ir, lhs);

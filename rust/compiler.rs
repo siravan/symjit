@@ -11,6 +11,7 @@ use super::config::{Config, SLICE_CAP};
 use super::expr::Expr;
 use super::instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
 use super::model::{CellModel, Equation, Program, Variable};
+use super::operation::Operation;
 use super::parser::Parser;
 use super::symbol::Loc;
 use super::types::Element;
@@ -981,9 +982,9 @@ impl IndirectTranslator {
             } else {
                 return Err(anyhow!("wrong number of arguments to {:?}", op));
             }
-        } else if self.config.is_intrinsic_unary(op) && n == 1 {
+        } else if self.config.is_intrinsic_unary(&Operation::new(op)) && n == 1 {
             self.assign(lhs, Expr::unary(op, &args[0]))?;
-        } else if self.config.is_intrinsic_binary(op) && n == 2 {
+        } else if self.config.is_intrinsic_binary(&Operation::new(op)) && n == 2 {
             self.assign(lhs, Expr::binary(op, &args[0], &args[1]))?;
         } else {
             let temps: Vec<Slot> = (0..n).map(|_| self.create_static().unwrap()).collect();

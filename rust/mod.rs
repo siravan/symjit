@@ -319,6 +319,7 @@ mod memory;
 mod mir;
 mod model;
 mod node;
+mod operation;
 mod parser;
 mod runnable;
 mod serializer;

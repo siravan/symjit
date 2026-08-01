@@ -9,6 +9,7 @@ use super::config::Config;
 use super::generator::Generator;
 use super::mir::Mir;
 use super::node::Node;
+use super::operation::Operation;
 use super::symbol::SymbolTable;
 use super::utils::Storage;
 
@@ -79,16 +80,16 @@ impl Builder {
         Ok(lhs)
     }
 
-    pub fn add_unary(&mut self, op: &str, arg: Node) -> Result<Node> {
-        if !self.config.is_intrinsic_unary(op) {
+    pub fn add_unary(&mut self, op: Operation, arg: Node) -> Result<Node> {
+        if !self.config.is_intrinsic_unary(&op) {
             self.ft.insert(op.to_string());
         }
 
         self.create_unary(op, arg)
     }
 
-    pub fn add_binary(&mut self, op: &str, left: Node, right: Node) -> Result<Node> {
-        if op == "power" {
+    pub fn add_binary(&mut self, op: Operation, left: Node, right: Node) -> Result<Node> {
+        if op.as_str() == "power" {
             if let Some(val) = right.as_int_const() {
                 if let Some(left) = left.as_const() {
                     return self.create_const(left.powi(val));
@@ -97,16 +98,16 @@ impl Builder {
                 match val {
                     0 => return self.create_const(1.0),
                     1 => return Ok(left),
-                    2 => return self.create_unary("square", left),
-                    3 => return self.create_unary("cube", left),
-                    -1 => return self.create_unary("recip", left),
+                    2 => return self.create_unary(Operation::new("square"), left),
+                    3 => return self.create_unary(Operation::new("cube"), left),
+                    -1 => return self.create_unary(Operation::new("recip"), left),
                     -2 => {
-                        let arg = self.create_unary("square", left)?;
-                        return self.create_unary("recip", arg);
+                        let arg = self.create_unary(Operation::new("square"), left)?;
+                        return self.create_unary(Operation::new("recip"), arg);
                     }
                     -3 => {
-                        let arg = self.create_unary("cube", left)?;
-                        return self.create_unary("recip", arg);
+                        let arg = self.create_unary(Operation::new("cube"), left)?;
+                        return self.create_unary(Operation::new("recip"), arg);
                     }
                     _ => {
                         return self.create_powi(left, val);
@@ -118,31 +119,36 @@ impl Builder {
                 const ONE_THIRD: f64 = 1.0 / 3.0;
 
                 match val {
-                    0.5 => return self.create_unary("root", left),
-                    ONE_THIRD => return self.add_unary("cbrt", left),
+                    0.5 => return self.create_unary(Operation::new("root"), left),
+                    ONE_THIRD => return self.add_unary(Operation::new("cbrt"), left),
                     1.5 => {
-                        let arg = self.create_unary("cube", left)?;
-                        return self.create_unary("root", arg);
+                        let arg = self.create_unary(Operation::new("cube"), left)?;
+                        return self.create_unary(Operation::new("root"), arg);
                     }
                     _ => {}
                 }
             }
         }
 
-        if !self.config.is_intrinsic_binary(op) {
+        if !self.config.is_intrinsic_binary(&op) {
             self.ft.insert(op.to_string());
         }
 
         self.create_binary(op, left, right)
     }
 
-    pub fn add_loop_prefix(&mut self, op: &str, var: Node, start: Node) -> Result<(Node, usize)> {
-        assert!(op == "Sum" || op == "Product");
+    pub fn add_loop_prefix(
+        &mut self,
+        op: Operation,
+        var: Node,
+        start: Node,
+    ) -> Result<(Node, usize)> {
+        assert!(op.as_str() == "Sum" || op.as_str() == "Product");
 
         let accum_var = self.block().create_tmp();
 
         self.block().add_assign(var, start);
-        let init = self.create_const(if op == "Sum" { 0.0 } else { 1.0 })?;
+        let init = self.create_const(if op.as_str() == "Sum" { 0.0 } else { 1.0 })?;
         self.block().add_assign(accum_var.clone(), init);
 
         let label = format!(".L{}", self.count_loops);
@@ -154,24 +160,24 @@ impl Builder {
 
     pub fn add_loop_body(
         &mut self,
-        op: &str,
+        op: Operation,
         eq: Node,
         var: Node,
         end: Node,
         accum_var: Node,
         loop_id: usize,
     ) -> Result<Node> {
-        let p = if op == "Sum" {
-            self.create_binary("plus", accum_var.clone(), eq)?
+        let p = if op.as_str() == "Sum" {
+            self.create_binary(Operation::Plus, accum_var.clone(), eq)?
         } else {
-            self.create_binary("times", accum_var.clone(), eq)?
+            self.create_binary(Operation::Times, accum_var.clone(), eq)?
         };
 
         self.add_assign(accum_var.clone(), p)?;
         let one = self.create_const(1.0)?;
-        let q = self.create_binary("plus", var.clone(), one.clone())?;
+        let q = self.create_binary(Operation::Plus, var.clone(), one.clone())?;
         self.add_assign(var.clone(), q)?;
-        let cond = self.create_binary("leq", var, end)?;
+        let cond = self.create_binary(Operation::new("leq"), var, end)?;
         let label = format!(".L{}", loop_id);
         self.block().add_branch_if(cond, &label, true);
 
@@ -211,7 +217,7 @@ impl Builder {
         Ok(self.block().create_var(sym))
     }
 
-    pub fn create_unary(&mut self, op: &str, arg: Node) -> Result<Node> {
+    pub fn create_unary(&mut self, op: Operation, arg: Node) -> Result<Node> {
         Ok(self.block().create_unary(op, arg))
     }
 
@@ -223,57 +229,67 @@ impl Builder {
         Ok(self.block().create_modular_powi(left, right, power))
     }
 
-    pub fn create_binary(&mut self, op: &str, left: Node, right: Node) -> Result<Node> {
-        let node = match op {
-            "times" if left.is_const(-1.0) => self.create_unary("neg", right)?,
-            "times" if right.is_const(-1.0) => self.create_unary("neg", left)?,
-            "times" if left.is_const(1.0) && !right.is_leaf_const() => right,
-            "times" if left.is_const(1.0) && right.is_leaf_const() => {
-                self.create_unary("real", right)?
+    pub fn create_binary(&mut self, op: Operation, left: Node, right: Node) -> Result<Node> {
+        let node = match &op {
+            Operation::Times if left.is_const(-1.0) => {
+                self.create_unary(Operation::new("neg"), right)?
             }
-            "times" if right.is_const(1.0) && !left.is_leaf_const() => left,
-            "times" if right.is_const(1.0) && left.is_leaf_const() => {
-                self.create_unary("real", left)?
+            Operation::Times if right.is_const(-1.0) => {
+                self.create_unary(Operation::new("neg"), left)?
             }
-            "times" if left.is_unary("recip") => {
-                self.create_binary("divide", right, left.arg().unwrap())?
+            Operation::Times if left.is_const(1.0) && !right.is_leaf_const() => right,
+            Operation::Times if left.is_const(1.0) && right.is_leaf_const() => {
+                self.create_unary(Operation::new("real"), right)?
             }
-            "times" if right.is_unary("recip") => {
-                self.create_binary("divide", left, right.arg().unwrap())?
+            Operation::Times if right.is_const(1.0) && !left.is_leaf_const() => left,
+            Operation::Times if right.is_const(1.0) && left.is_leaf_const() => {
+                self.create_unary(Operation::new("real"), left)?
             }
-            "plus" if left.is_unary("neg") => {
-                self.create_binary("minus", right, left.arg().unwrap())?
+            Operation::Times if left.is_unary("recip") => {
+                self.create_binary(Operation::Divide, right, left.arg().unwrap())?
             }
-            "plus" if right.is_unary("neg") => {
-                self.create_binary("minus", left, right.arg().unwrap())?
+            Operation::Times if right.is_unary("recip") => {
+                self.create_binary(Operation::Divide, left, right.arg().unwrap())?
             }
-            "rem" if left.is_unary("_powi_") && !self.config.is_complex() => {
-                let (arg, power) = left.arg_power().unwrap();
-                self.create_modular_powi(arg, right, power)?
+            Operation::Plus if left.is_unary("neg") => {
+                self.create_binary(Operation::Minus, right, left.arg().unwrap())?
             }
-            "min" => {
-                let cond = self.create_binary("leq", left.clone(), right.clone())?;
-                self.create_ifelse(cond, left, right)?
+            Operation::Plus if right.is_unary("neg") => {
+                self.create_binary(Operation::Minus, left, right.arg().unwrap())?
             }
-            "max" => {
-                let cond = self.create_binary("geq", left.clone(), right.clone())?;
-                self.create_ifelse(cond, left, right)?
-            }
-            "heaviside" => {
-                /*
-                 * In sympy, Heaviside is considered a binary operator,
-                 * where the second argument is the value at 0 (defaults to 0.5).
-                 */
-                let zero = self.create_const(0.0)?;
-                let one = self.create_const(1.0)?;
+            Operation::Op(s) => match (s.as_str()) {
+                "rem" if left.is_unary("_powi_") && !self.config.is_complex() => {
+                    let (arg, power) = left.arg_power().unwrap();
+                    self.create_modular_powi(arg, right, power)?
+                }
+                "min" => {
+                    let cond =
+                        self.create_binary(Operation::new("leq"), left.clone(), right.clone())?;
+                    self.create_ifelse(cond, left, right)?
+                }
+                "max" => {
+                    let cond =
+                        self.create_binary(Operation::new("geq"), left.clone(), right.clone())?;
+                    self.create_ifelse(cond, left, right)?
+                }
+                "heaviside" => {
+                    /*
+                     * In sympy, Heaviside is considered a binary operator,
+                     * where the second argument is the value at 0 (defaults to 0.5).
+                     */
+                    let zero = self.create_const(0.0)?;
+                    let one = self.create_const(1.0)?;
 
-                let c0 = self.create_binary("eq", left.clone(), zero.clone())?;
-                let x0 = self.create_ifelse(c0, right, one)?;
+                    let c0 =
+                        self.create_binary(Operation::new("eq"), left.clone(), zero.clone())?;
+                    let x0 = self.create_ifelse(c0, right, one)?;
 
-                let c1 = self.create_binary("geq", left, zero.clone())?;
-                self.create_ifelse(c1, x0, zero)?
-            }
-            // note: block() is needed here to prevent a infinite loop
+                    let c1 = self.create_binary(Operation::new("geq"), left, zero.clone())?;
+                    self.create_ifelse(c1, x0, zero)?
+                }
+                // note: block() is needed here to prevent a infinite loop
+                _ => self.block().create_binary(op, left, right),
+            },
             _ => self.block().create_binary(op, left, right),
         };
 

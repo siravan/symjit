@@ -7,6 +7,7 @@ use super::config::{Config, SLICE_CAP};
 use super::instruction::{BuiltinSymbol, Slot};
 use super::mir::Mir;
 use super::model::{CellModel, Program};
+use super::operation::Operation;
 use super::runnable::Application;
 use super::symbol::Loc;
 use super::utils::*;
@@ -281,11 +282,11 @@ impl DirectTranslator {
             } else {
                 return Err(anyhow!("wrong number of arguments to {:?}", op));
             }
-        } else if self.mir.config.is_intrinsic_unary(op) && n == 1 {
+        } else if self.mir.config.is_intrinsic_unary(&Operation::new(op)) && n == 1 {
             self.load(reg(0), &args[0])?;
             self.compile_unary(op, reg(1), reg(0))?;
             self.save(reg(1), lhs)?;
-        } else if self.mir.config.is_intrinsic_binary(op) && n == 2 {
+        } else if self.mir.config.is_intrinsic_binary(&Operation::new(op)) && n == 2 {
             self.load(reg(0), &args[0])?;
             self.load(reg(1), &args[1])?;
             self.compile_binary(op, reg(2), reg(0), reg(1))?;

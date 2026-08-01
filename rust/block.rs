@@ -7,6 +7,7 @@ use std::rc::Rc;
 use super::config::Config;
 use super::mir::Mir;
 use super::node::Node;
+use super::operation::Operation;
 use super::statement::Statement;
 use super::symbol::{Loc, Symbol, SymbolTable};
 
@@ -112,11 +113,11 @@ impl Block {
         Node::create_var(sym)
     }
 
-    pub fn create_unary(&mut self, op: &str, arg: Node) -> Node {
+    pub fn create_unary(&mut self, op: Operation, arg: Node) -> Node {
         Node::create_unary(op, arg, 1)
     }
 
-    pub fn create_binary(&mut self, op: &str, left: Node, right: Node) -> Node {
+    pub fn create_binary(&mut self, op: Operation, left: Node, right: Node) -> Node {
         Node::create_binary(op, left, right, 1, None)
     }
 
@@ -150,7 +151,7 @@ impl Block {
             Node::Void => Node::Void,
             Node::Const { val, idx } => Node::Const { val, idx },
             Node::Var { sym } => Node::Var { sym },
-            Node::Unary { op, arg, power, .. } => self.trim_unary(&op, *arg, power),
+            Node::Unary { op, arg, power, .. } => self.trim_unary(op, *arg, power),
             Node::Binary {
                 op,
                 left,
@@ -158,22 +159,22 @@ impl Block {
                 power,
                 cond,
                 ..
-            } => self.trim_binary(&op, *left, *right, power, cond),
+            } => self.trim_binary(op, *left, *right, power, cond),
         }
     }
 
-    fn trim_unary(&mut self, op: &str, arg: Node, power: i32) -> Node {
+    fn trim_unary(&mut self, op: Operation, arg: Node, power: i32) -> Node {
         let arg = self.trim(arg);
 
-        if !self.config.is_intrinsic_unary(op) {
+        if !self.config.is_intrinsic_unary(&op) {
             self.break_call_unary(op, arg)
         } else {
             Node::create_unary(op, arg, power)
         }
     }
 
-    fn break_call_unary(&mut self, op: &str, arg: Node) -> Node {
-        let n = (op.to_string(), arg.hashof());
+    fn break_call_unary(&mut self, op: Operation, arg: Node) -> Node {
+        let n = (op.as_str().to_string(), arg.hashof());
 
         if self.config.cse() {
             if let Some(lhs) = self.calls.get(&n) {
@@ -181,7 +182,7 @@ impl Block {
             }
         }
 
-        let arg = self.create_unary("_call_", arg);
+        let arg = self.create_unary(Operation::new("_call_"), arg);
         let lhs = self.create_tmp();
         self.stmts.push(Statement::call(op, lhs.clone(), arg, 1));
         self.calls.insert(n, lhs.clone());
@@ -190,7 +191,7 @@ impl Block {
 
     fn trim_binary(
         &mut self,
-        op: &str,
+        op: Operation,
         left: Node,
         right: Node,
         power: i32,
@@ -199,7 +200,7 @@ impl Block {
         let left = self.trim(left);
         let right = self.trim(right);
 
-        if !self.config.is_intrinsic_binary(op) {
+        if !self.config.is_intrinsic_binary(&op) {
             return self.break_call_binary(op, left, right);
         }
 
@@ -218,7 +219,7 @@ impl Block {
         Node::create_binary(op, left, right, power, cond)
     }
 
-    pub fn break_call_binary(&mut self, op: &str, left: Node, right: Node) -> Node {
+    pub fn break_call_binary(&mut self, op: Operation, left: Node, right: Node) -> Node {
         let n = (op.to_string(), left.hashof() ^ (right.hashof() + 1));
 
         if self.config.cse() {
@@ -230,7 +231,7 @@ impl Block {
         let left = self.process(left);
         let right = self.process(right);
 
-        let arg = self.create_binary("_call_", left, right);
+        let arg = self.create_binary(Operation::new("_call_"), left, right);
         let lhs = self.create_tmp();
         self.stmts.push(Statement::call(op, lhs.clone(), arg, 2));
         self.calls.insert(n, lhs.clone());
@@ -391,7 +392,7 @@ impl Block {
                 op, arg, power, h, ..
             } => self.common_subexpr(cs, ls, h).unwrap_or_else(|| {
                 let arg = self.rewrite_cse(cs, ls, *arg);
-                Node::create_unary(op.as_str(), arg, power)
+                Node::create_unary(op, arg, power)
             }),
             Node::Binary {
                 op,
@@ -404,7 +405,7 @@ impl Block {
             } => self.common_subexpr(cs, ls, h).unwrap_or_else(|| {
                 let left = self.rewrite_cse(cs, ls, *left);
                 let right = self.rewrite_cse(cs, ls, *right);
-                Node::create_binary(op.as_str(), left, right, power, cond)
+                Node::create_binary(op, left, right, power, cond)
             }),
         }
     }

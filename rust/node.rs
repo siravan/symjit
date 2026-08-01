@@ -8,6 +8,7 @@ use std::rc::Rc;
 
 // use super::generator::Generator;
 use super::mir::Mir;
+use super::operation::Operation;
 use super::symbol::{Loc, Symbol};
 use super::utils::reg;
 
@@ -24,7 +25,7 @@ pub enum Node {
         sym: Rc<RefCell<Symbol>>,
     },
     Unary {
-        op: String,
+        op: Operation,
         arg: Box<Node>,
         power: i32,
         ershov: u8,
@@ -32,7 +33,7 @@ pub enum Node {
         w: u32,
     },
     Binary {
-        op: String,
+        op: Operation,
         left: Box<Node>,
         right: Box<Node>,
         power: i32,
@@ -89,7 +90,7 @@ impl Node {
         Node::Var { sym }
     }
 
-    pub fn create_unary(op: &str, arg: Node, power: i32) -> Node {
+    pub fn create_unary(op: Operation, arg: Node, power: i32) -> Node {
         let e = arg.ershov_number();
 
         let mut hasher = DefaultHasher::new();
@@ -100,7 +101,7 @@ impl Node {
         let w = 1 + arg.weightof();
 
         Node::Unary {
-            op: op.to_string(),
+            op,
             arg: Box::new(arg),
             ershov: e,
             power,
@@ -109,7 +110,13 @@ impl Node {
         }
     }
 
-    pub fn create_binary(op: &str, left: Node, right: Node, power: i32, cond: Option<Loc>) -> Node {
+    pub fn create_binary(
+        op: Operation,
+        left: Node,
+        right: Node,
+        power: i32,
+        cond: Option<Loc>,
+    ) -> Node {
         let e = Self::calc_ershov(&left, &right);
 
         let mut hasher = DefaultHasher::new();
@@ -119,7 +126,7 @@ impl Node {
         let mut l = left.hashof();
         let mut r = right.hashof();
 
-        (l, r) = if COMMUTATIVE.contains(&op) && l > r {
+        (l, r) = if COMMUTATIVE.contains(&op.as_str()) && l > r {
             (r, l)
         } else {
             (l, r)
@@ -132,7 +139,7 @@ impl Node {
         let w = 1 + left.weightof() + right.weightof();
 
         Node::Binary {
-            op: op.to_string(),
+            op,
             left: Box::new(left),
             right: Box::new(right),
             ershov: e,
@@ -146,18 +153,18 @@ impl Node {
     pub fn create_ifelse(cond: &Node, left: Node, right: Node) -> Node {
         if let Node::Var { sym, .. } = cond {
             let sym = sym.borrow();
-            Self::create_binary("_ifelse_", left, right, 0, Some(sym.loc))
+            Self::create_binary(Operation::new("_ifelse_"), left, right, 0, Some(sym.loc))
         } else {
             unreachable!()
         }
     }
 
     pub fn create_powi(arg: Node, power: i32) -> Node {
-        Self::create_unary("_powi_", arg, power)
+        Self::create_unary(Operation::new("_powi_"), arg, power)
     }
 
     pub fn create_modular_powi(left: Node, right: Node, power: i32) -> Node {
-        Self::create_binary("_powi_mod_", left, right, power, None)
+        Self::create_binary(Operation::new("_powi_mod_"), left, right, power, None)
     }
 
     pub fn first(&mut self) -> Option<&mut Node> {
@@ -321,26 +328,28 @@ impl Node {
 
             let (dst, l, r) = self.alloc(mir, base, left, right)?;
 
-            match op.as_str() {
-                "plus" => mir.plus(reg(dst), reg(l), reg(r)),
-                "minus" => mir.minus(reg(dst), reg(l), reg(r)),
-                "times" => mir.times(reg(dst), reg(l), reg(r)),
-                "divide" => mir.divide(reg(dst), reg(l), reg(r)),
-                "rem" => mir.fmod(reg(dst), reg(l), reg(r)),
-                "gt" => mir.gt(reg(dst), reg(l), reg(r)),
-                "geq" => mir.geq(reg(dst), reg(l), reg(r)),
-                "lt" => mir.lt(reg(dst), reg(l), reg(r)),
-                "leq" => mir.leq(reg(dst), reg(l), reg(r)),
-                "eq" => mir.eq(reg(dst), reg(l), reg(r)),
-                "neq" => mir.neq(reg(dst), reg(l), reg(r)),
-                "and" => mir.and(reg(dst), reg(l), reg(r)),
-                "or" => mir.or(reg(dst), reg(l), reg(r)),
-                "xor" => mir.xor(reg(dst), reg(l), reg(r)),
-                "complex" => mir.complex(reg(dst), reg(l), reg(r)),
-                "_ifelse_" => mir.ifelse(reg(dst), reg(l), reg(r), cond.unwrap()),
-                "_powi_mod_" => mir.powi_mod(reg(dst), reg(l), *power, reg(r)),
-                "_call_" => mir.setup_call_binary(reg(l), reg(r)),
-                _ => return Err(anyhow!("binary operator {:?} is not recognized", op)),
+            match op {
+                Operation::Plus => mir.plus(reg(dst), reg(l), reg(r)),
+                Operation::Minus => mir.minus(reg(dst), reg(l), reg(r)),
+                Operation::Times => mir.times(reg(dst), reg(l), reg(r)),
+                Operation::Divide => mir.divide(reg(dst), reg(l), reg(r)),
+                Operation::Op(s) => match s.as_str() {
+                    "rem" => mir.fmod(reg(dst), reg(l), reg(r)),
+                    "gt" => mir.gt(reg(dst), reg(l), reg(r)),
+                    "geq" => mir.geq(reg(dst), reg(l), reg(r)),
+                    "lt" => mir.lt(reg(dst), reg(l), reg(r)),
+                    "leq" => mir.leq(reg(dst), reg(l), reg(r)),
+                    "eq" => mir.eq(reg(dst), reg(l), reg(r)),
+                    "neq" => mir.neq(reg(dst), reg(l), reg(r)),
+                    "and" => mir.and(reg(dst), reg(l), reg(r)),
+                    "or" => mir.or(reg(dst), reg(l), reg(r)),
+                    "xor" => mir.xor(reg(dst), reg(l), reg(r)),
+                    "complex" => mir.complex(reg(dst), reg(l), reg(r)),
+                    "_ifelse_" => mir.ifelse(reg(dst), reg(l), reg(r), cond.unwrap()),
+                    "_powi_mod_" => mir.powi_mod(reg(dst), reg(l), *power, reg(r)),
+                    "_call_" => mir.setup_call_binary(reg(l), reg(r)),
+                    _ => return Err(anyhow!("binary operator {:?} is not recognized", op)),
+                },
             };
 
             Ok(dst)
@@ -393,38 +402,36 @@ impl Node {
         &self,
         mir: &mut Mir,
         base: u8,
-        op: &str,
+        op: &Operation,
         left: &Node,
         right: &Node,
     ) -> Result<u8> {
         let dst = base + self.ershov_number() - 1;
 
-        if (op == "plus"
-            || op == "times"
-            || op == "minus"
-            || (op == "divide" && !mir.config.is_complex()))    // because complex division uses re(Reg::Temp)
+        if (op.is_plus() || op.is_minus() || op.is_times()
+            || (op.is_divide() && !mir.config.is_complex()))    // because complex division uses re(Reg::Temp)
             && right.is_leaf_var()
         {
             let l = left.compile(mir, base)?;
             let t = right.compile_leaf_var().unwrap();
 
             match op {
-                "plus" => mir.plus_load(reg(dst), reg(l), t),
-                "minus" => mir.minus_load(reg(dst), reg(l), t),
-                "times" => mir.times_load(reg(dst), reg(l), t),
-                "divide" => mir.divide_load(reg(dst), reg(l), t),
+                Operation::Plus => mir.plus_load(reg(dst), reg(l), t),
+                Operation::Minus => mir.minus_load(reg(dst), reg(l), t),
+                Operation::Times => mir.times_load(reg(dst), reg(l), t),
+                Operation::Divide => mir.divide_load(reg(dst), reg(l), t),
                 _ => unreachable!(),
             }
             return Ok(dst);
         }
 
-        if (op == "plus" || op == "times") && left.is_leaf_var() {
+        if (op.is_plus() || op.is_times()) && left.is_leaf_var() {
             let r = right.compile(mir, base)?;
             let t = left.compile_leaf_var().unwrap();
 
             match op {
-                "plus" => mir.plus_load(reg(dst), reg(r), t),
-                "times" => mir.times_load(reg(dst), reg(r), t),
+                Operation::Plus => mir.plus_load(reg(dst), reg(r), t),
+                Operation::Times => mir.times_load(reg(dst), reg(r), t),
                 _ => unreachable!(),
             }
             return Ok(dst);
@@ -449,35 +456,35 @@ impl Node {
         &self,
         mir: &mut Mir,
         base: u8,
-        op: &str,
+        op: &Operation,
         left: &Node,
         right: &Node,
     ) -> Result<u8> {
         let dst = base + self.ershov_number() - 1;
 
-        if (op == "plus" || op == "times" || op == "minus" || op == "divide")
+        if (op.is_plus() || op.is_minus() || op.is_times() || op.is_divide())
             && right.is_leaf_const()
         {
             let l = left.compile(mir, base)?;
             let idx = right.compile_leaf_const().unwrap();
 
             match op {
-                "plus" => mir.plus_load_const(reg(dst), reg(l), idx),
-                "minus" => mir.minus_load_const(reg(dst), reg(l), idx),
-                "times" => mir.times_load_const(reg(dst), reg(l), idx),
-                "divide" => mir.divide_load_const(reg(dst), reg(l), idx),
+                Operation::Plus => mir.plus_load_const(reg(dst), reg(l), idx),
+                Operation::Minus => mir.minus_load_const(reg(dst), reg(l), idx),
+                Operation::Times => mir.times_load_const(reg(dst), reg(l), idx),
+                Operation::Divide => mir.divide_load_const(reg(dst), reg(l), idx),
                 _ => unreachable!(),
             }
             return Ok(dst);
         }
 
-        if (op == "plus" || op == "times") && left.is_leaf_const() {
+        if (op.is_plus() || op.is_times()) && left.is_leaf_const() {
             let r = right.compile(mir, base)?;
             let idx = left.compile_leaf_const().unwrap();
 
             match op {
-                "plus" => mir.plus_load_const(reg(dst), reg(r), idx),
-                "times" => mir.times_load_const(reg(dst), reg(r), idx),
+                Operation::Plus => mir.plus_load_const(reg(dst), reg(r), idx),
+                Operation::Times => mir.times_load_const(reg(dst), reg(r), idx),
                 _ => unreachable!(),
             }
             return Ok(dst);
@@ -502,7 +509,7 @@ impl Node {
             op, left, right, ..
         } = self
         {
-            if op != "_call_" {
+            if op.as_str() != "_call_" {
                 return Err(anyhow!("external fun main node should be `_call_`"));
             }
 
@@ -543,14 +550,14 @@ impl Node {
 
     pub fn is_binary(&self, op_: &str) -> bool {
         if let Node::Binary { op, .. } = self {
-            return op == op_;
+            return op.as_str() == op_;
         };
         false
     }
 
     pub fn is_unary(&self, op_: &str) -> bool {
         if let Node::Unary { op, .. } = self {
-            return op == op_;
+            return op.as_str() == op_;
         };
         false
     }
@@ -599,10 +606,10 @@ impl fmt::Debug for Node {
             Node::Void => write!(f, "void"),
             Node::Const { val, .. } => write!(f, "const {}", val),
             Node::Var { sym, .. } => write!(f, "var {:?}", sym.borrow()),
-            Node::Unary { op, arg, .. } => write!(f, "{}({:?})", op, arg),
+            Node::Unary { op, arg, .. } => write!(f, "{}({:?})", op.as_str(), arg),
             Node::Binary {
                 op, left, right, ..
-            } => write!(f, "{}({:?}, {:?})", op, left, right),
+            } => write!(f, "{}({:?}, {:?})", op.as_str(), left, right),
         }
     }
 }
