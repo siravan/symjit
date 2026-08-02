@@ -558,12 +558,13 @@ pub struct IndirectTranslator {
     ssa: Vec<Instruction>,
     consts: Vec<Complex<f64>>, // constants
     count_params: usize,
+    count_outs: usize,
     count_statics: usize,
     // eqs: Vec<Equation>,            // Symjit Equations (output)
-    temps: HashMap<usize, Slot>,   // Temp idx => Static idx
+    temps: HashMap<Slot, Slot>,    // Temp idx => Static idx
     counts: HashMap<usize, usize>, // Static idx => number of usage on the RHS
     cache: HashMap<usize, Node>,   // cache of Static variables (Static idx => Node)
-    outs: HashMap<usize, Node>,    // cache of Outs (Out idx => Node)
+    outs: HashMap<usize, Slot>,    // cache of Outs (Out idx => Node)
     reals: HashSet<Loc>,
     num_params: usize,
     has_jump: bool,
@@ -625,7 +626,7 @@ impl Composer for IndirectTranslator {
     }
 
     fn append_if_else(&mut self, cond: &Slot, id: usize) -> Result<()> {
-        self.has_jump = true;
+        // self.has_jump = true;
         let cond = self.consume(cond)?;
         self.ssa.push(Instruction::IfElse(cond, id));
         self.depth += 1;
@@ -713,6 +714,7 @@ impl IndirectTranslator {
             ssa: Vec::new(),
             consts: Vec::new(),
             count_params: 0,
+            count_outs: 0,
             count_statics: 0,
             // eqs: Vec::new(),
             temps: HashMap::new(),
@@ -740,19 +742,35 @@ impl IndirectTranslator {
     /// slot should be an LHS.
     fn produce(&mut self, slot: &Slot) -> Result<Slot> {
         match slot {
-            Slot::Temp(idx) => {
-                if self.depth > 0 {
-                    if let Some(Slot::Static(s)) = self.temps.get(idx) {
-                        *self.counts.get_mut(s).unwrap() += 1;
-                        return Ok(Slot::Static(*s));
-                    }
+            Slot::Temp(_) => {
+                /*
+                if let Some(Slot::Static(s)) = self.temps.get(&slot) {
+                    *self.counts.get_mut(s).unwrap() += 1;
+                    return Ok(Slot::Static(*s));
                 }
+                */
 
                 let s = self.create_static()?;
-                self.temps.insert(*idx, s);
+                self.temps.insert(*slot, s);
                 Ok(s)
             }
-            Slot::Out(idx) => Ok(Slot::Out(*idx)),
+            Slot::Out(idx) => {
+                /*
+                if let Some(Slot::Static(s)) = self.temps.get(&slot) {
+                    *self.counts.get_mut(s).unwrap() += 1;
+                    return Ok(Slot::Static(*s));
+                }
+                */
+
+                let s = self.create_static()?;
+                self.temps.insert(*slot, s);
+
+                self.count_outs = self.count_outs.max(*idx + 1);
+                self.outs.insert(*idx, s);
+
+                Ok(s)
+            }
+            // Slot::Out(idx) => Ok(Slot::Out(*idx)),
             _ => Err(anyhow!("unacceptable lhs.")),
         }
     }
@@ -761,15 +779,15 @@ impl IndirectTranslator {
     /// slot should be an RHS.
     fn consume(&mut self, slot: &Slot) -> Result<Slot> {
         match slot {
-            Slot::Temp(idx) => {
-                if let Some(Slot::Static(s)) = self.temps.get(idx) {
+            Slot::Temp(_) | Slot::Out(_) => {
+                if let Some(Slot::Static(s)) = self.temps.get(slot) {
                     *self.counts.get_mut(s).unwrap() += 1;
                     Ok(Slot::Static(*s))
                 } else {
                     Err(anyhow!("Not a static reg."))
                 }
             }
-            Slot::Out(idx) => Ok(Slot::Out(*idx)),
+            // Slot::Out(idx) => Ok(Slot::Out(*idx)),
             Slot::Param(idx) => Ok(Slot::Param(*idx)),
             Slot::Const(idx) => Ok(Slot::Const(*idx)),
             Slot::Static(_) | Slot::Arg(_) => Err(anyhow!("Undefined Static/Arg.")),
@@ -802,10 +820,6 @@ impl IndirectTranslator {
     fn binop(&mut self, op: Operation, left: Node, right: Node) -> Result<Node> {
         assert!(op.is_plus() || op.is_times());
         self.builder.create_binary(op, left, right)
-    }
-
-    fn assignment(&mut self, lhs: Node, rhs: Node) -> Result<()> {
-        self.builder.add_assign(lhs, rhs).map(|_| ())
     }
 
     /// The second pass. It translates the SSA-form into a Symjit model.
@@ -841,24 +855,26 @@ impl IndirectTranslator {
         }
 
         // Important! Outs are cached and should be written to final outputs.
-        for k in 0..self.outs.len() {
+        for k in 0..self.count_outs {
             let name = &format!("Mem{}", k);
             let loc = Loc::Mem((self.slot_size * k) as u32);
             self.builder.symbol_table().add_mem_loc(name, loc);
             let out = self.var_node(name);
-
-            if let Some(eq) = self.outs.get(&k) {
-                self.assignment(out, eq.clone())?;
+            //let eq = self.outs.get(&k).unwrap();
+            if let Slot::Static(s) = self.outs.get(&k).unwrap() {
+                let eq = self.var_node(&format!("__Static{}", s));
+                self.builder.add_assign(out, eq.clone()).unwrap();
+            } else {
+                panic!("output var {} not found.", k);
             }
         }
-
-        // println!("{:?}", &self.builder);
 
         let prog = Program {
             builder: std::mem::take(&mut self.builder),
             count_states: 0,
             count_params: self.slot_size * self.count_params.max(self.num_params),
-            count_obs: self.slot_size * self.outs.len(),
+            // count_obs: self.slot_size * self.outs.len(),
+            count_obs: self.slot_size * self.count_outs,
             count_diffs: 0,
             count_loops: 0,
         };
@@ -882,12 +898,12 @@ impl IndirectTranslator {
                 self.var_node(name)
             }
             Slot::Out(idx) => {
-                if let Some(e) = self.outs.get(idx) {
-                    e.clone()
-                } else {
-                    let name = &format!("Out{}", idx);
-                    self.builder.block().create_tmp_named(name)
-                }
+                //if let Some(e) = self.outs.get(idx) {
+                //    e.clone()
+                //} else {
+                let name = &format!("Out{}", idx);
+                self.builder.block().create_tmp_named(name)
+                //}
             }
             Slot::Temp(idx) => {
                 let name = &format!("__Temp{}", idx);
@@ -929,14 +945,14 @@ impl IndirectTranslator {
                 }
             }
 
-            if let Slot::Out(idx) = lhs {
-                self.outs.insert(*idx, rhs.clone());
-                return Ok(());
-            }
+            // if let Slot::Out(idx) = lhs {
+            //    self.outs.insert(*idx, rhs.clone());
+            //    return Ok(());
+            //}
         }
 
         let lhs = self.expr(lhs, false);
-        self.assignment(lhs, rhs)
+        self.builder.add_assign(lhs, rhs).map(|_| ())
     }
 
     fn binary_tree(&mut self, op: Operation, args: &[Node]) -> Node {
@@ -980,9 +996,8 @@ impl IndirectTranslator {
 
     fn translate_pow(&mut self, lhs: &Slot, arg: &Slot, power: Node, is_real: bool) -> Result<()> {
         let arg = self.expr(arg, is_real);
-        let lhs = self.expr(lhs, false);
         let rhs = self.binary_node("power", arg, power)?;
-        self.assignment(lhs, rhs)
+        self.assign(lhs, rhs)
     }
 
     fn translate_assign(&mut self, lhs: &Slot, rhs: &Slot) -> Result<()> {
@@ -1095,8 +1110,10 @@ impl IndirectTranslator {
     }
 
     fn translate_goto(&mut self, id: usize) -> Result<()> {
-        let label = format!("L.{}", id);
-        self.builder.block().add_branch(&label);
+        if !self.config.simd_branch() || !self.config.symbolica() {
+            let label = format!("L.{}", id);
+            self.builder.block().add_branch(&label);
+        }
         Ok(())
     }
 

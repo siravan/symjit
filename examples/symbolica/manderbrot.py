@@ -6,7 +6,7 @@ from symjit import compile_evaluator
 x, y, c = S("x"), S("y"), S("c")
 
 z = E("c")
-for _ in range(2):
+for _ in range(20):
     z = z**2 + c
 
 z = z.abs()
@@ -17,7 +17,7 @@ f = compile_evaluator(
 )
 
 # print(ev.get_instructions())
-# print(f.dumps("simd"))
+print(f.dumps("bytecode"))
 
 A, B = np.meshgrid(np.arange(-2, 1, 0.002), np.arange(-1.5, 1.5, 0.002))
 C = (A + B * 1j).reshape((-1, 1))
