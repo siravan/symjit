@@ -17,7 +17,7 @@ f = compile_evaluator(
 )
 
 # print(ev.get_instructions())
-print(f.dumps("bytecode"))
+# print(f.dumps("bytecode"))
 
 A, B = np.meshgrid(np.arange(-2, 1, 0.002), np.arange(-1.5, 1.5, 0.002))
 C = (A + B * 1j).reshape((-1, 1))

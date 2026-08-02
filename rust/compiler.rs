@@ -743,24 +743,20 @@ impl IndirectTranslator {
     fn produce(&mut self, slot: &Slot) -> Result<Slot> {
         match slot {
             Slot::Temp(_) => {
-                /*
                 if let Some(Slot::Static(s)) = self.temps.get(&slot) {
                     *self.counts.get_mut(s).unwrap() += 1;
                     return Ok(Slot::Static(*s));
                 }
-                */
 
                 let s = self.create_static()?;
                 self.temps.insert(*slot, s);
                 Ok(s)
             }
             Slot::Out(idx) => {
-                /*
                 if let Some(Slot::Static(s)) = self.temps.get(&slot) {
                     *self.counts.get_mut(s).unwrap() += 1;
                     return Ok(Slot::Static(*s));
                 }
-                */
 
                 let s = self.create_static()?;
                 self.temps.insert(*slot, s);
