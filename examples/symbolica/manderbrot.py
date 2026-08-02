@@ -6,7 +6,7 @@ from symjit import compile_evaluator
 x, y, c = S("x"), S("y"), S("c")
 
 z = E("c")
-for _ in range(20):
+for _ in range(2):
     z = z**2 + c
 
 z = z.abs()

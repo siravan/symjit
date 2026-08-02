@@ -5,12 +5,14 @@ use num_complex::Complex;
 use rand::distr::{Alphanumeric, SampleString};
 
 use super::applet::{recast_as_f64, recast_as_f64_mut};
+use super::builder::Builder;
 use super::code::VirtualTable;
 use super::composer::{Composer, DirectTranslator};
 use super::config::{Config, SLICE_CAP};
 use super::expr::Expr;
 use super::instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
 use super::model::{CellModel, Equation, Program, Variable};
+use super::node::Node;
 use super::operation::Operation;
 use super::parser::Parser;
 use super::symbol::Loc;
@@ -557,16 +559,18 @@ pub struct IndirectTranslator {
     consts: Vec<Complex<f64>>, // constants
     count_params: usize,
     count_statics: usize,
-    eqs: Vec<Equation>,            // Symjit Equations (output)
+    // eqs: Vec<Equation>,            // Symjit Equations (output)
     temps: HashMap<usize, Slot>,   // Temp idx => Static idx
     counts: HashMap<usize, usize>, // Static idx => number of usage on the RHS
-    cache: HashMap<usize, Expr>,   // cache of Static variables (Static idx => Expr)
-    outs: HashMap<usize, Expr>,    // cache of Outs (Out idx => Expr)
+    cache: HashMap<usize, Node>,   // cache of Static variables (Static idx => Node)
+    outs: HashMap<usize, Node>,    // cache of Outs (Out idx => Node)
     reals: HashSet<Loc>,
     num_params: usize,
     has_jump: bool,
     last_label: usize,
     depth: usize,
+    builder: Builder,
+    slot_size: usize,
 }
 
 impl Composer for IndirectTranslator {
@@ -693,8 +697,7 @@ impl Composer for IndirectTranslator {
     }
 
     fn compile(&mut self) -> Result<Application> {
-        let (ml, reals) = self.translate()?;
-        let prog = Program::new(&ml, self.config.clone())?;
+        let (prog, reals) = self.translate()?;
         let mut app = Application::new(prog, reals)?;
         app.prepare_simd();
         Ok(app)
@@ -703,13 +706,15 @@ impl Composer for IndirectTranslator {
 
 impl IndirectTranslator {
     pub fn new(config: Config) -> IndirectTranslator {
+        let slot_size = if config.is_complex() { 2 } else { 1 };
+
         IndirectTranslator {
-            config,
+            config: config.clone(),
             ssa: Vec::new(),
             consts: Vec::new(),
             count_params: 0,
             count_statics: 0,
-            eqs: Vec::new(),
+            // eqs: Vec::new(),
             temps: HashMap::new(),
             counts: HashMap::new(),
             cache: HashMap::new(),
@@ -719,6 +724,8 @@ impl IndirectTranslator {
             has_jump: false,
             last_label: 0,
             depth: 0,
+            builder: Builder::new(config),
+            slot_size,
         }
     }
 
@@ -773,8 +780,36 @@ impl IndirectTranslator {
         slots.iter().map(|s| self.consume(s)).collect()
     }
 
+    /* helper Node functions */
+
+    fn unary_node(&mut self, op: &str, arg: Node) -> Result<Node> {
+        self.builder.add_unary(Operation::new_checked(op), arg)
+    }
+
+    fn binary_node(&mut self, op: &str, left: Node, right: Node) -> Result<Node> {
+        self.builder
+            .add_binary(Operation::new_checked(op), left, right)
+    }
+
+    fn const_node(&mut self, val: f64) -> Node {
+        self.builder.create_const(val).unwrap()
+    }
+
+    fn var_node(&mut self, name: &str) -> Node {
+        self.builder.create_var(name).unwrap()
+    }
+
+    fn binop(&mut self, op: Operation, left: Node, right: Node) -> Result<Node> {
+        assert!(op.is_plus() || op.is_times());
+        self.builder.create_binary(op, left, right)
+    }
+
+    fn assignment(&mut self, lhs: Node, rhs: Node) -> Result<()> {
+        self.builder.add_assign(lhs, rhs).map(|_| ())
+    }
+
     /// The second pass. It translates the SSA-form into a Symjit model.
-    pub fn translate(&mut self) -> Result<(CellModel, HashSet<Loc>)> {
+    pub fn translate(&mut self) -> Result<(Program, HashSet<Loc>)> {
         let ssa = std::mem::take(&mut self.ssa);
 
         for line in ssa.iter() {
@@ -782,12 +817,12 @@ impl IndirectTranslator {
                 Instruction::Add(lhs, args, n) => self.translate_nary("plus", lhs, args, *n)?,
                 Instruction::Mul(lhs, args, n) => self.translate_nary("times", lhs, args, *n)?,
                 Instruction::Pow(lhs, arg, p, is_real) => {
-                    let p = Expr::from(*p as f64);
-                    self.translate_pow(lhs, arg, &p, *is_real)?
+                    let p = self.const_node(*p as f64);
+                    self.translate_pow(lhs, arg, p, *is_real)?
                 }
                 Instruction::Powf(lhs, arg, p, is_real) => {
                     let p = self.expr(p, false);
-                    self.translate_pow(lhs, arg, &p, *is_real)?
+                    self.translate_pow(lhs, arg, p, *is_real)?
                 }
                 Instruction::Assign(lhs, rhs) => self.translate_assign(lhs, rhs)?,
                 Instruction::Fun(lhs, fun, args, is_real) => {
@@ -805,92 +840,84 @@ impl IndirectTranslator {
             }
         }
 
-        let mut params: Vec<Variable> = Vec::new();
-
         // Important! Outs are cached and should be written to final outputs.
         for k in 0..self.outs.len() {
-            let out = Expr::var(&format!("Out{}", k));
+            let name = &format!("Mem{}", k);
+            let loc = Loc::Mem((self.slot_size * k) as u32);
+            self.builder.symbol_table().add_mem_loc(name, loc);
+            let out = self.var_node(name);
 
             if let Some(eq) = self.outs.get(&k) {
-                if self.config.direct_arena() && !self.config.direct_arena_identity_output() {
-                    let coef = Expr::var(&format!("Coef{}", k));
-                    params.push(coef.to_variable()?);
-                    self.eqs
-                        .push(Expr::equation(&out, &Expr::binary("times", eq, &coef)));
-                } else {
-                    self.eqs.push(Expr::equation(&out, eq));
-                }
+                self.assignment(out, eq.clone())?;
             }
         }
 
-        let mut states: Vec<Variable> = (0..=self.count_params.max(self.num_params.max(1) - 1))
-            .map(|idx| self.expr(&Slot::Param(idx), false).to_variable().unwrap())
-            .collect();
+        // println!("{:?}", &self.builder);
 
-        // let mut states: Vec<Variable> = Vec::new();
+        let prog = Program {
+            builder: std::mem::take(&mut self.builder),
+            count_states: 0,
+            count_params: self.slot_size * self.count_params.max(self.num_params),
+            count_obs: self.slot_size * self.outs.len(),
+            count_diffs: 0,
+            count_loops: 0,
+        };
 
-        if self.config.symbolica() && !self.config.direct_arena() {
-            (params, states) = (states, params)
-        }
-
-        Ok((
-            CellModel {
-                iv: Expr::var("$_").to_variable().unwrap(),
-                params,
-                states,
-                algs: Vec::new(),
-                odes: Vec::new(),
-                obs: self.eqs.clone(),
-            },
-            self.reals.clone(),
-        ))
+        Ok((prog, self.reals.clone()))
     }
 
     // The counterpart of consume for the second-pass
-    fn expr(&mut self, slot: &Slot, is_real: bool) -> Expr {
+    fn expr(&mut self, slot: &Slot, is_real: bool) -> Node {
         match slot {
             Slot::Param(idx) => {
+                let name = &format!("Param{}", idx);
+                let loc = Loc::Param((self.slot_size * *idx) as u32);
+
                 if is_real {
-                    self.reals.insert(Loc::Param(*idx as u32));
+                    self.reals.insert(loc);
                 }
-                self.count_params = self.count_params.max(*idx);
-                Expr::var(&format!("Param{}", idx))
+
+                self.count_params = self.count_params.max(*idx + 1);
+                self.builder.symbol_table().add_param_loc(name, loc);
+                self.var_node(name)
             }
             Slot::Out(idx) => {
                 if let Some(e) = self.outs.get(idx) {
                     e.clone()
                 } else {
-                    Expr::var(&format!("Out{}", idx))
+                    let name = &format!("Out{}", idx);
+                    self.builder.block().create_tmp_named(name)
                 }
             }
-            Slot::Temp(idx) => Expr::var(&format!("__Temp{}", idx)),
+            Slot::Temp(idx) => {
+                let name = &format!("__Temp{}", idx);
+                self.builder.block().create_tmp_named(name)
+            }
             Slot::Const(idx) => {
                 let val = self.consts[*idx];
                 if val.im != 0.0 {
-                    Expr::binary("complex", &Expr::from(val.re), &Expr::from(val.im))
+                    let re = self.const_node(self.consts[*idx].re);
+                    let im = self.const_node(self.consts[*idx].im);
+                    self.binary_node("complex", re, im).unwrap()
                 } else {
-                    Expr::from(self.consts[*idx].re)
+                    self.const_node(self.consts[*idx].re)
                 }
             }
             Slot::Static(idx) => {
-                let s = format!("__Static{}", idx);
-                self.cache.remove(idx).unwrap_or(Expr::var(&s))
-
-                /*
-                let p = if let Some(v) = self.cache.get(idx) {
-                    v.clone()
-                } else {
-                    Expr::var(&s)
-                };
-                p
-                */
+                let name = format!("__Static{}", idx);
+                self.cache
+                    .remove(idx)
+                    .unwrap_or(self.builder.block().create_tmp_named(&name))
             }
-            Slot::Arg(idx) => Expr::var(&format!("__Arg{}", idx)),
+            Slot::Arg(idx) => {
+                let name = &format!("__Arg{}", idx);
+                self.var_node(name)
+            }
         }
     }
 
     // The counterpart of produce for the second-pass
-    fn assign(&mut self, lhs: &Slot, rhs: Expr) -> Result<()> {
+    fn assign(&mut self, lhs: &Slot, rhs: Node) -> Result<()> {
         if !self.has_jump {
             if let Slot::Static(idx) = lhs {
                 // Important! If a static variable is used only once, it
@@ -909,36 +936,53 @@ impl IndirectTranslator {
         }
 
         let lhs = self.expr(lhs, false);
-        self.eqs.push(Expr::equation(&lhs, &rhs));
-        Ok(())
+        self.assignment(lhs, rhs)
+    }
+
+    fn binary_tree(&mut self, op: Operation, args: &[Node]) -> Node {
+        if args.len() == 1 {
+            args[0].clone()
+        } else {
+            let k = args.len() / 2;
+            let left = self.binary_tree(op.clone(), &args[..k]);
+            let right = self.binary_tree(op.clone(), &args[k..]);
+            self.binop(op, left, right).unwrap()
+        }
     }
 
     fn translate_nary(&mut self, op: &str, lhs: &Slot, args: &[Slot], n: usize) -> Result<()> {
         if args.len() == 2 && op == "times" && args[0] == args[1] {
-            return self.translate_pow(lhs, &args[0], &Expr::from(2.0), n != 0);
+            let c = self.const_node(2.0);
+            return self.translate_pow(lhs, &args[0], c, n != 0);
         } else if args.len() == 3 && op == "times" && args[0] == args[1] && args[1] == args[2] {
-            return self.translate_pow(lhs, &args[0], &Expr::from(3.0), n != 0);
+            let c = self.const_node(3.0);
+            return self.translate_pow(lhs, &args[0], c, n != 0);
         }
 
-        let args: Vec<Expr> = args
+        let args: Vec<Node> = args
             .iter()
             .enumerate()
             .map(|(i, x)| self.expr(x, i < n))
             .collect();
-        let p: Vec<&Expr> = args.iter().collect();
 
-        if n == 0 || n >= p.len() {
-            self.assign(lhs, Expr::nary(op, &p))
+        let op = Operation::new_checked(op);
+
+        if n == 0 || n >= args.len() {
+            let rhs = self.binary_tree(op, &args);
+            self.assign(lhs, rhs)
         } else {
-            let l = Expr::nary(op, &p[..n]);
-            let r = Expr::nary(op, &p[n..]);
-            self.assign(lhs, Expr::nary(op, &[&l, &r]))
+            let l = self.binary_tree(op.clone(), &args[..n]);
+            let r = self.binary_tree(op.clone(), &args[n..]);
+            let rhs = self.binop(op, l, r)?;
+            self.assign(lhs, rhs)
         }
     }
 
-    fn translate_pow(&mut self, lhs: &Slot, arg: &Slot, power: &Expr, is_real: bool) -> Result<()> {
+    fn translate_pow(&mut self, lhs: &Slot, arg: &Slot, power: Node, is_real: bool) -> Result<()> {
         let arg = self.expr(arg, is_real);
-        self.assign(lhs, Expr::binary("power", &arg, power))
+        let lhs = self.expr(lhs, false);
+        let rhs = self.binary_node("power", arg, power)?;
+        self.assignment(lhs, rhs)
     }
 
     fn translate_assign(&mut self, lhs: &Slot, rhs: &Slot) -> Result<()> {
@@ -966,26 +1010,48 @@ impl IndirectTranslator {
             }
         }
 
-        let args: Vec<Expr> = if is_real {
+        /*
+        let args: Vec<Node> = if is_real {
             args.iter()
-                .map(|a| Expr::unary("real", &self.expr(a, true)))
+                .map(|a| {
+                    self.builder
+                        .create_unary(Operation::new("real"), self.expr(a, true))
+                        .unwrap()
+                })
                 .collect()
         } else {
             args.iter().map(|a| self.expr(a, false)).collect()
         };
+        */
+
+        let mut v: Vec<Node> = Vec::new();
+        for a in args.iter() {
+            let p = self.expr(a, true);
+            if is_real {
+                let arg = self.unary_node("real", p)?;
+                v.push(arg);
+            } else {
+                v.push(p);
+            }
+        }
+        let mut args = v;
 
         if VirtualTable::from_str(op).is_ok() || op.starts_with("composer_") {
             if n == 1 {
-                self.assign(lhs, Expr::unary(op, &args[0]))?;
+                let rhs = self.unary_node(op, args.remove(0))?;
+                self.assign(lhs, rhs)?;
             } else if n == 2 {
-                self.assign(lhs, Expr::binary(op, &args[0], &args[1]))?;
+                let rhs = self.binary_node(op, args.remove(0), args.remove(0))?;
+                self.assign(lhs, rhs)?;
             } else {
                 return Err(anyhow!("wrong number of arguments to {:?}", op));
             }
         } else if self.config.is_intrinsic_unary(&Operation::new(op)) && n == 1 {
-            self.assign(lhs, Expr::unary(op, &args[0]))?;
+            let rhs = self.unary_node(op, args.remove(0))?;
+            self.assign(lhs, rhs)?;
         } else if self.config.is_intrinsic_binary(&Operation::new(op)) && n == 2 {
-            self.assign(lhs, Expr::binary(op, &args[0], &args[1]))?;
+            let rhs = self.binary_node(op, args.remove(0), args.remove(0))?;
+            self.assign(lhs, rhs)?;
         } else {
             let temps: Vec<Slot> = (0..n).map(|_| self.create_static().unwrap()).collect();
             let slice: Vec<Slot> = (0..n).map(Slot::Arg).collect();
@@ -996,40 +1062,41 @@ impl IndirectTranslator {
 
             for i in 0..n {
                 if let Slot::Static(idx) = temps[i] {
-                    self.assign(&slice[i], Expr::var(&format!("__Static{}", idx)))?;
+                    let n = self
+                        .builder
+                        .create_var(&format!("__Static{}", idx))
+                        .unwrap();
+                    self.assign(&slice[i], n)?;
                 }
             }
 
             let op = format!("${}", op);
-            self.assign(
-                lhs,
-                Expr::binary(&op, &Expr::from(0), &Expr::from(n as i32)),
-            )?;
+            let l = self.const_node(0.0);
+            let r = self.const_node(n as f64);
+            let n = self.binary_node(op.as_str(), l, r)?;
+            self.assign(lhs, n)?;
         }
 
         Ok(())
     }
 
     fn translate_label(&mut self, id: usize) -> Result<()> {
-        self.eqs.push(Expr::special(&Expr::Label { id }));
+        let label = format!("L.{}", id);
+        self.builder.block().add_label(&label);
         Ok(())
     }
 
     fn translate_ifelse(&mut self, cond: &Slot, id: usize) -> Result<()> {
-        let if_clause = Expr::unary("iszero", &self.expr(cond, false));
-        self.eqs.push(Expr::special(&Expr::BranchIf {
-            cond: Box::new(if_clause),
-            id,
-            is_else: true,
-        }));
+        let label = format!("L.{}", id);
+        let cond = self.expr(cond, false);
+        let if_clause = self.unary_node("iszero", cond)?;
+        self.builder.block().add_branch_if(if_clause, &label, true);
         Ok(())
     }
 
     fn translate_goto(&mut self, id: usize) -> Result<()> {
-        if !self.config.simd_branch() || !self.config.symbolica() {
-            self.eqs.push(Expr::special(&Expr::Branch { id }));
-        }
-
+        let label = format!("L.{}", id);
+        self.builder.block().add_branch(&label);
         Ok(())
     }
 
@@ -1043,8 +1110,10 @@ impl IndirectTranslator {
         // Join is essentially a Φ-function.
         let t = self.expr(true_val, false);
         let f = self.expr(false_val, false);
-        let if_clause = Expr::unary("iszero", &self.expr(cond, false));
-        self.assign(lhs, if_clause.ifelse(&f, &t))?;
+        let cond = self.expr(cond, false);
+        let if_clause = self.unary_node("iszero", cond)?;
+        let rhs = self.builder.create_ifelse(if_clause, f, t).unwrap();
+        self.assign(lhs, rhs)?;
         Ok(())
     }
 }

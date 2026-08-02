@@ -117,11 +117,29 @@ impl SymbolTable {
         }
     }
 
+    pub fn add_mem_loc(&mut self, name: &str, loc: Loc) {
+        if self.find_sym(name).is_none() {
+            if let Loc::Mem(idx) = loc {
+                self.num_mem = self.num_mem.max(idx as usize);
+                self.add_sym(name, loc);
+            }
+        }
+    }
+
     pub fn add_param(&mut self, name: &str) {
         if self.find_sym(name).is_none() {
             let loc = Loc::Param(self.num_param as u32);
             self.num_param += self.slot_size;
             self.add_sym(name, loc);
+        }
+    }
+
+    pub fn add_param_loc(&mut self, name: &str, loc: Loc) {
+        if self.find_sym(name).is_none() {
+            if let Loc::Param(idx) = loc {
+                self.num_param = self.num_param.max(idx as usize);
+                self.add_sym(name, loc);
+            }
         }
     }
 
