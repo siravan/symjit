@@ -560,12 +560,12 @@ pub struct IndirectTranslator {
     count_params: usize,
     count_outs: usize,
     count_statics: usize,
-    temps: HashMap<Slot, Slot>,    // Temp idx => Static idx
+    temps: HashMap<Slot, Slot>,    // Temp/Out Slot => Static Slot
     counts: HashMap<usize, usize>, // Static idx => number of usage on the RHS
     cache: HashMap<usize, Node>,   // cache of Static variables (Static idx => Node)
-    outs: HashMap<usize, Slot>,    // cache of Outs (Out idx => Node)
-    reals: HashSet<Loc>,
-    join_rhs: HashSet<Slot>,
+    outs: HashMap<usize, Slot>,    // cache of Outs (Out idx => Static Slot)
+    reals: HashSet<Loc>,           // list of real Loc
+    join_rhs: HashSet<Slot>, // the set of Static slots used in the RHS of a Join operation (cannot move)
     num_params: usize,
     last_label: usize,
     builder: Builder,
@@ -1020,7 +1020,7 @@ impl IndirectTranslator {
 
         let mut v: Vec<Node> = Vec::new();
         for a in args.iter() {
-            let p = self.expr(a, true);
+            let p = self.expr(a, is_real);
             if is_real {
                 let arg = self.unary_node("real", p)?;
                 v.push(arg);

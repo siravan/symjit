@@ -246,7 +246,7 @@ impl Block {
      * In the second pass, the right side of statements are rewritten.
      */
     pub fn eliminate(&mut self) {
-        for _ in 0..5 {
+        for _ in 0..2 {
             if !self.elimination_pass() {
                 return;
             }

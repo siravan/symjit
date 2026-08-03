@@ -257,7 +257,7 @@ impl Builder {
             Operation::Plus if right.is_unary("neg") => {
                 self.create_binary(Operation::Minus, left, right.arg().unwrap())?
             }
-            Operation::Op(s) => match (s.as_str()) {
+            Operation::Op(s) => match s.as_str() {
                 "rem" if left.is_unary("_powi_") && !self.config.is_complex() => {
                     let (arg, power) = left.arg_power().unwrap();
                     self.create_modular_powi(arg, right, power)?

@@ -183,8 +183,8 @@ fn allocate_stack(a: &mut Assembler, size: u32, _with_arena: bool) {
     if size < 2048 {
         emit(a, rvv! {addi x(RiscV::sp), x(RiscV::sp), -(size as i32)});
     } else {
-        emit(a, rvv! {lui x(RiscV::t0), hi(size as u32)});
-        emit(a, rvv! {addi x(RiscV::t0), x(RiscV::t0), lo(size as u32)});
+        emit(a, rvv! {lui x(RiscV::t0), hi(size)});
+        emit(a, rvv! {addi x(RiscV::t0), x(RiscV::t0), lo(size)});
         emit(a, rvv! {sub x(RiscV::sp), x(RiscV::sp), x(RiscV::t0)});
     }
 

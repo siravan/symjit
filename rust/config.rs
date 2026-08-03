@@ -884,7 +884,7 @@ impl Config {
 
             if self.is_intrinsic_unary(&oper)
                 || self.is_intrinsic_binary(&oper)
-                || (!self.is_complex() && VirtualTable::from_str(&op).is_ok())
+                || (!self.is_complex() && VirtualTable::from_str(op).is_ok())
                 || (self.is_complex() && VirtualTable::from_str(&format!("cplx_{}", op)).is_ok())
             {
                 op.into()
