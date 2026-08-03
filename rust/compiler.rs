@@ -560,18 +560,17 @@ pub struct IndirectTranslator {
     count_params: usize,
     count_outs: usize,
     count_statics: usize,
-    // eqs: Vec<Equation>,            // Symjit Equations (output)
     temps: HashMap<Slot, Slot>,    // Temp idx => Static idx
     counts: HashMap<usize, usize>, // Static idx => number of usage on the RHS
     cache: HashMap<usize, Node>,   // cache of Static variables (Static idx => Node)
     outs: HashMap<usize, Slot>,    // cache of Outs (Out idx => Node)
     reals: HashSet<Loc>,
+    join_rhs: HashSet<Slot>,
     num_params: usize,
-    has_jump: bool,
     last_label: usize,
-    depth: usize,
     builder: Builder,
     slot_size: usize,
+    arena_mode: bool,
 }
 
 impl Composer for IndirectTranslator {
@@ -626,10 +625,8 @@ impl Composer for IndirectTranslator {
     }
 
     fn append_if_else(&mut self, cond: &Slot, id: usize) -> Result<()> {
-        // self.has_jump = true;
         let cond = self.consume(cond)?;
         self.ssa.push(Instruction::IfElse(cond, id));
-        self.depth += 1;
         Ok(())
     }
 
@@ -689,7 +686,8 @@ impl Composer for IndirectTranslator {
         let lhs = self.produce(lhs)?;
         self.ssa
             .push(Instruction::Join(lhs, cond, true_val, false_val));
-        self.depth -= 1;
+        self.join_rhs.insert(true_val);
+        self.join_rhs.insert(false_val);
         Ok(())
     }
 
@@ -708,6 +706,7 @@ impl Composer for IndirectTranslator {
 impl IndirectTranslator {
     pub fn new(config: Config) -> IndirectTranslator {
         let slot_size = if config.is_complex() { 2 } else { 1 };
+        let arena_mode = config.direct_arena();
 
         IndirectTranslator {
             config: config.clone(),
@@ -716,18 +715,17 @@ impl IndirectTranslator {
             count_params: 0,
             count_outs: 0,
             count_statics: 0,
-            // eqs: Vec::new(),
             temps: HashMap::new(),
             counts: HashMap::new(),
             cache: HashMap::new(),
             outs: HashMap::new(),
             reals: HashSet::new(),
+            join_rhs: HashSet::new(),
             num_params: 0,
-            has_jump: false,
             last_label: 0,
-            depth: 0,
             builder: Builder::new(config),
             slot_size,
+            arena_mode,
         }
     }
 
@@ -743,21 +741,11 @@ impl IndirectTranslator {
     fn produce(&mut self, slot: &Slot) -> Result<Slot> {
         match slot {
             Slot::Temp(_) => {
-                if let Some(Slot::Static(s)) = self.temps.get(&slot) {
-                    *self.counts.get_mut(s).unwrap() += 1;
-                    return Ok(Slot::Static(*s));
-                }
-
                 let s = self.create_static()?;
                 self.temps.insert(*slot, s);
                 Ok(s)
             }
             Slot::Out(idx) => {
-                if let Some(Slot::Static(s)) = self.temps.get(&slot) {
-                    *self.counts.get_mut(s).unwrap() += 1;
-                    return Ok(Slot::Static(*s));
-                }
-
                 let s = self.create_static()?;
                 self.temps.insert(*slot, s);
 
@@ -766,7 +754,6 @@ impl IndirectTranslator {
 
                 Ok(s)
             }
-            // Slot::Out(idx) => Ok(Slot::Out(*idx)),
             _ => Err(anyhow!("unacceptable lhs.")),
         }
     }
@@ -783,7 +770,6 @@ impl IndirectTranslator {
                     Err(anyhow!("Not a static reg."))
                 }
             }
-            // Slot::Out(idx) => Ok(Slot::Out(*idx)),
             Slot::Param(idx) => Ok(Slot::Param(*idx)),
             Slot::Const(idx) => Ok(Slot::Const(*idx)),
             Slot::Static(_) | Slot::Arg(_) => Err(anyhow!("Undefined Static/Arg.")),
@@ -824,8 +810,12 @@ impl IndirectTranslator {
 
         for line in ssa.iter() {
             match line {
-                Instruction::Add(lhs, args, n) => self.translate_nary("plus", lhs, args, *n)?,
-                Instruction::Mul(lhs, args, n) => self.translate_nary("times", lhs, args, *n)?,
+                Instruction::Add(lhs, args, n) => {
+                    self.translate_nary(Operation::Plus, lhs, args, *n)?
+                }
+                Instruction::Mul(lhs, args, n) => {
+                    self.translate_nary(Operation::Times, lhs, args, *n)?
+                }
                 Instruction::Pow(lhs, arg, p, is_real) => {
                     let p = self.const_node(*p as f64);
                     self.translate_pow(lhs, arg, p, *is_real)?
@@ -851,25 +841,37 @@ impl IndirectTranslator {
         }
 
         // Important! Outs are cached and should be written to final outputs.
+        let base = if self.arena_mode {
+            self.count_params
+        } else {
+            0
+        };
+
         for k in 0..self.count_outs {
             let name = &format!("Mem{}", k);
-            let loc = Loc::Mem((self.slot_size * k) as u32);
+            let loc = Loc::Mem((self.slot_size * (base + k)) as u32);
             self.builder.symbol_table().add_mem_loc(name, loc);
             let out = self.var_node(name);
-            //let eq = self.outs.get(&k).unwrap();
-            if let Slot::Static(s) = self.outs.get(&k).unwrap() {
-                let eq = self.var_node(&format!("__Static{}", s));
-                self.builder.add_assign(out, eq.clone()).unwrap();
-            } else {
-                panic!("output var {} not found.", k);
+
+            match self.outs.get(&k) {
+                Some(Slot::Static(s)) => {
+                    let eq = self.var_node(&format!("__Static{}", s));
+                    self.builder.add_assign(out, eq).unwrap();
+                }
+                _ => {
+                    return Err(anyhow!("output var {} not found.", k));
+                }
             }
         }
 
+        let np = self.slot_size * self.count_params.max(self.num_params);
+        let count_states = if self.arena_mode { np } else { 0 };
+        let count_params = if self.arena_mode { 0 } else { np };
+
         let prog = Program {
             builder: std::mem::take(&mut self.builder),
-            count_states: 0,
-            count_params: self.slot_size * self.count_params.max(self.num_params),
-            // count_obs: self.slot_size * self.outs.len(),
+            count_states,
+            count_params,
             count_obs: self.slot_size * self.count_outs,
             count_diffs: 0,
             count_loops: 0,
@@ -883,23 +885,26 @@ impl IndirectTranslator {
         match slot {
             Slot::Param(idx) => {
                 let name = &format!("Param{}", idx);
-                let loc = Loc::Param((self.slot_size * *idx) as u32);
+                let loc = if self.arena_mode {
+                    let loc = Loc::Mem((self.slot_size * *idx) as u32);
+                    self.builder.symbol_table().add_mem_loc(name, loc);
+                    loc
+                } else {
+                    let loc = Loc::Param((self.slot_size * *idx) as u32);
+                    self.builder.symbol_table().add_param_loc(name, loc);
+                    loc
+                };
 
                 if is_real {
                     self.reals.insert(loc);
                 }
 
                 self.count_params = self.count_params.max(*idx + 1);
-                self.builder.symbol_table().add_param_loc(name, loc);
                 self.var_node(name)
             }
             Slot::Out(idx) => {
-                //if let Some(e) = self.outs.get(idx) {
-                //    e.clone()
-                //} else {
                 let name = &format!("Out{}", idx);
                 self.builder.block().create_tmp_named(name)
-                //}
             }
             Slot::Temp(idx) => {
                 let name = &format!("__Temp{}", idx);
@@ -930,21 +935,15 @@ impl IndirectTranslator {
 
     // The counterpart of produce for the second-pass
     fn assign(&mut self, lhs: &Slot, rhs: Node) -> Result<()> {
-        if !self.has_jump {
-            if let Slot::Static(idx) = lhs {
-                // Important! If a static variable is used only once, it
-                // is pushed into the cache to be incorporated into the
-                // destination expression tree.
-                if self.counts.get(idx).is_some_and(|c| *c == 1) {
-                    self.cache.insert(*idx, rhs);
-                    return Ok(());
-                }
+        if let Slot::Static(idx) = lhs {
+            // Important! If a static variable is used only once, it
+            // is pushed into the cache to be incorporated into the
+            // destination expression tree, unless it is on the right
+            // hand side of a Join operation, which is a Φ-function.
+            if self.counts.get(idx).is_some_and(|c| *c == 1) && !self.join_rhs.contains(lhs) {
+                self.cache.insert(*idx, rhs);
+                return Ok(());
             }
-
-            // if let Slot::Out(idx) = lhs {
-            //    self.outs.insert(*idx, rhs.clone());
-            //    return Ok(());
-            //}
         }
 
         let lhs = self.expr(lhs, false);
@@ -962,11 +961,11 @@ impl IndirectTranslator {
         }
     }
 
-    fn translate_nary(&mut self, op: &str, lhs: &Slot, args: &[Slot], n: usize) -> Result<()> {
-        if args.len() == 2 && op == "times" && args[0] == args[1] {
+    fn translate_nary(&mut self, op: Operation, lhs: &Slot, args: &[Slot], n: usize) -> Result<()> {
+        if args.len() == 2 && op.is_times() && args[0] == args[1] {
             let c = self.const_node(2.0);
             return self.translate_pow(lhs, &args[0], c, n != 0);
-        } else if args.len() == 3 && op == "times" && args[0] == args[1] && args[1] == args[2] {
+        } else if args.len() == 3 && op.is_times() && args[0] == args[1] && args[1] == args[2] {
             let c = self.const_node(3.0);
             return self.translate_pow(lhs, &args[0], c, n != 0);
         }
@@ -976,8 +975,6 @@ impl IndirectTranslator {
             .enumerate()
             .map(|(i, x)| self.expr(x, i < n))
             .collect();
-
-        let op = Operation::new_checked(op);
 
         if n == 0 || n >= args.len() {
             let rhs = self.binary_tree(op, &args);
@@ -1020,20 +1017,6 @@ impl IndirectTranslator {
                 self.reals.insert(Loc::Param(*idx as u32));
             }
         }
-
-        /*
-        let args: Vec<Node> = if is_real {
-            args.iter()
-                .map(|a| {
-                    self.builder
-                        .create_unary(Operation::new("real"), self.expr(a, true))
-                        .unwrap()
-                })
-                .collect()
-        } else {
-            args.iter().map(|a| self.expr(a, false)).collect()
-        };
-        */
 
         let mut v: Vec<Node> = Vec::new();
         for a in args.iter() {
