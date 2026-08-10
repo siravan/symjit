@@ -6,7 +6,6 @@ use std::ops::{Neg, Not};
 use anyhow::{anyhow, Result};
 
 use super::model::{Equation, Variable};
-use super::utils::bool_to_f64;
 
 /// The elements of the top-level expression trees
 ///
@@ -580,20 +579,4 @@ impl Not for &Expr {
     fn not(self) -> Expr {
         Expr::neg(self)
     }
-}
-
-pub fn var(name: &str) -> Expr {
-    Expr::var(name)
-}
-
-pub fn double(val: f64) -> Expr {
-    Expr::from(val)
-}
-
-pub fn int(val: i32) -> Expr {
-    Expr::from(val)
-}
-
-pub fn boolean(val: bool) -> Expr {
-    Expr::from(bool_to_f64(val))
 }
