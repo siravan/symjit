@@ -50,7 +50,7 @@ impl Statement {
             Statement::Assign { lhs, rhs } => {
                 let r = rhs.compile_tree(ir)?;
                 Self::save(ir, r, lhs);
-                Some(format!("{}", rhs.topology()))
+                Some(rhs.topology())
             }
             Statement::Call {
                 op,

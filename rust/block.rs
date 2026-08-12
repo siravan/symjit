@@ -74,16 +74,12 @@ impl Block {
         let topo = self.config.debug_topology() && salt.is_some();
 
         for stmt in self.stmts.iter_mut() {
-            match stmt.compile(ir, topo)? {
-                Some(t) => {
-                    if topologies.contains_key(&t) {
-                        let p = topologies.get_mut(&t).unwrap();
-                        *p = *p + 1;
-                    } else {
-                        topologies.insert(t, 1);
-                    }
+            if let Some(t) = stmt.compile(ir, topo)? {
+                if let Some(p) = topologies.get_mut(&t) {
+                    *p += 1;
+                } else {
+                    topologies.insert(t, 1);
                 }
-                None => {}
             }
         }
 
