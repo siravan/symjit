@@ -4,8 +4,6 @@ use anyhow::{anyhow, Result};
 use num_complex::Complex;
 use rand::distr::{Alphanumeric, SampleString};
 
-use crate::builder;
-
 use super::applet::{recast_as_f64, recast_as_f64_mut};
 use super::builder::Builder;
 use super::code::VirtualTable;

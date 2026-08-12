@@ -338,7 +338,7 @@ pub use compiler::{Compiler, FastFunc, Translator};
 pub use composer::Composer;
 pub use config::Config;
 pub use defuns::Defuns;
-pub use expr::{double, int, var, Expr};
+pub use expr::Expr;
 pub use instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
 pub use matrix::Matrix;
 pub use runnable::{Application, CompilerType};
