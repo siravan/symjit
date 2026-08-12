@@ -22,4 +22,4 @@ bytecode = false
 scalar = false
 simd = false
 stats = false
-topology = true
+topology = false

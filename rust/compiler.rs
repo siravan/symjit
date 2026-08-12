@@ -567,9 +567,10 @@ pub struct IndirectTranslator {
     count_statics: usize,
     temps: HashMap<Slot, Slot>,    // Temp/Out Slot => Static Slot
     counts: HashMap<usize, usize>, // Static idx => number of usage on the RHS
-    cache: HashMap<usize, Node>,   // cache of Static variables (Static idx => Node)
-    outs: HashMap<usize, Slot>,    // cache of Outs (Out idx => Static Slot)
-    reals: HashSet<Loc>,           // list of real Loc
+    //cache: HashMap<usize, Node>,   // cache of Static variables (Static idx => Node)
+    cache: Vec<Option<Node>>,
+    outs: HashMap<usize, Slot>, // cache of Outs (Out idx => Static Slot)
+    reals: HashSet<Loc>,        // list of real Loc
     join_rhs: HashSet<Slot>, // the set of Static slots used in the RHS of a Join operation (cannot move)
     num_params: usize,
     last_label: usize,
@@ -725,7 +726,8 @@ impl IndirectTranslator {
             count_statics: 0,
             temps: HashMap::new(),
             counts: HashMap::new(),
-            cache: HashMap::new(),
+            // cache: HashMap::new(),
+            cache: Vec::new(),
             outs: HashMap::new(),
             reals: HashSet::new(),
             join_rhs: HashSet::new(),
@@ -815,6 +817,7 @@ impl IndirectTranslator {
     /// The second pass. It translates the SSA-form into a Symjit model.
     pub fn translate(&mut self) -> Result<(Program, HashSet<Loc>)> {
         let ssa = std::mem::take(&mut self.ssa);
+        self.cache = vec![None; self.count_statics];
 
         for line in ssa.iter() {
             match line {
@@ -930,9 +933,15 @@ impl IndirectTranslator {
             }
             Slot::Static(idx) => {
                 let name = format!("__Static{}", idx);
+                match &mut self.cache[*idx] {
+                    Some(_) => std::mem::take(&mut self.cache[*idx]).unwrap(),
+                    None => self.builder.block().create_tmp_named(&name),
+                }
+                /*
                 self.cache
                     .remove(idx)
                     .unwrap_or(self.builder.block().create_tmp_named(&name))
+                */
             }
             Slot::Arg(idx) => {
                 let name = &format!("__Arg{}", idx);
@@ -949,7 +958,8 @@ impl IndirectTranslator {
             // destination expression tree, unless it is on the right
             // hand side of a Join operation, which is a Φ-function.
             if self.counts.get(idx).is_some_and(|c| *c == 1) && !self.join_rhs.contains(lhs) {
-                self.cache.insert(*idx, rhs);
+                //self.cache.insert(*idx, rhs);
+                self.cache[*idx] = Some(rhs);
                 return Ok(());
             }
         }
