@@ -676,7 +676,7 @@ impl Generator for AmdVectorF64x4Generator {
     }
 
     #[cfg(target_family = "windows")]
-    fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
+    fn prologue_fast(&mut self, _cap: usize, _count_states: usize, _count_obs: usize) {
         unreachable!()
     }
 

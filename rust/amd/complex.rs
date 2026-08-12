@@ -651,7 +651,7 @@ impl Generator for AmdComplexGenerator {
         sub_rsp(&mut self.amd, align_stack(cap as u32 * REG_SIZE));
         self.amd.mov(STACK, SP);
 
-        for i in 0..count_states.min(8).step_by(2) {
+        for i in (0..count_states.min(8)).step_by(2) {
             self.amd
                 .vmovdd_mem_xmm(MEM, (i as u32 * REG_SIZE) as i32, i as u8);
         }
