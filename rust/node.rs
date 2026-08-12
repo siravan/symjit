@@ -220,6 +220,37 @@ impl Node {
         }
     }
 
+    pub fn topology(&self) -> String {
+        match self {
+            Self::Void => "?".into(),
+            Self::Var { .. } => "x".into(),
+            Self::Const { .. } => "c".into(),
+            Self::Unary { op, arg, .. } => {
+                format!("{}[{}]", &arg.topology(), op.as_str())
+            }
+            Self::Binary {
+                op, left, right, ..
+            } => {
+                let mut l = left.topology();
+                let mut r = right.topology();
+
+                let op: String = match op {
+                    Operation::Plus => "+".into(),
+                    Operation::Minus => "-".into(),
+                    Operation::Times => "*".into(),
+                    Operation::Divide => "/".into(),
+                    op => format!("[{}]", op.as_str()),
+                };
+
+                if (op == "+" || op == "*") && l < r {
+                    (l, r) = (r, l);
+                }
+
+                format!("{}{}{}", &l, &r, &op)
+            }
+        }
+    }
+
     /// The main entry point to compile an expression tree
     /// should be called on the root of the expression tree
     pub fn compile_tree(&mut self, mir: &mut Mir) -> Result<u8> {

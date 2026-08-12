@@ -3045,8 +3045,8 @@ impl Mir {
         }
         */
 
-        // let name = name.replace("_stats.txt", "_config.toml");
-        // self.config.to_toml(&name);
+        let name = name.replace("_stats.txt", "_config.toml");
+        self.config.to_toml(&name);
     }
 }
 

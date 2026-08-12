@@ -21,6 +21,7 @@ pub struct Builder {
     pub count_loops: usize,
     pub config: Config,
     pub count_stack: Option<usize>,
+    pub salt: Option<String>,
 }
 
 impl Default for Builder {
@@ -34,6 +35,7 @@ impl Default for Builder {
             count_loops: 0,
             config,
             count_stack: None,
+            salt: None,
         }
     }
 }
@@ -49,7 +51,12 @@ impl Builder {
             count_loops: 0,
             config,
             count_stack: None,
+            salt: None,
         }
+    }
+
+    pub fn set_salt(&mut self, salt: String) {
+        self.salt = Some(salt);
     }
 
     pub fn symbol_table(&mut self) -> &mut SymbolTable {
@@ -251,6 +258,9 @@ impl Builder {
             Operation::Times if right.is_unary("recip") => {
                 self.create_binary(Operation::Divide, left, right.arg().unwrap())?
             }
+            Operation::Divide if right.is_unary("recip") => {
+                self.create_binary(Operation::Times, left, right.arg().unwrap())?
+            }
             Operation::Plus if left.is_unary("neg") => {
                 self.create_binary(Operation::Minus, right, left.arg().unwrap())?
             }
@@ -298,7 +308,8 @@ impl Builder {
 
     pub fn compile_mir(&mut self, mir: &mut Mir) -> Result<()> {
         self.block().eliminate();
-        self.block().compile(mir)
+        let salt = self.salt.clone();
+        self.block().compile(mir, salt)
     }
 
     pub fn optimize_mir(&mut self, mir: &mut Mir) -> Result<()> {

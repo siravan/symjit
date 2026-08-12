@@ -29,6 +29,7 @@ pub const DEBUG_SCALAR: u32 = 0x0002_0000;
 pub const DEBUG_SIMD: u32 = 0x0004_0000;
 pub const DEBUG_STATS: u32 = 0x0008_0000;
 pub const DEBUG_LOCK: u32 = 0x0100_0000;
+pub const DEBUG_TOPOLOGY: u32 = 0x1000_0000;
 
 pub const HUGE: u32 = 0x0010_0000;
 pub const PARALLEL_MUL: u32 = 0x0020_0000;
@@ -92,6 +93,7 @@ struct DebugOptions {
     scalar: bool,
     simd: bool,
     stats: bool,
+    topology: bool,
     lock: bool,
 }
 
@@ -158,6 +160,9 @@ impl std::fmt::Debug for Config {
         }
         if self.debug_stats() {
             write!(f, "debug_stats, ")?;
+        }
+        if self.debug_topology() {
+            write!(f, "debug_topology, ")?;
         }
         if self.debug_lock() {
             write!(f, "debug_lock, ")?;
@@ -236,6 +241,7 @@ impl Config {
         config.set_debug_scalar(c.debug.scalar);
         config.set_debug_simd(c.debug.simd);
         config.set_debug_stats(c.debug.stats);
+        config.set_debug_topology(c.debug.topology);
         config.set_debug_lock(c.debug.lock);
 
         Ok(config)
@@ -280,6 +286,7 @@ impl Config {
             scalar: self.debug_scalar(),
             simd: self.debug_simd(),
             stats: self.debug_stats(),
+            topology: self.debug_topology(),
             lock: self.debug_lock(),
         };
 
@@ -440,6 +447,10 @@ impl Config {
 
     pub fn debug_stats(&self) -> bool {
         self.test(DEBUG_STATS)
+    }
+
+    pub fn debug_topology(&self) -> bool {
+        self.test(DEBUG_TOPOLOGY)
     }
 
     pub fn debug_lock(&self) -> bool {
@@ -677,6 +688,11 @@ impl Config {
     }
 
     /// Print stats for debugging
+    pub fn set_debug_topology(&mut self, enabled: bool) {
+        self.opt = (self.opt & !DEBUG_TOPOLOGY) | if enabled { DEBUG_TOPOLOGY } else { 0 };
+    }
+
+    /// Print stats for debugging
     pub fn set_debug_lock(&mut self, enabled: bool) {
         self.opt = (self.opt & !DEBUG_LOCK) | if enabled { DEBUG_LOCK } else { 0 };
     }
@@ -758,6 +774,9 @@ impl Config {
             }
             "debug_stats" => {
                 self.set_debug_stats(val.parse::<bool>()?);
+            }
+            "debug_topology" => {
+                self.set_debug_topology(val.parse::<bool>()?);
             }
             _ => return Err(anyhow!("option {} is not recognized.", option)),
         }

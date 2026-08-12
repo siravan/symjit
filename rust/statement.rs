@@ -45,11 +45,12 @@ impl Statement {
         }
     }
 
-    pub fn compile(&mut self, ir: &mut Mir) -> Result<()> {
-        match self {
+    pub fn compile(&mut self, ir: &mut Mir, topo: bool) -> Result<Option<String>> {
+        let t = match self {
             Statement::Assign { lhs, rhs } => {
                 let r = rhs.compile_tree(ir)?;
                 Self::save(ir, r, lhs);
+                Some(format!("{}", rhs.topology()))
             }
             Statement::Call {
                 op,
@@ -66,12 +67,20 @@ impl Statement {
                     ir.call(op.as_str(), *num_args)?;
                     Self::save_result(ir, lhs);
                 }
+
+                if topo {
+                    Some(format!("{}[:{}]", arg.topology(), op.as_str()))
+                } else {
+                    None
+                }
             }
             Statement::Label { label } => {
                 ir.set_label(label);
+                None
             }
             Statement::Branch { label } => {
                 ir.branch(label);
+                None
             }
             Statement::BranchIf {
                 cond,
@@ -80,10 +89,11 @@ impl Statement {
             } => {
                 let cond = cond.compile_tree(ir)?;
                 ir.branch_if(reg(cond), label, *is_else);
+                None
             }
         };
 
-        Ok(())
+        Ok(t)
     }
 
     fn save(ir: &mut Mir, r: u8, v: &Node) {

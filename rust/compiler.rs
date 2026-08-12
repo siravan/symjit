@@ -4,6 +4,8 @@ use anyhow::{anyhow, Result};
 use num_complex::Complex;
 use rand::distr::{Alphanumeric, SampleString};
 
+use crate::builder;
+
 use super::applet::{recast_as_f64, recast_as_f64_mut};
 use super::builder::Builder;
 use super::code::VirtualTable;
@@ -396,17 +398,24 @@ impl Application {
 pub struct Translator {
     composer: Box<dyn Composer>,
     config: Config,
+    salt: String,
 }
 
 impl Translator {
     pub fn new(config: Config) -> Translator {
+        let salt = Alphanumeric.sample_string(&mut rand::rng(), 8);
+
         let composer: Box<dyn Composer> = if config.direct() {
             Box::new(DirectTranslator::new(config.clone()))
         } else {
-            Box::new(IndirectTranslator::new(config.clone()))
+            Box::new(IndirectTranslator::new(config.clone(), &salt))
         };
 
-        Translator { composer, config }
+        Translator {
+            composer,
+            config,
+            salt,
+        }
     }
 
     pub fn parse_model(&mut self, model: &SymbolicaModel) -> Result<()> {
@@ -527,24 +536,22 @@ impl Composer for Translator {
     }
 
     fn compile(&mut self) -> Result<Application> {
-        let salt = Alphanumeric.sample_string(&mut rand::rng(), 8);
-
         let mut app = self.composer.compile()?;
 
         if self.config.debug_stats() {
-            app.dump(&format!("symjit_{}_stats.txt", salt), "stats");
+            app.dump(&format!("symjit_{}_stats.txt", self.salt), "stats");
         };
 
         if self.config.debug_bytecode() {
-            app.dump(&format!("symjit_{}_bytecode.txt", salt), "bytecode");
+            app.dump(&format!("symjit_{}_bytecode.txt", self.salt), "bytecode");
         };
 
         if self.config.debug_scalar() {
-            app.dump(&format!("symjit_{}_scalar.bin", salt), "scalar");
+            app.dump(&format!("symjit_{}_scalar.bin", self.salt), "scalar");
         };
 
         if self.config.debug_scalar() {
-            app.dump(&format!("symjit_{}_simd.bin", salt), "simd");
+            app.dump(&format!("symjit_{}_simd.bin", self.salt), "simd");
         };
 
         Ok(app)
@@ -704,12 +711,15 @@ impl Composer for IndirectTranslator {
 }
 
 impl IndirectTranslator {
-    pub fn new(config: Config) -> IndirectTranslator {
+    pub fn new(config: Config, salt: &str) -> IndirectTranslator {
         let slot_size = if config.is_complex() { 2 } else { 1 };
         let arena_mode = config.direct_arena();
 
+        let mut builder = Builder::new(config.clone());
+        builder.set_salt(salt.into());
+
         IndirectTranslator {
-            config: config.clone(),
+            config,
             ssa: Vec::new(),
             consts: Vec::new(),
             count_params: 0,
@@ -723,7 +733,7 @@ impl IndirectTranslator {
             join_rhs: HashSet::new(),
             num_params: 0,
             last_label: 0,
-            builder: Builder::new(config),
+            builder,
             slot_size,
             arena_mode,
         }

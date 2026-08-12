@@ -2,6 +2,8 @@ use anyhow::Result;
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::fs;
+use std::io::Write;
 use std::rc::Rc;
 
 use super::config::Config;
@@ -67,9 +69,34 @@ impl Block {
 
     // **************** Compile the Block! *********************
 
-    pub fn compile(&mut self, ir: &mut Mir) -> Result<()> {
+    pub fn compile(&mut self, ir: &mut Mir, salt: Option<String>) -> Result<()> {
+        let mut topologies: HashMap<String, i64> = HashMap::new();
+        let topo = self.config.debug_topology() && salt.is_some();
+
         for stmt in self.stmts.iter_mut() {
-            stmt.compile(ir)?;
+            match stmt.compile(ir, topo)? {
+                Some(t) => {
+                    if topologies.contains_key(&t) {
+                        let p = topologies.get_mut(&t).unwrap();
+                        *p = *p + 1;
+                    } else {
+                        topologies.insert(t, 1);
+                    }
+                }
+                None => {}
+            }
+        }
+
+        if topo {
+            let mut counts: Vec<(&String, &i64)> = topologies.iter().collect();
+            counts.sort_by_key(|&(_, v)| -v);
+
+            let name = &format!("symjit_{}_topology.txt", salt.unwrap());
+            let mut fs = fs::File::create(name)?;
+
+            for (k, v) in counts.iter() {
+                writeln!(fs, "{}\t{}", v, k)?;
+            }
         }
 
         Ok(())
