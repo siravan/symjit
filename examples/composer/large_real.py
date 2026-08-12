@@ -1,6 +1,7 @@
 import math
 import platform
 import time
+import statistics
 
 import numpy as np
 from symjit import Composer, compile_composer
@@ -16,7 +17,7 @@ def arch():
         return None
 
 
-
+N = 10
 DEPTH = 12
 NCOLS = 2**DEPTH
 NROWS = 10000
@@ -112,18 +113,23 @@ def test_model():
 
 
     for abbr, args in cases():
+        dt = []
         f = compile_composer(cp, **args)
-        t0 = time.perf_counter_ns()
-        B = f.evaluate(X)
-        t1 = time.perf_counter_ns()
 
+        for _ in range(N):
+            t0 = time.perf_counter_ns()
+            B = f.evaluate(X)
+            t1 = time.perf_counter_ns()
+            dt.append(t1 - t0)
+
+        t = statistics.median(dt)
         print(f"{abbr}\t", end="")
 
         try:
             np.testing.assert_array_almost_equal(val, B[0])
-            print(f"\tpass in {1e-6 * (t1-t0):.3f} ms")
+            print(f"\tpass in {1e-6 * t:.3f} ms")
         except AssertionError:
-            print(f"\t\033[31mfail\033[0m in {1e-6 * (t1-t0):.3f} ms")
+            print(f"\t\033[31mfail\033[0m in {1e-6 * t:.3f} ms")
 
         if args["opt_level"] == 3:
             print()
