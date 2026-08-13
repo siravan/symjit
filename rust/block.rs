@@ -229,17 +229,28 @@ impl Block {
 
         let count_scratch = self.config.count_scratch();
 
-        let right = if left.ershov_number() == count_scratch - 1
-            && right.ershov_number() == count_scratch - 1
-        {
-            let lhs = self.create_tmp();
-            self.stmts.push(Statement::assign(lhs.clone(), right));
-            lhs
+        if left.ershov_number() == count_scratch && right.ershov_number() == count_scratch {
+            let l = self.create_tmp();
+            let r = self.create_tmp();
+            self.stmts.push(Statement::assign(l.clone(), left));
+            self.stmts.push(Statement::assign(r.clone(), right));
+            Node::create_binary(op, l, r, power, cond)
         } else {
-            right
-        };
+            Node::create_binary(op, left, right, power, cond)
+        }
+
+        /*/
+        let right =
+            if left.ershov_number() == count_scratch && right.ershov_number() == count_scratch {
+                let lhs = self.create_tmp();
+                self.stmts.push(Statement::assign(lhs.clone(), right));
+                lhs
+            } else {
+                right
+            };
 
         Node::create_binary(op, left, right, power, cond)
+        */
     }
 
     pub fn break_call_binary(&mut self, op: Operation, left: Node, right: Node) -> Node {

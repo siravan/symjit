@@ -1,3 +1,15 @@
+# Version 2.22.1
+
+* `IndirectTranslator` cache changed to `Vec`.
+* Trimming binary operators is symmetrical. 
+
+# Version 2.22.0
+
+* Modified kernel prologue/epilogue.
+* `IndirectTranslator` changed from `Expr` output to `Node` output.
+* `Operation` added.
+* Arena infrastructure. 
+
 # Version 2.21.0
 
 * New stable release.

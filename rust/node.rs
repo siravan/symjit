@@ -223,14 +223,12 @@ impl Node {
     pub fn topology(&self) -> String {
         match self {
             Self::Void => "?".into(),
-            Self::Var { .. } => "x".into(),
-            /*
+            // Self::Var { .. } => "x".into(),
             Self::Var { sym } => match sym.borrow().loc {
                 Loc::Stack(_) => "x".into(),
                 Loc::Param(_) => "p".into(),
                 Loc::Mem(_) => "q".into(),
             },
-            */
             Self::Const { .. } => "c".into(),
             Self::Unary { op, arg, .. } => {
                 format!("{}[{}]", &arg.topology(), op.as_str())
