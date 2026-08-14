@@ -8,7 +8,10 @@ import time
 
 x = symbols("x")
 
-x0 = 0.0001
+if args["dtype"] == "complex128":
+    x0 = 0.0001 + 0.0001j
+else:
+    x0 = 0.0001
 
 print("depth\tlambdify\trust\t\tdt")
 
