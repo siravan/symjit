@@ -22,5 +22,5 @@ bytecode = false
 scalar = false
 simd = false
 stats = false
-topology = false
-instructions = true
+topology = true
+instructions = false

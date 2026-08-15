@@ -12,6 +12,7 @@ use super::node::Node;
 use super::operation::Operation;
 use super::statement::Statement;
 use super::symbol::{Loc, Symbol, SymbolTable};
+use super::topology::Topology;
 
 //****************************************************//
 
@@ -22,16 +23,20 @@ pub struct Block {
     pub num_tmp: usize,
     pub calls: HashMap<(String, u64), Node>,
     pub config: Config,
+    pub topology: Topology,
 }
 
 impl Block {
     pub fn new(config: Config) -> Block {
+        let topology = Topology::new(config.clone());
+
         Block {
             stmts: Vec::new(),
             sym_table: SymbolTable::new(config.is_complex()),
             num_tmp: 0,
             calls: HashMap::new(),
             config,
+            topology,
         }
     }
 
@@ -70,29 +75,19 @@ impl Block {
     // **************** Compile the Block! *********************
 
     pub fn compile(&mut self, ir: &mut Mir, salt: Option<String>) -> Result<()> {
-        let mut topologies: HashMap<String, i64> = HashMap::new();
-        let topo = self.config.debug_topology() && salt.is_some();
+        if self.topology.enabled {
+            self.topology.set_salt(salt);
 
-        for stmt in self.stmts.iter_mut() {
-            if let Some(t) = stmt.compile(ir, topo)? {
-                if let Some(p) = topologies.get_mut(&t) {
-                    *p += 1;
-                } else {
-                    topologies.insert(t, 1);
-                }
+            for stmt in self.stmts.iter_mut() {
+                stmt.add_topology(&mut self.topology);
             }
+
+            self.topology.prepare();
+            println!("{:?}", &self.topology.subs);
         }
 
-        if topo {
-            let mut counts: Vec<(&String, &i64)> = topologies.iter().collect();
-            counts.sort_by_key(|&(_, v)| -v);
-
-            let name = &format!("symjit_{}_topology.txt", salt.unwrap());
-            let mut fs = fs::File::create(name)?;
-
-            for (k, v) in counts.iter() {
-                writeln!(fs, "{}\t{}", v, k)?;
-            }
+        for stmt in self.stmts.iter_mut() {
+            stmt.compile(ir, &mut self.topology)?;
         }
 
         Ok(())
@@ -336,9 +331,9 @@ impl Block {
 
         for s in stmts {
             match s {
-                Statement::Assign { lhs, rhs } => {
+                Statement::Assign { lhs, rhs, topo } => {
                     let rhs = self.rewrite_cse(&cs, &mut ls, rhs);
-                    self.stmts.push(Statement::Assign { lhs, rhs });
+                    self.stmts.push(Statement::Assign { lhs, rhs, topo });
                 }
                 Statement::Call {
                     op,

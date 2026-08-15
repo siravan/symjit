@@ -4,6 +4,7 @@ use super::mir::Mir;
 use super::node::Node;
 use super::operation::Operation;
 use super::symbol::Loc;
+use super::topology::Topology;
 use super::utils::{is_external_func, reg};
 
 #[derive(Debug, Clone)]
@@ -11,6 +12,7 @@ pub enum Statement {
     Assign {
         lhs: Node,
         rhs: Node,
+        topo: Option<String>,
     },
     Call {
         op: Operation,
@@ -33,7 +35,11 @@ pub enum Statement {
 
 impl Statement {
     pub fn assign(lhs: Node, rhs: Node) -> Statement {
-        Statement::Assign { lhs, rhs }
+        Statement::Assign {
+            lhs,
+            rhs,
+            topo: None,
+        }
     }
 
     pub fn call(op: Operation, lhs: Node, arg: Node, num_args: usize) -> Statement {
@@ -45,12 +51,23 @@ impl Statement {
         }
     }
 
-    pub fn compile(&mut self, ir: &mut Mir, topo: bool) -> Result<Option<String>> {
-        let t = match self {
-            Statement::Assign { lhs, rhs } => {
+    pub fn add_topology(&mut self, topology: &mut Topology) {
+        if let Statement::Assign { rhs, topo, .. } = self {
+            let t = rhs.topology();
+            topology.add(&t);
+            *topo = Some(t);
+        };
+    }
+
+    pub fn compile(&mut self, ir: &mut Mir, topology: &mut Topology) -> Result<()> {
+        match self {
+            Statement::Assign { lhs, rhs, topo } => {
                 let r = rhs.compile_tree(ir)?;
                 Self::save(ir, r, lhs);
-                Some(rhs.topology())
+                if topology.test(topo) {
+                    let s = topo.clone().unwrap();
+                    println!("{:?} is a match for {}", &rhs, &s);
+                }
             }
             Statement::Call {
                 op,
@@ -67,20 +84,12 @@ impl Statement {
                     ir.call(op.as_str(), *num_args)?;
                     Self::save_result(ir, lhs);
                 }
-
-                if topo {
-                    Some(format!("{}[:{}]", arg.topology(), op.as_str()))
-                } else {
-                    None
-                }
             }
             Statement::Label { label } => {
                 ir.set_label(label);
-                None
             }
             Statement::Branch { label } => {
                 ir.branch(label);
-                None
             }
             Statement::BranchIf {
                 cond,
@@ -89,11 +98,10 @@ impl Statement {
             } => {
                 let cond = cond.compile_tree(ir)?;
                 ir.branch_if(reg(cond), label, *is_else);
-                None
             }
         };
 
-        Ok(t)
+        Ok(())
     }
 
     fn save(ir: &mut Mir, r: u8, v: &Node) {
