@@ -1,4 +1,8 @@
+use std::fmt;
+
 use num_complex::Complex;
+use num_rational::Rational64;
+use num_traits::{FromPrimitive, One, Zero};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -25,6 +29,9 @@ pub enum Slot {
     Static(usize),
     Arg(usize),
 }
+
+#[derive(Clone)]
+struct VecSlot(Vec<Slot>);
 
 #[derive(Debug, Clone, Deserialize)]
 pub enum Instruction {
@@ -111,3 +118,115 @@ impl ConstType {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct SymbolicaModel(pub Vec<Instruction>, pub usize, pub Vec<ConstType>);
+
+/***************************************************************/
+
+impl fmt::Display for Slot {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Slot::Param(idx) => write!(f, "('param', {})", *idx),
+            Slot::Out(idx) => write!(f, "('out', {})", *idx),
+            Slot::Temp(idx) => write!(f, "('temp', {})", *idx),
+            Slot::Const(idx) => write!(f, "('const', {})", *idx),
+            _ => write!(f, "?"),
+        }
+    }
+}
+
+impl fmt::Display for VecSlot {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let v: Vec<String> = self.0.iter().map(|s| s.to_string()).collect();
+        write!(f, "[{}]", v.join(","))
+    }
+}
+
+impl fmt::Display for Instruction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Instruction::Add(lhs, args, num_reals) => {
+                write!(
+                    f,
+                    "('add', {}, {}, {})",
+                    lhs,
+                    VecSlot(args.clone()),
+                    num_reals
+                )
+            }
+            Instruction::Mul(lhs, args, num_reals) => {
+                write!(
+                    f,
+                    "('mul', {}, {}, {})",
+                    lhs,
+                    VecSlot(args.clone()),
+                    num_reals
+                )
+            }
+            Instruction::Pow(lhs, arg, p, is_real) => write!(
+                f,
+                "('pow', {}, {}, {}, {})",
+                lhs,
+                arg,
+                p,
+                if *is_real { "True" } else { "False" }
+            ),
+            Instruction::Powf(lhs, arg, p, is_real) => write!(
+                f,
+                "('powf', {}, {}, {}, {})",
+                lhs,
+                arg,
+                p,
+                if *is_real { "True" } else { "False" }
+            ),
+            Instruction::Assign(lhs, rhs) => write!(f, "('assign', {}, {})", lhs, rhs),
+            Instruction::Label(id) => write!(f, "('label', {})", id),
+            Instruction::Goto(id) => write!(f, "('goto', {})", id),
+            Instruction::IfElse(cond, id) => write!(f, "('if_else', {}, {})", cond, id),
+            Instruction::Fun(lhs, fun, args, is_real) => {
+                let fun = fun.strip_prefix("symbolica_").unwrap_or_else(|| fun);
+                write!(
+                    f,
+                    "('fun', {}, {}, [], {}, {})",
+                    lhs,
+                    fun,
+                    VecSlot(args.clone()),
+                    if *is_real { "True" } else { "False" }
+                )
+            }
+            Instruction::Join(lhs, cond, true_val, false_val) => write!(
+                f,
+                "('join', {}, {}, {}, {})",
+                lhs, cond, true_val, false_val
+            ),
+            _ => Ok(()),
+        }
+    }
+}
+
+pub fn rationalize_complex(z: Complex<f64>) -> String {
+    if z.is_zero() {
+        "0".into()
+    } else if z.im.is_zero() {
+        let x = Rational64::from_f64(z.re).unwrap();
+        if x.denom().is_one() {
+            x.numer().to_string()
+        } else {
+            format!("{}/{}", x.numer(), x.denom())
+        }
+    } else if z.re.is_zero() {
+        let y = Rational64::from_f64(z.im).unwrap();
+        if y.denom().is_one() {
+            format!("{}𝑖", y.numer())
+        } else {
+            format!("{}𝑖/{}", y.numer(), y.denom())
+        }
+    } else {
+        let x = Rational64::from_f64(z.re).unwrap();
+        let y = Rational64::from_f64(z.im).unwrap();
+
+        if z.im.is_sign_negative() {
+            format!("{}/{}-{}𝑖/{}", x.numer(), x.denom(), y.numer(), y.denom())
+        } else {
+            format!("{}/{}+{}𝑖/{}", x.numer(), x.denom(), y.numer(), y.denom())
+        }
+    }
+}

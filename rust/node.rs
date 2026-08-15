@@ -223,21 +223,23 @@ impl Node {
     pub fn topology(&self) -> String {
         match self {
             Self::Void => "?".into(),
-            // Self::Var { .. } => "x".into(),
+            Self::Var { .. } => "X".into(),
+            /*
             Self::Var { sym } => match sym.borrow().loc {
                 Loc::Stack(_) => "x".into(),
                 Loc::Param(_) => "p".into(),
                 Loc::Mem(_) => "q".into(),
             },
-            Self::Const { .. } => "c".into(),
+            */
+            Self::Const { .. } => "C".into(),
             Self::Unary { op, arg, .. } => {
                 format!("{}[{}]", &arg.topology(), op.as_str())
             }
             Self::Binary {
                 op, left, right, ..
             } => {
-                let mut l = left.topology();
-                let mut r = right.topology();
+                let l = left.topology();
+                let r = right.topology();
 
                 let op: String = match op {
                     Operation::Plus => "+".into(),
@@ -247,9 +249,11 @@ impl Node {
                     op => format!("[{}]", op.as_str()),
                 };
 
+                /*
                 if (op == "+" || op == "*") && l < r {
                     (l, r) = (r, l);
                 }
+                */
 
                 format!("{}{}{}", &l, &r, &op)
             }

@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
+use std::io::Write;
 
 use anyhow::{anyhow, Result};
 use num_complex::Complex;
-use rand::distr::{Alphanumeric, SampleString};
 
 use super::applet::{recast_as_f64, recast_as_f64_mut};
 use super::builder::Builder;
@@ -10,14 +10,14 @@ use super::code::VirtualTable;
 use super::composer::{Composer, DirectTranslator};
 use super::config::{Config, SLICE_CAP};
 use super::expr::Expr;
-use super::instruction::{BuiltinSymbol, Instruction, Slot, SymbolicaModel};
+use super::instruction::{rationalize_complex, BuiltinSymbol, Instruction, Slot, SymbolicaModel};
 use super::model::{CellModel, Equation, Program, Variable};
 use super::node::Node;
 use super::operation::Operation;
 use super::parser::Parser;
 use super::symbol::Loc;
 use super::types::Element;
-use super::utils::Compiled;
+use super::utils::{advance_id, Compiled};
 use super::Application;
 
 // #[derive(Debug)]
@@ -397,11 +397,21 @@ pub struct Translator {
     composer: Box<dyn Composer>,
     config: Config,
     salt: String,
+    instructions: Vec<String>,
+    count_temp: usize,
+    constants: Vec<String>,
+    spy: bool,
 }
 
 impl Translator {
     pub fn new(config: Config) -> Translator {
-        let salt = Alphanumeric.sample_string(&mut rand::rng(), 8);
+        // let salt = Alphanumeric.sample_string(&mut rand::rng(), 8);
+        //let salt = format!("{:05}", advance_id());
+        let salt = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+            .to_string();
 
         let composer: Box<dyn Composer> = if config.direct() {
             Box::new(DirectTranslator::new(config.clone()))
@@ -409,10 +419,16 @@ impl Translator {
             Box::new(IndirectTranslator::new(config.clone(), &salt))
         };
 
+        let spy = config.debug_instructions();
+
         Translator {
             composer,
             config,
             salt,
+            instructions: Vec::new(),
+            count_temp: 0,
+            constants: Vec::new(),
+            spy,
         }
     }
 
@@ -462,42 +478,86 @@ impl Translator {
 
         Ok(())
     }
+
+    fn dump(&self) {
+        let mut fs = std::fs::File::create(format!("instructions_{}.txt", self.salt)).unwrap();
+        let _ = writeln!(
+            fs,
+            "([{}], {}, [{}])",
+            self.instructions.join(",\n"),
+            self.count_temp,
+            self.constants.join(", "),
+        );
+    }
 }
 
 impl Composer for Translator {
     fn append_constant(&mut self, z: Complex<f64>) -> Result<usize> {
+        if self.spy {
+            self.constants.push(rationalize_complex(z));
+        }
         self.composer.append_constant(z)
     }
 
     fn append_add(&mut self, lhs: &Slot, args: &[Slot], num_reals: usize) -> Result<()> {
+        if self.spy {
+            self.instructions
+                .push(Instruction::Add(*lhs, args.to_vec(), num_reals).to_string());
+        }
         self.composer.append_add(lhs, args, num_reals)
     }
 
     fn append_mul(&mut self, lhs: &Slot, args: &[Slot], num_reals: usize) -> Result<()> {
+        if self.spy {
+            self.instructions
+                .push(Instruction::Mul(*lhs, args.to_vec(), num_reals).to_string());
+        }
         self.composer.append_mul(lhs, args, num_reals)
     }
 
     fn append_pow(&mut self, lhs: &Slot, arg: &Slot, p: i64, is_real: bool) -> Result<()> {
+        if self.spy {
+            self.instructions
+                .push(Instruction::Pow(*lhs, *arg, p, is_real).to_string());
+        }
         self.composer.append_pow(lhs, arg, p, is_real)
     }
 
     fn append_powf(&mut self, lhs: &Slot, arg: &Slot, p: &Slot, is_real: bool) -> Result<()> {
+        if self.spy {
+            self.instructions
+                .push(Instruction::Powf(*lhs, *arg, *p, is_real).to_string());
+        }
         self.composer.append_powf(lhs, arg, p, is_real)
     }
 
     fn append_assign(&mut self, lhs: &Slot, rhs: &Slot) -> Result<()> {
+        if self.spy {
+            self.instructions
+                .push(Instruction::Assign(*lhs, *rhs).to_string());
+        }
         self.composer.append_assign(lhs, rhs)
     }
 
     fn append_label(&mut self, id: usize) -> Result<()> {
+        if self.spy {
+            self.instructions.push(Instruction::Label(id).to_string());
+        }
         self.composer.append_label(id)
     }
 
     fn append_if_else(&mut self, cond: &Slot, id: usize) -> Result<()> {
+        if self.spy {
+            self.instructions
+                .push(Instruction::IfElse(*cond, id).to_string());
+        }
         self.composer.append_if_else(cond, id)
     }
 
     fn append_goto(&mut self, id: usize) -> Result<()> {
+        if self.spy {
+            self.instructions.push(Instruction::Goto(id).to_string());
+        }
         self.composer.append_goto(id)
     }
 
@@ -516,6 +576,10 @@ impl Composer for Translator {
     }
 
     fn append_fun(&mut self, lhs: &Slot, fun: &str, args: &[Slot], is_real: bool) -> Result<()> {
+        if self.spy {
+            self.instructions
+                .push(Instruction::Fun(*lhs, fun.into(), args.to_vec(), is_real).to_string());
+        }
         self.composer.append_fun(lhs, fun, args, is_real)
     }
 
@@ -526,6 +590,10 @@ impl Composer for Translator {
         true_val: &Slot,
         false_val: &Slot,
     ) -> Result<()> {
+        if self.spy {
+            self.instructions
+                .push(Instruction::Join(*lhs, *cond, *true_val, *false_val).to_string());
+        }
         self.composer.append_join(lhs, cond, true_val, false_val)
     }
 
@@ -534,6 +602,10 @@ impl Composer for Translator {
     }
 
     fn compile(&mut self) -> Result<Application> {
+        if self.spy {
+            self.dump();
+        }
+
         let mut app = self.composer.compile()?;
 
         if self.config.debug_stats() {

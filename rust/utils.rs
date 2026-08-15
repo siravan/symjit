@@ -1,6 +1,7 @@
 use anyhow::Result;
 use std::fmt;
 use std::io::{Read, Write};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::config::Config;
 use super::machine::MachineCode;
@@ -115,4 +116,12 @@ pub fn reg(r: u8) -> Reg {
 
 pub fn is_external_func(op: &str) -> bool {
     op.starts_with("$")
+}
+
+/*****************************************/
+
+static COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+pub fn advance_id() -> usize {
+    COUNTER.fetch_add(1, Ordering::Relaxed)
 }

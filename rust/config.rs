@@ -30,6 +30,7 @@ pub const DEBUG_SIMD: u32 = 0x0004_0000;
 pub const DEBUG_STATS: u32 = 0x0008_0000;
 pub const DEBUG_LOCK: u32 = 0x0100_0000;
 pub const DEBUG_TOPOLOGY: u32 = 0x1000_0000;
+pub const DEBUG_INSTRUCTIONS: u32 = 0x2000_0000;
 
 pub const HUGE: u32 = 0x0010_0000;
 pub const PARALLEL_MUL: u32 = 0x0020_0000;
@@ -95,6 +96,7 @@ struct DebugOptions {
     stats: bool,
     topology: bool,
     lock: bool,
+    instructions: bool,
 }
 
 #[derive(Debug)]
@@ -163,6 +165,9 @@ impl std::fmt::Debug for Config {
         }
         if self.debug_topology() {
             write!(f, "debug_topology, ")?;
+        }
+        if self.debug_instructions() {
+            write!(f, "debug_instructions, ")?;
         }
         if self.debug_lock() {
             write!(f, "debug_lock, ")?;
@@ -242,6 +247,7 @@ impl Config {
         config.set_debug_simd(c.debug.simd);
         config.set_debug_stats(c.debug.stats);
         config.set_debug_topology(c.debug.topology);
+        config.set_debug_instructions(c.debug.instructions);
         config.set_debug_lock(c.debug.lock);
 
         Ok(config)
@@ -287,6 +293,7 @@ impl Config {
             simd: self.debug_simd(),
             stats: self.debug_stats(),
             topology: self.debug_topology(),
+            instructions: self.debug_instructions(),
             lock: self.debug_lock(),
         };
 
@@ -451,6 +458,10 @@ impl Config {
 
     pub fn debug_topology(&self) -> bool {
         self.test(DEBUG_TOPOLOGY)
+    }
+
+    pub fn debug_instructions(&self) -> bool {
+        self.test(DEBUG_INSTRUCTIONS)
     }
 
     pub fn debug_lock(&self) -> bool {
@@ -687,9 +698,14 @@ impl Config {
         self.opt = (self.opt & !DEBUG_STATS) | if enabled { DEBUG_STATS } else { 0 };
     }
 
-    /// Print stats for debugging
+    /// Print topology information for debugging
     pub fn set_debug_topology(&mut self, enabled: bool) {
         self.opt = (self.opt & !DEBUG_TOPOLOGY) | if enabled { DEBUG_TOPOLOGY } else { 0 };
+    }
+
+    /// Print instructions for deugging
+    pub fn set_debug_instructions(&mut self, enabled: bool) {
+        self.opt = (self.opt & !DEBUG_INSTRUCTIONS) | if enabled { DEBUG_INSTRUCTIONS } else { 0 };
     }
 
     /// Print stats for debugging
