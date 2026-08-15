@@ -199,6 +199,18 @@ impl Generator for ArmComplexGenerator {
         self.save_stack(Reg::Ret, idx);
     }
 
+    fn load_arg(&mut self, _arg: u8, _loc: Loc) {
+        unimplemented!()
+    }
+
+    fn save_arg(&mut self, _arg: u8, _loc: Loc) {}
+
+    fn load_arg_complex(&mut self, _arg: u8, _loc: Loc) {
+        unimplemented!()
+    }
+
+    fn save_arg_complex(&mut self, _arg: u8, _loc: Loc) {}
+
     fn neg(&mut self, dst: Reg, s1: Reg) {
         self.emit(arm! {fneg q(ϕ(dst)), q(ϕ(s1))});
     }

@@ -132,6 +132,16 @@ pub enum Instruction {
         dst: Reg,
         idx: u32,
     },
+    LoadArg {
+        arg: u8,
+        loc: Loc,
+        complex: bool,
+    },
+    SaveArg {
+        arg: u8,
+        loc: Loc,
+        complex: bool,
+    },
     Call {
         label: String,
         num_args: usize,
@@ -210,6 +220,26 @@ impl fmt::Debug for Instruction {
                 write!(f, "{:?} := ({:?} + {:?}*im)", &loc, &xs, &ys)
             }
             Instruction::LoadConst { dst, idx } => write!(f, "{:?} := consts[{:?}]", &dst, idx),
+            Instruction::LoadArg {
+                arg,
+                loc,
+                complex: false,
+            } => write!(f, "Arg[{:?}]: real := {:?}", arg, loc),
+            Instruction::LoadArg {
+                arg,
+                loc,
+                complex: true,
+            } => write!(f, "Arg[{:?}]: complex := {:?}", arg, loc),
+            Instruction::SaveArg {
+                arg,
+                loc,
+                complex: false,
+            } => write!(f, "{:?} := Arg[{:?}]: real", loc, arg,),
+            Instruction::SaveArg {
+                arg,
+                loc,
+                complex: true,
+            } => write!(f, "{:?} := Arg[{:?}]: complex", loc, arg,),
             Instruction::Fused { op, dst, a, b, c } => match op {
                 FusedOp::MulAdd => write!(f, "{:?} := {:?} * {:?} + {:?}", &dst, &a, &b, &c),
                 FusedOp::NegMulAdd => write!(f, "{:?} := - {:?} * {:?} + {:?}", &dst, &a, &b, &c),
@@ -286,6 +316,10 @@ impl Instruction {
             Instruction::LoadComplex { .. } => "load_complex".into(),
             Instruction::SaveComplex { .. } => "save_complex".into(),
             Instruction::LoadConst { .. } => "load_const".into(),
+            Instruction::LoadArg { complex: false, .. } => "load_arg".into(),
+            Instruction::LoadArg { complex: true, .. } => "load_arg_complex".into(),
+            Instruction::SaveArg { complex: false, .. } => "save_arg".into(),
+            Instruction::SaveArg { complex: true, .. } => "save_arg_complex".into(),
             Instruction::Fused { op, .. } => format!("fused op {:?}", &op),
             Instruction::IfElse { .. } => "if_else".into(),
             Self::Label { .. } => "label".into(),
@@ -544,6 +578,38 @@ impl Mir {
             ys,
             loc: Loc::Stack(idx),
         });
+    }
+
+    pub fn load_arg(&mut self, arg: u8, loc: Loc) {
+        self.push(Instruction::LoadArg {
+            arg,
+            loc,
+            complex: false,
+        })
+    }
+
+    pub fn save_arg(&mut self, arg: u8, loc: Loc) {
+        self.push(Instruction::SaveArg {
+            arg,
+            loc,
+            complex: false,
+        })
+    }
+
+    pub fn load_arg_complex(&mut self, arg: u8, loc: Loc) {
+        self.push(Instruction::LoadArg {
+            arg,
+            loc,
+            complex: true,
+        })
+    }
+
+    pub fn save_arg_complex(&mut self, arg: u8, loc: Loc) {
+        self.push(Instruction::LoadArg {
+            arg,
+            loc,
+            complex: true,
+        })
     }
 
     pub fn neg(&mut self, dst: Reg, s1: Reg) {
@@ -1363,6 +1429,12 @@ impl Mir {
                 Instruction::LoadConst { dst, idx } => {
                     Self::set(regs, *dst, self.consts[*idx as usize]);
                 }
+                Instruction::LoadArg { .. } => {
+                    unimplemented!()
+                }
+                Instruction::SaveArg { .. } => {
+                    unimplemented!()
+                }
                 Instruction::Call { label, num_args } => {
                     let f = self.find_op(label).unwrap();
                     match &f {
@@ -1826,6 +1898,20 @@ impl Mir {
                 }
                 Instruction::LoadConst { dst, idx } => {
                     ir.load_const(*dst, *idx);
+                }
+                Instruction::LoadArg { arg, loc, complex } => {
+                    if *complex {
+                        ir.load_arg_complex(*arg, *loc)
+                    } else {
+                        ir.load_arg(*arg, *loc);
+                    }
+                }
+                Instruction::SaveArg { arg, loc, complex } => {
+                    if *complex {
+                        ir.save_arg_complex(*arg, *loc)
+                    } else {
+                        ir.save_arg(*arg, *loc);
+                    }
                 }
                 Instruction::Call { label, num_args } => {
                     let f = self.find_op(label).unwrap();

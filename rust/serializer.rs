@@ -186,6 +186,12 @@ impl MirWriter {
                 self.reg(*s1);
                 self.num(0, *idx);
             }
+            Instruction::LoadArg { arg, loc, complex } => {
+                unimplemented!()
+            }
+            Instruction::SaveArg { arg, loc, complex } => {
+                unimplemented!()
+            }
             Instruction::Branch { label } => {
                 self.append_byte(BRANCH);
                 self.string(label);

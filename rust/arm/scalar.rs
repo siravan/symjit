@@ -219,6 +219,22 @@ impl Generator for ArmGenerator {
         self.save_stack(Reg::Ret, idx);
     }
 
+    fn load_arg(&mut self, _arg: u8, _loc: Loc) {
+        unimplemented!()
+    }
+
+    fn save_arg(&mut self, _arg: u8, _loc: Loc) {
+        unimplemented!()
+    }
+
+    fn load_arg_complex(&mut self, _arg: u8, _loc: Loc) {
+        unimplemented!()
+    }
+
+    fn save_arg_complex(&mut self, _arg: u8, _loc: Loc) {
+        unimplemented!()
+    }
+
     fn neg(&mut self, dst: Reg, s1: Reg) {
         self.emit(arm! {fneg d(ϕ(dst)), d(ϕ(s1))});
     }

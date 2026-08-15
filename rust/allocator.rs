@@ -205,6 +205,12 @@ impl GreedyAllocator {
                     let ys = self.consume(ip, ys);
                     self.push(Instruction::SaveComplex { xs, ys, loc });
                 }
+                Instruction::LoadArg { arg, loc, complex } => {
+                    self.push(Instruction::LoadArg { arg, loc, complex })
+                }
+                Instruction::SaveArg { arg, loc, complex } => {
+                    self.push(Instruction::SaveArg { arg, loc, complex });
+                }
                 Instruction::Mov { dst, s1 } => {
                     let (dst, s1) = self.unary_op(ip, dst, s1);
                     self.push(Instruction::Mov { dst, s1 });
@@ -459,6 +465,12 @@ impl GreedyAllocator {
                     if let Reg::Gen(r) = ys {
                         self.allocs[r as usize].loc = Some(loc.imag());
                     }
+                }
+                Instruction::LoadArg { arg, loc, complex } => {
+                    self.push(Instruction::LoadArg { arg, loc, complex })
+                }
+                Instruction::SaveArg { arg, loc, complex } => {
+                    self.push(Instruction::SaveArg { arg, loc, complex });
                 }
                 Instruction::Mov { dst, s1 } => {
                     let s1 = self.deallocate(s1);

@@ -282,6 +282,18 @@ impl Generator for Complexifier {
         self.save_stack(Reg::Ret, idx);
     }
 
+    fn load_arg(&mut self, arg: u8, loc: Loc) {
+        self.mir.load_arg_complex(arg, loc)
+    }
+
+    fn save_arg(&mut self, _arg: u8, _loc: Loc) {}
+
+    fn load_arg_complex(&mut self, arg: u8, loc: Loc) {
+        self.mir.save_arg_complex(arg, loc)
+    }
+
+    fn save_arg_complex(&mut self, _arg: u8, _loc: Loc) {}
+
     fn neg(&mut self, dst: Reg, s1: Reg) {
         self.mir.neg(re(dst), re(s1));
 

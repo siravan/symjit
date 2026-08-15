@@ -437,6 +437,22 @@ impl Generator for RiscV {
         self.save_stack(Reg::Ret, idx);
     }
 
+    fn load_arg(&mut self, _arg: u8, _loc: Loc) {
+        unimplemented!()
+    }
+
+    fn save_arg(&mut self, _arg: u8, _loc: Loc) {
+        unimplemented!()
+    }
+
+    fn load_arg_complex(&mut self, _arg: u8, _loc: Loc) {
+        unimplemented!()
+    }
+
+    fn save_arg_complex(&mut self, _arg: u8, _loc: Loc) {
+        unimplemented!()
+    }
+
     fn neg(&mut self, dst: Reg, s1: Reg) {
         self.emit(rvv! {fneg.d f(ϕ(dst)), f(ϕ(s1))});
     }
