@@ -1,10 +1,13 @@
 use anyhow::Result;
 
+use crate::utils::Reg;
+
+use super::config::SPILL_AREA;
 use super::mir::Mir;
 use super::node::Node;
 use super::operation::Operation;
 use super::symbol::Loc;
-use super::topology::Topology;
+use super::topology::{SubroutineStatus, Topology};
 use super::utils::{is_external_func, reg};
 
 #[derive(Debug, Clone)]
@@ -12,7 +15,7 @@ pub enum Statement {
     Assign {
         lhs: Node,
         rhs: Node,
-        topo: Option<String>,
+        topo: String,
     },
     Call {
         op: Operation,
@@ -38,7 +41,7 @@ impl Statement {
         Statement::Assign {
             lhs,
             rhs,
-            topo: None,
+            topo: "".into(),
         }
     }
 
@@ -55,18 +58,34 @@ impl Statement {
         if let Statement::Assign { rhs, topo, .. } = self {
             let t = rhs.topology();
             topology.add(&t);
-            *topo = Some(t);
+            *topo = t;
         };
     }
 
     pub fn compile(&mut self, ir: &mut Mir, topology: &mut Topology) -> Result<()> {
         match self {
             Statement::Assign { lhs, rhs, topo } => {
-                let r = rhs.compile_tree(ir)?;
-                Self::save(ir, r, lhs);
-                if topology.test(topo) {
-                    let s = topo.clone().unwrap();
-                    println!("{:?} is a match for {}", &rhs, &s);
+                if let Some((num_args, defined)) = topology.status(&topo) {
+                    if !defined {
+                        let mut n: usize = 0;
+                        let body = rhs.subroutine(&topology.args, &mut n);
+                        topology.define(&topo, body);
+                    }
+
+                    if num_args >= 8 {
+                        let mut n: usize = 0;
+                        rhs.caller_in_stack(ir, &topology.args, &mut n);
+                    }
+
+                    let mut n: usize = 0;
+                    rhs.caller_in_register(ir, &mut n);
+
+                    ir.call(&topo, 0)?;
+                    Self::save_result(ir, lhs);
+                    ir.nop();
+                } else {
+                    let r = rhs.compile_tree(ir)?;
+                    Self::save(ir, r, lhs);
                 }
             }
             Statement::Call {

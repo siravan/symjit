@@ -44,6 +44,8 @@ const BRANCH_ELSE: u8 = 10;
 const CALL: u8 = 11;
 const LABEL: u8 = 12;
 const IFELSE: u8 = 13;
+const LOAD_ARG: u8 = 14;
+const SAVE_ARG: u8 = 15;
 
 const FUSED_MUL_ADD: u8 = 32;
 const FUSED_MUL_SUB: u8 = 33;
@@ -186,11 +188,41 @@ impl MirWriter {
                 self.reg(*s1);
                 self.num(0, *idx);
             }
-            Instruction::LoadArg { arg, loc, complex } => {
-                unimplemented!()
+            Instruction::LoadArg {
+                arg,
+                loc,
+                complex: false,
+            } => {
+                self.append_byte(LOAD_ARG);
+                self.append_byte(*arg);
+                self.loc(*loc);
             }
-            Instruction::SaveArg { arg, loc, complex } => {
-                unimplemented!()
+            Instruction::LoadArg {
+                arg,
+                loc,
+                complex: true,
+            } => {
+                self.append_byte(LOAD_ARG);
+                self.append_byte(*arg | 0x80);
+                self.loc(*loc);
+            }
+            Instruction::SaveArg {
+                arg,
+                loc,
+                complex: false,
+            } => {
+                self.append_byte(SAVE_ARG);
+                self.append_byte(*arg);
+                self.loc(*loc);
+            }
+            Instruction::SaveArg {
+                arg,
+                loc,
+                complex: true,
+            } => {
+                self.append_byte(SAVE_ARG);
+                self.append_byte(*arg | 0x80);
+                self.loc(*loc);
             }
             Instruction::Branch { label } => {
                 self.append_byte(BRANCH);
@@ -663,6 +695,24 @@ impl MirIterator {
                 let ys = self.reg()?;
                 let loc = self.loc()?;
                 Ok(Instruction::SaveComplex { xs, ys, loc })
+            }
+            LOAD_ARG => {
+                let arg = self.pop()?;
+                let loc = self.loc()?;
+                Ok(Instruction::LoadArg {
+                    arg: arg & 0x7f,
+                    loc,
+                    complex: arg & 0x80 != 0,
+                })
+            }
+            SAVE_ARG => {
+                let arg = self.pop()?;
+                let loc = self.loc()?;
+                Ok(Instruction::SaveArg {
+                    arg: arg & 0x7f,
+                    loc,
+                    complex: arg & 0x80 != 0,
+                })
             }
             BRANCH => {
                 let label = self.string()?;

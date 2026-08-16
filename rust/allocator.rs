@@ -467,6 +467,10 @@ impl GreedyAllocator {
                     }
                 }
                 Instruction::LoadArg { arg, loc, complex } => {
+                    self.locs.insert(loc);
+                    if complex {
+                        self.locs.insert(loc.imag());
+                    }
                     self.push(Instruction::LoadArg { arg, loc, complex })
                 }
                 Instruction::SaveArg { arg, loc, complex } => {
@@ -500,7 +504,7 @@ impl GreedyAllocator {
                     false_val,
                     cond,
                 } => {
-                    if self.config.is_sse() {
+                    if true || self.config.is_sse() {
                         let (dst, _) = self.allocate(ip, dst);
                         let true_val = self.deallocate(true_val);
                         let false_val = self.deallocate(false_val);
@@ -523,27 +527,22 @@ impl GreedyAllocator {
                     }
                     self.locs.insert(cond);
                 }
-                Instruction::Branch { .. } => {
-                    if let Instruction::Branch { label } = ins.clone() {
-                        self.push(Instruction::Branch { label });
-                    }
+                Instruction::Branch { label } => {
+                    self.push(Instruction::Branch { label });
                     self.reset_allocs(); // needed?
                 }
-                Instruction::BranchIf { .. } => {
-                    if let Instruction::BranchIf {
+                Instruction::BranchIf {
+                    cond,
+                    label,
+                    is_else,
+                } => {
+                    let cond = self.deallocate(cond);
+                    self.push(Instruction::BranchIf {
                         cond,
                         label,
                         is_else,
-                    } = ins.clone()
-                    {
-                        let cond = self.deallocate(cond);
-                        self.push(Instruction::BranchIf {
-                            cond,
-                            label,
-                            is_else,
-                        });
-                        self.reset_allocs();
-                    }
+                    });
+                    self.reset_allocs();
                 }
                 Instruction::Call { .. } | Instruction::Label { .. } => {
                     self.push(ins.clone());

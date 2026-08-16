@@ -385,20 +385,64 @@ impl Generator for AmdVectorF64x4Generator {
         self.save_stack(Reg::Ret, idx);
     }
 
-    fn load_arg(&mut self, _arg: u8, _loc: Loc) {
-        unimplemented!()
+    fn load_arg(&mut self, arg: u8, loc: Loc) {
+        match loc {
+            Loc::Param(idx) => self.amd.vmovpd_ymm_mem(arg, PARAMS, idx as i32 * REG_SIZE),
+            Loc::Stack(idx) => self.amd.vmovpd_ymm_mem(arg, STACK, idx as i32 * REG_SIZE),
+            Loc::Mem(idx) => self.amd.vmovpd_ymm_mem(arg, MEM, idx as i32 * REG_SIZE),
+        }
     }
 
-    fn save_arg(&mut self, _arg: u8, _loc: Loc) {
-        unimplemented!()
+    fn save_arg(&mut self, arg: u8, loc: Loc) {
+        match loc {
+            Loc::Param(idx) => self.amd.vmovpd_mem_ymm(PARAMS, idx as i32 * REG_SIZE, arg),
+            Loc::Stack(idx) => self.amd.vmovpd_mem_ymm(STACK, idx as i32 * REG_SIZE, arg),
+            Loc::Mem(idx) => self.amd.vmovpd_mem_ymm(MEM, idx as i32 * REG_SIZE, arg),
+        }
     }
 
-    fn load_arg_complex(&mut self, _arg: u8, _loc: Loc) {
-        unimplemented!()
+    fn load_arg_complex(&mut self, arg: u8, loc: Loc) {
+        match loc {
+            Loc::Param(idx) => {
+                self.amd
+                    .vmovpd_ymm_mem(2 * arg, PARAMS, idx as i32 * REG_SIZE);
+                self.amd
+                    .vmovpd_ymm_mem(2 * arg + 1, PARAMS, (idx + 1) as i32 * REG_SIZE);
+            }
+            Loc::Stack(idx) => {
+                self.amd
+                    .vmovpd_ymm_mem(2 * arg, STACK, idx as i32 * REG_SIZE);
+                self.amd
+                    .vmovpd_ymm_mem(2 * arg + 1, STACK, (idx + 1) as i32 * REG_SIZE);
+            }
+            Loc::Mem(idx) => {
+                self.amd.vmovpd_ymm_mem(2 * arg, MEM, idx as i32 * REG_SIZE);
+                self.amd
+                    .vmovpd_ymm_mem(2 * arg + 1, MEM, (idx + 1) as i32 * REG_SIZE);
+            }
+        }
     }
 
-    fn save_arg_complex(&mut self, _arg: u8, _loc: Loc) {
-        unimplemented!()
+    fn save_arg_complex(&mut self, arg: u8, loc: Loc) {
+        match loc {
+            Loc::Param(idx) => {
+                self.amd
+                    .vmovpd_mem_ymm(PARAMS, idx as i32 * REG_SIZE, 2 * arg);
+                self.amd
+                    .vmovpd_mem_ymm(PARAMS, (idx + 1) as i32 * REG_SIZE, 2 * arg + 1);
+            }
+            Loc::Stack(idx) => {
+                self.amd
+                    .vmovpd_mem_ymm(STACK, idx as i32 * REG_SIZE, 2 * arg);
+                self.amd
+                    .vmovpd_mem_ymm(STACK, (idx + 1) as i32 * REG_SIZE, 2 * arg + 1);
+            }
+            Loc::Mem(idx) => {
+                self.amd.vmovpd_mem_ymm(MEM, idx as i32 * REG_SIZE, 2 * arg);
+                self.amd
+                    .vmovpd_mem_ymm(MEM, (idx + 1) as i32 * REG_SIZE, 2 * arg + 1);
+            }
+        }
     }
 
     fn neg(&mut self, dst: Reg, s1: Reg) {

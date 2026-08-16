@@ -57,7 +57,8 @@ impl Compactor {
                 Instruction::Load { loc, .. }
                 | Instruction::IfElse { cond: loc, .. }
                 | Instruction::LoadMath { loc, .. }
-                | Instruction::LoadComplex { loc, .. } => {
+                | Instruction::LoadComplex { loc, .. }
+                | Instruction::LoadArg { loc, .. } => {
                     if let Loc::Stack(idx) = loc {
                         if idx >= self.fixed {
                             if let Some(x) = self.live.get_mut(&loc) {
@@ -66,7 +67,9 @@ impl Compactor {
                         }
                     }
                 }
-                Instruction::Save { loc, .. } | Instruction::SaveComplex { loc, .. } => {
+                Instruction::Save { loc, .. }
+                | Instruction::SaveComplex { loc, .. }
+                | Instruction::SaveArg { loc, .. } => {
                     if let Loc::Stack(idx) = loc {
                         if idx >= self.fixed {
                             self.live.insert(loc, ip);
@@ -141,6 +144,14 @@ impl Compactor {
                         loc: l,
                     });
                 }
+                Instruction::LoadArg { arg, loc, complex } => {
+                    let l = self.load(*loc, ip);
+                    self.push(Instruction::LoadArg {
+                        arg: *arg,
+                        loc: l,
+                        complex: *complex,
+                    })
+                }
                 Instruction::LoadMath { op, dst, s1, loc } => {
                     let l = self.load(*loc, ip);
                     self.push(Instruction::LoadMath {
@@ -175,6 +186,14 @@ impl Compactor {
                         ys: *ys,
                         loc: l,
                     });
+                }
+                Instruction::SaveArg { arg, loc, complex } => {
+                    let l = self.save(*loc);
+                    self.push(Instruction::SaveArg {
+                        arg: *arg,
+                        loc: l,
+                        complex: *complex,
+                    })
                 }
                 Instruction::Label { label } => {
                     if !self.labels.contains(label) {

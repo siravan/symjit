@@ -6,6 +6,8 @@ use std::fs;
 use std::io::Write;
 use std::rc::Rc;
 
+use crate::config::SLICE_CAP;
+
 use super::config::Config;
 use super::mir::Mir;
 use super::node::Node;
@@ -28,11 +30,20 @@ pub struct Block {
 
 impl Block {
     pub fn new(config: Config) -> Block {
-        let topology = Topology::new(config.clone());
+        let sym_table = SymbolTable::new(config.is_complex());
+
+        let mut args: Vec<Rc<RefCell<Symbol>>> = Vec::new();
+        for i in 0..SLICE_CAP {
+            let name = format!("__Arg{}", i);
+            let sym = sym_table.find_sym(&name).unwrap();
+            args.push(sym);
+        }
+
+        let topology = Topology::new(config.clone(), args);
 
         Block {
             stmts: Vec::new(),
-            sym_table: SymbolTable::new(config.is_complex()),
+            sym_table,
             num_tmp: 0,
             calls: HashMap::new(),
             config,
@@ -83,14 +94,19 @@ impl Block {
             }
 
             self.topology.prepare();
-            println!("{:?}", &self.topology.subs);
         }
 
         for stmt in self.stmts.iter_mut() {
             stmt.compile(ir, &mut self.topology)?;
         }
 
+        // println!("{:?}", &self.topology);
+
         Ok(())
+    }
+
+    pub fn compile_subroutines(&mut self, ir: &mut Mir) -> Result<()> {
+        self.topology.compile(ir)
     }
 
     // create_* functions create a new Node

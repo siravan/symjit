@@ -7,10 +7,11 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
 
 // use super::generator::Generator;
+use super::config::SPILL_AREA;
 use super::mir::Mir;
 use super::operation::Operation;
 use super::symbol::{Loc, Symbol};
-use super::utils::reg;
+use super::utils::{reg, Reg};
 
 const COMMUTATIVE: &[&str] = &["plus", "times", "eq", "neq", "and", "or", "xor"];
 
@@ -231,7 +232,7 @@ impl Node {
                 Loc::Mem(_) => "q".into(),
             },
             */
-            Self::Const { .. } => "C".into(),
+            Self::Const { idx, .. } => format!("C[{}]", idx),
             Self::Unary { op, arg, .. } => {
                 format!("{}[{}]", &arg.topology(), op.as_str())
             }
@@ -262,7 +263,7 @@ impl Node {
 
     /// The main entry point to compile an expression tree
     /// should be called on the root of the expression tree
-    pub fn compile_tree(&mut self, mir: &mut Mir) -> Result<u8> {
+    pub fn compile_tree(&self, mir: &mut Mir) -> Result<u8> {
         self.compile(mir, 0)
     }
 
@@ -635,6 +636,98 @@ impl Node {
                 let mut s = HashSet::new();
                 s.insert(sym.borrow().loc);
                 s
+            }
+        }
+    }
+
+    pub fn subroutine(&self, args: &[Rc<RefCell<Symbol>>], n: &mut usize) -> Node {
+        match self {
+            Node::Void => Node::Void,
+            Node::Unary {
+                op,
+                arg,
+                power,
+                ershov,
+                h,
+                w,
+            } => Node::Unary {
+                op: op.clone(),
+                arg: Box::new(arg.subroutine(args, n)),
+                power: *power,
+                ershov: *ershov,
+                h: *h,
+                w: *w,
+            },
+            Node::Binary {
+                op,
+                left,
+                right,
+                power,
+                ershov,
+                h,
+                w,
+                cond,
+            } => {
+                let left = left.subroutine(args, n);
+                let right = right.subroutine(args, n);
+                Node::Binary {
+                    op: op.clone(),
+                    left: Box::new(left),
+                    right: Box::new(right),
+                    power: *power,
+                    ershov: *ershov,
+                    h: *h,
+                    w: *w,
+                    cond: *cond,
+                }
+            }
+            Node::Const { val, idx } => Node::Const {
+                val: *val,
+                idx: *idx,
+            },
+            Node::Var { .. } => {
+                let v = Node::Var {
+                    sym: args[*n].clone(),
+                };
+                *n += 1;
+                v
+            }
+        }
+    }
+
+    pub fn caller_in_register(&self, mir: &mut Mir, n: &mut usize) {
+        match self {
+            Node::Void | Node::Const { .. } => {}
+            Node::Unary { arg, .. } => arg.caller_in_register(mir, n),
+            Node::Binary { left, right, .. } => {
+                left.caller_in_register(mir, n);
+                right.caller_in_register(mir, n);
+            }
+            Node::Var { sym } => {
+                if *n < 8 {
+                    let loc = sym.borrow().loc;
+                    mir.load_arg(*n as u8, loc);
+                }
+                *n += 1;
+            }
+        }
+    }
+
+    pub fn caller_in_stack(&self, mir: &mut Mir, args: &[Rc<RefCell<Symbol>>], n: &mut usize) {
+        match self {
+            Node::Void | Node::Const { .. } => {}
+            Node::Unary { arg, .. } => arg.caller_in_stack(mir, args, n),
+            Node::Binary { left, right, .. } => {
+                left.caller_in_stack(mir, args, n);
+                right.caller_in_stack(mir, args, n);
+            }
+            Node::Var { sym } => {
+                if *n >= 8 {
+                    let loc = sym.borrow().loc;
+                    mir.load_arg(0, loc);
+                    mir.save_arg(0, args[*n].borrow().loc);
+                }
+                *n += 1;
             }
         }
     }

@@ -309,13 +309,14 @@ impl Builder {
     pub fn compile_mir(&mut self, mir: &mut Mir) -> Result<()> {
         self.block().eliminate();
         let salt = self.salt.clone();
-        self.block().compile(mir, salt)
+        self.block().compile(mir, salt)?;
+        self.block().compile_subroutines(mir)
     }
 
     pub fn optimize_mir(&mut self, mir: &mut Mir) -> Result<()> {
         let opt_level = self.config.opt_level();
 
-        if opt_level >= 1 {
+        if opt_level >= 1 && !self.config.compress() {
             mir.optimize_peephole(1);
 
             /*

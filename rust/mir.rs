@@ -605,7 +605,7 @@ impl Mir {
     }
 
     pub fn save_arg_complex(&mut self, arg: u8, loc: Loc) {
-        self.push(Instruction::LoadArg {
+        self.push(Instruction::SaveArg {
             arg,
             loc,
             complex: true,
@@ -1161,7 +1161,10 @@ impl Mir {
     }
 
     pub fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
-        let _ = self.find_op(op)?;
+        // num_args == 0 means a subroutine call
+        if num_args > 0 {
+            let _ = self.find_op(op)?;
+        }
         self.push(Instruction::Call {
             label: op.to_string(),
             num_args,
@@ -1559,7 +1562,7 @@ impl Mir {
         funclets: &mut HashSet<(FuncletOp, Vec<Reg>)>,
         ins: &Instruction,
     ) -> bool {
-        if !self.config.compress() || !self.config.is_complex() {
+        if !self.config.compress() || !self.config.is_complex() || true {
             return false;
         }
 
@@ -1914,14 +1917,18 @@ impl Mir {
                     }
                 }
                 Instruction::Call { label, num_args } => {
-                    let f = self.find_op(label).unwrap();
-                    match f {
-                        Func::Unary(_) => ir.call(label, *num_args)?,
-                        Func::Binary(_) => ir.call(label, *num_args)?,
-                        Func::UnaryCplx(_) => ir.call_complex(label, *num_args)?,
-                        Func::BinaryCplx(_) => ir.call_complex(label, *num_args)?,
-                        Func::PairedUnary(_) => ir.call(label, *num_args)?,
-                        Func::Slice { .. } => ir.call(label, *num_args)?,
+                    if *num_args == 0 {
+                        ir.call_funclet(label);
+                    } else {
+                        let f = self.find_op(label).unwrap();
+                        match f {
+                            Func::Unary(_) => ir.call(label, *num_args)?,
+                            Func::Binary(_) => ir.call(label, *num_args)?,
+                            Func::UnaryCplx(_) => ir.call_complex(label, *num_args)?,
+                            Func::BinaryCplx(_) => ir.call_complex(label, *num_args)?,
+                            Func::PairedUnary(_) => ir.call(label, *num_args)?,
+                            Func::Slice { .. } => ir.call(label, *num_args)?,
+                        }
                     }
                 }
                 Instruction::Fused { op, dst, a, b, c } => match op {
@@ -1943,7 +1950,13 @@ impl Mir {
                     }
                 }
                 Instruction::Label { label } => ir.set_label(label),
-                Instruction::Branch { label } => ir.branch(label),
+                Instruction::Branch { label } => {
+                    if label == ".ret" {
+                        ir.ret();
+                    } else {
+                        ir.branch(label)
+                    }
+                }
                 Instruction::BranchIf {
                     cond,
                     label,

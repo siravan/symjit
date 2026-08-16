@@ -286,11 +286,11 @@ impl Generator for Complexifier {
         self.mir.load_arg_complex(arg, loc)
     }
 
-    fn save_arg(&mut self, _arg: u8, _loc: Loc) {}
-
-    fn load_arg_complex(&mut self, arg: u8, loc: Loc) {
+    fn save_arg(&mut self, arg: u8, loc: Loc) {
         self.mir.save_arg_complex(arg, loc)
     }
+
+    fn load_arg_complex(&mut self, _arg: u8, _loc: Loc) {}
 
     fn save_arg_complex(&mut self, _arg: u8, _loc: Loc) {}
 
@@ -775,9 +775,13 @@ impl Generator for Complexifier {
         self.mir.call(op, num_args)
     }
 
-    fn call_funclet(&mut self, _label: &str) {}
+    fn call_funclet(&mut self, label: &str) {
+        let _ = self.mir.call(label, 0);
+    }
 
-    fn ret(&mut self) {}
+    fn ret(&mut self) {
+        self.branch(".ret");
+    }
 
     fn prologue_fast(&mut self, _cap: usize, _count_states: usize, _count_obs: usize) {}
     fn epilogue_fast(
