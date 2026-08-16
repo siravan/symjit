@@ -2,13 +2,10 @@ use anyhow::Result;
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::fs;
-use std::io::Write;
 use std::rc::Rc;
 
-use crate::config::SLICE_CAP;
-
 use super::config::Config;
+use super::config::SLICE_CAP;
 use super::mir::Mir;
 use super::node::Node;
 use super::operation::Operation;

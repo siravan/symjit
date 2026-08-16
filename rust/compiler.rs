@@ -17,7 +17,7 @@ use super::operation::Operation;
 use super::parser::Parser;
 use super::symbol::Loc;
 use super::types::Element;
-use super::utils::{advance_id, Compiled};
+use super::utils::Compiled;
 use super::Application;
 
 // #[derive(Debug)]

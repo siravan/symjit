@@ -4,20 +4,12 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::rc::Rc;
 
-use crate::config::SPILL_AREA;
-use crate::utils::Reg;
-
-use super::config::{Config, SLICE_CAP};
+use super::config::Config;
 use super::mir::Mir;
 use super::node::Node;
 use super::symbol::Symbol;
 use super::utils::reg;
-
-pub enum SubroutineStatus {
-    Nothing,
-    Undefined,
-    Defined,
-}
+use super::utils::Reg;
 
 #[derive(Clone, Debug)]
 pub struct Subroutine {

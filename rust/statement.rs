@@ -1,13 +1,10 @@
 use anyhow::Result;
 
-use crate::utils::Reg;
-
-use super::config::SPILL_AREA;
 use super::mir::Mir;
 use super::node::Node;
 use super::operation::Operation;
 use super::symbol::Loc;
-use super::topology::{SubroutineStatus, Topology};
+use super::topology::Topology;
 use super::utils::{is_external_func, reg};
 
 #[derive(Debug, Clone)]
