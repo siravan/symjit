@@ -219,20 +219,36 @@ impl Generator for ArmGenerator {
         self.save_stack(Reg::Ret, idx);
     }
 
-    fn load_arg(&mut self, _arg: u8, _loc: Loc) {
-        unimplemented!()
+    fn load_arg(&mut self, arg: u8, loc: Loc) {
+        match loc {
+            Loc::Param(idx) => load_d_from_mem(&mut self.a, arg, PARAMS, idx),
+            Loc::Stack(idx) => load_d_from_mem(&mut self.a, arg, STACK, idx),
+            Loc::Mem(idx) => load_d_from_mem(&mut self.a, arg, MEM, idx),
+        }
     }
 
-    fn save_arg(&mut self, _arg: u8, _loc: Loc) {
-        unimplemented!()
+    fn save_arg(&mut self, arg: u8, loc: Loc) {
+        match loc {
+            Loc::Param(idx) => save_d_to_mem(&mut self.a, arg, PARAMS, idx),
+            Loc::Stack(idx) => save_d_to_mem(&mut self.a, arg, STACK, idx),
+            Loc::Mem(idx) => save_d_to_mem(&mut self.a, arg, MEM, idx),
+        }
     }
 
-    fn load_arg_complex(&mut self, _arg: u8, _loc: Loc) {
-        unimplemented!()
+    fn load_arg_complex(&mut self, arg: u8, loc: Loc) {
+        match loc {
+            Loc::Param(idx) => load_q_from_mem(&mut self.a, arg, PARAMS, idx / 2),
+            Loc::Stack(idx) => load_q_from_mem(&mut self.a, arg, STACK, idx / 2),
+            Loc::Mem(idx) => load_q_from_mem(&mut self.a, arg, MEM, idx / 2),
+        }
     }
 
-    fn save_arg_complex(&mut self, _arg: u8, _loc: Loc) {
-        unimplemented!()
+    fn save_arg_complex(&mut self, arg: u8, loc: Loc) {
+        match loc {
+            Loc::Param(idx) => save_q_to_mem(&mut self.a, arg, PARAMS, idx / 2),
+            Loc::Stack(idx) => save_q_to_mem(&mut self.a, arg, STACK, idx / 2),
+            Loc::Mem(idx) => save_q_to_mem(&mut self.a, arg, MEM, idx / 2),
+        }
     }
 
     fn neg(&mut self, dst: Reg, s1: Reg) {
