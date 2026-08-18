@@ -1,4 +1,5 @@
 use super::code::Func;
+use super::symbol::Loc;
 use super::utils::{align_stack, Reg};
 
 mod asm;
@@ -206,5 +207,69 @@ fn add_func(amd: &mut Amd, op: &str, f: Func) {
         let label = format!("_func_{}_", op);
         amd.a.set_label(label.as_str());
         amd.a.append_quad(f.func_ptr());
+    }
+}
+
+fn load_f64_from_loc(amd: &mut Amd, r: u8, loc: Loc) {
+    match loc {
+        Loc::Param(idx) => amd.vmovsd_xmm_mem(r, PARAMS, (idx * 8) as i32),
+        Loc::Stack(idx) => amd.vmovsd_xmm_mem(r, STACK, (idx * 8) as i32),
+        Loc::Mem(idx) => amd.vmovsd_xmm_mem(r, MEM, (idx * 8) as i32),
+    }
+}
+
+fn load_f64x2_from_loc(amd: &mut Amd, r: u8, loc: Loc) {
+    match loc {
+        Loc::Param(idx) => amd.vmovdd_xmm_mem(r, PARAMS, (idx * 8) as i32),
+        Loc::Stack(idx) => amd.vmovdd_xmm_mem(r, STACK, (idx * 8) as i32),
+        Loc::Mem(idx) => amd.vmovdd_xmm_mem(r, MEM, (idx * 8) as i32),
+    }
+}
+
+fn load_f64x4_from_loc(amd: &mut Amd, r: u8, loc: Loc) {
+    match loc {
+        Loc::Param(idx) => amd.vmovpd_ymm_mem(r, PARAMS, (idx * 32) as i32),
+        Loc::Stack(idx) => amd.vmovpd_ymm_mem(r, STACK, (idx * 32) as i32),
+        Loc::Mem(idx) => amd.vmovpd_ymm_mem(r, MEM, (idx * 32) as i32),
+    }
+}
+
+fn load_f64x8_from_loc(amd: &mut Amd, r: u8, loc: Loc) {
+    match loc {
+        Loc::Param(idx) => amd.vmovqd_zmm_mem(r, PARAMS, (idx * 64) as i32),
+        Loc::Stack(idx) => amd.vmovqd_zmm_mem(r, STACK, (idx * 64) as i32),
+        Loc::Mem(idx) => amd.vmovqd_zmm_mem(r, MEM, (idx * 64) as i32),
+    }
+}
+
+fn save_f64_to_loc(amd: &mut Amd, r: u8, loc: Loc) {
+    match loc {
+        Loc::Param(idx) => amd.vmovsd_mem_xmm(PARAMS, (idx * 8) as i32, r),
+        Loc::Stack(idx) => amd.vmovsd_mem_xmm(STACK, (idx * 8) as i32, r),
+        Loc::Mem(idx) => amd.vmovsd_mem_xmm(MEM, (idx * 8) as i32, r),
+    }
+}
+
+fn save_f64x2_to_loc(amd: &mut Amd, r: u8, loc: Loc) {
+    match loc {
+        Loc::Param(idx) => amd.vmovdd_mem_xmm(PARAMS, (idx * 8) as i32, r),
+        Loc::Stack(idx) => amd.vmovdd_mem_xmm(STACK, (idx * 8) as i32, r),
+        Loc::Mem(idx) => amd.vmovdd_mem_xmm(MEM, (idx * 8) as i32, r),
+    }
+}
+
+fn save_f64x4_to_loc(amd: &mut Amd, r: u8, loc: Loc) {
+    match loc {
+        Loc::Param(idx) => amd.vmovpd_mem_ymm(PARAMS, (idx * 32) as i32, r),
+        Loc::Stack(idx) => amd.vmovpd_mem_ymm(STACK, (idx * 32) as i32, r),
+        Loc::Mem(idx) => amd.vmovpd_mem_ymm(MEM, (idx * 32) as i32, r),
+    }
+}
+
+fn save_f64x8_to_loc(amd: &mut Amd, r: u8, loc: Loc) {
+    match loc {
+        Loc::Param(idx) => amd.vmovqd_mem_zmm(PARAMS, (idx * 64) as i32, r),
+        Loc::Stack(idx) => amd.vmovqd_mem_zmm(STACK, (idx * 64) as i32, r),
+        Loc::Mem(idx) => amd.vmovqd_mem_zmm(MEM, (idx * 64) as i32, r),
     }
 }

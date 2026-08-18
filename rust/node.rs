@@ -638,7 +638,7 @@ impl Node {
         }
     }
 
-    pub fn subroutine(&self, args: &[Rc<RefCell<Symbol>>], n: &mut usize) -> Node {
+    pub fn subroutine(&self, args: &[Rc<RefCell<Symbol>>], n: &mut u8) -> Node {
         match self {
             Node::Void => Node::Void,
             Node::Unary {
@@ -685,47 +685,26 @@ impl Node {
             },
             Node::Var { .. } => {
                 let v = Node::Var {
-                    sym: args[*n].clone(),
+                    sym: args[*n as usize].clone(),
                 };
-                *n += 1;
+                *n -= 1;
                 v
             }
         }
     }
 
-    pub fn caller_in_register(&self, mir: &mut Mir, n: &mut usize) {
+    pub fn caller(&self, mir: &mut Mir, n: &mut u8) {
         match self {
             Node::Void | Node::Const { .. } => {}
-            Node::Unary { arg, .. } => arg.caller_in_register(mir, n),
+            Node::Unary { arg, .. } => arg.caller(mir, n),
             Node::Binary { left, right, .. } => {
-                left.caller_in_register(mir, n);
-                right.caller_in_register(mir, n);
+                left.caller(mir, n);
+                right.caller(mir, n);
             }
             Node::Var { sym } => {
-                if *n < 8 {
-                    let loc = sym.borrow().loc;
-                    mir.load_arg(*n as u8, loc);
-                }
-                *n += 1;
-            }
-        }
-    }
-
-    pub fn caller_in_stack(&self, mir: &mut Mir, args: &[Rc<RefCell<Symbol>>], n: &mut usize) {
-        match self {
-            Node::Void | Node::Const { .. } => {}
-            Node::Unary { arg, .. } => arg.caller_in_stack(mir, args, n),
-            Node::Binary { left, right, .. } => {
-                left.caller_in_stack(mir, args, n);
-                right.caller_in_stack(mir, args, n);
-            }
-            Node::Var { sym } => {
-                if *n >= 8 {
-                    let loc = sym.borrow().loc;
-                    mir.load_arg(0, loc);
-                    mir.save_arg(0, args[*n].borrow().loc);
-                }
-                *n += 1;
+                let loc = sym.borrow().loc;
+                mir.load_arg(*n as u8, loc);
+                *n -= 1;
             }
         }
     }

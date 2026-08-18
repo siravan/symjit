@@ -64,18 +64,13 @@ impl Statement {
             Statement::Assign { lhs, rhs, topo } => {
                 if let Some((num_args, defined)) = topology.status(&topo) {
                     if !defined {
-                        let mut n: usize = 0;
+                        let mut n = num_args as u8 - 1;
                         let body = rhs.subroutine(&topology.args, &mut n);
                         topology.define(&topo, body);
                     }
 
-                    if num_args >= 8 {
-                        let mut n: usize = 0;
-                        rhs.caller_in_stack(ir, &topology.args, &mut n);
-                    }
-
-                    let mut n: usize = 0;
-                    rhs.caller_in_register(ir, &mut n);
+                    let mut n = num_args as u8 - 1;
+                    rhs.caller(ir, &mut n);
 
                     ir.call(&topo, 0)?;
                     Self::save_result(ir, lhs);

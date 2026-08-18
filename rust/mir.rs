@@ -420,7 +420,7 @@ impl Mir {
     }
 
     pub fn used_registers(&self) -> Vec<Reg> {
-        let mut mask: u32 = 0;
+        let mut mask: u32 = if self.config.compress() { !0 as u32 } else { 0 };
 
         for ins in self.code.iter() {
             mask |= Self::get_dst(&ins);

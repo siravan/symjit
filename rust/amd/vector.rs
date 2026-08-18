@@ -386,62 +386,36 @@ impl Generator for AmdVectorF64x4Generator {
     }
 
     fn load_arg(&mut self, arg: u8, loc: Loc) {
-        match loc {
-            Loc::Param(idx) => self.amd.vmovpd_ymm_mem(arg, PARAMS, idx as i32 * REG_SIZE),
-            Loc::Stack(idx) => self.amd.vmovpd_ymm_mem(arg, STACK, idx as i32 * REG_SIZE),
-            Loc::Mem(idx) => self.amd.vmovpd_ymm_mem(arg, MEM, idx as i32 * REG_SIZE),
+        if arg < 16 {
+            load_f64x4_from_loc(&mut self.amd, arg, loc);
+        } else {
+            load_f64x4_from_loc(&mut self.amd, 0, loc);
+            save_f64x4_to_loc(&mut self.amd, arg, self.config.location(arg));
         }
     }
 
-    fn save_arg(&mut self, arg: u8, loc: Loc) {
-        match loc {
-            Loc::Param(idx) => self.amd.vmovpd_mem_ymm(PARAMS, idx as i32 * REG_SIZE, arg),
-            Loc::Stack(idx) => self.amd.vmovpd_mem_ymm(STACK, idx as i32 * REG_SIZE, arg),
-            Loc::Mem(idx) => self.amd.vmovpd_mem_ymm(MEM, idx as i32 * REG_SIZE, arg),
+    fn save_arg(&mut self, arg: u8, _loc: Loc) {
+        if arg < 16 {
+            save_f64x4_to_loc(&mut self.amd, arg, self.config.location(arg));
         }
     }
 
     fn load_arg_complex(&mut self, arg: u8, loc: Loc) {
-        match loc {
-            Loc::Param(idx) => {
-                self.amd
-                    .vmovpd_ymm_mem(2 * arg, PARAMS, idx as i32 * REG_SIZE);
-                self.amd
-                    .vmovpd_ymm_mem(2 * arg + 1, PARAMS, (idx + 1) as i32 * REG_SIZE);
-            }
-            Loc::Stack(idx) => {
-                self.amd
-                    .vmovpd_ymm_mem(2 * arg, STACK, idx as i32 * REG_SIZE);
-                self.amd
-                    .vmovpd_ymm_mem(2 * arg + 1, STACK, (idx + 1) as i32 * REG_SIZE);
-            }
-            Loc::Mem(idx) => {
-                self.amd.vmovpd_ymm_mem(2 * arg, MEM, idx as i32 * REG_SIZE);
-                self.amd
-                    .vmovpd_ymm_mem(2 * arg + 1, MEM, (idx + 1) as i32 * REG_SIZE);
-            }
+        if arg < 8 {
+            load_f64x4_from_loc(&mut self.amd, 2 * arg, loc);
+            load_f64x4_from_loc(&mut self.amd, 2 * arg + 1, loc.imag());
+        } else {
+            load_f64x4_from_loc(&mut self.amd, 0, loc);
+            load_f64x4_from_loc(&mut self.amd, 1, loc.imag());
+            save_f64x4_to_loc(&mut self.amd, 0, self.config.location(arg));
+            save_f64x4_to_loc(&mut self.amd, 1, self.config.location(arg).imag());
         }
     }
 
-    fn save_arg_complex(&mut self, arg: u8, loc: Loc) {
-        match loc {
-            Loc::Param(idx) => {
-                self.amd
-                    .vmovpd_mem_ymm(PARAMS, idx as i32 * REG_SIZE, 2 * arg);
-                self.amd
-                    .vmovpd_mem_ymm(PARAMS, (idx + 1) as i32 * REG_SIZE, 2 * arg + 1);
-            }
-            Loc::Stack(idx) => {
-                self.amd
-                    .vmovpd_mem_ymm(STACK, idx as i32 * REG_SIZE, 2 * arg);
-                self.amd
-                    .vmovpd_mem_ymm(STACK, (idx + 1) as i32 * REG_SIZE, 2 * arg + 1);
-            }
-            Loc::Mem(idx) => {
-                self.amd.vmovpd_mem_ymm(MEM, idx as i32 * REG_SIZE, 2 * arg);
-                self.amd
-                    .vmovpd_mem_ymm(MEM, (idx + 1) as i32 * REG_SIZE, 2 * arg + 1);
-            }
+    fn save_arg_complex(&mut self, arg: u8, _loc: Loc) {
+        if arg < 8 {
+            save_f64x4_to_loc(&mut self.amd, 2 * arg, self.config.location(arg));
+            save_f64x4_to_loc(&mut self.amd, 2 * arg + 1, self.config.location(arg).imag());
         }
     }
 

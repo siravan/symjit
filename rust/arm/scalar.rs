@@ -220,34 +220,32 @@ impl Generator for ArmGenerator {
     }
 
     fn load_arg(&mut self, arg: u8, loc: Loc) {
-        match loc {
-            Loc::Param(idx) => load_d_from_mem(&mut self.a, arg, PARAMS, idx),
-            Loc::Stack(idx) => load_d_from_mem(&mut self.a, arg, STACK, idx),
-            Loc::Mem(idx) => load_d_from_mem(&mut self.a, arg, MEM, idx),
+        if arg < 32 {
+            load_d_from_loc(&mut self.a, arg, loc);
+        } else {
+            load_d_from_loc(&mut self.a, 0, loc);
+            save_d_to_loc(&mut self.a, 0, self.config.location(arg));
         }
     }
 
-    fn save_arg(&mut self, arg: u8, loc: Loc) {
-        match loc {
-            Loc::Param(idx) => save_d_to_mem(&mut self.a, arg, PARAMS, idx),
-            Loc::Stack(idx) => save_d_to_mem(&mut self.a, arg, STACK, idx),
-            Loc::Mem(idx) => save_d_to_mem(&mut self.a, arg, MEM, idx),
+    fn save_arg(&mut self, arg: u8, _loc: Loc) {
+        if arg < 32 {
+            save_d_to_loc(&mut self.a, arg, self.config.location(arg));
         }
     }
 
     fn load_arg_complex(&mut self, arg: u8, loc: Loc) {
-        match loc {
-            Loc::Param(idx) => load_q_from_mem(&mut self.a, arg, PARAMS, idx / 2),
-            Loc::Stack(idx) => load_q_from_mem(&mut self.a, arg, STACK, idx / 2),
-            Loc::Mem(idx) => load_q_from_mem(&mut self.a, arg, MEM, idx / 2),
+        if arg < 32 {
+            load_c_from_loc(&mut self.a, arg, loc);
+        } else {
+            load_c_from_loc(&mut self.a, 0, loc);
+            save_c_to_loc(&mut self.a, 0, self.config.location(arg));
         }
     }
 
-    fn save_arg_complex(&mut self, arg: u8, loc: Loc) {
-        match loc {
-            Loc::Param(idx) => save_q_to_mem(&mut self.a, arg, PARAMS, idx / 2),
-            Loc::Stack(idx) => save_q_to_mem(&mut self.a, arg, STACK, idx / 2),
-            Loc::Mem(idx) => save_q_to_mem(&mut self.a, arg, MEM, idx / 2),
+    fn save_arg_complex(&mut self, arg: u8, _loc: Loc) {
+        if arg < 32 {
+            save_c_to_loc(&mut self.a, arg, self.config.location(arg));
         }
     }
 

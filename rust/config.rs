@@ -7,6 +7,7 @@ use std::sync::Arc;
 use super::code::VirtualTable;
 use super::defuns::Defuns;
 use super::operation::Operation;
+use super::symbol::Loc;
 use super::utils::Storage;
 
 pub const USE_SIMD: u32 = 0x0000_0001;
@@ -532,6 +533,11 @@ impl Config {
         } else {
             (self.available_registers() - 6) / 2
         }
+    }
+
+    pub fn location(&self, arg: u8) -> Loc {
+        let k = if self.is_complex() { 2 } else { 1 };
+        Loc::Stack(SPILL_AREA as u32 + k * arg as u32)
     }
 
     pub fn symbolica(&self) -> bool {

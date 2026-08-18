@@ -272,52 +272,32 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn load_arg(&mut self, arg: u8, loc: Loc) {
-        match loc {
-            Loc::Param(idx) => load_q_from_mem(&mut self.a, arg, PARAMS, idx),
-            Loc::Stack(idx) => load_q_from_mem(&mut self.a, arg, STACK, idx),
-            Loc::Mem(idx) => load_q_from_mem(&mut self.a, arg, MEM, idx),
+        if arg < 32 {
+            load_q_from_loc(&mut self.a, arg, loc);
+        } else {
+            load_q_from_loc(&mut self.a, 0, loc);
+            save_q_to_loc(&mut self.a, arg, self.config.location(arg));
         }
     }
 
-    fn save_arg(&mut self, arg: u8, loc: Loc) {
-        match loc {
-            Loc::Param(idx) => save_q_to_mem(&mut self.a, arg, PARAMS, idx),
-            Loc::Stack(idx) => save_q_to_mem(&mut self.a, arg, STACK, idx),
-            Loc::Mem(idx) => save_q_to_mem(&mut self.a, arg, MEM, idx),
+    fn save_arg(&mut self, arg: u8, _loc: Loc) {
+        if arg < 32 {
+            save_q_to_loc(&mut self.a, arg, self.config.location(arg));
         }
     }
 
     fn load_arg_complex(&mut self, arg: u8, loc: Loc) {
-        match loc {
-            Loc::Param(idx) => {
-                load_q_from_mem(&mut self.a, 2 * arg, PARAMS, idx);
-                load_q_from_mem(&mut self.a, 2 * arg + 1, PARAMS, idx + 1);
-            }
-            Loc::Stack(idx) => {
-                load_q_from_mem(&mut self.a, 2 * arg, STACK, idx);
-                load_q_from_mem(&mut self.a, 2 * arg + 1, STACK, idx + 1);
-            }
-            Loc::Mem(idx) => {
-                load_q_from_mem(&mut self.a, 2 * arg, MEM, idx);
-                load_q_from_mem(&mut self.a, 2 * arg + 1, MEM, idx + 1);
-            }
+        if arg < 16 {
+            load_paired_q_from_loc(&mut self.a, 2 * arg, 2 * arg + 1, loc);
+        } else {
+            load_paired_q_from_loc(&mut self.a, 0, 1, loc);
+            save_paired_q_to_loc(&mut self.a, 0, 1, self.config.location(arg));
         }
     }
 
-    fn save_arg_complex(&mut self, arg: u8, loc: Loc) {
-        match loc {
-            Loc::Param(idx) => {
-                save_q_to_mem(&mut self.a, 2 * arg, PARAMS, idx);
-                save_q_to_mem(&mut self.a, 2 * arg + 1, PARAMS, idx + 1);
-            }
-            Loc::Stack(idx) => {
-                save_q_to_mem(&mut self.a, 2 * arg, STACK, idx);
-                save_q_to_mem(&mut self.a, 2 * arg + 1, STACK, idx + 1);
-            }
-            Loc::Mem(idx) => {
-                save_q_to_mem(&mut self.a, 2 * arg, MEM, idx);
-                save_q_to_mem(&mut self.a, 2 * arg + 1, MEM, idx + 1);
-            }
+    fn save_arg_complex(&mut self, arg: u8, _loc: Loc) {
+        if arg < 16 {
+            save_paired_q_to_loc(&mut self.a, 2 * arg, 2 * arg + 1, self.config.location(arg));
         }
     }
 

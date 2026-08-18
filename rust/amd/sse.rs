@@ -264,20 +264,12 @@ impl Generator for AmdSSEGenerator {
         self.save_stack(Reg::Ret, idx);
     }
 
-    fn load_arg(&mut self, arg: u8, loc: Loc) {
-        match loc {
-            Loc::Param(idx) => self.amd.movsd_xmm_mem(arg, PARAMS, (idx * REG_SIZE) as i32),
-            Loc::Stack(idx) => self.amd.movsd_xmm_mem(arg, STACK, (idx * REG_SIZE) as i32),
-            Loc::Mem(idx) => self.amd.movsd_xmm_mem(arg, MEM, (idx * REG_SIZE) as i32),
-        }
+    fn load_arg(&mut self, _arg: u8, _loc: Loc) {
+        unimplemented!()
     }
 
-    fn save_arg(&mut self, arg: u8, loc: Loc) {
-        match loc {
-            Loc::Param(idx) => self.amd.movsd_mem_xmm(PARAMS, (idx * REG_SIZE) as i32, arg),
-            Loc::Stack(idx) => self.amd.movsd_mem_xmm(STACK, (idx * REG_SIZE) as i32, arg),
-            Loc::Mem(idx) => self.amd.movsd_mem_xmm(MEM, (idx * REG_SIZE) as i32, arg),
-        }
+    fn save_arg(&mut self, _arg: u8, _loc: Loc) {
+        unimplemented!()
     }
 
     fn load_arg_complex(&mut self, _arg: u8, _loc: Loc) {

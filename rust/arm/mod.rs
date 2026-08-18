@@ -3,6 +3,7 @@ mod macros;
 
 use super::assembler::Assembler;
 use super::code::Func;
+use super::symbol::Loc;
 use super::utils::Reg;
 
 const SP: u8 = 31;
@@ -282,6 +283,102 @@ fn save_paired_q_to_mem(a: &mut Assembler, d1: u8, d2: u8, base: u8, idx: u32) {
             emit(a, arm! {add x(SCRATCH1), x(base), x(SCRATCH1), lsl #4});
             emit(a, arm! {stp q(d1), q(d2), [x(SCRATCH1), #0]});
         }
+    }
+}
+
+fn load_d_from_loc(a: &mut Assembler, r: u8, loc: Loc) {
+    match loc {
+        Loc::Param(idx) => load_d_from_mem(a, r, PARAMS, idx),
+        Loc::Stack(idx) => load_d_from_mem(a, r, STACK, idx),
+        Loc::Mem(idx) => load_d_from_mem(a, r, MEM, idx),
+    }
+}
+
+fn load_c_from_loc(a: &mut Assembler, r: u8, loc: Loc) {
+    match loc {
+        Loc::Param(idx) => load_q_from_mem(a, r, PARAMS, idx / 2),
+        Loc::Stack(idx) => load_q_from_mem(a, r, STACK, idx / 2),
+        Loc::Mem(idx) => load_q_from_mem(a, r, MEM, idx / 2),
+    }
+}
+
+fn load_q_from_loc(a: &mut Assembler, r: u8, loc: Loc) {
+    match loc {
+        Loc::Param(idx) => load_q_from_mem(a, r, PARAMS, idx),
+        Loc::Stack(idx) => load_q_from_mem(a, r, STACK, idx),
+        Loc::Mem(idx) => load_q_from_mem(a, r, MEM, idx),
+    }
+}
+
+fn save_d_to_loc(a: &mut Assembler, r: u8, loc: Loc) {
+    match loc {
+        Loc::Param(idx) => save_d_to_mem(a, r, PARAMS, idx),
+        Loc::Stack(idx) => save_d_to_mem(a, r, STACK, idx),
+        Loc::Mem(idx) => save_d_to_mem(a, r, MEM, idx),
+    }
+}
+
+fn save_c_to_loc(a: &mut Assembler, r: u8, loc: Loc) {
+    match loc {
+        Loc::Param(idx) => save_q_to_mem(a, r, PARAMS, idx / 2),
+        Loc::Stack(idx) => save_q_to_mem(a, r, STACK, idx / 2),
+        Loc::Mem(idx) => save_q_to_mem(a, r, MEM, idx / 2),
+    }
+}
+
+fn save_q_to_loc(a: &mut Assembler, r: u8, loc: Loc) {
+    match loc {
+        Loc::Param(idx) => save_q_to_mem(a, r, PARAMS, idx),
+        Loc::Stack(idx) => save_q_to_mem(a, r, STACK, idx),
+        Loc::Mem(idx) => save_q_to_mem(a, r, MEM, idx),
+    }
+}
+
+fn load_paired_d_from_loc(a: &mut Assembler, r1: u8, r2: u8, loc: Loc) {
+    match loc {
+        Loc::Param(idx) => load_paired_d_from_mem(a, r1, r2, PARAMS, idx),
+        Loc::Stack(idx) => load_paired_d_from_mem(a, r1, r2, STACK, idx),
+        Loc::Mem(idx) => load_paired_d_from_mem(a, r1, r2, MEM, idx),
+    }
+}
+
+fn load_paired_c_from_loc(a: &mut Assembler, r1: u8, r2: u8, loc: Loc) {
+    match loc {
+        Loc::Param(idx) => load_paired_q_from_mem(a, r1, r2, PARAMS, idx / 2),
+        Loc::Stack(idx) => load_paired_q_from_mem(a, r1, r2, STACK, idx / 2),
+        Loc::Mem(idx) => load_paired_q_from_mem(a, r1, r2, MEM, idx / 2),
+    }
+}
+
+fn load_paired_q_from_loc(a: &mut Assembler, r1: u8, r2: u8, loc: Loc) {
+    match loc {
+        Loc::Param(idx) => load_paired_q_from_mem(a, r1, r2, PARAMS, idx),
+        Loc::Stack(idx) => load_paired_q_from_mem(a, r1, r2, STACK, idx),
+        Loc::Mem(idx) => load_paired_q_from_mem(a, r1, r2, MEM, idx),
+    }
+}
+
+fn save_paired_d_to_loc(a: &mut Assembler, r1: u8, r2: u8, loc: Loc) {
+    match loc {
+        Loc::Param(idx) => save_paired_d_to_mem(a, r1, r2, PARAMS, idx),
+        Loc::Stack(idx) => save_paired_d_to_mem(a, r1, r2, STACK, idx),
+        Loc::Mem(idx) => save_paired_d_to_mem(a, r1, r2, MEM, idx),
+    }
+}
+
+fn save_paired_c_to_loc(a: &mut Assembler, r1: u8, r2: u8, loc: Loc) {
+    match loc {
+        Loc::Param(idx) => save_paired_q_to_mem(a, r1, r2, PARAMS, idx / 2),
+        Loc::Stack(idx) => save_paired_q_to_mem(a, r1, r2, STACK, idx / 2),
+        Loc::Mem(idx) => save_paired_q_to_mem(a, r1, r2, MEM, idx / 2),
+    }
+}
+
+fn save_paired_q_to_loc(a: &mut Assembler, r1: u8, r2: u8, loc: Loc) {
+    match loc {
+        Loc::Param(idx) => save_paired_q_to_mem(a, r1, r2, PARAMS, idx),
+        Loc::Stack(idx) => save_paired_q_to_mem(a, r1, r2, STACK, idx),
+        Loc::Mem(idx) => save_paired_q_to_mem(a, r1, r2, MEM, idx),
     }
 }
 

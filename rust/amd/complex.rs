@@ -235,22 +235,17 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn load_arg(&mut self, arg: u8, loc: Loc) {
-        match loc {
-            Loc::Param(idx) => self
-                .amd
-                .vmovdd_xmm_mem(arg, PARAMS, (idx * REG_SIZE) as i32),
-            Loc::Stack(idx) => self.amd.vmovdd_xmm_mem(arg, STACK, (idx * REG_SIZE) as i32),
-            Loc::Mem(idx) => self.amd.vmovdd_xmm_mem(arg, MEM, (idx * REG_SIZE) as i32),
+        if arg < 16 {
+            load_f64x2_from_loc(&mut self.amd, arg, loc);
+        } else {
+            load_f64x2_from_loc(&mut self.amd, 0, loc);
+            save_f64x2_to_loc(&mut self.amd, 0, self.config.location(arg));
         }
     }
 
-    fn save_arg(&mut self, arg: u8, loc: Loc) {
-        match loc {
-            Loc::Param(idx) => self
-                .amd
-                .vmovdd_mem_xmm(PARAMS, (idx * REG_SIZE) as i32, arg),
-            Loc::Stack(idx) => self.amd.vmovdd_mem_xmm(STACK, (idx * REG_SIZE) as i32, arg),
-            Loc::Mem(idx) => self.amd.vmovdd_mem_xmm(MEM, (idx * REG_SIZE) as i32, arg),
+    fn save_arg(&mut self, arg: u8, _loc: Loc) {
+        if arg < 16 {
+            save_f64x2_to_loc(&mut self.amd, arg, self.config.location(arg));
         }
     }
 
