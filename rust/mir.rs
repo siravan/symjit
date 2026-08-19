@@ -1829,14 +1829,16 @@ impl Mir {
     }
 
     pub fn rerun(&self, ir: &mut dyn Generator) -> Result<()> {
-        let mut funclets: HashSet<(FuncletOp, Vec<Reg>)> = HashSet::new();
+        // let mut funclets: HashSet<(FuncletOp, Vec<Reg>)> = HashSet::new();
 
         let mut iter = self.code.iter().peekable();
 
         while let Some(ins) = iter.next() {
+            /*
             if self.try_funclet(ir, &mut funclets, &ins) {
                 continue;
             }
+            */
 
             match &ins {
                 Instruction::Nop | Instruction::End => {}
@@ -1868,18 +1870,12 @@ impl Mir {
                 Instruction::LoadComplex { xd, yd, loc } => {
                     match loc {
                         Loc::Mem(idx) => {
-                            // ir.load_mem(*xd, *idx);
-                            // ir.load_mem(*yd, 1 + *idx);
                             ir.load_mem_complex(*xd, *yd, *idx);
                         }
                         Loc::Stack(idx) => {
-                            // ir.load_stack(*xd, *idx);
-                            // ir.load_stack(*yd, 1 + *idx);
                             ir.load_stack_complex(*xd, *yd, *idx);
                         }
                         Loc::Param(idx) => {
-                            // ir.load_param(*xd, *idx);
-                            // ir.load_param(*yd, 1 + *idx);
                             ir.load_param_complex(*xd, *yd, *idx);
                         }
                     };
@@ -1887,13 +1883,9 @@ impl Mir {
                 Instruction::SaveComplex { xs, ys, loc } => {
                     match loc {
                         Loc::Mem(idx) => {
-                            // ir.save_mem(*xs, *idx);
-                            // ir.save_mem(*ys, 1 + *idx);
                             ir.save_mem_complex(*xs, *ys, *idx);
                         }
                         Loc::Stack(idx) => {
-                            // ir.save_stack(*xs, *idx);
-                            // ir.save_stack(*ys, 1 + *idx);
                             ir.save_stack_complex(*xs, *ys, *idx);
                         }
                         Loc::Param(_) => unreachable!(),
@@ -2053,7 +2045,7 @@ impl Mir {
             }
         }
 
-        self.create_funclets(ir, funclets)?;
+        // self.create_funclets(ir, funclets)?;
 
         Ok(())
     }
