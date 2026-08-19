@@ -390,7 +390,7 @@ impl Generator for AmdVectorF64x4Generator {
             load_f64x4_from_loc(&mut self.amd, arg, loc);
         } else {
             load_f64x4_from_loc(&mut self.amd, 0, loc);
-            save_f64x4_to_loc(&mut self.amd, arg, self.config.location(arg));
+            save_f64x4_to_loc(&mut self.amd, 0, self.config.location(arg));
         }
     }
 

@@ -276,7 +276,7 @@ impl Generator for ArmSimdGenerator {
             load_q_from_loc(&mut self.a, arg, loc);
         } else {
             load_q_from_loc(&mut self.a, 0, loc);
-            save_q_to_loc(&mut self.a, arg, self.config.location(arg));
+            save_q_to_loc(&mut self.a, 0, self.config.location(arg));
         }
     }
 
