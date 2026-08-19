@@ -687,24 +687,23 @@ impl Node {
                 let v = Node::Var {
                     sym: args[*n as usize].clone(),
                 };
-                *n -= 1;
+                *n += 1;
                 v
             }
         }
     }
 
-    pub fn caller(&self, mir: &mut Mir, n: &mut u8) {
+    pub fn caller(&self, mir: &mut Mir, locs: &mut Vec<Loc>) {
         match self {
             Node::Void | Node::Const { .. } => {}
-            Node::Unary { arg, .. } => arg.caller(mir, n),
+            Node::Unary { arg, .. } => arg.caller(mir, locs),
             Node::Binary { left, right, .. } => {
-                left.caller(mir, n);
-                right.caller(mir, n);
+                left.caller(mir, locs);
+                right.caller(mir, locs);
             }
             Node::Var { sym } => {
                 let loc = sym.borrow().loc;
-                mir.load_arg(*n as u8, loc);
-                *n -= 1;
+                locs.push(loc);
             }
         }
     }

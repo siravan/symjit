@@ -437,19 +437,19 @@ impl Generator for RiscV {
         self.save_stack(Reg::Ret, idx);
     }
 
-    fn load_arg(&mut self, _arg: u8, _loc: Loc) {
+    fn load_args(&mut self, _locs: Vec<Loc>, _ultra: bool) {
         unimplemented!()
     }
 
-    fn save_arg(&mut self, _arg: u8, _loc: Loc) {
+    fn save_args(&mut self, _num_args: u8, _ultra: bool) {
         unimplemented!()
     }
 
-    fn load_arg_complex(&mut self, _arg: u8, _loc: Loc) {
+    fn load_args_complex(&mut self, _locs: Vec<Loc>, _ultra: bool) {
         unimplemented!()
     }
 
-    fn save_arg_complex(&mut self, _arg: u8, _loc: Loc) {
+    fn save_args_complex(&mut self, _num_args: u8, _ultra: bool) {
         unimplemented!()
     }
 

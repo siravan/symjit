@@ -107,9 +107,7 @@ impl Topology {
             match &f.body {
                 Some(body) => {
                     ir.set_label(&f.topology);
-                    for i in 0..f.num_args {
-                        ir.save_arg(i as u8, self.args[i].borrow().loc);
-                    }
+                    ir.save_args(f.num_args as u8, false);
                     let dst = body.compile_tree(ir)?;
                     ir.nop();
                     ir.fmov(Reg::Ret, reg(dst));

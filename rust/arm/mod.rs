@@ -334,6 +334,7 @@ fn save_q_to_loc(a: &mut Assembler, r: u8, loc: Loc) {
     }
 }
 
+/*
 fn load_paired_d_from_loc(a: &mut Assembler, r1: u8, r2: u8, loc: Loc) {
     match loc {
         Loc::Param(idx) => load_paired_d_from_mem(a, r1, r2, PARAMS, idx),
@@ -349,6 +350,7 @@ fn load_paired_c_from_loc(a: &mut Assembler, r1: u8, r2: u8, loc: Loc) {
         Loc::Mem(idx) => load_paired_q_from_mem(a, r1, r2, MEM, idx / 2),
     }
 }
+*/
 
 fn load_paired_q_from_loc(a: &mut Assembler, r1: u8, r2: u8, loc: Loc) {
     match loc {
@@ -358,6 +360,7 @@ fn load_paired_q_from_loc(a: &mut Assembler, r1: u8, r2: u8, loc: Loc) {
     }
 }
 
+/*
 fn save_paired_d_to_loc(a: &mut Assembler, r1: u8, r2: u8, loc: Loc) {
     match loc {
         Loc::Param(idx) => save_paired_d_to_mem(a, r1, r2, PARAMS, idx),
@@ -373,6 +376,7 @@ fn save_paired_c_to_loc(a: &mut Assembler, r1: u8, r2: u8, loc: Loc) {
         Loc::Mem(idx) => save_paired_q_to_mem(a, r1, r2, MEM, idx / 2),
     }
 }
+*/
 
 fn save_paired_q_to_loc(a: &mut Assembler, r1: u8, r2: u8, loc: Loc) {
     match loc {

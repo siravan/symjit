@@ -205,11 +205,25 @@ impl GreedyAllocator {
                     let ys = self.consume(ip, ys);
                     self.push(Instruction::SaveComplex { xs, ys, loc });
                 }
-                Instruction::LoadArg { arg, loc, complex } => {
-                    self.push(Instruction::LoadArg { arg, loc, complex })
-                }
-                Instruction::SaveArg { arg, loc, complex } => {
-                    self.push(Instruction::SaveArg { arg, loc, complex });
+                Instruction::LoadArgs {
+                    locs,
+                    complex,
+                    ultra,
+                } => self.push(Instruction::LoadArgs {
+                    locs,
+                    complex,
+                    ultra,
+                }),
+                Instruction::SaveArgs {
+                    num_args,
+                    complex,
+                    ultra,
+                } => {
+                    self.push(Instruction::SaveArgs {
+                        num_args,
+                        complex,
+                        ultra,
+                    });
                 }
                 Instruction::Mov { dst, s1 } => {
                     let (dst, s1) = self.unary_op(ip, dst, s1);
@@ -466,15 +480,28 @@ impl GreedyAllocator {
                         self.allocs[r as usize].loc = Some(loc.imag());
                     }
                 }
-                Instruction::LoadArg { arg, loc, complex } => {
-                    self.locs.insert(loc);
-                    if complex {
-                        self.locs.insert(loc.imag());
-                    }
-                    self.push(Instruction::LoadArg { arg, loc, complex })
+                Instruction::LoadArgs {
+                    locs,
+                    complex,
+                    ultra,
+                } => {
+                    self.locs.extend(&locs);
+                    self.push(Instruction::LoadArgs {
+                        locs,
+                        complex,
+                        ultra,
+                    })
                 }
-                Instruction::SaveArg { arg, loc, complex } => {
-                    self.push(Instruction::SaveArg { arg, loc, complex });
+                Instruction::SaveArgs {
+                    num_args,
+                    complex,
+                    ultra,
+                } => {
+                    self.push(Instruction::SaveArgs {
+                        num_args,
+                        complex,
+                        ultra,
+                    });
                 }
                 Instruction::Mov { dst, s1 } => {
                     let s1 = self.deallocate(s1);
@@ -504,7 +531,7 @@ impl GreedyAllocator {
                     false_val,
                     cond,
                 } => {
-                    if true || self.config.is_sse() {
+                    if self.config.is_sse() {
                         let (dst, _) = self.allocate(ip, dst);
                         let true_val = self.deallocate(true_val);
                         let false_val = self.deallocate(false_val);

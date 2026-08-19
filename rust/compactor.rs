@@ -57,8 +57,7 @@ impl Compactor {
                 Instruction::Load { loc, .. }
                 | Instruction::IfElse { cond: loc, .. }
                 | Instruction::LoadMath { loc, .. }
-                | Instruction::LoadComplex { loc, .. }
-                | Instruction::LoadArg { loc, .. } => {
+                | Instruction::LoadComplex { loc, .. } => {
                     if let Loc::Stack(idx) = loc {
                         if idx >= self.fixed {
                             if let Some(x) = self.live.get_mut(&loc) {
@@ -67,9 +66,18 @@ impl Compactor {
                         }
                     }
                 }
-                Instruction::Save { loc, .. }
-                | Instruction::SaveComplex { loc, .. }
-                | Instruction::SaveArg { loc, .. } => {
+                Instruction::LoadArgs { locs, .. } => {
+                    for loc in locs {
+                        if let Loc::Stack(idx) = loc {
+                            if idx >= self.fixed {
+                                if let Some(x) = self.live.get_mut(&loc) {
+                                    *x = ip + 1;
+                                }
+                            }
+                        }
+                    }
+                }
+                Instruction::Save { loc, .. } | Instruction::SaveComplex { loc, .. } => {
                     if let Loc::Stack(idx) = loc {
                         if idx >= self.fixed {
                             self.live.insert(loc, ip);
@@ -144,12 +152,16 @@ impl Compactor {
                         loc: l,
                     });
                 }
-                Instruction::LoadArg { arg, loc, complex } => {
-                    let l = self.load(*loc, ip);
-                    self.push(Instruction::LoadArg {
-                        arg: *arg,
-                        loc: l,
+                Instruction::LoadArgs {
+                    locs,
+                    complex,
+                    ultra,
+                } => {
+                    let l: Vec<Loc> = locs.iter().map(|x| self.load(*x, ip)).collect();
+                    self.push(Instruction::LoadArgs {
+                        locs: l,
                         complex: *complex,
+                        ultra: *ultra,
                     })
                 }
                 Instruction::LoadMath { op, dst, s1, loc } => {
@@ -187,14 +199,15 @@ impl Compactor {
                         loc: l,
                     });
                 }
-                Instruction::SaveArg { arg, loc, complex } => {
-                    let l = self.save(*loc);
-                    self.push(Instruction::SaveArg {
-                        arg: *arg,
-                        loc: l,
-                        complex: *complex,
-                    })
-                }
+                Instruction::SaveArgs {
+                    num_args,
+                    complex,
+                    ultra,
+                } => self.push(Instruction::SaveArgs {
+                    num_args: *num_args,
+                    complex: *complex,
+                    ultra: *ultra,
+                }),
                 Instruction::Label { label } => {
                     if !self.labels.contains(label) {
                         // beginning of a backward loop

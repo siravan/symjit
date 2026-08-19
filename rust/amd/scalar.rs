@@ -267,32 +267,44 @@ impl Generator for AmdScalarGenerator {
         self.save_stack(Reg::Ret, idx);
     }
 
-    fn load_arg(&mut self, arg: u8, loc: Loc) {
-        if arg < 16 {
-            load_f64_from_loc(&mut self.amd, arg, loc);
-        } else {
-            load_f64_from_loc(&mut self.amd, 0, loc);
-            save_f64_to_loc(&mut self.amd, 0, self.config.location(arg));
+    fn load_args(&mut self, locs: Vec<Loc>, _ultra: bool) {
+        for (arg, loc) in locs.iter().enumerate() {
+            if arg >= 16 {
+                load_f64_from_loc(&mut self.amd, 0, *loc);
+                save_f64_to_loc(&mut self.amd, 0, self.config.location(arg as u8));
+            }
+        }
+
+        for (arg, loc) in locs.iter().enumerate() {
+            if arg < 16 {
+                load_f64_from_loc(&mut self.amd, arg as u8, *loc);
+            }
         }
     }
 
-    fn save_arg(&mut self, arg: u8, _loc: Loc) {
-        if arg < 16 {
+    fn save_args(&mut self, num_args: u8, _ultra: bool) {
+        for arg in 0..num_args.min(16) {
             save_f64_to_loc(&mut self.amd, arg, self.config.location(arg));
         }
     }
 
-    fn load_arg_complex(&mut self, arg: u8, loc: Loc) {
-        if arg < 16 {
-            load_f64x2_from_loc(&mut self.amd, arg, loc);
-        } else {
-            load_f64x2_from_loc(&mut self.amd, 0, loc);
-            save_f64x2_to_loc(&mut self.amd, 0, self.config.location(arg));
+    fn load_args_complex(&mut self, locs: Vec<Loc>, _ultra: bool) {
+        for (arg, loc) in locs.iter().enumerate() {
+            if arg >= 16 {
+                load_f64x2_from_loc(&mut self.amd, 0, *loc);
+                save_f64x2_to_loc(&mut self.amd, 0, self.config.location(arg as u8));
+            }
+        }
+
+        for (arg, loc) in locs.iter().enumerate() {
+            if arg < 16 {
+                load_f64x2_from_loc(&mut self.amd, arg as u8, *loc);
+            }
         }
     }
 
-    fn save_arg_complex(&mut self, arg: u8, _loc: Loc) {
-        if arg < 16 {
+    fn save_args_complex(&mut self, num_args: u8, _ultra: bool) {
+        for arg in 0..num_args.min(16) {
             save_f64x2_to_loc(&mut self.amd, arg, self.config.location(arg));
         }
     }
