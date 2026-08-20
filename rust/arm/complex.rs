@@ -76,28 +76,28 @@ impl ArmComplexGenerator {
         if n > 0 {
             if let Loc::Stack(idx) = locs[start] {
                 assert!(idx < 65536);
-                self.emit(arm! {movz x(r), #idx});
+                self.emit(arm! {movz x(r), #idx/2});
             }
         }
 
         if n > 1 {
             if let Loc::Stack(idx) = locs[start + 1] {
                 assert!(idx < 65536);
-                self.emit(arm! {movk_lsl16 x(r), #idx});
+                self.emit(arm! {movk_lsl16 x(r), #idx/2});
             }
         }
 
         if n > 2 {
             if let Loc::Stack(idx) = locs[start + 2] {
                 assert!(idx < 65536);
-                self.emit(arm! {movk_lsl32 x(r), #idx});
+                self.emit(arm! {movk_lsl32 x(r), #idx/2});
             }
         }
 
         if n > 3 {
             if let Loc::Stack(idx) = locs[start + 3] {
                 assert!(idx < 65536);
-                self.emit(arm! {movk_lsl48 x(r), #idx});
+                self.emit(arm! {movk_lsl48 x(r), #idx/2});
             }
         }
     }
@@ -241,7 +241,7 @@ impl Generator for ArmComplexGenerator {
 
         if ultra {
             let num_args = locs.len().min(32);
-            for k in 0..(num_args - 1) / 8 + 1 {
+            for k in 0..(num_args - 1) / 4 + 1 {
                 self.pack_locs(k as u8, &locs, k * 4);
             }
         } else {
@@ -256,7 +256,7 @@ impl Generator for ArmComplexGenerator {
     fn save_args(&mut self, num_args: u8, ultra: bool) {
         if ultra {
             for arg in 0..num_args.min(32) {
-                let r = arg % 4;
+                let r = arg / 4;
                 let immr = (arg as u32 % 4) * 16;
                 let imml = immr + 15;
                 self.emit(arm! {ubfm x(8), x(r), #immr, #imml});
