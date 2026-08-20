@@ -316,10 +316,10 @@ class SymbolicaFunc:
             return self.compiler.dumps(what=what)
 
     def measure(self, name, what="ker-scalar-size"):
-        self.compiler.measure(name, what=what)
-
-    def measure_complex(self, name, what="ker-scalar-size"):
-        self.complex_compiler.measure(name, what=what)
+        if self.is_complex:
+            return self.complex_compiler.measure(what)
+        else:
+            return self.compiler.measure(what)
 
     def save(self, file, dtype="complex128"):
         if dtype == "complex128":

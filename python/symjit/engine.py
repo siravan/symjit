@@ -485,7 +485,6 @@ class RustyCompiler:
             return b.hex()
 
     def measure(self, what: str):
-        print(what)
         return lib._measure(self.p, what.encode("utf-8"))
 
     def execute(self):
