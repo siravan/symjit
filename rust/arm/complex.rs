@@ -69,6 +69,38 @@ impl ArmComplexGenerator {
 
         Ok(())
     }
+
+    fn pack_locs(&mut self, r: u8, locs: &[Loc], start: usize) {
+        let n = locs.len() - start;
+
+        if n > 0 {
+            if let Loc::Stack(idx) = locs[start] {
+                assert!(idx < 65536);
+                self.emit(arm! {movz x(r), #idx});
+            }
+        }
+
+        if n > 1 {
+            if let Loc::Stack(idx) = locs[start + 1] {
+                assert!(idx < 65536);
+                self.emit(arm! {movk_lsl16 x(r), #idx});
+            }
+        }
+
+        if n > 2 {
+            if let Loc::Stack(idx) = locs[start + 2] {
+                assert!(idx < 65536);
+                self.emit(arm! {movk_lsl32 x(r), #idx});
+            }
+        }
+
+        if n > 3 {
+            if let Loc::Stack(idx) = locs[start + 3] {
+                assert!(idx < 65536);
+                self.emit(arm! {movk_lsl48 x(r), #idx});
+            }
+        }
+    }
 }
 
 impl Generator for ArmComplexGenerator {
@@ -199,7 +231,7 @@ impl Generator for ArmComplexGenerator {
         self.save_stack(Reg::Ret, idx);
     }
 
-    fn load_args(&mut self, locs: Vec<Loc>, _ultra: bool) {
+    fn load_args(&mut self, locs: Vec<Loc>, ultra: bool) {
         for (arg, loc) in locs.iter().enumerate() {
             if arg >= 32 {
                 load_c_from_loc(&mut self.a, 0, *loc);
@@ -207,16 +239,33 @@ impl Generator for ArmComplexGenerator {
             }
         }
 
-        for (arg, loc) in locs.iter().enumerate() {
-            if arg < 32 {
-                load_c_from_loc(&mut self.a, arg as u8, *loc);
+        if ultra {
+            let num_args = locs.len().min(32);
+            for k in 0..(num_args - 1) / 8 + 1 {
+                self.pack_locs(k as u8, &locs, k * 4);
+            }
+        } else {
+            for (arg, loc) in locs.iter().enumerate() {
+                if arg < 32 {
+                    load_c_from_loc(&mut self.a, arg as u8, *loc);
+                }
             }
         }
     }
 
-    fn save_args(&mut self, num_args: u8, _ultra: bool) {
-        for arg in 0..num_args.min(32) {
-            save_c_to_loc(&mut self.a, arg, self.config.location(arg));
+    fn save_args(&mut self, num_args: u8, ultra: bool) {
+        if ultra {
+            for arg in 0..num_args.min(32) {
+                let r = arg % 4;
+                let immr = (arg as u32 % 4) * 16;
+                let imml = immr + 15;
+                self.emit(arm! {ubfm x(8), x(r), #immr, #imml});
+                self.emit(arm! {ldr q(arg), [x(STACK), x(8), lsl #4]});
+            }
+        } else {
+            for arg in 0..num_args.min(32) {
+                save_c_to_loc(&mut self.a, arg, self.config.location(arg));
+            }
         }
     }
 

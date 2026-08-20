@@ -142,6 +142,10 @@ class Engine:
         self._dump.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
         self._dump.restype = ctypes.c_bool
 
+        self._measure = self.dll.measure
+        self._measure.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        self._measure.restype = ctypes.c_size_t
+
         self._finalize = self.dll.finalize
         self._finalize.argtypes = [ctypes.c_void_p]
         self._finalize.restype = None
@@ -479,6 +483,10 @@ class RustyCompiler:
             return b.decode("utf8")
         else:
             return b.hex()
+
+    def measure(self, what: str):
+        print(what)
+        return lib._measure(self.p, what.encode("utf-8"))
 
     def execute(self):
         if not lib._execute(self.p):

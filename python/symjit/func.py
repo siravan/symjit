@@ -104,6 +104,9 @@ class Func:
     def dumps(self, what="scalar"):
         return self.compiler.dumps(what=what)
 
+    def measure(self, what="ker-scalar-size"):
+        return self.compiler.measure(what=what)
+
     def fast_func(self):
         return self.f
 
@@ -216,6 +219,9 @@ class FuncComplex:
     def dumps(self, what="scalar"):
         return self.compiler.dumps(what=what)
 
+    def measure(self, what="ker-scalar-size"):
+        return self.compiler.measure(what)
+
     def fast_func(self):
         return None
 
@@ -308,6 +314,12 @@ class SymbolicaFunc:
             return self.complex_compiler.dumps(what=what)
         elif self.compiler is not None:
             return self.compiler.dumps(what=what)
+
+    def measure(self, name, what="ker-scalar-size"):
+        self.compiler.measure(name, what=what)
+
+    def measure_complex(self, name, what="ker-scalar-size"):
+        self.complex_compiler.measure(name, what=what)
 
     def save(self, file, dtype="complex128"):
         if dtype == "complex128":

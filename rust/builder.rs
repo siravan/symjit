@@ -63,10 +63,10 @@ impl Builder {
         &mut self.block().sym_table
     }
 
-    pub fn stack_size(&mut self) -> usize {
+    pub fn stack_size(&self) -> usize {
         match self.count_stack {
             Some(size) => size,
-            None => self.symbol_table().num_stack,
+            None => self.primary_block.sym_table.num_stack,
         }
     }
 

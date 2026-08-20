@@ -697,6 +697,23 @@ pub unsafe extern "C" fn dump(
     }
 }
 
+/// Returns diagnostic measurements.
+///
+/// # Safety
+///     it is the responsibility of the calling function to ensure
+///     that q points to a valid CompilerResult.
+///
+#[no_mangle]
+pub unsafe extern "C" fn measure(q: *mut CompilerResult, what: *const c_char) -> usize {
+    let q: &CompilerResult = unsafe { &*q };
+    if let Some(app) = &q.app {
+        let what = unsafe { CStr::from_ptr(what).to_str().unwrap() };
+        app.measure(what)
+    } else {
+        0
+    }
+}
+
 /// Deallocates the CompilerResult pointed by `q`.
 ///
 /// # Safety

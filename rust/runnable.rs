@@ -696,6 +696,35 @@ impl Application {
         }
     }
 
+    pub fn measure(&self, what: &str) -> usize {
+        match what {
+            "ker-scalar-size" => {
+                if let Some(f) = &self.compiled {
+                    f.size
+                } else {
+                    0
+                }
+            }
+            "ker-simd-size" => {
+                if let Some(f) = &self.compiled_simd {
+                    f.size
+                } else {
+                    0
+                }
+            }
+            "ker-fast-size" => {
+                if let Some(f) = &self.compiled_fast {
+                    f.size
+                } else {
+                    0
+                }
+            }
+            "mir-size" => self.bytecode.mir.code.ip,
+            "stack-size" => self.prog.builder.stack_size(),
+            _ => 0,
+        }
+    }
+
     /************************** save/load ******************************/
 
     const MAGIC: usize = 0x40568795410d08e9;

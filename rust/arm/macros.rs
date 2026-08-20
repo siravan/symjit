@@ -458,6 +458,15 @@ macro_rules! arm {
         0xd341fc00 | rd!($rd) | rn!($rn)
     };
 
+    // immr is the right rotate amount
+    // imms is the left-most bit position of the source
+    (ubfm x($rd:expr), x($rn:expr), #$immr:expr, #$imms:expr) => {{
+        let immr: u32 = $immr;
+        let imms: u32 = $imms;
+        assert!(immr < 64 && imms < 64);
+        0xd3400000 | rd!($rd) | rn!($rn) | (immr << 16) | (imms << 10)
+    }};
+
     (blr x($rn:expr)) => { 0xd63f0000 | rn!($rn) };
     (ret) => { 0xd65f03c0 };
     (nop) => { 0x91000000 };
