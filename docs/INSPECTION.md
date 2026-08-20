@@ -19,6 +19,15 @@ On a Linux system, we can invoke `objdump` to disassemble the output as below:
 objdump -b binary -m i386:x86-64 -M intel -D test.bin
 ```
 
+On a MacOS `aarch64` (Apple Silicon), the `-b` option is not available. You need to first use `objcopy` to make
+an object file:
+
+```
+objcopy -I binary -O elf64-littleaarch64 test.bin test.elf
+objdump -D test.bin
+```
+
+
 The output (assuming a Linux x86-64 machine) is
 
 ```
