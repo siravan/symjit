@@ -1115,6 +1115,20 @@ impl Amd {
         self.append_word((imm64 >> 32) as u32);
     }
 
+    pub fn movsx(&mut self, reg: u8, rm: u8) {
+        self.rex(reg, rm);
+        self.append_byte(0x0f);
+        self.append_byte(0xbf);
+        self.modrm_reg(reg, rm);
+    }
+
+    pub fn movzx(&mut self, reg: u8, rm: u8) {
+        self.rex(reg, rm);
+        self.append_byte(0x0f);
+        self.append_byte(0xb7);
+        self.modrm_reg(reg, rm);
+    }
+
     pub fn call(&mut self, reg: u8) {
         if reg < 8 {
             self.append_bytes(&[0xff, 0xd0 | reg]);
@@ -1228,6 +1242,20 @@ impl Amd {
         self.append_byte(0x81);
         self.modrm_reg(7, rm);
         self.append_word(imm);
+    }
+
+    pub fn shl_imm(&mut self, rm: u8, imm: u8) {
+        self.rex(0, rm);
+        self.append_byte(0xc1);
+        self.modrm_reg(4, rm);
+        self.append_byte(imm);
+    }
+
+    pub fn shr_imm(&mut self, rm: u8, imm: u8) {
+        self.rex(0, rm);
+        self.append_byte(0xc1);
+        self.modrm_reg(5, rm);
+        self.append_byte(imm);
     }
 
     pub fn inc(&mut self, rm: u8) {

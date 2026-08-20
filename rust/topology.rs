@@ -106,6 +106,9 @@ impl Topology {
         for f in self.subs.values() {
             match &f.body {
                 Some(body) => {
+                    let label = format!("{}_ultra", f.topology);
+                    ir.set_label(&label);
+                    ir.save_args(f.num_args as u8, true);
                     ir.set_label(&f.topology);
                     ir.save_args(f.num_args as u8, false);
                     let dst = body.compile_tree(ir)?;

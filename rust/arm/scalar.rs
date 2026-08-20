@@ -234,9 +234,11 @@ impl Generator for ArmGenerator {
         }
     }
 
-    fn save_args(&mut self, num_args: u8, _ultra: bool) {
-        for arg in 0..num_args.min(32) {
-            save_d_to_loc(&mut self.a, arg, self.config.location(arg));
+    fn save_args(&mut self, num_args: u8, ultra: bool) {
+        if !ultra {
+            for arg in 0..num_args.min(32) {
+                save_d_to_loc(&mut self.a, arg, self.config.location(arg));
+            }
         }
     }
 
@@ -255,9 +257,11 @@ impl Generator for ArmGenerator {
         }
     }
 
-    fn save_args_complex(&mut self, num_args: u8, _ultra: bool) {
-        for arg in 0..num_args.min(32) {
-            save_c_to_loc(&mut self.a, arg, self.config.location(arg));
+    fn save_args_complex(&mut self, num_args: u8, ultra: bool) {
+        if !ultra {
+            for arg in 0..num_args.min(32) {
+                save_c_to_loc(&mut self.a, arg, self.config.location(arg));
+            }
         }
     }
 

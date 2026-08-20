@@ -286,9 +286,11 @@ impl Generator for ArmSimdGenerator {
         }
     }
 
-    fn save_args(&mut self, num_args: u8, _ultra: bool) {
-        for arg in 0..num_args.min(32) {
-            save_q_to_loc(&mut self.a, arg, self.config.location(arg));
+    fn save_args(&mut self, num_args: u8, ultra: bool) {
+        if !ultra {
+            for arg in 0..num_args.min(32) {
+                save_q_to_loc(&mut self.a, arg, self.config.location(arg));
+            }
         }
     }
 
@@ -307,9 +309,11 @@ impl Generator for ArmSimdGenerator {
         }
     }
 
-    fn save_args_complex(&mut self, num_args: u8, _ultra: bool) {
-        for arg in 0..num_args.min(16) {
-            save_paired_q_to_loc(&mut self.a, 2 * arg, 2 * arg + 1, self.config.location(arg));
+    fn save_args_complex(&mut self, num_args: u8, ultra: bool) {
+        if !ultra {
+            for arg in 0..num_args.min(16) {
+                save_paired_q_to_loc(&mut self.a, 2 * arg, 2 * arg + 1, self.config.location(arg));
+            }
         }
     }
 

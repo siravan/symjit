@@ -282,9 +282,11 @@ impl Generator for AmdScalarGenerator {
         }
     }
 
-    fn save_args(&mut self, num_args: u8, _ultra: bool) {
-        for arg in 0..num_args.min(16) {
-            save_f64_to_loc(&mut self.amd, arg, self.config.location(arg));
+    fn save_args(&mut self, num_args: u8, ultra: bool) {
+        if !ultra {
+            for arg in 0..num_args.min(16) {
+                save_f64_to_loc(&mut self.amd, arg, self.config.location(arg));
+            }
         }
     }
 
@@ -303,9 +305,11 @@ impl Generator for AmdScalarGenerator {
         }
     }
 
-    fn save_args_complex(&mut self, num_args: u8, _ultra: bool) {
-        for arg in 0..num_args.min(16) {
-            save_f64x2_to_loc(&mut self.amd, arg, self.config.location(arg));
+    fn save_args_complex(&mut self, num_args: u8, ultra: bool) {
+        if !ultra {
+            for arg in 0..num_args.min(16) {
+                save_f64x2_to_loc(&mut self.amd, arg, self.config.location(arg));
+            }
         }
     }
 
