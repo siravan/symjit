@@ -267,50 +267,70 @@ impl Generator for AmdScalarGenerator {
         self.save_stack(Reg::Ret, idx);
     }
 
-    fn load_args(&mut self, locs: Vec<Loc>, _ultra: bool) {
-        for (arg, loc) in locs.iter().enumerate() {
-            if arg >= 16 {
-                load_f64_from_loc(&mut self.amd, 0, *loc);
-                save_f64_to_loc(&mut self.amd, 0, self.config.location(arg as u8));
-            }
-        }
-
-        for (arg, loc) in locs.iter().enumerate() {
-            if arg < 16 {
-                load_f64_from_loc(&mut self.amd, arg as u8, *loc);
-            }
-        }
+    fn load_args(&mut self, locs: Vec<Loc>, ultra: bool) {
+        load_args_helper(
+            &mut self.amd,
+            &self.config,
+            &locs[..],
+            ultra,
+            16,
+            |amd, loc, dst| {
+                load_f64_from_loc(amd, 0, loc);
+                save_f64_to_loc(amd, 0, dst);
+            },
+            |amd, arg, loc| {
+                load_f64_from_loc(amd, arg as u8, loc);
+            },
+        );
     }
 
     fn save_args(&mut self, num_args: u8, ultra: bool) {
-        if !ultra {
-            for arg in 0..num_args.min(16) {
-                save_f64_to_loc(&mut self.amd, arg, self.config.location(arg));
-            }
-        }
+        save_args_helper(
+            &mut self.amd,
+            &self.config,
+            num_args,
+            ultra,
+            16,
+            |amd, arg| {
+                amd.vmovsd_xmm_indexed(arg, STACK, Amd::RAX, 8);
+            },
+            |amd, arg, loc| {
+                save_f64_to_loc(amd, arg, loc);
+            },
+        );
     }
 
-    fn load_args_complex(&mut self, locs: Vec<Loc>, _ultra: bool) {
-        for (arg, loc) in locs.iter().enumerate() {
-            if arg >= 16 {
-                load_f64x2_from_loc(&mut self.amd, 0, *loc);
-                save_f64x2_to_loc(&mut self.amd, 0, self.config.location(arg as u8));
-            }
-        }
-
-        for (arg, loc) in locs.iter().enumerate() {
-            if arg < 16 {
-                load_f64x2_from_loc(&mut self.amd, arg as u8, *loc);
-            }
-        }
+    fn load_args_complex(&mut self, locs: Vec<Loc>, ultra: bool) {
+        load_args_helper(
+            &mut self.amd,
+            &self.config,
+            &locs[..],
+            ultra,
+            16,
+            |amd, loc, dst| {
+                load_f64x2_from_loc(amd, 0, loc);
+                save_f64x2_to_loc(amd, 0, dst);
+            },
+            |amd, arg, loc| {
+                load_f64x2_from_loc(amd, arg as u8, loc);
+            },
+        );
     }
 
     fn save_args_complex(&mut self, num_args: u8, ultra: bool) {
-        if !ultra {
-            for arg in 0..num_args.min(16) {
-                save_f64x2_to_loc(&mut self.amd, arg, self.config.location(arg));
-            }
-        }
+        save_args_helper(
+            &mut self.amd,
+            &self.config,
+            num_args,
+            ultra,
+            16,
+            |amd, arg| {
+                amd.vmovdd_xmm_indexed(arg, STACK, Amd::RAX, 8);
+            },
+            |amd, arg, loc| {
+                save_f64_to_loc(amd, arg, loc);
+            },
+        );
     }
 
     fn neg(&mut self, dst: Reg, s1: Reg) {

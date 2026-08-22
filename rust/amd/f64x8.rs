@@ -238,10 +238,15 @@ impl Amd {
     }
 
     pub fn vmovqd_zmm_indexed(&mut self, reg: u8, base: u8, index: u8, scale: u8) {
-        // self.vex_pd(reg, 0, base, index);
         Prefix::new(reg, 0, base).set_index(index).evex(self);
         self.append_byte(0x10);
         self.modrm_sib(reg, base, index, scale);
+    }
+
+    pub fn vmovqd_zmm_indexed_mem(&mut self, reg: u8, base: u8, index: u8, scale: u8, offset: i32) {
+        Prefix::new(reg, 0, base).set_index(index).evex(self);
+        self.append_byte(0x10);
+        self.modrm_sib_mem(reg, base, index, scale, offset);
     }
 
     pub fn vmovqd_zmm_label(&mut self, reg: u8, label: &str) {

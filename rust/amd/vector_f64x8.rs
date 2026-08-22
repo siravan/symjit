@@ -394,54 +394,78 @@ impl Generator for AmdVectorF64x8Generator {
         self.save_stack(Reg::Ret, idx);
     }
 
-    fn load_args(&mut self, locs: Vec<Loc>, _ultra: bool) {
-        for (arg, loc) in locs.iter().enumerate() {
-            if arg >= 32 {
-                load_f64x8_from_loc(&mut self.amd, 0, *loc);
-                save_f64x8_to_loc(&mut self.amd, 0, self.config.location(arg as u8));
-            }
-        }
-
-        for (arg, loc) in locs.iter().enumerate() {
-            if arg < 32 {
-                load_f64x8_from_loc(&mut self.amd, arg as u8, *loc);
-            }
-        }
+    fn load_args(&mut self, locs: Vec<Loc>, ultra: bool) {
+        load_args_helper(
+            &mut self.amd,
+            &self.config,
+            &locs[..],
+            ultra,
+            32,
+            |amd, loc, dst| {
+                load_f64x8_from_loc(amd, 0, loc);
+                save_f64x8_to_loc(amd, 0, dst);
+            },
+            |amd, arg, loc| {
+                load_f64x8_from_loc(amd, arg, loc);
+            },
+        );
     }
 
     fn save_args(&mut self, num_args: u8, ultra: bool) {
-        if !ultra {
-            for arg in 0..num_args.min(32) {
-                save_f64x8_to_loc(&mut self.amd, arg, self.config.location(arg));
-            }
-        }
+        save_args_helper(
+            &mut self.amd,
+            &self.config,
+            num_args,
+            ultra,
+            32,
+            |amd, arg| {
+                amd.shl_imm(Amd::RAX, 3);
+                amd.vmovqd_zmm_indexed(arg, STACK, Amd::RAX, 8);
+            },
+            |amd, arg, loc| {
+                save_f64x8_to_loc(amd, arg, loc);
+            },
+        );
     }
 
-    fn load_args_complex(&mut self, locs: Vec<Loc>, _ultra: bool) {
-        for (arg, loc) in locs.iter().enumerate() {
-            if arg >= 16 {
-                load_f64x8_from_loc(&mut self.amd, 0, *loc);
-                load_f64x8_from_loc(&mut self.amd, 1, loc.imag());
-                save_f64x8_to_loc(&mut self.amd, 0, self.config.location(arg as u8));
-                save_f64x8_to_loc(&mut self.amd, 1, self.config.location(arg as u8).imag());
-            }
-        }
-
-        for (arg, loc) in locs.iter().enumerate() {
-            if arg < 16 {
-                load_f64x8_from_loc(&mut self.amd, 2 * arg as u8, *loc);
-                load_f64x8_from_loc(&mut self.amd, 2 * arg as u8 + 1, loc.imag());
-            }
-        }
+    fn load_args_complex(&mut self, locs: Vec<Loc>, ultra: bool) {
+        load_args_helper(
+            &mut self.amd,
+            &self.config,
+            &locs[..],
+            ultra,
+            16,
+            |amd, loc, dst| {
+                load_f64x8_from_loc(amd, 0, loc);
+                load_f64x8_from_loc(amd, 1, loc.imag());
+                save_f64x8_to_loc(amd, 0, dst);
+                save_f64x8_to_loc(amd, 1, dst.imag());
+            },
+            |amd, arg, loc| {
+                load_f64x8_from_loc(amd, 2 * arg, loc);
+                load_f64x8_from_loc(amd, 2 * arg + 1, loc.imag());
+            },
+        );
     }
 
     fn save_args_complex(&mut self, num_args: u8, ultra: bool) {
-        if !ultra {
-            for arg in 0..num_args.min(16) {
-                save_f64x8_to_loc(&mut self.amd, 2 * arg, self.config.location(arg));
-                save_f64x8_to_loc(&mut self.amd, 2 * arg + 1, self.config.location(arg).imag());
-            }
-        }
+        save_args_helper(
+            &mut self.amd,
+            &self.config,
+            num_args,
+            ultra,
+            16,
+            |amd, arg| {
+                amd.shl_imm(Amd::RAX, 3);
+                amd.vmovqd_zmm_indexed(2 * arg, STACK, Amd::RAX, 8);
+                // note that the offset is 1 and not 64 due to EVEX compressed displacement mode
+                amd.vmovqd_zmm_indexed_mem(2 * arg + 1, STACK, Amd::RAX, 8, 1);
+            },
+            |amd, arg, loc| {
+                save_f64x8_to_loc(amd, 2 * arg, loc);
+                save_f64x8_to_loc(amd, 2 * arg + 1, loc.imag());
+            },
+        );
     }
 
     fn neg(&mut self, dst: Reg, s1: Reg) {

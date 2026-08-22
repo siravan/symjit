@@ -14,8 +14,6 @@ const T0: u8 = 1; // Reg::Temp
 const T1: u8 = 2;
 const T2: u8 = 3;
 
-const SUBROUTINE_ARGS: [u8; 4] = [Amd::RCX, Amd::RDX, Amd::R8, Amd::R9];
-
 macro_rules! binop {
     ($self:ident, $avx:ident, $dst:expr, $s1: expr, $s2: expr) => {
         $self.amd.$avx(ϕ($dst), ϕ($s1), ϕ($s2));
@@ -93,22 +91,6 @@ impl AmdComplexGenerator {
     fn predefined_consts(&mut self) {
         self.align();
         predefined_consts(&mut self.amd);
-    }
-
-    fn pack_locs(&mut self, r: u8, locs: &[Loc], start: usize) {
-        let mut a: u64 = 0;
-
-        for i in 0..4 {
-            let k = start + i;
-
-            if k < locs.len() {
-                if let Loc::Stack(idx) = locs[k] {
-                    a |= (idx as u64 & 0xffff) << (16 * i);
-                }
-            }
-        }
-
-        self.amd.movabs(r, a);
     }
 }
 
@@ -253,43 +235,36 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn load_args(&mut self, locs: Vec<Loc>, ultra: bool) {
-        for (arg, loc) in locs.iter().enumerate() {
-            if arg >= 16 {
-                load_f64x2_from_loc(&mut self.amd, 0, *loc);
-                save_f64x2_to_loc(&mut self.amd, 0, self.config.location(arg as u8));
-            }
-        }
-
-        if ultra {
-            let num_args = locs.len().min(16);
-            for k in 0..(num_args - 1) / 4 + 1 {
-                self.pack_locs(SUBROUTINE_ARGS[k], &locs, k * 4);
-            }
-        } else {
-            for (arg, loc) in locs.iter().enumerate() {
-                if arg < 16 {
-                    load_f64x2_from_loc(&mut self.amd, arg as u8, *loc);
-                }
-            }
-        }
+        load_args_helper(
+            &mut self.amd,
+            &self.config,
+            &locs[..],
+            ultra,
+            16,
+            |amd, loc, dst| {
+                load_f64x2_from_loc(amd, 0, loc);
+                save_f64x2_to_loc(amd, 0, dst);
+            },
+            |amd, arg, loc| {
+                load_f64x2_from_loc(amd, arg, loc);
+            },
+        );
     }
 
     fn save_args(&mut self, num_args: u8, ultra: bool) {
-        if ultra {
-            for arg in 0..num_args.min(16) {
-                self.amd.mov(Amd::RAX, SUBROUTINE_ARGS[arg as usize / 4]);
-                let k = arg % 4;
-                if k > 0 {
-                    self.amd.shr_imm(Amd::RAX, 16 * k);
-                }
-                self.amd.movzx(Amd::RAX, Amd::RAX);
-                self.amd.vmovdd_xmm_indexed(arg, STACK, Amd::RAX, 8);
-            }
-        } else {
-            for arg in 0..num_args.min(16) {
-                save_f64x2_to_loc(&mut self.amd, arg, self.config.location(arg));
-            }
-        }
+        save_args_helper(
+            &mut self.amd,
+            &self.config,
+            num_args,
+            ultra,
+            16,
+            |amd, arg| {
+                amd.vmovdd_xmm_indexed(arg, STACK, Amd::RAX, 8);
+            },
+            |amd, arg, loc| {
+                save_f64x2_to_loc(amd, arg, loc);
+            },
+        );
     }
 
     fn load_args_complex(&mut self, _locs: Vec<Loc>, _ultra: bool) {}

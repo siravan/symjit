@@ -1,4 +1,5 @@
 use super::code::Func;
+use super::config::Config;
 use super::symbol::Loc;
 use super::utils::{align_stack, Reg};
 
@@ -27,6 +28,8 @@ const ARGS: [u8; 4] = [Amd::RCX, Amd::RDX, Amd::R8, Amd::R9];
 
 #[cfg(target_family = "unix")]
 const ARGS: [u8; 4] = [Amd::RDI, Amd::RSI, Amd::RDX, Amd::RCX];
+
+const SUBROUTINE_ARGS: [u8; 4] = [Amd::RCX, Amd::RDX, Amd::R8, Amd::R9];
 
 const RET: u8 = 0;
 
@@ -271,5 +274,82 @@ fn save_f64x8_to_loc(amd: &mut Amd, r: u8, loc: Loc) {
         Loc::Param(idx) => amd.vmovqd_mem_zmm(PARAMS, (idx * 64) as i32, r),
         Loc::Stack(idx) => amd.vmovqd_mem_zmm(STACK, (idx * 64) as i32, r),
         Loc::Mem(idx) => amd.vmovqd_mem_zmm(MEM, (idx * 64) as i32, r),
+    }
+}
+
+fn pack_locs(amd: &mut Amd, locs: &[Loc]) {
+    for reg in 0..(locs.len() - 1) / 4 + 1 {
+        let mut a: u64 = 0;
+
+        for i in 0..4 {
+            let j = reg * 4 + i;
+
+            if j < locs.len() {
+                if let Loc::Stack(idx) = locs[j] {
+                    assert!(idx < 65536);
+                    a |= (idx as u64 & 0xffff) << (16 * i);
+                }
+            }
+        }
+
+        amd.movabs(SUBROUTINE_ARGS[reg], a);
+    }
+}
+
+fn load_args_helper<F1, F2>(
+    amd: &mut Amd,
+    config: &Config,
+    locs: &[Loc],
+    ultra: bool,
+    n: usize,
+    f1: F1,
+    f2: F2,
+) where
+    F1: Fn(&mut Amd, Loc, Loc),
+    F2: Fn(&mut Amd, u8, Loc),
+{
+    for (arg, loc) in locs.iter().enumerate() {
+        if arg >= n {
+            f1(amd, *loc, config.location(arg as u8))
+        }
+    }
+
+    if ultra {
+        pack_locs(amd, locs.get(0..n).unwrap_or(&locs));
+    } else {
+        for (arg, loc) in locs.iter().enumerate() {
+            if arg < n {
+                f2(amd, arg as u8, *loc)
+            }
+        }
+    }
+}
+
+fn save_args_helper<F1, F2>(
+    amd: &mut Amd,
+    config: &Config,
+    num_args: u8,
+    ultra: bool,
+    n: u8,
+    f1: F1,
+    f2: F2,
+) where
+    F1: Fn(&mut Amd, u8),
+    F2: Fn(&mut Amd, u8, Loc),
+{
+    if ultra {
+        for arg in 0..num_args.min(n) {
+            amd.mov(Amd::RAX, SUBROUTINE_ARGS[arg as usize / 4]);
+            let k = arg % 4;
+            if k > 0 {
+                amd.shr_imm(Amd::RAX, 16 * k);
+            }
+            amd.movzx(Amd::RAX, Amd::RAX);
+            f1(amd, arg)
+        }
+    } else {
+        for arg in 0..num_args.min(n) {
+            f2(amd, arg, config.location(arg))
+        }
     }
 }
