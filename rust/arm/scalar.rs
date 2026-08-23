@@ -277,7 +277,6 @@ impl Generator for ArmGenerator {
             ultra,
             32,
             |a, arg| {
-                emit(a, arm! {lsr x(8), x(8), #1});
                 emit(a, arm! {ldr q(arg), [x(STACK), x(8), lsl #4]});
             },
             |a, arg, loc| {
