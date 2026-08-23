@@ -540,18 +540,14 @@ impl Node {
         }
     }
 
-    pub fn call_external(&self) -> Result<(i32, i32)> {
-        if let Node::Binary {
-            op, left, right, ..
-        } = self
-        {
+    pub fn call_external(&self) -> Result<i32> {
+        if let Node::Binary { op, right, .. } = self {
             if op.as_str() != "_call_" {
                 return Err(anyhow!("external fun main node should be `_call_`"));
             }
 
-            let l = left.as_int_const().unwrap();
             let r = right.as_int_const().unwrap();
-            Ok((l, r))
+            Ok(r)
         } else {
             unreachable!();
         }

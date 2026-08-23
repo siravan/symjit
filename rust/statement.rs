@@ -59,8 +59,8 @@ impl Statement {
                 num_args,
             } => {
                 if is_external_func(op.as_str()) {
-                    let (l, r) = arg.call_external()?;
-                    ir.call(op.as_str(), (r - l) as usize)?;
+                    let r = arg.call_external()?;
+                    ir.call(op.as_str(), r as usize)?;
                     Self::save_result(ir, lhs);
                 } else {
                     let _ = arg.compile_tree(ir)?;
