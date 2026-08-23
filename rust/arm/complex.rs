@@ -69,38 +69,6 @@ impl ArmComplexGenerator {
 
         Ok(())
     }
-
-    fn pack_locs(&mut self, r: u8, locs: &[Loc], start: usize) {
-        let n = locs.len() - start;
-
-        if n > 0 {
-            if let Loc::Stack(idx) = locs[start] {
-                assert!(idx < 65536);
-                self.emit(arm! {movz x(r), #idx/2});
-            }
-        }
-
-        if n > 1 {
-            if let Loc::Stack(idx) = locs[start + 1] {
-                assert!(idx < 65536);
-                self.emit(arm! {movk_lsl16 x(r), #idx/2});
-            }
-        }
-
-        if n > 2 {
-            if let Loc::Stack(idx) = locs[start + 2] {
-                assert!(idx < 65536);
-                self.emit(arm! {movk_lsl32 x(r), #idx/2});
-            }
-        }
-
-        if n > 3 {
-            if let Loc::Stack(idx) = locs[start + 3] {
-                assert!(idx < 65536);
-                self.emit(arm! {movk_lsl48 x(r), #idx/2});
-            }
-        }
-    }
 }
 
 impl Generator for ArmComplexGenerator {

@@ -46,6 +46,7 @@ def run():
         t_start = time.time()
         res_symjit_no_simd = sum(f.evaluate_complex(inputs))
         t_symjit_no_simd = (time.time() - t_start) * 1000000.0 / N
+        n_no_simd = f.measure("ker-scalar-size")
 
         f = symjit.compile_evaluator(
             ev, use_simd=True, use_threads=False, dtype="complex128"
@@ -54,11 +55,13 @@ def run():
         t_start = time.time()
         res_symjit_simd = sum(f.evaluate_complex(inputs))
         t_symjit_simd = (time.time() - t_start) * 1000000.0 / N
+        n_simd = f.measure("ker-simd-size")
 
         f = symjit.compile_evaluator(ev, ty=CONFIG, dtype="complex128")
         t_start = time.time()
         res_symjit_cfg = sum(f.evaluate_complex(inputs))
         t_symjit_cfg = (time.time() - t_start) * 1000000.0 / N
+        n_cfg = f.measure("ker-simd-size")
 
         threashold = 1e-14 * math.sqrt(num_terms)
 
@@ -72,6 +75,10 @@ def run():
 
         print(
             f"{k}\t{num_terms}\t{t_eager:7.1f}\t{t_symjit_no_simd:7.1f}\t{t_symjit_simd:7.1f}\t{t_symjit_cfg:7.1f}\t{msg}"
+        )
+
+        print(
+            f"{n_no_simd}\t{n_simd}\t{n_cfg}"
         )
 
 
