@@ -1137,27 +1137,19 @@ impl IndirectTranslator {
             let rhs = self.binary_node(op, args.remove(0), args.remove(0))?;
             self.assign(lhs, rhs)?;
         } else {
-            let temps: Vec<Slot> = (0..n).map(|_| self.create_static().unwrap()).collect();
-            let slice: Vec<Slot> = (0..n).map(Slot::Arg).collect();
-
             for i in 0..n {
-                self.assign(&temps[i], args[i].clone())?;
-            }
-
-            for i in 0..n {
-                if let Slot::Static(idx) = temps[i] {
-                    let n = self
-                        .builder
-                        .create_var(&format!("__Static{}", idx))
-                        .unwrap();
-                    self.assign(&slice[i], n)?;
-                }
+                self.assign(&Slot::Arg(i), args[i].clone())?;
             }
 
             let op = format!("${}", op);
-            let l = self.const_node(0.0);
+            // This is a hack to prevent CSE for external call.
+            // This will be replaced with a better implementation
+            // in version 2.23.
+            let l = self.const_node(rand::random());
             let r = self.const_node(n as f64);
             let n = self.binary_node(op.as_str(), l, r)?;
+            // Important! To prevent call from separating from arguments setup.
+            self.join_rhs.insert(lhs.clone());
             self.assign(lhs, n)?;
         }
 
