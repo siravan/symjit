@@ -271,50 +271,72 @@ impl Generator for ArmSimdGenerator {
         self.save_stack(Reg::Ret, idx);
     }
 
-    fn load_args(&mut self, locs: Vec<Loc>, _ultra: bool) {
-        for (arg, loc) in locs.iter().enumerate() {
-            if arg >= 32 {
-                load_q_from_loc(&mut self.a, 0, *loc);
-                save_q_to_loc(&mut self.a, 0, self.config.location(arg as u8));
-            }
-        }
-
-        for (arg, loc) in locs.iter().enumerate() {
-            if arg < 32 {
-                load_q_from_loc(&mut self.a, arg as u8, *loc);
-            }
-        }
+    fn load_args(&mut self, locs: Vec<Loc>, ultra: bool) {
+        load_args_helper(
+            &mut self.a,
+            &self.config,
+            &locs[..],
+            ultra,
+            32,
+            |a, loc, dst| {
+                load_q_from_loc(a, 0, loc);
+                save_q_to_loc(a, 0, dst);
+            },
+            |a, arg, loc| {
+                load_q_from_loc(a, arg, loc);
+            },
+        );
     }
 
     fn save_args(&mut self, num_args: u8, ultra: bool) {
-        if !ultra {
-            for arg in 0..num_args.min(32) {
-                save_q_to_loc(&mut self.a, arg, self.config.location(arg));
-            }
-        }
+        save_args_helper(
+            &mut self.a,
+            &self.config,
+            num_args,
+            ultra,
+            32,
+            |a, arg| {
+                emit(a, arm! {str q(arg), [x(STACK), x(8), lsl #4]});
+            },
+            |a, arg, loc| {
+                save_q_to_loc(a, arg, loc);
+            },
+        );
     }
 
-    fn load_args_complex(&mut self, locs: Vec<Loc>, _ultra: bool) {
-        for (arg, loc) in locs.iter().enumerate() {
-            if arg >= 16 {
-                load_paired_q_from_loc(&mut self.a, 0, 1, *loc);
-                save_paired_q_to_loc(&mut self.a, 0, 1, self.config.location(arg as u8));
-            }
-        }
-
-        for (arg, loc) in locs.iter().enumerate() {
-            if arg < 16 {
-                load_paired_q_from_loc(&mut self.a, 2 * arg as u8, 2 * arg as u8 + 1, *loc);
-            }
-        }
+    fn load_args_complex(&mut self, locs: Vec<Loc>, ultra: bool) {
+        load_args_helper(
+            &mut self.a,
+            &self.config,
+            &locs[..],
+            ultra,
+            16,
+            |a, loc, dst| {
+                load_paired_q_from_loc(a, 0, 1, loc);
+                save_paired_q_to_loc(a, 0, 1, dst);
+            },
+            |a, arg, loc| {
+                load_paired_q_from_loc(a, 2 * arg, 2 * arg + 1, loc);
+            },
+        );
     }
 
     fn save_args_complex(&mut self, num_args: u8, ultra: bool) {
-        if !ultra {
-            for arg in 0..num_args.min(16) {
-                save_paired_q_to_loc(&mut self.a, 2 * arg, 2 * arg + 1, self.config.location(arg));
-            }
-        }
+        save_args_helper(
+            &mut self.a,
+            &self.config,
+            num_args,
+            ultra,
+            16,
+            |a, arg| {
+                emit(a, arm! {ldr q(2*arg), [x(STACK), x(8), lsl #4]});
+                emit(a, arm! {add x(8), x(8), #1});
+                emit(a, arm! {ldr q(2*arg+1), [x(STACK), x(8), lsl #4]});
+            },
+            |a, arg, loc| {
+                save_paired_q_to_loc(a, 2 * arg, 2 * arg + 1, loc);
+            },
+        );
     }
 
     fn neg(&mut self, dst: Reg, s1: Reg) {

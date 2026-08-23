@@ -1,6 +1,6 @@
 [package]
 name = "symjit"
-version = "2.22.1"
+version = "2.23.0"
 edition = "2021"
 authors = ["Shahriar Iravanian <siravan@svtsim.com>"]
 license = "MIT"
@@ -31,7 +31,7 @@ wide = "1.1"
 toml= "1.1"
 hugepage-rs = "0.1"
 lazy_static = "1.5"
-# rand = "0.10"
+rand = "0.10"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_System_Memory"] }

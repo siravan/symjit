@@ -232,41 +232,37 @@ impl Generator for ArmComplexGenerator {
     }
 
     fn load_args(&mut self, locs: Vec<Loc>, ultra: bool) {
-        for (arg, loc) in locs.iter().enumerate() {
-            if arg >= 32 {
-                load_c_from_loc(&mut self.a, 0, *loc);
-                save_c_to_loc(&mut self.a, 0, self.config.location(arg as u8));
-            }
-        }
-
-        if ultra {
-            let num_args = locs.len().min(32);
-            for k in 0..(num_args - 1) / 4 + 1 {
-                self.pack_locs(k as u8, &locs, k * 4);
-            }
-        } else {
-            for (arg, loc) in locs.iter().enumerate() {
-                if arg < 32 {
-                    load_c_from_loc(&mut self.a, arg as u8, *loc);
-                }
-            }
-        }
+        load_args_helper(
+            &mut self.a,
+            &self.config,
+            &locs[..],
+            ultra,
+            32,
+            |a, loc, dst| {
+                load_c_from_loc(a, 0, loc);
+                save_c_to_loc(a, 0, dst);
+            },
+            |a, arg, loc| {
+                load_c_from_loc(a, arg, loc);
+            },
+        );
     }
 
     fn save_args(&mut self, num_args: u8, ultra: bool) {
-        if ultra {
-            for arg in 0..num_args.min(32) {
-                let r = arg / 4;
-                let immr = (arg as u32 % 4) * 16;
-                let imml = immr + 15;
-                self.emit(arm! {ubfm x(8), x(r), #immr, #imml});
-                self.emit(arm! {ldr q(arg), [x(STACK), x(8), lsl #4]});
-            }
-        } else {
-            for arg in 0..num_args.min(32) {
-                save_c_to_loc(&mut self.a, arg, self.config.location(arg));
-            }
-        }
+        save_args_helper(
+            &mut self.a,
+            &self.config,
+            num_args,
+            ultra,
+            32,
+            |a, arg| {
+                emit(a, arm! {lsr x(8), x(8), #1});
+                emit(a, arm! {ldr q(arg), [x(STACK), x(8), lsl #4]});
+            },
+            |a, arg, loc| {
+                save_c_to_loc(a, arg, loc);
+            },
+        );
     }
 
     fn load_args_complex(&mut self, _locs: Vec<Loc>, _ultra: bool) {

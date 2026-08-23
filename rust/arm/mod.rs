@@ -3,6 +3,7 @@ mod macros;
 
 use super::assembler::Assembler;
 use super::code::Func;
+use super::config::Config;
 use super::symbol::Loc;
 use super::utils::Reg;
 
@@ -454,6 +455,78 @@ fn add_stack(a: &mut Assembler, size: u32) {
     emit(a, arm! {add sp, sp, #size & 0x0fff});
 }
 */
+
+fn pack_locs(a: &mut Assembler, locs: &[Loc]) {
+    for (i, loc) in locs.iter().enumerate() {
+        let r = i / 4;
+        if let Loc::Stack(idx) = loc {
+            assert!(*idx < 65536);
+            match i % 4 {
+                0 => emit(a, arm! {movz x(r), #idx/2}),
+                1 => emit(a, arm! {movk_lsl16 x(r), #idx/2}),
+                2 => emit(a, arm! {movk_lsl32 x(r), #idx/2}),
+                3 => emit(a, arm! {movk_lsl48 x(r), #idx/2}),
+                _ => unreachable!(),
+            }
+        }
+    }
+}
+
+fn load_args_helper<F1, F2>(
+    a: &mut Assembler,
+    config: &Config,
+    locs: &[Loc],
+    ultra: bool,
+    n: usize,
+    f1: F1,
+    f2: F2,
+) where
+    F1: Fn(&mut Assembler, Loc, Loc),
+    F2: Fn(&mut Assembler, u8, Loc),
+{
+    for (arg, loc) in locs.iter().enumerate() {
+        if arg >= n {
+            f1(a, *loc, config.location(arg as u8))
+        }
+    }
+
+    if ultra {
+        pack_locs(a, locs.get(0..n).unwrap_or(&locs));
+    } else {
+        for (arg, loc) in locs.iter().enumerate() {
+            if arg < n {
+                f2(a, arg as u8, *loc)
+            }
+        }
+    }
+}
+
+fn save_args_helper<F1, F2>(
+    a: &mut Assembler,
+    config: &Config,
+    num_args: u8,
+    ultra: bool,
+    n: u8,
+    f1: F1,
+    f2: F2,
+) where
+    F1: Fn(&mut Assembler, u8),
+    F2: Fn(&mut Assembler, u8, Loc),
+{
+    if ultra {
+        for arg in 0..num_args.min(n) {
+            let r = arg / 4;
+            let immr = (arg as u32 % 4) * 16;
+            let imml = immr + 15;
+            emit(a, arm! {ubfm x(8), x(r), #immr, #imml});
+            f1(a, arg)
+        }
+    } else {
+        for arg in 0..num_args.min(n) {
+            f2(a, arg, config.location(arg))
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
