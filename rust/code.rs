@@ -4,6 +4,8 @@ use spec_math::cephes64;
 use std::ffi::c_void;
 use std::fmt;
 
+use super::applet::Applet;
+
 /*
  * Design Note:
  *
@@ -40,7 +42,7 @@ pub type UnaryFuncCplx = extern "C" fn(f64, f64, &mut Complex<f64>);
 pub type BinaryFuncCplx = extern "C" fn(f64, f64, &mut Complex<f64>);
 pub type PairedUnaryFunc = extern "C" fn(f64) -> SinCos;
 
-#[derive(Clone, Hash)]
+#[derive(Clone)]
 pub enum Func {
     Unary(UnaryFunc),
     Binary(BinaryFunc),
@@ -52,6 +54,7 @@ pub enum Func {
         f_simd: *const c_void,
         env: *const c_void,
     },
+    App(Applet),
 }
 
 impl Func {
@@ -63,6 +66,10 @@ impl Func {
             Func::BinaryCplx(f) => *f as usize as u64,
             Func::PairedUnary(f) => *f as usize as u64,
             Func::Slice { .. } => 0,
+            Func::App(app) => match app.scalar_ptr() {
+                Some(f) => f as usize as u64,
+                None => 0,
+            },
         }
     }
 }

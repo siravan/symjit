@@ -5,7 +5,7 @@ use super::super::code::Func;
 use super::super::config::{Config, ABI_AREA};
 use super::super::generator::{FuncletType, Generator};
 use super::super::symbol::Loc;
-use super::super::utils::{align_stack, is_external_func, Reg};
+use super::super::utils::{align_stack, Reg};
 
 use super::*;
 
@@ -55,11 +55,19 @@ impl ArmGenerator {
     */
 
     fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
-        load_x_from_label(&mut self.a, 0, &format!("_env_{}_", op));
         let ofs = ABI_AREA as u32 * REG_SIZE;
-        self.emit(arm! {add x(1), x(STACK), #ofs});
-        self.emit(arm! {movz x(2), #num_args});
-        self.emit(arm! {add x(3), x(SP), #0});
+
+        if self.config.is_kernel_func(op) {
+            self.emit(arm! {add x(0), x(SP), #0});
+            self.emit(arm! {eor x(1), x(1), x(1)});
+            self.emit(arm! {eor x(2), x(2), x(2)});
+            self.emit(arm! {add x(3), x(STACK), #ofs});
+        } else {
+            load_x_from_label(&mut self.a, 0, &format!("_env_{}_", op));
+            self.emit(arm! {add x(1), x(STACK), #ofs});
+            self.emit(arm! {movz x(2), #num_args});
+            self.emit(arm! {add x(3), x(SP), #0});
+        }
 
         let label = format!("_func_{}_", op);
         load_long(&mut self.a, 9, &label);
@@ -491,7 +499,7 @@ impl Generator for ArmGenerator {
     }
 
     fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
-        if is_external_func(op) {
+        if self.config.is_external_func(op) {
             return self.call_external(op, num_args);
         }
 

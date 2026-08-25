@@ -186,30 +186,43 @@ fn fuse_load_math(amd: &mut Amd, last_load: usize) {
 }
 
 fn add_func(amd: &mut Amd, op: &str, f: Func) {
-    if let Func::Slice {
-        f_scalar,
-        f_simd,
-        env,
-        ..
-    } = f
-    {
-        let label = format!("_func_{}_", op);
-        amd.a.set_label(label.as_str());
-        // let f_scalar = trampoline_homogenous::<f64> as *const c_void;
-        amd.a.append_quad(f_scalar as u64);
+    match &f {
+        Func::Slice {
+            f_scalar,
+            f_simd,
+            env,
+            ..
+        } => {
+            let label = format!("_func_{}_", op);
+            amd.a.set_label(label.as_str());
+            amd.a.append_quad(*f_scalar as u64);
 
-        let label = format!("_simd_{}_", op);
-        amd.a.set_label(label.as_str());
-        // let f_simd = trampoline_heterogenous::<f64x4, f64> as *const c_void;
-        amd.a.append_quad(f_simd as u64);
+            let label = format!("_simd_{}_", op);
+            amd.a.set_label(label.as_str());
+            amd.a.append_quad(*f_simd as u64);
 
-        let label = format!("_env_{}_", op);
-        amd.a.set_label(label.as_str());
-        amd.a.append_quad(env as u64);
-    } else {
-        let label = format!("_func_{}_", op);
-        amd.a.set_label(label.as_str());
-        amd.a.append_quad(f.func_ptr());
+            let label = format!("_env_{}_", op);
+            amd.a.set_label(label.as_str());
+            amd.a.append_quad(*env as u64);
+        }
+        Func::App(app) => {
+            if let Some(f) = app.scalar_kernel() {
+                let label = format!("_func_{}_", op);
+                amd.a.set_label(label.as_str());
+                amd.a.append_quad(f as usize as u64);
+            }
+
+            if let Some(f) = app.simd_kernel() {
+                let label = format!("_simd_{}_", op);
+                amd.a.set_label(label.as_str());
+                amd.a.append_quad(f as usize as u64);
+            }
+        }
+        _ => {
+            let label = format!("_func_{}_", op);
+            amd.a.set_label(label.as_str());
+            amd.a.append_quad(f.func_ptr());
+        }
     }
 }
 

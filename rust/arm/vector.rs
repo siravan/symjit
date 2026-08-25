@@ -5,7 +5,7 @@ use super::super::code::Func;
 use super::super::config::{Config, KernelType, ABI_AREA};
 use super::super::generator::{FuncletType, Generator, StackRegions};
 use super::super::symbol::Loc;
-use super::super::utils::{align_stack, is_external_func, Reg};
+use super::super::utils::{align_stack, Reg};
 
 use super::*;
 
@@ -45,29 +45,42 @@ impl ArmSimdGenerator {
     }
 
     fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
+        let ofs = ABI_AREA as u32 * REG_SIZE;
+        let ker = self.config.is_kernel_func(op);
+
         let label = format!("_simd_{}_", op);
         load_long(&mut self.a, CALL, &label);
 
-        let ofs = ABI_AREA as u32 * REG_SIZE;
-
-        load_x_from_label(&mut self.a, 0, &format!("_env_{}_", op));
-        self.emit(arm! {add x(1), x(SP), #ofs});
-        self.emit(arm! {movz x(2), #num_args});
-        self.emit(arm! {add x(3), x(SP), #0});
+        if ker {
+            self.emit(arm! {add x(0), x(SP), #0});
+            self.emit(arm! {eor x(1), x(1), x(1)});
+            self.emit(arm! {eor x(2), x(2), x(2)});
+            self.emit(arm! {add x(3), x(STACK), #ofs});
+        } else {
+            load_x_from_label(&mut self.a, 0, &format!("_env_{}_", op));
+            self.emit(arm! {add x(1), x(STACK), #ofs});
+            self.emit(arm! {movz x(2), #num_args});
+            self.emit(arm! {add x(3), x(SP), #0});
+        }
 
         self.emit(arm! {blr x(CALL)});
 
         if self.config.is_complex() {
-            self.emit(arm! {tst x(0), x(0)});
-            let l1 = self.a.create_label();
-            self.jump(&l1, 0, |offset, _| arm! {b.eq label(offset)});
-            self.emit(arm! {ldr q(2), [sp, #0]});
-            self.emit(arm! {ldr q(3), [sp, #16]});
-            self.emit(arm! {uzp1 q(0), q(2), q(3)});
-            self.emit(arm! {uzp2 q(1), q(2), q(3)});
             let l2 = self.a.create_label();
-            self.branch(&l2);
-            self.set_label(&l1);
+
+            if !ker {
+                self.emit(arm! {tst x(0), x(0)});
+                let l1 = self.a.create_label();
+                self.jump(&l1, 0, |offset, _| arm! {b.eq label(offset)});
+                self.emit(arm! {ldr q(2), [sp, #0]});
+                self.emit(arm! {ldr q(3), [sp, #16]});
+                self.emit(arm! {uzp1 q(0), q(2), q(3)});
+                self.emit(arm! {uzp2 q(1), q(2), q(3)});
+
+                self.branch(&l2);
+                self.set_label(&l1);
+            }
+
             self.emit(arm! {ldr q(0), [sp, #0]});
             self.emit(arm! {ldr q(1), [sp, #16]});
             self.set_label(&l2);
@@ -594,7 +607,7 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
-        if is_external_func(op) {
+        if self.config.is_external_func(op) {
             return self.call_external(op, num_args);
         }
 

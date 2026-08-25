@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::sync::Arc;
 
-use super::code::VirtualTable;
+use super::code::{Func, VirtualTable};
 use super::defuns::Defuns;
 use super::operation::Operation;
 use super::symbol::Loc;
@@ -532,6 +532,23 @@ impl Config {
             self.available_registers() - 5
         } else {
             (self.available_registers() - 6) / 2
+        }
+    }
+
+    pub fn is_external_func(&self, op: &str) -> bool {
+        if let Some(df) = &self.df {
+            matches!(df.funcs.get(op), Some(Func::Slice { .. }))
+                || matches!(df.funcs.get(op), Some(Func::App { .. }))
+        } else {
+            false
+        }
+    }
+
+    pub fn is_kernel_func(&self, op: &str) -> bool {
+        if let Some(df) = &self.df {
+            matches!(df.funcs.get(op), Some(Func::App { .. }))
+        } else {
+            false
         }
     }
 

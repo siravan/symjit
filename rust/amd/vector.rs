@@ -3,7 +3,7 @@ use super::super::config::{Config, KernelType, ABI_AREA};
 use super::super::generator::{FuncletType, Generator, StackRegions};
 use super::super::symbol::Loc;
 use super::super::utils::align_stack;
-use super::super::utils::{is_external_func, DataType, Reg};
+use super::super::utils::{DataType, Reg};
 use anyhow::{anyhow, Result};
 
 use super::asm::{Amd, RoundingMode};
@@ -187,29 +187,39 @@ impl AmdVectorF64x4Generator {
 
     fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
         let cap = ABI_AREA as i32;
+        let ker = self.config.is_kernel_func(op);
 
-        self.amd.mov_reg_label(ARGS[0], &format!("_env_{}_", op));
-        self.amd.lea_mem(ARGS[1], STACK, cap * REG_SIZE);
-        self.amd.mov_imm(ARGS[2], num_args as u32);
-        self.amd.lea_mem(ARGS[3], SP, 4 * REG_SIZE);
+        if ker {
+            self.amd.lea_mem(ARGS[0], SP, 4 * REG_SIZE);
+            self.amd.xor(ARGS[1], ARGS[1]);
+            self.amd.xor(ARGS[2], ARGS[2]);
+            self.amd.lea_mem(ARGS[3], STACK, cap * REG_SIZE);
+        } else {
+            self.amd.mov_reg_label(ARGS[0], &format!("_env_{}_", op));
+            self.amd.lea_mem(ARGS[1], STACK, cap * REG_SIZE);
+            self.amd.mov_imm(ARGS[2], num_args as u32);
+            self.amd.lea_mem(ARGS[3], SP, 4 * REG_SIZE);
+        }
+
         self.vzeroupper();
-
         self.amd.call_indirect(&format!("_simd_{}_", op));
 
         if self.config.is_complex() {
             let l1 = format!(".P{}", self.amd.a.ip());
             let l2 = format!(".Q{}", self.amd.a.ip());
 
-            self.amd.or(Amd::RAX, Amd::RAX);
-            self.amd.jz(&l1);
+            if !ker {
+                self.amd.or(Amd::RAX, Amd::RAX);
+                self.amd.jz(&l1);
 
-            self.amd.vmovpd_ymm_mem(2, SP, 4 * REG_SIZE);
-            self.amd.vmovpd_ymm_mem(3, SP, 5 * REG_SIZE);
-            self.amd.vshufpd(0, 2, 3, 0);
-            self.amd.vshufpd(1, 2, 3, 0x0f);
+                self.amd.vmovpd_ymm_mem(2, SP, 4 * REG_SIZE);
+                self.amd.vmovpd_ymm_mem(3, SP, 5 * REG_SIZE);
+                self.amd.vshufpd(0, 2, 3, 0);
+                self.amd.vshufpd(1, 2, 3, 0x0f);
 
-            self.amd.jmp(&l2);
-            self.set_label(&l1);
+                self.amd.jmp(&l2);
+                self.set_label(&l1);
+            }
 
             self.amd.vmovpd_ymm_mem(0, SP, 4 * REG_SIZE);
             self.amd.vmovpd_ymm_mem(1, SP, 5 * REG_SIZE);
@@ -689,7 +699,7 @@ impl Generator for AmdVectorF64x4Generator {
     }
 
     fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
-        if is_external_func(op) {
+        if self.config.is_external_func(op) {
             return self.call_external(op, num_args);
         }
 

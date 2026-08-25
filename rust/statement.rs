@@ -5,7 +5,7 @@ use super::node::Node;
 use super::operation::Operation;
 use super::symbol::Loc;
 use super::topology::Topology;
-use super::utils::{is_external_func, reg};
+use super::utils::reg;
 
 #[derive(Debug, Clone)]
 pub enum Statement {
@@ -103,7 +103,7 @@ impl Statement {
                 arg,
                 num_args,
             } => {
-                if is_external_func(op.as_str()) {
+                if ir.config.is_external_func(op.as_str()) {
                     let r = arg.call_external()?;
                     ir.call(op.as_str(), r as usize)?;
                     Self::save_result(ir, lhs);

@@ -297,8 +297,7 @@ impl DirectTranslator {
                 self.save(reg(0), &Slot::Arg(i))?;
             }
 
-            let op = format!("${}", op);
-            self.mir.call(&op, n)?;
+            self.mir.call(op, n)?;
             self.save(Reg::Ret, lhs)?;
             self.ft.insert(op.to_string());
         }

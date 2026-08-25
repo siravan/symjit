@@ -45,6 +45,22 @@ impl Applet {
         })
     }
 
+    pub fn scalar_ptr(&self) -> Option<CompiledFunc<f64>> {
+        if let Some(f) = &self.compiled {
+            Some(f.func())
+        } else {
+            None
+        }
+    }
+
+    pub fn simd_ptr(&self) -> Option<CompiledFunc<f64>> {
+        if let Some(f) = &self.compiled_simd {
+            Some(f.func())
+        } else {
+            None
+        }
+    }
+
     /// Generic evaluate function for compiled Symbolica expressions
     pub fn evaluate<T>(&self, args: &[T], outs: &mut [T])
     where

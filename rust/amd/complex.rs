@@ -3,7 +3,7 @@ use super::super::config::{Config, KernelType, ABI_AREA};
 use super::super::generator::{FuncletType, Generator, StackRegions};
 use super::super::symbol::Loc;
 use super::super::utils::align_stack;
-use super::super::utils::{is_external_func, DataType, Reg};
+use super::super::utils::{DataType, Reg};
 use anyhow::Result;
 
 use super::asm::{Amd, RoundingMode};
@@ -76,10 +76,18 @@ impl AmdComplexGenerator {
     fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
         let cap = ABI_AREA as u32;
 
-        self.amd.mov_reg_label(ARGS[0], &format!("_env_{}_", op));
-        self.amd.lea_mem(ARGS[1], STACK, (cap * REG_SIZE) as i32);
-        self.amd.mov_imm(ARGS[2], num_args as u32);
-        self.amd.lea_mem(ARGS[3], SP, 4 * REG_SIZE as i32);
+        if self.config.is_kernel_func(op) {
+            self.amd.lea_mem(ARGS[0], SP, 4 * REG_SIZE as i32);
+            self.amd.xor(ARGS[1], ARGS[1]);
+            self.amd.xor(ARGS[2], ARGS[2]);
+            self.amd.lea_mem(ARGS[3], STACK, (cap * REG_SIZE) as i32);
+        } else {
+            self.amd.mov_reg_label(ARGS[0], &format!("_env_{}_", op));
+            self.amd.lea_mem(ARGS[1], STACK, (cap * REG_SIZE) as i32);
+            self.amd.mov_imm(ARGS[2], num_args as u32);
+            self.amd.lea_mem(ARGS[3], SP, 4 * REG_SIZE as i32);
+        }
+
         self.vzeroupper();
 
         self.amd.call_indirect(&format!("_func_{}_", op));
@@ -590,7 +598,7 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
-        if is_external_func(op) {
+        if self.config.is_external_func(op) {
             return self.call_external(op, num_args);
         }
 
