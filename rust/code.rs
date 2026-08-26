@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use num_complex::Complex;
+use rand::*;
 use spec_math::cephes64;
 use std::ffi::c_void;
 use std::fmt;
@@ -125,6 +126,7 @@ impl VirtualTable {
             "Ci" => Func::Unary(Self::ci),
             "Shi" => Func::Unary(Self::shi),
             "Chi" => Func::Unary(Self::chi),
+            "random" => Func::Unary(Self::random),
             // Binary Functions
             "power" => Func::Binary(Self::power),
             "atan2" => Func::Binary(Self::atan2),
@@ -155,6 +157,7 @@ impl VirtualTable {
             "cplx_log" => Func::UnaryCplx(Self::cplx_log),
             // Complex Binary Functions
             "cplx_power" => Func::BinaryCplx(Self::cplx_power),
+            "cplx_random" => Func::UnaryCplx(Self::cplx_random),
             // "trampoline" => Func::Trampoline(Self::closure_trampoline),
             _ => {
                 return Err(anyhow!("op_code {} is not found or is not supported", op));
@@ -325,6 +328,10 @@ impl VirtualTable {
         c
     }
 
+    pub extern "C" fn random(x: f64) -> f64 {
+        rand::random::<f64>() * x
+    }
+
     /************** Complex Functions ***************/
 
     pub extern "C" fn cplx_sinc(xr: f64, xi: f64, z: &mut Complex<f64>) {
@@ -432,5 +439,9 @@ impl VirtualTable {
 
     pub extern "C" fn cplx_power(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).powc(*z);
+    }
+
+    pub extern "C" fn cplx_random(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(rand::random::<f64>(), rand::random::<f64>()) * Complex::new(xr, xi);
     }
 }
