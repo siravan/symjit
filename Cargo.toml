@@ -39,6 +39,7 @@ windows-sys = { version = "0.61", features = ["Win32_System_Memory"] }
 [features]
 selinux-fix = ["memmap2"]
 default = []
+symbolica = []
 
 [lib]
 # name = "_lib"

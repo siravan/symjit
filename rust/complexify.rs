@@ -756,6 +756,9 @@ impl Generator for Complexifier {
     fn add_func(&mut self, _f: &str, _p: Func) {}
 
     fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
+        // Important! We need to mark Reg::Ret as complex because
+        // of a bug discovered while testing complex applet calls.
+        self.ensure_complex(Reg::Ret);
         self.mir.call(op, num_args)
     }
 

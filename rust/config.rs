@@ -46,7 +46,13 @@ pub const OPT_LEVEL_SHIFT: usize = 8;
 
 pub const SPILL_AREA: usize = 16;
 pub const ABI_AREA: usize = 16;
-pub const SLICE_CAP: usize = 64;
+
+#[cfg(feature = "symbolica")]
+pub const SLICE_CAP: usize = 256;
+
+#[cfg(not(feature = "symbolica"))]
+pub const SLICE_CAP: usize = 32;
+
 pub const DEFAULT_STACK_LIMIT: usize = 1 << 20;
 
 #[derive(Clone)]
