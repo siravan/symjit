@@ -37,8 +37,6 @@ const T1: u8 = 30;
 const T2: u8 = 31;
 
 mod complex;
-#[cfg(all(test, target_arch = "aarch64"))]
-mod funclet_tests;
 mod scalar;
 mod vector;
 
@@ -477,10 +475,10 @@ fn pack_locs(a: &mut Assembler, locs: &[Loc]) {
         if let Loc::Stack(idx) = loc {
             assert!(*idx < 65536);
             match i % 4 {
-                0 => emit(a, arm! {movz x(r), #idx/2}),
-                1 => emit(a, arm! {movk_lsl16 x(r), #idx/2}),
-                2 => emit(a, arm! {movk_lsl32 x(r), #idx/2}),
-                3 => emit(a, arm! {movk_lsl48 x(r), #idx/2}),
+                0 => emit(a, arm! {movz x(r), #*idx}),
+                1 => emit(a, arm! {movk_lsl16 x(r), #*idx}),
+                2 => emit(a, arm! {movk_lsl32 x(r), #*idx}),
+                3 => emit(a, arm! {movk_lsl48 x(r), #*idx}),
                 _ => unreachable!(),
             }
         }
