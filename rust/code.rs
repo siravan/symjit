@@ -54,7 +54,7 @@ pub enum Func {
         f_simd: *const c_void,
         env: *const c_void,
     },
-    App(Applet),
+    App(Box<Applet>),
 }
 
 impl Func {

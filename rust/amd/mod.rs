@@ -332,7 +332,7 @@ fn load_args_helper<F1, F2>(
     }
 
     if ultra {
-        pack_locs(amd, locs.get(0..n).unwrap_or(&locs));
+        pack_locs(amd, locs.get(0..n).unwrap_or(locs));
     } else {
         for (arg, loc) in locs.iter().enumerate() {
             if arg < n {

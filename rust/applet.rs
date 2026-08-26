@@ -46,19 +46,11 @@ impl Applet {
     }
 
     pub fn scalar_ptr(&self) -> Option<CompiledFunc<f64>> {
-        if let Some(f) = &self.compiled {
-            Some(f.func())
-        } else {
-            None
-        }
+        self.compiled.as_ref().map(|f| f.func())
     }
 
     pub fn simd_ptr(&self) -> Option<CompiledFunc<f64>> {
-        if let Some(f) = &self.compiled_simd {
-            Some(f.func())
-        } else {
-            None
-        }
+        self.compiled_simd.as_ref().map(|f| f.func())
     }
 
     /// Generic evaluate function for compiled Symbolica expressions

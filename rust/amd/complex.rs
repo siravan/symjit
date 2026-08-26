@@ -1,6 +1,6 @@
 use super::super::code::Func;
 use super::super::config::{Config, KernelType, ABI_AREA};
-use super::super::generator::{FuncletType, Generator, StackRegions};
+use super::super::generator::{Generator, StackRegions};
 use super::super::symbol::Loc;
 use super::super::utils::align_stack;
 use super::super::utils::{DataType, Reg};
@@ -117,10 +117,6 @@ impl Generator for AmdComplexGenerator {
 
     fn three_address(&self) -> bool {
         true
-    }
-
-    fn support_funclet(&self) -> FuncletType {
-        FuncletType::Real
     }
 
     fn seal(&mut self) {
@@ -249,12 +245,12 @@ impl Generator for AmdComplexGenerator {
             &locs[..],
             ultra,
             16,
-            |amd, loc, dst| {
-                load_f64x2_from_loc(amd, 0, loc);
+            |amd, src, dst| {
+                load_f64x2_from_loc(amd, 0, src);
                 save_f64x2_to_loc(amd, 0, dst);
             },
-            |amd, arg, loc| {
-                load_f64x2_from_loc(amd, arg, loc);
+            |amd, arg, src| {
+                load_f64x2_from_loc(amd, arg, src);
             },
         );
     }
@@ -269,21 +265,14 @@ impl Generator for AmdComplexGenerator {
             |amd, arg| {
                 amd.vmovdd_xmm_indexed(arg, STACK, Amd::RAX, 8);
             },
-            |amd, arg, loc| {
-                save_f64x2_to_loc(amd, arg, loc);
+            |amd, arg, dst| {
+                save_f64x2_to_loc(amd, arg, dst);
             },
         );
     }
 
     fn load_args_complex(&mut self, _locs: Vec<Loc>, _ultra: bool) {}
     fn save_args_complex(&mut self, _num_args: u8, _ultra: bool) {}
-
-    fn copy(&mut self, dst: Loc, src: Loc) {
-        load_f64x2_from_loc(&mut self.amd, 0, src);
-        save_f64x2_to_loc(&mut self.amd, 0, dst);
-    }
-
-    fn copy_complex(&mut self, _dst: Loc, _src: Loc) {}
 
     fn neg(&mut self, dst: Reg, s1: Reg) {
         self.load_const_by_name(Reg::Temp, "_minus_zero_");
@@ -639,10 +628,6 @@ impl Generator for AmdComplexGenerator {
         self.load_stack(Reg::Ret, 4);
 
         Ok(())
-    }
-
-    fn call_funclet(&mut self, label: &str) {
-        self.amd.call_relative(label);
     }
 
     fn ret(&mut self) {

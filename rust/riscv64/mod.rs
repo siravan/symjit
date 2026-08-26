@@ -3,7 +3,7 @@ mod macros;
 
 use super::assembler::{Assembler, Jumper};
 use super::config::Config;
-use super::generator::{FuncletType, Generator};
+use super::generator::Generator;
 use super::symbol::Loc;
 use super::utils::{align_stack, Reg};
 use anyhow::Result;
@@ -313,10 +313,6 @@ impl Generator for RiscV {
         14
     }
 
-    fn support_funclet(&self) -> FuncletType {
-        FuncletType::None
-    }
-
     fn seal(&mut self) {
         self.apply_jumps();
     }
@@ -451,25 +447,6 @@ impl Generator for RiscV {
 
     fn save_args_complex(&mut self, _num_args: u8, _ultra: bool) {
         unimplemented!()
-    }
-
-    fn copy(&mut self, dst: Loc, src: Loc) {
-        match src {
-            Loc::Param(idx) => self.load_float(0, PARAMS, 8 * idx),
-            Loc::Stack(idx) => self.load_float(0, STACK, 8 * idx),
-            Loc::Mem(idx) => self.load_float(0, MEM, 8 * idx),
-        }
-
-        match dst {
-            Loc::Param(idx) => self.save_float(0, PARAMS, 8 * idx),
-            Loc::Stack(idx) => self.save_float(0, STACK, 8 * idx),
-            Loc::Mem(idx) => self.save_float(0, MEM, 8 * idx),
-        }
-    }
-
-    fn copy_complex(&mut self, dst: Loc, src: Loc) {
-        self.copy(dst, src);
-        self.copy(dst.imag(), src.imag());
     }
 
     fn neg(&mut self, dst: Reg, s1: Reg) {
@@ -741,10 +718,6 @@ impl Generator for RiscV {
         self.load_stack(Reg::Ret, 0);
         self.load_stack(Reg::Temp, 1);
         Ok(())
-    }
-
-    fn call_funclet(&mut self, _label: &str) {
-        todo!();
     }
 
     fn ret(&mut self) {

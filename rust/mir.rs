@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fmt;
 use std::fs;
 use std::hash::{Hash, Hasher};
@@ -14,7 +13,6 @@ use super::code::{Func, VirtualTable};
 use super::complexify::Complexifier;
 use super::config::Config;
 use super::config::SPILL_AREA;
-use super::generator::FuncletType;
 use super::generator::Generator;
 use super::machine::MachineCode;
 use super::serializer::MirWriter;
@@ -80,6 +78,7 @@ pub enum FusedOp {
     NegMulSub = 3, // -a * b - c
 }
 
+/*
 #[derive(Clone, Copy, Debug, PartialEq, Hash, Eq)]
 #[repr(u8)]
 pub enum FuncletOp {
@@ -89,6 +88,7 @@ pub enum FuncletOp {
     TimesComplex,
     DivideComplex,
 }
+*/
 
 #[derive(Clone)]
 pub enum Instruction {
@@ -1554,6 +1554,7 @@ impl Mir {
     }
 }
 
+/*
 // Funclet Section
 impl Mir {
     fn try_funclet(
@@ -1779,6 +1780,7 @@ impl Mir {
         Ok(())
     }
 }
+*/
 
 impl Mir {
     fn rerun_uniop(ir: &mut dyn Generator, op: UniOp, dst: Reg, s1: Reg) {
@@ -1834,12 +1836,6 @@ impl Mir {
         let mut iter = self.code.iter().peekable();
 
         while let Some(ins) = iter.next() {
-            /*
-            if self.try_funclet(ir, &mut funclets, &ins) {
-                continue;
-            }
-            */
-
             match &ins {
                 Instruction::Nop | Instruction::End => {}
                 Instruction::Uni { op, dst, s1 } => {
@@ -1917,19 +1913,15 @@ impl Mir {
                     }
                 }
                 Instruction::Call { label, num_args } => {
-                    if *num_args == 0 {
-                        ir.call_funclet(label);
-                    } else {
-                        let f = self.find_op(label).unwrap();
-                        match f {
-                            Func::Unary(_) => ir.call(label, *num_args)?,
-                            Func::Binary(_) => ir.call(label, *num_args)?,
-                            Func::UnaryCplx(_) => ir.call_complex(label, *num_args)?,
-                            Func::BinaryCplx(_) => ir.call_complex(label, *num_args)?,
-                            Func::PairedUnary(_) => ir.call(label, *num_args)?,
-                            Func::Slice { .. } => ir.call(label, *num_args)?,
-                            Func::App { .. } => ir.call(label, *num_args)?,
-                        }
+                    let f = self.find_op(label).unwrap();
+                    match f {
+                        Func::Unary(_) => ir.call(label, *num_args)?,
+                        Func::Binary(_) => ir.call(label, *num_args)?,
+                        Func::UnaryCplx(_) => ir.call_complex(label, *num_args)?,
+                        Func::BinaryCplx(_) => ir.call_complex(label, *num_args)?,
+                        Func::PairedUnary(_) => ir.call(label, *num_args)?,
+                        Func::Slice { .. } => ir.call(label, *num_args)?,
+                        Func::App { .. } => ir.call(label, *num_args)?,
                     }
                 }
                 Instruction::Fused { op, dst, a, b, c } => match op {
@@ -2045,8 +2037,6 @@ impl Mir {
                 },
             }
         }
-
-        // self.create_funclets(ir, funclets)?;
 
         Ok(())
     }

@@ -3,7 +3,7 @@ use std::collections::HashSet;
 
 use super::code::Func;
 use super::config::Config;
-use super::generator::{FuncletType, Generator};
+use super::generator::Generator;
 use super::mir::Mir;
 use super::symbol::Loc;
 use super::utils::Reg;
@@ -148,10 +148,6 @@ impl Generator for Complexifier {
         Vec::new()
     }
 
-    fn support_funclet(&self) -> FuncletType {
-        FuncletType::None
-    }
-
     fn seal(&mut self) {}
     fn align(&mut self) {}
 
@@ -293,14 +289,6 @@ impl Generator for Complexifier {
     fn load_args_complex(&mut self, _loc: Vec<Loc>, _ultra: bool) {}
 
     fn save_args_complex(&mut self, _num_args: u8, _ultra: bool) {}
-
-    fn copy(&mut self, _dst: Loc, _src: Loc) {
-        unreachable!()
-    }
-
-    fn copy_complex(&mut self, _dst: Loc, _src: Loc) {
-        unreachable!()
-    }
 
     fn neg(&mut self, dst: Reg, s1: Reg) {
         self.mir.neg(re(dst), re(s1));
@@ -781,10 +769,6 @@ impl Generator for Complexifier {
         }
 
         self.mir.call(op, num_args)
-    }
-
-    fn call_funclet(&mut self, label: &str) {
-        let _ = self.mir.call(label, 0);
     }
 
     fn ret(&mut self) {

@@ -1,6 +1,6 @@
 use super::super::code::Func;
 use super::super::config::{Config, KernelType, ABI_AREA};
-use super::super::generator::{FuncletType, Generator, StackRegions};
+use super::super::generator::{Generator, StackRegions};
 use super::super::symbol::Loc;
 use super::super::utils::align_stack;
 use super::super::utils::{DataType, Reg};
@@ -263,10 +263,6 @@ impl Generator for AmdVectorF64x8Generator {
         true
     }
 
-    fn support_funclet(&self) -> FuncletType {
-        FuncletType::Complex
-    }
-
     fn seal(&mut self) {
         self.predefined_consts();
         self.apply_jumps();
@@ -412,12 +408,12 @@ impl Generator for AmdVectorF64x8Generator {
             &locs[..],
             ultra,
             32,
-            |amd, loc, dst| {
-                load_f64x8_from_loc(amd, 0, loc);
+            |amd, src, dst| {
+                load_f64x8_from_loc(amd, 0, src);
                 save_f64x8_to_loc(amd, 0, dst);
             },
-            |amd, arg, loc| {
-                load_f64x8_from_loc(amd, arg, loc);
+            |amd, arg, src| {
+                load_f64x8_from_loc(amd, arg, src);
             },
         );
     }
@@ -433,8 +429,8 @@ impl Generator for AmdVectorF64x8Generator {
                 amd.shl_imm(Amd::RAX, 3);
                 amd.vmovqd_zmm_indexed(arg, STACK, Amd::RAX, 8);
             },
-            |amd, arg, loc| {
-                save_f64x8_to_loc(amd, arg, loc);
+            |amd, arg, dst| {
+                save_f64x8_to_loc(amd, arg, dst);
             },
         );
     }
@@ -446,15 +442,15 @@ impl Generator for AmdVectorF64x8Generator {
             &locs[..],
             ultra,
             16,
-            |amd, loc, dst| {
-                load_f64x8_from_loc(amd, 0, loc);
-                load_f64x8_from_loc(amd, 1, loc.imag());
+            |amd, src, dst| {
+                load_f64x8_from_loc(amd, 0, src);
+                load_f64x8_from_loc(amd, 1, src.imag());
                 save_f64x8_to_loc(amd, 0, dst);
                 save_f64x8_to_loc(amd, 1, dst.imag());
             },
-            |amd, arg, loc| {
-                load_f64x8_from_loc(amd, 2 * arg, loc);
-                load_f64x8_from_loc(amd, 2 * arg + 1, loc.imag());
+            |amd, arg, src| {
+                load_f64x8_from_loc(amd, 2 * arg, src);
+                load_f64x8_from_loc(amd, 2 * arg + 1, src.imag());
             },
         );
     }
@@ -472,23 +468,11 @@ impl Generator for AmdVectorF64x8Generator {
                 // note that the offset is 1 and not 64 due to EVEX compressed displacement mode
                 amd.vmovqd_zmm_indexed_mem(2 * arg + 1, STACK, Amd::RAX, 8, 1);
             },
-            |amd, arg, loc| {
-                save_f64x8_to_loc(amd, 2 * arg, loc);
-                save_f64x8_to_loc(amd, 2 * arg + 1, loc.imag());
+            |amd, arg, dst| {
+                save_f64x8_to_loc(amd, 2 * arg, dst);
+                save_f64x8_to_loc(amd, 2 * arg + 1, dst.imag());
             },
         );
-    }
-
-    fn copy(&mut self, dst: Loc, src: Loc) {
-        load_f64x8_from_loc(&mut self.amd, 0, src);
-        save_f64x8_to_loc(&mut self.amd, 0, dst);
-    }
-
-    fn copy_complex(&mut self, dst: Loc, src: Loc) {
-        load_f64x8_from_loc(&mut self.amd, 0, src);
-        load_f64x8_from_loc(&mut self.amd, 1, src.imag());
-        save_f64x8_to_loc(&mut self.amd, 0, dst);
-        save_f64x8_to_loc(&mut self.amd, 1, dst.imag());
     }
 
     fn neg(&mut self, dst: Reg, s1: Reg) {
@@ -747,10 +731,6 @@ impl Generator for AmdVectorF64x8Generator {
         }
 
         Ok(())
-    }
-
-    fn call_funclet(&mut self, label: &str) {
-        self.amd.call_relative(label);
     }
 
     fn ret(&mut self) {

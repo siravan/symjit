@@ -3,7 +3,7 @@ use anyhow::{anyhow, Result};
 use super::super::assembler::{Assembler, Jumper};
 use super::super::code::Func;
 use super::super::config::{Config, KernelType, ABI_AREA};
-use super::super::generator::{FuncletType, Generator, StackRegions};
+use super::super::generator::{Generator, StackRegions};
 use super::super::symbol::Loc;
 use super::super::utils::{align_stack, Reg};
 
@@ -131,10 +131,6 @@ impl Generator for ArmSimdGenerator {
 
     fn count_shadows(&self) -> u8 {
         14
-    }
-
-    fn support_funclet(&self) -> FuncletType {
-        FuncletType::Complex
     }
 
     fn seal(&mut self) {
@@ -291,12 +287,12 @@ impl Generator for ArmSimdGenerator {
             &locs[..],
             ultra,
             32,
-            |a, loc, dst| {
-                load_q_from_loc(a, 0, loc);
+            |a, src, dst| {
+                load_q_from_loc(a, 0, src);
                 save_q_to_loc(a, 0, dst);
             },
-            |a, arg, loc| {
-                load_q_from_loc(a, arg, loc);
+            |a, arg, src| {
+                load_q_from_loc(a, arg, src);
             },
         );
     }
@@ -311,8 +307,8 @@ impl Generator for ArmSimdGenerator {
             |a, arg| {
                 emit(a, arm! {str q(arg), [x(STACK), x(8), lsl #4]});
             },
-            |a, arg, loc| {
-                save_q_to_loc(a, arg, loc);
+            |a, arg, dst| {
+                save_q_to_loc(a, arg, dst);
             },
         );
     }
@@ -324,12 +320,12 @@ impl Generator for ArmSimdGenerator {
             &locs[..],
             ultra,
             16,
-            |a, loc, dst| {
-                load_paired_q_from_loc(a, 0, 1, loc);
+            |a, src, dst| {
+                load_paired_q_from_loc(a, 0, 1, src);
                 save_paired_q_to_loc(a, 0, 1, dst);
             },
-            |a, arg, loc| {
-                load_paired_q_from_loc(a, 2 * arg, 2 * arg + 1, loc);
+            |a, arg, src| {
+                load_paired_q_from_loc(a, 2 * arg, 2 * arg + 1, src);
             },
         );
     }
@@ -346,20 +342,10 @@ impl Generator for ArmSimdGenerator {
                 emit(a, arm! {add x(8), x(8), #1});
                 emit(a, arm! {ldr q(2*arg+1), [x(STACK), x(8), lsl #4]});
             },
-            |a, arg, loc| {
-                save_paired_q_to_loc(a, 2 * arg, 2 * arg + 1, loc);
+            |a, arg, dst| {
+                save_paired_q_to_loc(a, 2 * arg, 2 * arg + 1, dst);
             },
         );
-    }
-
-    fn copy(&mut self, dst: Loc, src: Loc) {
-        load_q_from_loc(&mut self.a, 0, src);
-        save_q_to_loc(&mut self.a, 0, dst);
-    }
-
-    fn copy_complex(&mut self, dst: Loc, src: Loc) {
-        load_paired_q_from_loc(&mut self.a, 0, 1, src);
-        save_paired_q_to_loc(&mut self.a, 0, 1, dst);
     }
 
     fn neg(&mut self, dst: Reg, s1: Reg) {
@@ -741,10 +727,6 @@ impl Generator for ArmSimdGenerator {
         }
 
         Ok(())
-    }
-
-    fn call_funclet(&mut self, label: &str) {
-        self.jump(label, 0, |offset, _| arm! {bl label(offset)});
     }
 
     fn ret(&mut self) {

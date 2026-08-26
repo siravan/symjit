@@ -510,7 +510,7 @@ fn load_args_helper<F1, F2>(
     }
 
     if ultra {
-        pack_locs(a, locs.get(0..n).unwrap_or(&locs));
+        pack_locs(a, locs.get(0..n).unwrap_or(locs));
     } else {
         for (arg, loc) in locs.iter().enumerate() {
             if arg < n {
@@ -544,41 +544,5 @@ fn save_args_helper<F1, F2>(
         for arg in 0..num_args.min(n) {
             f2(a, arg, config.location(arg))
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::super::config::Config;
-    use super::super::generator::{FuncletType, Generator};
-    use super::*;
-
-    fn first_funclet_call<G: Generator>(mut generator: G) -> u32 {
-        generator.call_funclet("target");
-        generator.branch("done");
-        generator.set_label("target");
-        generator.ret();
-        generator.set_label("done");
-        generator.seal();
-
-        let bytes = generator.bytes();
-        u32::from_le_bytes(bytes[..4].try_into().unwrap())
-    }
-
-    #[test]
-    fn generators_emit_relative_funclet_calls() {
-        let config = Config::default();
-
-        let scalar = ArmGenerator::new(config.clone());
-        assert!(matches!(scalar.support_funclet(), FuncletType::Complex));
-        assert_eq!(first_funclet_call(scalar), 0x9400_0002);
-
-        let vector = ArmSimdGenerator::new(config.clone());
-        assert!(matches!(vector.support_funclet(), FuncletType::Complex));
-        assert_eq!(first_funclet_call(vector), 0x9400_0002);
-
-        let complex = ArmComplexGenerator::new(config);
-        assert!(matches!(complex.support_funclet(), FuncletType::Real));
-        assert_eq!(first_funclet_call(complex), 0x9400_0002);
     }
 }

@@ -3,7 +3,7 @@ use anyhow::Result;
 use super::super::assembler::{Assembler, Jumper};
 use super::super::code::Func;
 use super::super::config::{Config, ABI_AREA};
-use super::super::generator::{FuncletType, Generator};
+use super::super::generator::Generator;
 use super::super::symbol::Loc;
 use super::super::utils::{align_stack, Reg};
 
@@ -93,10 +93,6 @@ impl Generator for ArmGenerator {
 
     fn count_shadows(&self) -> u8 {
         14
-    }
-
-    fn support_funclet(&self) -> FuncletType {
-        FuncletType::Complex
     }
 
     fn seal(&mut self) {
@@ -234,12 +230,12 @@ impl Generator for ArmGenerator {
             &locs[..],
             ultra,
             32,
-            |a, loc, dst| {
-                load_d_from_loc(a, 0, loc);
+            |a, src, dst| {
+                load_d_from_loc(a, 0, src);
                 save_d_to_loc(a, 0, dst);
             },
-            |a, arg, loc| {
-                load_d_from_loc(a, arg, loc);
+            |a, arg, src| {
+                load_d_from_loc(a, arg, src);
             },
         );
     }
@@ -254,8 +250,8 @@ impl Generator for ArmGenerator {
             |a, arg| {
                 emit(a, arm! {ldr d(arg), [x(STACK), x(8), lsl #3]});
             },
-            |a, arg, loc| {
-                save_d_to_loc(a, arg, loc);
+            |a, arg, dst| {
+                save_d_to_loc(a, arg, dst);
             },
         );
     }
@@ -267,12 +263,12 @@ impl Generator for ArmGenerator {
             &locs[..],
             ultra,
             32,
-            |a, loc, dst| {
-                load_c_from_loc(a, 0, loc);
+            |a, src, dst| {
+                load_c_from_loc(a, 0, src);
                 save_c_to_loc(a, 0, dst);
             },
-            |a, arg, loc| {
-                load_c_from_loc(a, arg, loc);
+            |a, arg, src| {
+                load_c_from_loc(a, arg, src);
             },
         );
     }
@@ -288,20 +284,10 @@ impl Generator for ArmGenerator {
                 emit(a, arm! {lsr x(8), x(8), #1});
                 emit(a, arm! {ldr q(arg), [x(STACK), x(8), lsl #4]});
             },
-            |a, arg, loc| {
-                save_c_to_loc(a, arg, loc);
+            |a, arg, dst| {
+                save_c_to_loc(a, arg, dst);
             },
         );
-    }
-
-    fn copy(&mut self, dst: Loc, src: Loc) {
-        load_d_from_loc(&mut self.a, 0, src);
-        save_d_to_loc(&mut self.a, 0, dst);
-    }
-
-    fn copy_complex(&mut self, dst: Loc, src: Loc) {
-        load_c_from_loc(&mut self.a, 0, src);
-        save_c_to_loc(&mut self.a, 0, dst);
     }
 
     fn neg(&mut self, dst: Reg, s1: Reg) {
@@ -533,10 +519,6 @@ impl Generator for ArmGenerator {
         self.load_stack(Reg::Ret, 0);
         self.load_stack(Reg::Temp, 1);
         Ok(())
-    }
-
-    fn call_funclet(&mut self, label: &str) {
-        self.jump(label, 0, |offset, _| arm! {bl label(offset)});
     }
 
     fn ret(&mut self) {

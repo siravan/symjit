@@ -182,7 +182,8 @@ impl Defuns {
     }
 
     pub fn add_applet(&mut self, name: &str, app: Applet) {
-        self.funcs.insert(name.to_string(), Func::App(app));
+        self.funcs
+            .insert(name.to_string(), Func::App(Box::new(app)));
     }
 
     pub fn add_sliced_func<T>(&mut self, name: &str, closure: ExternalFunction<T>) -> Result<()>

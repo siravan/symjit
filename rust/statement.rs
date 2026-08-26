@@ -1,12 +1,11 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
-use super::config::SPILL_AREA;
 use super::mir::Mir;
 use super::node::Node;
 use super::operation::Operation;
 use super::symbol::Loc;
 use super::topology::Topology;
-use super::utils::{reg, Reg};
+use super::utils::reg;
 
 #[derive(Debug, Clone)]
 pub enum Statement {
@@ -136,22 +135,10 @@ impl Statement {
                 ir.branch_if(reg(cond), label, *is_else);
             }
             Statement::LoadArgs { args } => {
-                let mut locs: Vec<Loc> = Vec::new();
-
-                for (i, arg) in args.iter().enumerate() {
-                    match arg {
-                        Node::Var { sym } => locs.push(sym.borrow().loc),
-                        _ => {
-                            let r = arg.compile_tree(ir)?;
-                            let sym = topology.args[i].clone();
-                            locs.push(sym.borrow().loc);
-                            Self::save(ir, r, &Node::Var { sym });
-                        }
-                    }
+                for (src, dst) in args.iter().zip(topology.args.iter()) {
+                    let r = src.compile_tree(ir)?;
+                    Self::save(ir, r, &Node::Var { sym: dst.clone() });
                 }
-
-                ir.load_args(locs, false);
-                ir.save_args(args.len() as u8, false);
             }
         };
 

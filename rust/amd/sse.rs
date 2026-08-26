@@ -1,6 +1,6 @@
 use super::super::code::Func;
 use super::super::config::{Config, KernelType, ABI_AREA};
-use super::super::generator::{FuncletType, Generator, StackRegions};
+use super::super::generator::{Generator, StackRegions};
 use super::super::symbol::Loc;
 use super::super::utils::align_stack;
 use super::super::utils::{DataType, Reg};
@@ -128,10 +128,6 @@ impl Generator for AmdSSEGenerator {
 
     fn three_address(&self) -> bool {
         false
-    }
-
-    fn support_funclet(&self) -> FuncletType {
-        FuncletType::Complex
     }
 
     fn seal(&mut self) {
@@ -285,24 +281,6 @@ impl Generator for AmdSSEGenerator {
 
     fn save_args_complex(&mut self, _num_args: u8, _ultra: bool) {
         unimplemented!()
-    }
-
-    fn copy(&mut self, dst: Loc, src: Loc) {
-        match src {
-            Loc::Param(idx) => self.amd.movsd_xmm_mem(0, PARAMS, (idx * 8) as i32),
-            Loc::Stack(idx) => self.amd.movsd_xmm_mem(0, STACK, (idx * 8) as i32),
-            Loc::Mem(idx) => self.amd.movsd_xmm_mem(0, MEM, (idx * 8) as i32),
-        }
-        match dst {
-            Loc::Param(idx) => self.amd.movsd_mem_xmm(PARAMS, (idx * 8) as i32, 0),
-            Loc::Stack(idx) => self.amd.movsd_mem_xmm(STACK, (idx * 8) as i32, 0),
-            Loc::Mem(idx) => self.amd.movsd_mem_xmm(MEM, (idx * 8) as i32, 0),
-        }
-    }
-
-    fn copy_complex(&mut self, dst: Loc, src: Loc) {
-        self.copy(dst, src);
-        self.copy(dst.imag(), src.imag());
     }
 
     fn neg(&mut self, dst: Reg, s1: Reg) {
@@ -527,10 +505,6 @@ impl Generator for AmdSSEGenerator {
         self.load_stack(Reg::Temp, 5);
 
         Ok(())
-    }
-
-    fn call_funclet(&mut self, label: &str) {
-        self.amd.call_relative(label);
     }
 
     fn ret(&mut self) {

@@ -1155,7 +1155,7 @@ impl IndirectTranslator {
             let r = self.const_node(n as f64);
             let n = self.binary_node(op, l, r)?;
             // Important! To prevent call from separating from arguments setup.
-            self.join_rhs.insert(lhs.clone());
+            self.join_rhs.insert(*lhs);
             self.assign(lhs, n)?;
         }
 

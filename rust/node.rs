@@ -689,13 +689,13 @@ impl Node {
         }
     }
 
-    pub fn caller(&self, mir: &mut Mir, locs: &mut Vec<Loc>) {
+    pub fn caller(&self, _mir: &mut Mir, locs: &mut Vec<Loc>) {
         match self {
             Node::Void | Node::Const { .. } => {}
-            Node::Unary { arg, .. } => arg.caller(mir, locs),
+            Node::Unary { arg, .. } => arg.caller(_mir, locs),
             Node::Binary { left, right, .. } => {
-                left.caller(mir, locs);
-                right.caller(mir, locs);
+                left.caller(_mir, locs);
+                right.caller(_mir, locs);
             }
             Node::Var { sym } => {
                 let loc = sym.borrow().loc;

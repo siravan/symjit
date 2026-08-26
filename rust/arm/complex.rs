@@ -3,7 +3,7 @@ use anyhow::Result;
 use super::super::assembler::{Assembler, Jumper};
 use super::super::code::Func;
 use super::super::config::{Config, ABI_AREA};
-use super::super::generator::{FuncletType, Generator};
+use super::super::generator::Generator;
 use super::super::symbol::Loc;
 use super::super::utils::{align_stack, Reg};
 
@@ -90,10 +90,6 @@ impl Generator for ArmComplexGenerator {
 
     fn count_shadows(&self) -> u8 {
         14
-    }
-
-    fn support_funclet(&self) -> FuncletType {
-        FuncletType::Real
     }
 
     fn seal(&mut self) {
@@ -214,12 +210,12 @@ impl Generator for ArmComplexGenerator {
             &locs[..],
             ultra,
             32,
-            |a, loc, dst| {
-                load_c_from_loc(a, 0, loc);
+            |a, src, dst| {
+                load_c_from_loc(a, 0, src);
                 save_c_to_loc(a, 0, dst);
             },
-            |a, arg, loc| {
-                load_c_from_loc(a, arg, loc);
+            |a, arg, src| {
+                load_c_from_loc(a, arg, src);
             },
         );
     }
@@ -235,8 +231,8 @@ impl Generator for ArmComplexGenerator {
                 emit(a, arm! {lsr x(8), x(8), #1});
                 emit(a, arm! {ldr q(arg), [x(STACK), x(8), lsl #4]});
             },
-            |a, arg, loc| {
-                save_c_to_loc(a, arg, loc);
+            |a, arg, dst| {
+                save_c_to_loc(a, arg, dst);
             },
         );
     }
@@ -248,13 +244,6 @@ impl Generator for ArmComplexGenerator {
     fn save_args_complex(&mut self, _num_args: u8, _ultra: bool) {
         unreachable!()
     }
-
-    fn copy(&mut self, dst: Loc, src: Loc) {
-        load_c_from_loc(&mut self.a, 0, src);
-        save_c_to_loc(&mut self.a, 0, dst);
-    }
-
-    fn copy_complex(&mut self, _dst: Loc, _src: Loc) {}
 
     fn neg(&mut self, dst: Reg, s1: Reg) {
         self.emit(arm! {fneg q(ϕ(dst)), q(ϕ(s1))});
@@ -565,10 +554,6 @@ impl Generator for ArmComplexGenerator {
 
         self.load_stack(Reg::Ret, 0);
         Ok(())
-    }
-
-    fn call_funclet(&mut self, label: &str) {
-        self.jump(label, 0, |offset, _| arm! {bl label(offset)});
     }
 
     fn ret(&mut self) {
