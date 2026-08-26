@@ -733,6 +733,10 @@ impl Generator for ArmSimdGenerator {
         self.emit(arm! {ret});
     }
 
+    fn call_funclet(&mut self, label: &str) {
+        self.jump(label, 0, |offset, _| arm! {bl label(offset)});
+    }
+
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {
         if true_val == false_val {
             self.fmov(dst, true_val);

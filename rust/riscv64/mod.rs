@@ -720,6 +720,10 @@ impl Generator for RiscV {
         Ok(())
     }
 
+    fn call_funclet(&mut self, _label: &str) {
+        todo!();
+    }
+
     fn ret(&mut self) {
         self.emit(rvv! {ret});
     }

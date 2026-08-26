@@ -774,6 +774,8 @@ impl Generator for Complexifier {
         self.mir.call(op, num_args)
     }
 
+    fn call_funclet(&mut self, _label: &str) {}
+
     fn ret(&mut self) {
         self.branch(".ret");
     }

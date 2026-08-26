@@ -1913,15 +1913,19 @@ impl Mir {
                     }
                 }
                 Instruction::Call { label, num_args } => {
-                    let f = self.find_op(label).unwrap();
-                    match f {
-                        Func::Unary(_) => ir.call(label, *num_args)?,
-                        Func::Binary(_) => ir.call(label, *num_args)?,
-                        Func::UnaryCplx(_) => ir.call_complex(label, *num_args)?,
-                        Func::BinaryCplx(_) => ir.call_complex(label, *num_args)?,
-                        Func::PairedUnary(_) => ir.call(label, *num_args)?,
-                        Func::Slice { .. } => ir.call(label, *num_args)?,
-                        Func::App { .. } => ir.call(label, *num_args)?,
+                    if *num_args == 0 {
+                        ir.call_funclet(label);
+                    } else {
+                        let f = self.find_op(label).unwrap();
+                        match f {
+                            Func::Unary(_) => ir.call(label, *num_args)?,
+                            Func::Binary(_) => ir.call(label, *num_args)?,
+                            Func::UnaryCplx(_) => ir.call_complex(label, *num_args)?,
+                            Func::BinaryCplx(_) => ir.call_complex(label, *num_args)?,
+                            Func::PairedUnary(_) => ir.call(label, *num_args)?,
+                            Func::Slice { .. } => ir.call(label, *num_args)?,
+                            Func::App { .. } => ir.call(label, *num_args)?,
+                        }
                     }
                 }
                 Instruction::Fused { op, dst, a, b, c } => match op {

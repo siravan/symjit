@@ -722,6 +722,10 @@ impl Generator for AmdVectorF64x4Generator {
         Ok(())
     }
 
+    fn call_funclet(&mut self, label: &str) {
+        self.amd.call_relative(label);
+    }
+
     fn ret(&mut self) {
         self.amd.ret();
     }

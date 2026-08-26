@@ -630,6 +630,10 @@ impl Generator for AmdComplexGenerator {
         Ok(())
     }
 
+    fn call_funclet(&mut self, label: &str) {
+        self.amd.call_relative(label);
+    }
+
     fn ret(&mut self) {
         self.amd.ret();
     }

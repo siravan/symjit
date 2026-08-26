@@ -116,6 +116,8 @@ pub trait Generator {
     fn add_func(&mut self, f: &str, p: Func);
     fn call(&mut self, op: &str, num_args: usize) -> Result<()>;
     fn call_complex(&mut self, op: &str, num_args: usize) -> Result<()>;
+
+    fn call_funclet(&mut self, label: &str);
     fn ret(&mut self);
 
     fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize);
