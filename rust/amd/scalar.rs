@@ -282,12 +282,12 @@ impl Generator for AmdScalarGenerator {
             &locs[..],
             ultra,
             16,
-            |amd, loc, dst| {
-                load_f64_from_loc(amd, 0, loc);
+            |amd, src, dst| {
+                load_f64_from_loc(amd, 0, src);
                 save_f64_to_loc(amd, 0, dst);
             },
-            |amd, arg, loc| {
-                load_f64_from_loc(amd, arg as u8, loc);
+            |amd, arg, src| {
+                load_f64_from_loc(amd, arg as u8, src);
             },
         );
     }
@@ -302,8 +302,8 @@ impl Generator for AmdScalarGenerator {
             |amd, arg| {
                 amd.vmovsd_xmm_indexed(arg, STACK, Amd::RAX, 8);
             },
-            |amd, arg, loc| {
-                save_f64_to_loc(amd, arg, loc);
+            |amd, arg, dst| {
+                save_f64_to_loc(amd, arg, dst);
             },
         );
     }
@@ -339,6 +339,16 @@ impl Generator for AmdScalarGenerator {
                 save_f64_to_loc(amd, arg, loc);
             },
         );
+    }
+
+    fn copy(&mut self, dst: Loc, src: Loc) {
+        load_f64_from_loc(&mut self.amd, 0, src);
+        save_f64_to_loc(&mut self.amd, 0, dst);
+    }
+
+    fn copy_complex(&mut self, dst: Loc, src: Loc) {
+        load_f64x2_from_loc(&mut self.amd, 0, src);
+        save_f64x2_to_loc(&mut self.amd, 0, dst);
     }
 
     fn neg(&mut self, dst: Reg, s1: Reg) {

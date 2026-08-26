@@ -287,6 +287,24 @@ impl Generator for AmdSSEGenerator {
         unimplemented!()
     }
 
+    fn copy(&mut self, dst: Loc, src: Loc) {
+        match src {
+            Loc::Param(idx) => self.amd.movsd_xmm_mem(0, PARAMS, (idx * 8) as i32),
+            Loc::Stack(idx) => self.amd.movsd_xmm_mem(0, STACK, (idx * 8) as i32),
+            Loc::Mem(idx) => self.amd.movsd_xmm_mem(0, MEM, (idx * 8) as i32),
+        }
+        match dst {
+            Loc::Param(idx) => self.amd.movsd_mem_xmm(PARAMS, (idx * 8) as i32, 0),
+            Loc::Stack(idx) => self.amd.movsd_mem_xmm(STACK, (idx * 8) as i32, 0),
+            Loc::Mem(idx) => self.amd.movsd_mem_xmm(MEM, (idx * 8) as i32, 0),
+        }
+    }
+
+    fn copy_complex(&mut self, dst: Loc, src: Loc) {
+        self.copy(dst, src);
+        self.copy(dst.imag(), src.imag());
+    }
+
     fn neg(&mut self, dst: Reg, s1: Reg) {
         self.load_const_by_name(Reg::Temp, "_minus_zero_");
         self.xor(dst, s1, Reg::Temp);

@@ -479,6 +479,18 @@ impl Generator for AmdVectorF64x8Generator {
         );
     }
 
+    fn copy(&mut self, dst: Loc, src: Loc) {
+        load_f64x8_from_loc(&mut self.amd, 0, src);
+        save_f64x8_to_loc(&mut self.amd, 0, dst);
+    }
+
+    fn copy_complex(&mut self, dst: Loc, src: Loc) {
+        load_f64x8_from_loc(&mut self.amd, 0, src);
+        load_f64x8_from_loc(&mut self.amd, 1, src.imag());
+        save_f64x8_to_loc(&mut self.amd, 0, dst);
+        save_f64x8_to_loc(&mut self.amd, 1, dst.imag());
+    }
+
     fn neg(&mut self, dst: Reg, s1: Reg) {
         self.load_const_by_name(Reg::Temp, "_minus_zero_");
         self.xor(dst, s1, Reg::Temp);

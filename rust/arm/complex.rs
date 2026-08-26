@@ -249,6 +249,13 @@ impl Generator for ArmComplexGenerator {
         unreachable!()
     }
 
+    fn copy(&mut self, dst: Loc, src: Loc) {
+        load_c_from_loc(&mut self.a, 0, src);
+        save_c_to_loc(&mut self.a, 0, dst);
+    }
+
+    fn copy_complex(&mut self, _dst: Loc, _src: Loc) {}
+
     fn neg(&mut self, dst: Reg, s1: Reg) {
         self.emit(arm! {fneg q(ϕ(dst)), q(ϕ(s1))});
     }

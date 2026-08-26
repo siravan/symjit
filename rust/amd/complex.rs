@@ -278,6 +278,13 @@ impl Generator for AmdComplexGenerator {
     fn load_args_complex(&mut self, _locs: Vec<Loc>, _ultra: bool) {}
     fn save_args_complex(&mut self, _num_args: u8, _ultra: bool) {}
 
+    fn copy(&mut self, dst: Loc, src: Loc) {
+        load_f64x2_from_loc(&mut self.amd, 0, src);
+        save_f64x2_to_loc(&mut self.amd, 0, dst);
+    }
+
+    fn copy_complex(&mut self, _dst: Loc, _src: Loc) {}
+
     fn neg(&mut self, dst: Reg, s1: Reg) {
         self.load_const_by_name(Reg::Temp, "_minus_zero_");
         self.amd.vunpckldd(ϕ(Reg::Temp), ϕ(Reg::Temp), ϕ(Reg::Temp));

@@ -80,6 +80,10 @@ impl Block {
         self.stmts.push(Statement::assign(lhs, rhs));
     }
 
+    pub fn load_args(&mut self, args: Vec<Node>) {
+        self.stmts.push(Statement::load_args(args));
+    }
+
     // **************** Compile the Block! *********************
 
     pub fn compile(&mut self, ir: &mut Mir, salt: Option<String>) -> Result<()> {
@@ -329,6 +333,7 @@ impl Block {
                     // assert!(depth > 0);
                     depth -= 1;
                 }
+                Statement::LoadArgs { .. } => {}
             }
         }
 
@@ -380,6 +385,9 @@ impl Block {
                         label,
                         is_else,
                     });
+                }
+                Statement::LoadArgs { args } => {
+                    self.stmts.push(Statement::LoadArgs { args });
                 }
             }
         }

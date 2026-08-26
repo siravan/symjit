@@ -602,6 +602,8 @@ impl Composer for Translator {
     }
 
     fn compile(&mut self) -> Result<Application> {
+        self.config.can_compile()?;
+
         if self.spy {
             self.dump();
         }
@@ -1111,6 +1113,7 @@ impl IndirectTranslator {
         let mut v: Vec<Node> = Vec::new();
         for a in args.iter() {
             let p = self.expr(a, is_real);
+
             if is_real {
                 let arg = self.unary_node("real", p)?;
                 v.push(arg);
@@ -1137,9 +1140,13 @@ impl IndirectTranslator {
             let rhs = self.binary_node(op, args.remove(0), args.remove(0))?;
             self.assign(lhs, rhs)?;
         } else {
+            /*
             for i in 0..n {
                 self.assign(&Slot::Arg(i), args[i].clone())?;
             }
+            */
+
+            self.builder.load_args(args)?;
 
             // This is a hack to prevent CSE for external call.
             // This will be replaced with a better implementation

@@ -501,7 +501,11 @@ fn load_args_helper<F1, F2>(
 {
     for (arg, loc) in locs.iter().enumerate() {
         if arg >= n {
-            f1(a, *loc, config.location(arg as u8))
+            let src = *loc;
+            let dst = config.location(arg as u8);
+            if src != dst {
+                f1(a, src, dst)
+            }
         }
     }
 

@@ -752,6 +752,14 @@ impl Config {
         }
     }
 
+    pub fn sizeof(&self) -> usize {
+        if self.is_complex() {
+            2
+        } else {
+            1
+        }
+    }
+
     pub fn set_option(&mut self, option: &str, val: &str) -> Result<()> {
         match option {
             "use_simd" => {
@@ -818,6 +826,49 @@ impl Config {
                 self.set_debug_topology(val.parse::<bool>()?);
             }
             _ => return Err(anyhow!("option {} is not recognized.", option)),
+        }
+
+        Ok(())
+    }
+
+    pub fn can_compile(&self) -> Result<()> {
+        if let Some(df) = &self.df {
+            for (name, f) in &df.funcs {
+                if let Func::App(app) = f {
+                    let c = &app.config;
+
+                    if c.is_complex() {
+                        if !self.is_complex() {
+                            return Err(anyhow!(
+                                "Inner app {} is defined as complex, whereas the main app is real.",
+                                name
+                            ));
+                        }
+
+                        if app.count_obs != 2 {
+                            return Err(anyhow!("Inner app {} should have only one output.", name));
+                        }
+                    } else {
+                        if self.is_complex() {
+                            return Err(anyhow!(
+                                "Inner app {} is defined as real, whereas the main app is complex.",
+                                name
+                            ));
+                        }
+
+                        if app.count_obs != 1 {
+                            return Err(anyhow!("Inner app {} should have only one output.", name));
+                        }
+                    }
+
+                    if !c.use_simd() && self.use_simd() {
+                        return Err(anyhow!(
+                            "Inner app {} should use SIMD since the main app does.",
+                            name
+                        ));
+                    }
+                }
+            }
         }
 
         Ok(())

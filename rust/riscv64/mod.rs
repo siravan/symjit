@@ -453,6 +453,25 @@ impl Generator for RiscV {
         unimplemented!()
     }
 
+    fn copy(&mut self, dst: Loc, src: Loc) {
+        match src {
+            Loc::Param(idx) => self.load_float(0, PARAMS, 8 * idx),
+            Loc::Stack(idx) => self.load_float(0, STACK, 8 * idx),
+            Loc::Mem(idx) => self.load_float(0, MEM, 8 * idx),
+        }
+
+        match dst {
+            Loc::Param(idx) => self.save_float(0, PARAMS, 8 * idx),
+            Loc::Stack(idx) => self.save_float(0, STACK, 8 * idx),
+            Loc::Mem(idx) => self.save_float(0, MEM, 8 * idx),
+        }
+    }
+
+    fn copy_complex(&mut self, dst: Loc, src: Loc) {
+        self.copy(dst, src);
+        self.copy(dst.imag(), src.imag());
+    }
+
     fn neg(&mut self, dst: Reg, s1: Reg) {
         self.emit(rvv! {fneg.d f(ϕ(dst)), f(ϕ(s1))});
     }

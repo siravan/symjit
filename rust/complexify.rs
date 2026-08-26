@@ -294,6 +294,14 @@ impl Generator for Complexifier {
 
     fn save_args_complex(&mut self, _num_args: u8, _ultra: bool) {}
 
+    fn copy(&mut self, _dst: Loc, _src: Loc) {
+        unreachable!()
+    }
+
+    fn copy_complex(&mut self, _dst: Loc, _src: Loc) {
+        unreachable!()
+    }
+
     fn neg(&mut self, dst: Reg, s1: Reg) {
         self.mir.neg(re(dst), re(s1));
 

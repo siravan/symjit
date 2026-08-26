@@ -352,6 +352,16 @@ impl Generator for ArmSimdGenerator {
         );
     }
 
+    fn copy(&mut self, dst: Loc, src: Loc) {
+        load_q_from_loc(&mut self.a, 0, src);
+        save_q_to_loc(&mut self.a, 0, dst);
+    }
+
+    fn copy_complex(&mut self, dst: Loc, src: Loc) {
+        load_paired_q_from_loc(&mut self.a, 0, 1, src);
+        save_paired_q_to_loc(&mut self.a, 0, 1, dst);
+    }
+
     fn neg(&mut self, dst: Reg, s1: Reg) {
         self.emit(arm! {fneg q(ϕ(dst)), q(ϕ(s1))});
     }

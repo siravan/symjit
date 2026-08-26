@@ -71,6 +71,9 @@ pub trait Generator {
     fn save_mem_result(&mut self, idx: u32);
     fn save_stack_result(&mut self, idx: u32);
 
+    fn copy(&mut self, dst: Loc, src: Loc);
+    fn copy_complex(&mut self, dst: Loc, src: Loc);
+
     fn neg(&mut self, dst: Reg, s1: Reg);
     fn abs(&mut self, dst: Reg, s1: Reg);
     fn root(&mut self, dst: Reg, s1: Reg);

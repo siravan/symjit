@@ -294,6 +294,16 @@ impl Generator for ArmGenerator {
         );
     }
 
+    fn copy(&mut self, dst: Loc, src: Loc) {
+        load_d_from_loc(&mut self.a, 0, src);
+        save_d_to_loc(&mut self.a, 0, dst);
+    }
+
+    fn copy_complex(&mut self, dst: Loc, src: Loc) {
+        load_c_from_loc(&mut self.a, 0, src);
+        save_c_to_loc(&mut self.a, 0, dst);
+    }
+
     fn neg(&mut self, dst: Reg, s1: Reg) {
         self.emit(arm! {fneg d(ϕ(dst)), d(ϕ(s1))});
     }

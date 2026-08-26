@@ -224,6 +224,11 @@ impl Builder {
         Ok(self.block().create_var(sym))
     }
 
+    pub fn load_args(&mut self, args: Vec<Node>) -> Result<()> {
+        self.block().load_args(args);
+        Ok(())
+    }
+
     pub fn create_unary(&mut self, op: Operation, arg: Node) -> Result<Node> {
         Ok(self.block().create_unary(op, arg))
     }
