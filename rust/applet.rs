@@ -297,8 +297,8 @@ impl Applet {
     }
 
     fn exec_vectorized_simple(&mut self, states: &Matrix, obs: &mut Matrix) {
-        assert!(states.ncols == obs.ncols);
-        let n = states.ncols;
+        assert!(states.vecsize == obs.vecsize);
+        let n = states.vecsize;
         let params = &self.params[..];
 
         if let Some(compiled) = &mut self.compiled {
@@ -329,8 +329,8 @@ impl Applet {
 
     fn exec_vectorized_scalar(&mut self, states: &mut Matrix, obs: &mut Matrix, threads: bool) {
         if let Some(compiled) = &mut self.compiled {
-            assert!(states.ncols == obs.ncols);
-            let n = states.ncols;
+            assert!(states.vecsize == obs.vecsize);
+            let n = states.vecsize;
             let f = compiled.func();
             let params = &self.params[..];
             let v = combine_matrixes(states, obs);
@@ -355,8 +355,8 @@ impl Applet {
         l: usize,
     ) {
         if let Some(compiled) = &mut self.compiled {
-            assert!(states.ncols == obs.ncols);
-            let n = states.ncols;
+            assert!(states.vecsize == obs.vecsize);
+            let n = states.vecsize;
             let params = &self.params[..];
             let n0 = l * (n / l);
             let v = combine_matrixes(states, obs);

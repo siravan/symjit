@@ -98,13 +98,13 @@ class Func:
 
         return self.vecfmt(res)
 
-    def dump(self, name, what="scalar"):
+    def dump(self, name: str, what: str="scalar"):
         self.compiler.dump(name, what=what)
 
-    def dumps(self, what="scalar"):
+    def dumps(self, what: str="scalar"):
         return self.compiler.dumps(what=what)
 
-    def measure(self, what="ker-scalar-size"):
+    def measure(self, what: str="ker-scalar-size"):
         return self.compiler.measure(what=what)
 
     def fast_func(self):
@@ -213,32 +213,35 @@ class FuncComplex:
 
         return self.vecfmt(res)
 
-    def dump(self, name, what="scalar"):
+    def dump(self, name: str, what: str="scalar"):
         self.compiler.dump(name, what=what)
 
-    def dumps(self, what="scalar"):
+    def dumps(self, what: str="scalar") -> str:
         return self.compiler.dumps(what=what)
 
-    def measure(self, what="ker-scalar-size"):
+    def measure(self, what: str="ker-scalar-size") -> int:
         return self.compiler.measure(what)
 
     def fast_func(self):
         return None
 
     def execute_vectorized(self, buf):
-        print("`execute_vectorized` is not implemented for complex functions.")
-        pass
+        if buf.dtype == np.complex128:
+            self.compiler.execute_vectorized(buf)
+        else:
+            print("complex `execute_vectorized` expects a complex array as input.")
+
 
     def apply(self, y, p=None):
         pass
 
-    def callable_quad(self, use_fast=True):
+    def callable_quad(self, use_fast: bool=True):
         pass
 
     def callable_filter(self):
         pass
 
-    def save(self, file):
+    def save(self, file: str):
         self.compiler.save(file)
 
 

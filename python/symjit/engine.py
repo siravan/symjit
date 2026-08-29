@@ -6,6 +6,8 @@ import sys
 import warnings
 
 import numpy as np
+from numpy.typing import NDArray
+from typing import Dict
 
 
 class Engine:
@@ -37,32 +39,32 @@ class Engine:
             self.is_valid = False
 
     def populate(self):
-        self._info = self.dll.info
-        self._info.argtypes = []
-        self._info.restype = ctypes.c_char_p
+        self.info = self.dll.info
+        self.info.argtypes = []
+        self.info.restype = ctypes.c_char_p
 
-        self._check_status = self.dll.check_status
-        self._check_status.argtypes = [ctypes.c_void_p]
-        self._check_status.restype = ctypes.c_char_p
+        self.check_status = self.dll.check_status
+        self.check_status.argtypes = [ctypes.c_void_p]
+        self.check_status.restype = ctypes.c_char_p
 
-        self._count_states = self.dll.count_states
-        self._count_states.argtypes = [ctypes.c_void_p]
-        self._count_states.restype = ctypes.c_size_t
+        self.count_states = self.dll.count_states
+        self.count_states.argtypes = [ctypes.c_void_p]
+        self.count_states.restype = ctypes.c_size_t
 
-        self._count_params = self.dll.count_params
-        self._count_params.argtypes = [ctypes.c_void_p]
-        self._count_params.restype = ctypes.c_size_t
+        self.count_params = self.dll.count_params
+        self.count_params.argtypes = [ctypes.c_void_p]
+        self.count_params.restype = ctypes.c_size_t
 
-        self._count_obs = self.dll.count_obs
-        self._count_obs.argtypes = [ctypes.c_void_p]
-        self._count_obs.restype = ctypes.c_size_t
+        self.count_obs = self.dll.count_obs
+        self.count_obs.argtypes = [ctypes.c_void_p]
+        self.count_obs.restype = ctypes.c_size_t
 
-        self._count_diffs = self.dll.count_diffs
-        self._count_diffs.argtypes = [ctypes.c_void_p]
-        self._count_diffs.restype = ctypes.c_size_t
+        self.count_diffs = self.dll.count_diffs
+        self.count_diffs.argtypes = [ctypes.c_void_p]
+        self.count_diffs.restype = ctypes.c_size_t
 
-        self._run = self.dll.run
-        self._run.argtypes = [
+        self.run = self.dll.run
+        self.run.argtypes = [
             ctypes.c_void_p,  # handle
             ctypes.POINTER(ctypes.c_double),  # du
             ctypes.POINTER(ctypes.c_double),  # u
@@ -71,175 +73,175 @@ class Engine:
             ctypes.c_size_t,  # np
             ctypes.c_double,  # t
         ]
-        self._run.restype = ctypes.c_bool
+        self.run.restype = ctypes.c_bool
 
-        self._execute = self.dll.execute
-        self._execute.argtypes = [
+        self.execute = self.dll.execute
+        self.execute.argtypes = [
             ctypes.c_void_p,  # handle
         ]
-        self._execute.restype = ctypes.c_bool
+        self.execute.restype = ctypes.c_bool
 
-        self._evaluate = self.dll.evaluate
-        self._evaluate.argtypes = [
-            ctypes.c_void_p,  # handle
-            ctypes.POINTER(ctypes.c_double),  # args
-            ctypes.c_size_t,  # nargs
-            ctypes.POINTER(ctypes.c_double),  # outs
-            ctypes.c_size_t,  # nouts
-        ]
-        self._evaluate.restype = ctypes.c_bool
-
-        self._evaluate_matrix = self.dll.evaluate_matrix
-        self._evaluate_matrix.argtypes = [
+        self.evaluate = self.dll.evaluate
+        self.evaluate.argtypes = [
             ctypes.c_void_p,  # handle
             ctypes.POINTER(ctypes.c_double),  # args
             ctypes.c_size_t,  # nargs
             ctypes.POINTER(ctypes.c_double),  # outs
             ctypes.c_size_t,  # nouts
         ]
-        self._evaluate_matrix.restype = ctypes.c_bool
+        self.evaluate.restype = ctypes.c_bool
 
-        self._execute_vectorized = self.dll.execute_vectorized
-        self._execute_vectorized.argtypes = [
+        self.evaluate_matrix = self.dll.evaluate_matrix
+        self.evaluate_matrix.argtypes = [
+            ctypes.c_void_p,  # handle
+            ctypes.POINTER(ctypes.c_double),  # args
+            ctypes.c_size_t,  # nargs
+            ctypes.POINTER(ctypes.c_double),  # outs
+            ctypes.c_size_t,  # nouts
+        ]
+        self.evaluate_matrix.restype = ctypes.c_bool
+
+        self.execute_vectorized = self.dll.execute_vectorized
+        self.execute_vectorized.argtypes = [
             ctypes.c_void_p,  # handle
             ctypes.POINTER(ctypes.c_double),  # buf
             ctypes.c_size_t,  # n
         ]
-        self._execute_vectorized.restype = ctypes.c_bool
+        self.execute_vectorized.restype = ctypes.c_bool
 
-        self._compile = self.dll.compile
-        self._compile.argtypes = [
+        self.compile = self.dll.compile
+        self.compile.argtypes = [
             ctypes.c_char_p,
             ctypes.c_char_p,
             ctypes.c_uint32,
             ctypes.c_void_p,
         ]
-        self._compile.restype = ctypes.c_void_p
+        self.compile.restype = ctypes.c_void_p
 
-        self._translate = self.dll.translate
-        self._translate.argtypes = [
+        self.translate = self.dll.translate
+        self.translate.argtypes = [
             ctypes.c_char_p,
             ctypes.c_char_p,
             ctypes.c_uint32,
             ctypes.c_void_p,
             ctypes.c_size_t,
         ]
-        self._translate.restype = ctypes.c_void_p
+        self.translate.restype = ctypes.c_void_p
 
-        self._save = self.dll.save
-        self._save.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-        self._save.restype = ctypes.c_bool
+        self.save = self.dll.save
+        self.save.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        self.save.restype = ctypes.c_bool
 
-        self._load = self.dll.load
-        self._load.argtypes = [ctypes.c_char_p, ctypes.c_void_p]
-        self._load.restype = ctypes.c_void_p
+        self.load = self.dll.load
+        self.load.argtypes = [ctypes.c_char_p, ctypes.c_void_p]
+        self.load.restype = ctypes.c_void_p
 
-        self._get_config = self.dll.get_config
-        self._get_config.argtypes = [ctypes.c_void_p]
-        self._get_config.restype = ctypes.c_size_t
+        self.get_config = self.dll.get_config
+        self.get_config.argtypes = [ctypes.c_void_p]
+        self.get_config.restype = ctypes.c_size_t
 
-        self._dump = self.dll.dump
-        self._dump.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
-        self._dump.restype = ctypes.c_bool
+        self.dump = self.dll.dump
+        self.dump.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
+        self.dump.restype = ctypes.c_bool
 
-        self._measure = self.dll.measure
-        self._measure.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-        self._measure.restype = ctypes.c_size_t
+        self.measure = self.dll.measure
+        self.measure.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        self.measure.restype = ctypes.c_size_t
 
-        self._finalize = self.dll.finalize
-        self._finalize.argtypes = [ctypes.c_void_p]
-        self._finalize.restype = None
+        self.finalize = self.dll.finalize
+        self.finalize.argtypes = [ctypes.c_void_p]
+        self.finalize.restype = None
 
-        self._ptr_states = self.dll.ptr_states
-        self._ptr_states.argtypes = [ctypes.c_void_p]
-        self._ptr_states.restype = ctypes.POINTER(ctypes.c_double)
+        self.ptr_states = self.dll.ptr_states
+        self.ptr_states.argtypes = [ctypes.c_void_p]
+        self.ptr_states.restype = ctypes.POINTER(ctypes.c_double)
 
-        self._ptr_params = self.dll.ptr_params
-        self._ptr_params.argtypes = [ctypes.c_void_p]
-        self._ptr_params.restype = ctypes.POINTER(ctypes.c_double)
+        self.ptr_params = self.dll.ptr_params
+        self.ptr_params.argtypes = [ctypes.c_void_p]
+        self.ptr_params.restype = ctypes.POINTER(ctypes.c_double)
 
-        self._ptr_obs = self.dll.ptr_obs
-        self._ptr_obs.argtypes = [ctypes.c_void_p]
-        self._ptr_obs.restype = ctypes.POINTER(ctypes.c_double)
+        self.ptr_obs = self.dll.ptr_obs
+        self.ptr_obs.argtypes = [ctypes.c_void_p]
+        self.ptr_obs.restype = ctypes.POINTER(ctypes.c_double)
 
-        self._ptr_diffs = self.dll.ptr_diffs
-        self._ptr_diffs.argtypes = [ctypes.c_void_p]
-        self._ptr_diffs.restype = ctypes.POINTER(ctypes.c_double)
+        self.ptr_diffs = self.dll.ptr_diffs
+        self.ptr_diffs.argtypes = [ctypes.c_void_p]
+        self.ptr_diffs.restype = ctypes.POINTER(ctypes.c_double)
 
-        self._fast_func = self.dll.fast_func
-        self._fast_func.argtypes = [ctypes.c_void_p]
-        self._fast_func.restype = ctypes.c_void_p
+        self.fast_func = self.dll.fast_func
+        self.fast_func.argtypes = [ctypes.c_void_p]
+        self.fast_func.restype = ctypes.c_void_p
 
         ######################################################
 
-        self._create_matrix = self.dll.create_matrix
-        self._create_matrix.argtypes = []
-        self._create_matrix.restype = ctypes.c_void_p
+        self.create_matrix = self.dll.create_matrix
+        self.create_matrix.argtypes = []
+        self.create_matrix.restype = ctypes.c_void_p
 
-        self._add_row = self.dll.add_row
-        self._add_row.argtypes = [
+        self.add_row = self.dll.add_row
+        self.add_row.argtypes = [
             ctypes.c_void_p,  # handle
             ctypes.POINTER(ctypes.c_double),
             ctypes.c_size_t,
         ]
-        self._add_row.restype = None
+        self.add_row.restype = None
 
-        self._finalize_matrix = self.dll.finalize_matrix
-        self._finalize_matrix.argtypes = [ctypes.c_void_p]
-        self._finalize_matrix.restype = None
+        self.finalize_matrix = self.dll.finalize_matrix
+        self.finalize_matrix.argtypes = [ctypes.c_void_p]
+        self.finalize_matrix.restype = None
 
-        self._execute_matrix = self.dll.execute_matrix
-        self._execute_matrix.argtypes = [
+        self.execute_matrix = self.dll.execute_matrix
+        self.execute_matrix.argtypes = [
             ctypes.c_void_p,  # handle
             ctypes.c_void_p,  # states
             ctypes.c_void_p,  # obs
         ]
-        self._execute_matrix.restype = ctypes.c_bool
+        self.execute_matrix.restype = ctypes.c_bool
 
-        self._callable_quad = self.dll.callable_quad
-        self._callable_quad.argtypes = [
+        self.callable_quad = self.dll.callable_quad
+        self.callable_quad.argtypes = [
             ctypes.c_size_t,
             ctypes.POINTER(ctypes.c_double),
             ctypes.c_void_p,
         ]
-        self._callable_quad.restype = ctypes.c_double
+        self.callable_quad.restype = ctypes.c_double
 
-        self._callable_quad_fast = self.dll.callable_quad_fast
-        self._callable_quad_fast.argtypes = [
+        self.callable_quad_fast = self.dll.callable_quad_fast
+        self.callable_quad_fast.argtypes = [
             ctypes.c_size_t,
             ctypes.POINTER(ctypes.c_double),
             ctypes.c_void_p,
         ]
-        self._callable_quad_fast.restype = ctypes.c_double
+        self.callable_quad_fast.restype = ctypes.c_double
 
-        self._callable_filter = self.dll.callable_filter
-        self._callable_filter.argtypes = [
+        self.callable_filter = self.dll.callable_filter
+        self.callable_filter.argtypes = [
             ctypes.POINTER(ctypes.c_double),
             ctypes.c_size_t,
             ctypes.POINTER(ctypes.c_double),
             ctypes.c_void_p,
         ]
-        self._callable_filter.restype = ctypes.c_int64
+        self.callable_filter.restype = ctypes.c_int64
 
-        self._create_defuns = self.dll.create_defuns
-        self._create_defuns.argtypes = []
-        self._create_defuns.restype = ctypes.c_void_p
+        self.create_defuns = self.dll.create_defuns
+        self.create_defuns.argtypes = []
+        self.create_defuns.restype = ctypes.c_void_p
 
-        self._add_func = self.dll.add_func
-        self._add_func.argtypes = [
+        self.add_func = self.dll.add_func
+        self.add_func.argtypes = [
             ctypes.c_void_p,
             ctypes.c_char_p,
             ctypes.c_void_p,
             ctypes.c_size_t,
         ]
-        self._add_func.restype = None
+        self.add_func.restype = None
 
-        self._finalize_defuns = self.dll.finalize_defuns
-        self._finalize_defuns.argtypes = [ctypes.c_void_p]
-        self._finalize_defuns.restype = None
+        self.finalize_defuns = self.dll.finalize_defuns
+        self.finalize_defuns.argtypes = [ctypes.c_void_p]
+        self.finalize_defuns.restype = None
 
     def info(self):
-        return self._info()
+        return self.info()
 
     def find_dll(self, substr):
         files = os.listdir(os.path.dirname(__file__))
@@ -255,7 +257,7 @@ class Engine:
 lib = Engine()  # interface to the rust codegen engine
 
 
-def from_raw_parts(ptr, count):
+def from_raw_parts(ptr, count: int) -> NDArray:
     if count == 0:
         return np.zeros(1)
     else:
@@ -264,14 +266,14 @@ def from_raw_parts(ptr, count):
 
 class Matrix:
     def __init__(self):
-        self.p = lib._create_matrix()
-        self.rows = []  # the list of new rows owned by self
+        self.p: int = lib.create_matrix()
+        self.rows: list[NDArray] = []  # the list of new rows owned by self
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        lib._finalize_matrix(self.p)
+        lib.finalize_matrix(self.p)
 
     def add_row(self, row):
         v = np.ascontiguousarray(row, dtype=np.double)
@@ -283,12 +285,12 @@ class Matrix:
 
         ptr = v.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         n = v.size
-        lib._add_row(self.p, ptr, n)
+        lib.add_row(self.p, ptr, n)
 
 
 class Defuns:
     def __init__(self, defuns):
-        self.p = lib._create_defuns()
+        self.p: int = lib.create_defuns()
         self.funcs = {}
 
         fac1 = ctypes.CFUNCTYPE(ctypes.c_double, ctypes.c_double)
@@ -314,38 +316,38 @@ class Defuns:
 
                 name = str(sym)
                 self.funcs[name] = (f, degree)
-                lib._add_func(self.p, name.encode("utf8"), f, degree)
+                lib.add_func(self.p, name.encode("utf8"), f, degree)
 
     def __del__(self):
         if hasattr(self, "p"):
-            lib._finalize_defuns(self.p)
+            lib.finalize_defuns(self.p)
 
 
 class RustyCompiler:
     def __init__(
         self,
         model,
-        ty="native",
-        use_simd=True,
-        enable_simd512=False,
-        use_threads=True,
-        cse=True,
-        fastmath=True,
-        opt_level=1,
-        convert=True,
-        defuns=None,
-        dtype="float64",
-        action="compile",
-        file="",
-        num_params=1,
-        order="fortran",
-        simd_branch=False,
-        fast_complex=True,
-        direct=False,
-        compact=True,
-        compress=False,
-        huge=False,
-        parallel_mul=True,
+        ty: str="native",
+        use_simd: bool=True,
+        enable_simd512: bool=False,
+        use_threads: bool=True,
+        cse: bool=True,
+        fastmath: bool=True,
+        opt_level: int=1,
+        convert: bool=True,
+        defuns: Defuns | None=None,
+        dtype: str="float64",
+        action: str="compile",
+        file: str="",
+        num_params: int=1,
+        order: str="fortran",
+        simd_branch: bool=False,
+        fast_complex: bool=True,
+        direct: bool=False,
+        compact: bool=True,
+        compress: bool=False,
+        huge: bool=False,
+        parallel_mul: bool=True,
     ):
         if convert:
             model = json.dumps(model)
@@ -381,26 +383,27 @@ class RustyCompiler:
             | ((opt_level & 0x0F) << 8)
         )
 
-        self.dtype = dtype
-        self.defuns = Defuns(defuns)
-        self.ty = ty
+        self.p: int = 0
+        self.dtype: str = dtype
+        self.defuns: Defuns = Defuns(defuns)
+        self.ty: str = ty
 
         if action == "compile":
-            self.p = lib._compile(
+            self.p = lib.compile(
                 model.encode("utf-8"), ty.encode("utf8"), opt, self.defuns.p
             )
-            self.symbolica = False
+            self.symbolica: bool = False
         elif action == "translate":
-            self.p = lib._translate(
+            self.p = lib.translate(
                 model.encode("utf-8"), ty.encode("utf8"), opt, self.defuns.p, num_params
             )
-            self.symbolica = True
+            self.symbolica: bool = True
         elif action == "load":
             self.load(file)
         else:
             raise ValueError(f"action {action} not defined")
 
-        status = lib._check_status(self.p)
+        status = lib.check_status(self.p)
         if status != b"Success":
             raise ValueError(status.decode())
 
@@ -410,15 +413,15 @@ class RustyCompiler:
 
     def __del__(self):
         if hasattr(self, "p"):
-            lib._finalize(self.p)
+            lib.finalize(self.p)
 
-    def save(self, file):
-        lib._save(self.p, file.encode("utf-8"))
+    def save(self, file: str):
+        lib.save(self.p, file.encode("utf-8"))
 
-    def load(self, file):
-        self.p = lib._load(file.encode("utf-8"), self.defuns.p)
+    def load(self, file: str):
+        self.p = lib.load(file.encode("utf-8"), self.defuns.p)
 
-        opt = lib._get_config(self.p)
+        opt = lib.get_config(self.p)
         self.symbolica = opt & 0x40 != 0
 
         if opt & 0x20 != 0:
@@ -455,26 +458,26 @@ class RustyCompiler:
         return [x["val"] for x in self.json_model["params"]]
 
     def populate(self):
-        self.count_states = lib._count_states(self.p)
-        self.count_params = lib._count_params(self.p)
-        self.count_obs = lib._count_obs(self.p)
-        self.count_diffs = lib._count_diffs(self.p)
+        self.count_states: int = lib.count_states(self.p)
+        self.count_params: int = lib.count_params(self.p)
+        self.count_obs: int = lib.count_obs(self.p)
+        self.count_diffs: int = lib.count_diffs(self.p)
 
-        self.states = from_raw_parts(lib._ptr_states(self.p), self.count_states)
-        self.params = from_raw_parts(lib._ptr_params(self.p), self.count_params)
-        self.obs = from_raw_parts(lib._ptr_obs(self.p), self.count_obs)
-        self.diffs = from_raw_parts(lib._ptr_diffs(self.p), self.count_diffs)
+        self.states = from_raw_parts(lib.ptr_states(self.p), self.count_states)
+        self.params = from_raw_parts(lib.ptr_params(self.p), self.count_params)
+        self.obs = from_raw_parts(lib.ptr_obs(self.p), self.count_obs)
+        self.diffs = from_raw_parts(lib.ptr_diffs(self.p), self.count_diffs)
 
-    def dump(self, name, what="scalar"):
-        if not lib._dump(self.p, name.encode("utf-8"), what.encode("utf-8")):
+    def dump(self, name: str, what: str="scalar"):
+        if not lib.dump(self.p, name.encode("utf-8"), what.encode("utf-8")):
             raise ValueError("cannot dump the requested code")
         with open(name, "rb") as fd:
             buf = fd.read()
             return buf
 
-    def dumps(self, what="scalar"):
+    def dumps(self, what: str="scalar"):
         name = "symjit_dump.bin"
-        self.dump(name, what=what)
+        _ = self.dump(name, what=what)
         with open(name, "rb") as fd:
             b = fd.read()
         os.remove(name)
@@ -484,46 +487,46 @@ class RustyCompiler:
         else:
             return b.hex()
 
-    def measure(self, what: str):
-        return lib._measure(self.p, what.encode("utf-8"))
+    def measure(self, what: str) -> int:
+        return lib.measure(self.p, what.encode("utf-8"))
 
     def execute(self):
-        if not lib._execute(self.p):
+        if not lib.execute(self.p):
             raise ValueError("cannot execute the model")
 
-    def execute_vectorized(self, buf):
+    def execute_vectorized(self, buf: NDArray):
         ptr = buf.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         n = buf.shape[1]
-        if not lib._execute_vectorized(self.p, ptr, n):
+        if not lib.execute_vectorized(self.p, ptr, n):
             raise ValueError("cannot execute the model")
 
-    def execute_matrix(self, states, obs):
-        if not lib._execute_matrix(self.p, states.p, obs.p):
+    def execute_matrix(self, states: Matrix, obs: Matrix):
+        if not lib.execute_matrix(self.p, states.p, obs.p):
             raise ValueError("cannot execute the model")
 
-    def evaluate(self, args, outs):
+    def evaluate(self, args: NDArray, outs: NDArray):
         pargs = args.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         nargs = args.size
         pouts = outs.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         nouts = outs.size
 
-        if not lib._evaluate(self.p, pargs, nargs, pouts, nouts):
+        if not lib.evaluate(self.p, pargs, nargs, pouts, nouts):
             raise ValueError("cannot evaluate the model")
 
-    def evaluate_matrix(self, args, outs, k=1):
+    def evaluate_matrix(self, args: NDArray, outs: NDArray, k: int=1):
         pargs = args.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         nargs = args.size
         pouts = outs.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         nouts = outs.size
 
-        if not lib._evaluate_matrix(self.p, pargs, nargs * k, pouts, nouts * k):
+        if not lib.evaluate_matrix(self.p, pargs, nargs * k, pouts, nouts * k):
             raise ValueError("cannot evaluate the model")
 
     def fast_func(self):
         if self.ty == "bytecode":
             return None
 
-        f = lib._fast_func(self.p)
+        f = lib.fast_func(self.p)
 
         if f is None:
             return None
@@ -532,21 +535,21 @@ class RustyCompiler:
         fac = ctypes.CFUNCTYPE(*sig)
         return fac(f)
 
-    def callable_quad(self, use_fast=True):
-        f = lib._fast_func(self.p)
+    def callable_quad(self, use_fast: bool=True):
+        f = lib.fast_func(self.p)
 
         try:
             from scipy import LowLevelCallable
 
             if f is not None and use_fast:
                 return LowLevelCallable(
-                    lib._callable_quad_fast,
+                    lib.callable_quad_fast,
                     user_data=ctypes.c_void_p(f),
                     signature="double (int, double *, void *)",
                 )
             else:
                 return LowLevelCallable(
-                    lib._callable_quad,
+                    lib.callable_quad,
                     user_data=ctypes.c_void_p(self.p),
                     signature="double (int, double *, void *)",
                 )
@@ -558,7 +561,7 @@ class RustyCompiler:
             from scipy import LowLevelCallable
 
             return LowLevelCallable(
-                lib._callable_filter,
+                lib.callable_filter,
                 user_data=ctypes.c_void_p(self.p),
                 signature="int (double *, npy_intp, double *, void *)",
             )
