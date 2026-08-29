@@ -86,6 +86,13 @@ impl Amd {
         self.append_byte(b);
     }
 
+    pub fn rex32(&mut self, reg: u8, rm: u8) {
+        let b = 0x40 + ((rm & 8) >> 3) + ((reg & 8) >> 1);
+        if b != 0x40 {
+            self.append_byte(b);
+        }
+    }
+
     pub fn rex_index(&mut self, reg: u8, rm: u8, index: u8) {
         let b = 0x48 + ((rm & 8) >> 3) + ((index & 8) >> 2) + ((reg & 8) >> 1);
         self.append_byte(b);
@@ -1139,6 +1146,12 @@ impl Amd {
         self.rex(reg, 0);
         self.append_byte(0x8d);
         self.modrm_sib(reg, base, index, scale);
+    }
+
+    pub fn mov_reg_imm32(&mut self, rm: u8, imm32: u32) {
+        self.rex32(0, rm);
+        self.append_byte(0xb8 + (rm & 7));
+        self.append_word(imm32);
     }
 
     pub fn movabs(&mut self, rm: u8, imm64: u64) {

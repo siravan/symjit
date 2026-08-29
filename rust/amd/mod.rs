@@ -305,7 +305,11 @@ fn pack_locs(amd: &mut Amd, locs: &[Loc]) {
             }
         }
 
+        //if a >> 32 == 0 {
+        //amd.mov_reg_imm32(SUBROUTINE_ARGS[reg], (a & 0xffffffff) as u32);
+        //} else {
         amd.movabs(SUBROUTINE_ARGS[reg], a);
+        //}
     }
 }
 
