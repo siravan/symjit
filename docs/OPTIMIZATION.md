@@ -10,7 +10,7 @@ The Rust backend supports different optimization and parallelization methods, wh
 * `fast_complex` (default `True`): It uses f64x2 SIMD instructions for complex operations in the scalar mode.
 * `parallel_mul` (default `True`): It tries f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
 * `huge` (default `False`): It tries to use huge (2 MB) memory pages instead of the standard 4 KB ones (available only on Linux x86-64 machines).
-* `compress` (default `False`): It compresses the compiled code to reduce the binary size by converting inline operations to calls. In most cases, this will slow down the code and should be used only for extremely large functions where memory pressure is present. 
+* `compress` (default `False`): It compresses the compiled code to reduce the binary size by converting inlined operations to subroutine calls. In most cases, this will slow down the code and should be used only for extremely large functions where L3-cache pressure is present (compiled code size of 8-32 MB, depending on the processor). 
  `compact` (default `True`): It compacts the stack frame by reusing temporary variables. 
 * `opt_level` (default 2): It accepts a value of 0, 1, 2, or 3. Broadly, the levels are parallel to -O0, -O1, -O2, and -O3 options in gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does basic optimization, such as peephole optimization. Level-2 uses an improved graph-coloring algorithm (based on petgraph crate) for better register allocation. However, level-3 may fail silently and revert back to level-2. Level-3 is mainly useful for small functions.
 

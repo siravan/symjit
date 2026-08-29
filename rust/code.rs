@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Result};
 use num_complex::Complex;
-use rand::*;
 use spec_math::cephes64;
 use std::ffi::c_void;
 use std::fmt;

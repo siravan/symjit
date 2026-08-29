@@ -1,3 +1,13 @@
+# Version 2.24.0
+
+* Inner function calls (`add_applet`).
+* Adding type hints to `compile_*` functions.
+
+# Version 2.23.0
+
+* New compression mode (`compress = True`).
+* Ultramode (`compress = True` and `opt_level = 3`).
+
 # Version 2.22.1
 
 * `IndirectTranslator` cache changed to `Vec`.

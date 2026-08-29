@@ -318,7 +318,7 @@ class SymbolicaFunc:
         elif self.compiler is not None:
             return self.compiler.dumps(what=what)
 
-    def measure(self, name, what="ker-scalar-size"):
+    def measure(self, what: int="ker-scalar-size") -> int:
         if self.is_complex:
             return self.complex_compiler.measure(what)
         else:
