@@ -371,6 +371,10 @@ impl Config {
         self.is_amd64() && !self.has_avx()
     }
 
+    pub fn is_window(&self) -> bool {
+        self.is_amd64() && cfg!(target_family = "windows")
+    }
+
     pub fn is_bytecode(&self) -> bool {
         matches!(self.ty, CompilerType::ByteCode)
     }
@@ -416,7 +420,7 @@ impl Config {
     }
 
     pub fn compress(&self) -> bool {
-        self.test(COMPRESS)
+        self.test(COMPRESS) && !self.is_window()
     }
 
     pub fn direct(&self) -> bool {

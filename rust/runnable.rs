@@ -129,7 +129,7 @@ impl Application {
         let use_threads = config.use_threads();
 
         let can_fast = config.may_fast()
-            && count_states <= 8
+            && (count_states <= 4 || (count_states <= 8 && !config.is_window()))
             && count_params == 0
             && count_obs == 1
             && count_diffs == 0;

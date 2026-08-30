@@ -403,7 +403,7 @@ impl Generator for AmdComplexGenerator {
         _x2: Reg,
         _y2: Reg,
     ) -> bool {
-        unreachable!()
+        false
     }
 
     fn divide_complex(
@@ -415,7 +415,7 @@ impl Generator for AmdComplexGenerator {
         _x2: Reg,
         _y2: Reg,
     ) -> bool {
-        unreachable!()
+        false
     }
 
     fn support_times2(&self) -> bool {
