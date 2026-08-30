@@ -109,10 +109,12 @@ impl Application {
             let complexified = Complexifier::new(&reals, config.clone()).complexify(&mir)?;
 
             if config.fast_complex() {
+                /*
                 let mut c = config.clone();
                 c.set_simd(false);
                 let n = c.count_scratch() as usize;
                 super::allocator::GreedyAllocator::new(c, n).optimize(&mut mir)?;
+                */
                 compiled = Self::compile_ty(&config, &mir, &mut prog)?;
             } else {
                 compiled = Self::compile_ty(&config, &complexified, &mut prog)?;

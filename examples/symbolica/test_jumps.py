@@ -14,6 +14,7 @@ f_without_simd = compile_evaluator(
     dtype="complex128",
     use_simd=False,
     use_threads=False,
+    opt_level = 2,
 )
 
 count_params = f_without_simd.complex_compiler.count_params // 2
