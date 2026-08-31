@@ -420,7 +420,7 @@ impl Config {
     }
 
     pub fn compress(&self) -> bool {
-        self.test(COMPRESS) && !self.is_window()
+        self.test(COMPRESS)
     }
 
     pub fn direct(&self) -> bool {

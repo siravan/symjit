@@ -70,7 +70,7 @@ fn load_nonvolatile_regs(amd: &mut Amd) {
 }
 
 fn allocate_stack(amd: &mut Amd, size: u32, _with_arena: bool) {
-    amd.sub_rsp(align_stack(size));
+    sub_rsp(amd, align_stack(size));
     amd.and_imm(SP, 0xffffffc0);
     amd.mov(STACK, SP);
 }
@@ -89,7 +89,7 @@ fn sub_rsp(amd: &mut Amd, mut size: u32) {
 
     while size > PAGE_SIZE {
         amd.sub_rsp(PAGE_SIZE);
-        amd.mov_reg_mem(Amd::RAX, STACK, 0);
+        amd.mov_reg_mem(Amd::RAX, SP, 0);
         size -= PAGE_SIZE;
     }
 
