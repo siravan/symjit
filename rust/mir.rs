@@ -2895,7 +2895,7 @@ impl Mir {
                     op: ArithOp::Times, ..
                 } = *q2
                 {
-                    if q1.dst() == q2.s1() {
+                    if q1.dst() == q2.s1() && q0.dst() != q1.dst() && q0.s1() != q1.dst() {
                         code.push(q1);
                         code.push(q0);
                         return Some(q2.clone());

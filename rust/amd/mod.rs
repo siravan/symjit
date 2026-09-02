@@ -329,9 +329,7 @@ fn load_args_helper<F1, F2>(
         if arg >= n {
             let src = *loc;
             let dst = config.location(arg as u8);
-            //if src != dst {
             f1(amd, src, dst)
-            //}
         }
     }
 

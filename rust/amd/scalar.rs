@@ -332,7 +332,7 @@ impl Generator for AmdScalarGenerator {
                 amd.vmovdd_xmm_indexed(arg, STACK, Amd::RAX, 8);
             },
             |amd, arg, dst| {
-                save_f64_to_loc(amd, arg, dst);
+                save_f64x2_to_loc(amd, arg, dst);
             },
         );
     }

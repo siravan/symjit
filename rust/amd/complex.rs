@@ -441,7 +441,10 @@ impl Generator for AmdComplexGenerator {
             match l1 {
                 Loc::Mem(idx) => self.amd.vmovdd_xmm_mem(T0, MEM, (idx * REG_SIZE) as i32),
                 Loc::Param(idx) => self.amd.vmovdd_xmm_mem(T0, PARAMS, (idx * REG_SIZE) as i32),
-                Loc::Stack(idx) => self.amd.vmovdd_xmm_mem(T0, SP, (idx * REG_SIZE) as i32),
+                Loc::Stack(idx) => {
+                    // Important! STACK instead of SP here because SP changes in the compression subroutines.
+                    self.amd.vmovdd_xmm_mem(T0, STACK, (idx * REG_SIZE) as i32);
+                }
             }
 
             match l2 {
@@ -452,9 +455,10 @@ impl Generator for AmdComplexGenerator {
                     self.amd
                         .vinsertf128_mem(T0, T0, PARAMS, (idx * REG_SIZE) as i32, 1)
                 }
-                Loc::Stack(idx) => self
-                    .amd
-                    .vinsertf128_mem(T0, T0, SP, (idx * REG_SIZE) as i32, 1),
+                Loc::Stack(idx) => {
+                    self.amd
+                        .vinsertf128_mem(T0, T0, STACK, (idx * REG_SIZE) as i32, 1)
+                }
             }
 
             self.amd.vinsertf128(ϕ(s1), ϕ(s1), ϕ(s2), 1);
