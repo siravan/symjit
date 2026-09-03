@@ -22,6 +22,7 @@ fn lo(x: u32) -> u32 {
 
 pub struct RiscV {
     a: Assembler,
+    config: Config,
 }
 
 impl RiscV {
@@ -192,9 +193,10 @@ fn allocate_stack(a: &mut Assembler, size: u32, _with_arena: bool) {
 }
 
 impl RiscV {
-    pub fn new(_config: Config) -> RiscV {
+    pub fn new(config: Config) -> RiscV {
         RiscV {
             a: Assembler::new(),
+            config,
         }
     }
 
@@ -296,6 +298,62 @@ impl RiscV {
         } else {
             self.li(Self::t0, size as i32);
             self.emit(rvv! {add x(Self::sp), x(Self::sp), x(Self::t0)});
+        }
+    }
+
+    fn load_d_from_loc(&mut self, r: u8, loc: Loc) {
+        match loc {
+            Loc::Param(idx) => self.load_float(r, PARAMS, 8 * idx),
+            Loc::Stack(idx) => self.load_float(r, STACK, 8 * idx),
+            Loc::Mem(idx) => self.load_float(r, MEM, 8 * idx),
+        }
+    }
+
+    fn save_d_to_loc(&mut self, r: u8, loc: Loc) {
+        match loc {
+            Loc::Param(idx) => self.save_float(r, PARAMS, 8 * idx),
+            Loc::Stack(idx) => self.save_float(r, STACK, 8 * idx),
+            Loc::Mem(idx) => self.save_float(r, MEM, 8 * idx),
+        }
+    }
+
+    fn load_c_from_loc(&mut self, r: u8, loc: Loc) {
+        let (base, idx) = match loc {
+            Loc::Param(idx) => (PARAMS, idx),
+            Loc::Stack(idx) => (STACK, idx),
+            Loc::Mem(idx) => (MEM, idx),
+        };
+
+        let offset = idx * 8;
+
+        if offset < 2040 {
+            self.emit(rvv! {fld f(r), x(base), offset});
+            self.emit(rvv! {fld f(r+1), x(base), offset + 8});
+        } else {
+            self.li(Self::t0, offset as i32);
+            self.emit(rvv! {add x(Self::t0), x(Self::t0), x(base)});
+            self.emit(rvv! {fld f(r), x(Self::t0), 0});
+            self.emit(rvv! {fld f(r+1), x(Self::t0), 8});
+        }
+    }
+
+    fn save_c_to_loc(&mut self, r: u8, loc: Loc) {
+        let (base, idx) = match loc {
+            Loc::Param(idx) => (PARAMS, idx),
+            Loc::Stack(idx) => (STACK, idx),
+            Loc::Mem(idx) => (MEM, idx),
+        };
+
+        let offset = idx * 8;
+
+        if offset < 2040 {
+            self.emit(rvv! {fsd f(r), x(base), offset});
+            self.emit(rvv! {fsd f(r+1), x(base), offset + 8});
+        } else {
+            self.li(Self::t0, offset as i32);
+            self.emit(rvv! {add x(Self::t0), x(Self::t0), x(base)});
+            self.emit(rvv! {fsd f(r), x(Self::t0), 0});
+            self.emit(rvv! {fsd f(r+1), x(Self::t0), 8});
         }
     }
 }
@@ -433,20 +491,38 @@ impl Generator for RiscV {
         self.save_stack(Reg::Ret, idx);
     }
 
-    fn load_args(&mut self, _locs: Vec<Loc>, _ultra: bool) {
-        unimplemented!()
+    fn load_args(&mut self, locs: Vec<Loc>, _ultra: bool) {
+        for (arg, loc) in locs.iter().enumerate().skip(32) {
+            self.load_d_from_loc(0, *loc);
+            self.save_d_to_loc(0, self.config.location(arg as u8));
+        }
+
+        for (arg, loc) in locs.iter().enumerate().take(32) {
+            self.load_d_from_loc(arg as u8, *loc);
+        }
     }
 
-    fn save_args(&mut self, _num_args: u8, _ultra: bool) {
-        unimplemented!()
+    fn save_args(&mut self, num_args: u8, _ultra: bool) {
+        for arg in 0..num_args.min(32) {
+            self.save_d_to_loc(arg as u8, self.config.location(arg));
+        }
     }
 
-    fn load_args_complex(&mut self, _locs: Vec<Loc>, _ultra: bool) {
-        unimplemented!()
+    fn load_args_complex(&mut self, locs: Vec<Loc>, _ultra: bool) {
+        for (arg, loc) in locs.iter().enumerate().skip(16) {
+            self.load_c_from_loc(0, *loc);
+            self.save_c_to_loc(0, self.config.location(arg as u8));
+        }
+
+        for (arg, loc) in locs.iter().enumerate().take(16) {
+            self.load_c_from_loc(2 * arg as u8, *loc);
+        }
     }
 
-    fn save_args_complex(&mut self, _num_args: u8, _ultra: bool) {
-        unimplemented!()
+    fn save_args_complex(&mut self, num_args: u8, _ultra: bool) {
+        for arg in 0..num_args.min(16) {
+            self.save_c_to_loc(2 * arg, self.config.location(arg));
+        }
     }
 
     fn neg(&mut self, dst: Reg, s1: Reg) {
@@ -720,8 +796,18 @@ impl Generator for RiscV {
         Ok(())
     }
 
-    fn call_funclet(&mut self, _label: &str) {
-        todo!();
+    fn call_funclet(&mut self, label: &str) {
+        self.jump(
+            label,
+            0,
+            |offset, _| rvv! {auipc x(Self::t0), hi(offset as u32)},
+        );
+
+        self.jump(
+            label,
+            0,
+            |offset, _| rvv! {jalr x(Self::ra), x(Self::t0), lo((offset + 4) as u32)},
+        );
     }
 
     fn ret(&mut self) {
