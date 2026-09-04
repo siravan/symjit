@@ -43,7 +43,7 @@ impl RiscV {
     const a1: u8 = 11;
     const a2: u8 = 12;
     const a3: u8 = 13;
-    const a4: u8 = 14;
+    // const a4: u8 = 14;
     // const a5: u8 = 15;
     // const a6: u8 = 16;
     // const a7: u8 = 17;
@@ -229,7 +229,7 @@ impl RiscV {
             self.emit(rvv! {addi x(Self::a0), x(SP), 0});
             self.emit(rvv! {addi x(Self::a1), x(Self::zero), 0});
             self.emit(rvv! {addi x(Self::a2), x(Self::zero), 0});
-            self.emit(rvv! {addi x(Self::a4), x(STACK), ofs});
+            self.emit(rvv! {addi x(Self::a3), x(STACK), ofs});
         } else {
             self.load_x_from_label(Self::a0, &format!("_env_{}_", op));
             self.emit(rvv! {addi x(Self::a1), x(STACK), ofs});
