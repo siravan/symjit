@@ -232,7 +232,7 @@ impl Node {
             */
             Self::Const { idx, .. } => format!("C[{}]", idx),
             Self::Unary { op, arg, .. } => {
-                format!("{}[{}]", &arg.topology(), op.as_str())
+                format!("{}[{}]", arg.topology(), op.as_str())
             }
             Self::Binary {
                 op, left, right, ..
@@ -254,7 +254,7 @@ impl Node {
                 }
                 */
 
-                format!("{}{}{}", &l, &r, &op)
+                format!("{}{}{}", l, r, op)
             }
         }
     }

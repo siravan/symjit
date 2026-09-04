@@ -53,7 +53,7 @@ impl fmt::Debug for GreedyAllocator {
         writeln!(f, "...................")?;
 
         for (i, s) in self.statics.iter().enumerate() {
-            writeln!(f, "σ{} := ({:?})", i, &s)?;
+            writeln!(f, "σ{} := ({:?})", i, s)?;
         }
 
         Ok(())

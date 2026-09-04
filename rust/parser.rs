@@ -370,21 +370,20 @@ impl Parser {
         self.expects(Token::Comma)?;
 
         let args;
-        let b;
 
-        if self.lex.head() == '[' {
+        let b = if self.lex.head() == '[' {
             // v2
             let _tags = self.parse_tags()?;
             self.expects(Token::Comma)?;
             args = self.parse_slots()?;
             self.expects(Token::Comma)?;
-            b = self.parse_bool()?;
+            self.parse_bool()?
         } else {
             // v1
             args = vec![self.parse_slot()?];
             self.expects(Token::Comma)?;
-            b = self.parse_bool()?;
-        }
+            self.parse_bool()?
+        };
 
         if !name.starts_with("composer_") {
             name = format!("symbolica_{}", name);

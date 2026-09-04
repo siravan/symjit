@@ -90,7 +90,7 @@ impl Statement {
 
                     if ultra {
                         ir.load_args(locs, true);
-                        let label = format!("{}_ultra", &topo);
+                        let label = format!("{}_ultra", topo);
                         ir.call(&label, 0)?;
                     } else {
                         ir.load_args(locs, false);

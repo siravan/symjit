@@ -112,7 +112,7 @@ impl DirectTranslator {
                 if let Some(Loc::Param(i)) = self.find_sym(&name) {
                     self.mir.load_param(dst, i);
                 } else {
-                    return Err(anyhow!("error adding {:?}.", &name));
+                    return Err(anyhow!("error adding {:?}.", name));
                 }
             }
             Slot::Out(idx) => {
@@ -120,7 +120,7 @@ impl DirectTranslator {
                 if let Some(Loc::Stack(i)) = self.find_sym(&name) {
                     self.mir.load_stack(dst, i);
                 } else {
-                    return Err(anyhow!("{:?} not found.", &name));
+                    return Err(anyhow!("{:?} not found.", name));
                 }
             }
             Slot::Temp(idx) => {
@@ -128,10 +128,10 @@ impl DirectTranslator {
                 if let Some(Loc::Stack(i)) = self.find_sym(&name) {
                     self.mir.load_stack(dst, i);
                 } else {
-                    return Err(anyhow!("{:?} not found.", &name));
+                    return Err(anyhow!("{:?} not found.", name));
                 }
             }
-            _ => return Err(anyhow!("{:?} is not defined.", &slot)),
+            _ => return Err(anyhow!("{:?} is not defined.", slot)),
         }
 
         Ok(())

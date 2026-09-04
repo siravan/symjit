@@ -570,7 +570,7 @@ impl Generator for RiscV {
 
     fn save_args(&mut self, num_args: u8, _ultra: bool) {
         for arg in 0..num_args.min(32) {
-            self.save_d_to_loc(arg as u8, self.config.location(arg));
+            self.save_d_to_loc(arg, self.config.location(arg));
         }
     }
 

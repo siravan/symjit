@@ -132,7 +132,7 @@ pub struct Defuns {
 
 impl fmt::Debug for Defuns {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "{:?}", &self.funcs)?;
+        writeln!(f, "{:?}", self.funcs)?;
         Ok(())
     }
 }
@@ -191,7 +191,7 @@ impl Defuns {
         T: Copy + Sized + Element,
     {
         if VirtualTable::from_str(name).is_ok() {
-            return Err(anyhow!("cannot redefine function {}.", &name));
+            return Err(anyhow!("cannot redefine function {}.", name));
         }
 
         let ext = Box::new(closure);

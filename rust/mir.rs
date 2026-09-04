@@ -194,7 +194,7 @@ pub enum Instruction {
 
 impl Hash for Instruction {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        let s = format!("{:?}", &self);
+        let s = format!("{:?}", self);
         s.hash(state);
     }
 }
@@ -204,21 +204,21 @@ impl fmt::Debug for Instruction {
         match self {
             Instruction::Nop => write!(f, "nop"),
             Instruction::End => write!(f, "end"),
-            Instruction::Uni { op, dst, s1 } => write!(f, "{:?} := {:?}({:?})", &dst, &op, &s1),
+            Instruction::Uni { op, dst, s1 } => write!(f, "{:?} := {:?}({:?})", dst, op, s1),
             Instruction::Bi { op, dst, s1, s2 } => {
-                write!(f, "{:?} := {:?} {:?} {:?}", &dst, &s1, &op, &s2)
+                write!(f, "{:?} := {:?} {:?} {:?}", dst, s1, op, s2)
             }
-            Instruction::Call { label, .. } => write!(f, "call {}", &label),
-            Instruction::Mov { dst, s1 } => write!(f, "{:?} := {:?}", &dst, &s1),
-            Instruction::Load { dst, loc } => write!(f, "{:?} := {:?}", &dst, &loc),
-            Instruction::Save { src, loc } => write!(f, "{:?} := {:?}", &loc, &src),
+            Instruction::Call { label, .. } => write!(f, "call {}", label),
+            Instruction::Mov { dst, s1 } => write!(f, "{:?} := {:?}", dst, s1),
+            Instruction::Load { dst, loc } => write!(f, "{:?} := {:?}", dst, loc),
+            Instruction::Save { src, loc } => write!(f, "{:?} := {:?}", loc, src),
             Instruction::LoadComplex { xd, yd, loc } => {
-                write!(f, "({:?} + {:?}*im) := {:?}", &xd, &yd, &loc)
+                write!(f, "({:?} + {:?}*im) := {:?}", xd, yd, loc)
             }
             Instruction::SaveComplex { xs, ys, loc } => {
-                write!(f, "{:?} := ({:?} + {:?}*im)", &loc, &xs, &ys)
+                write!(f, "{:?} := ({:?} + {:?}*im)", loc, xs, ys)
             }
-            Instruction::LoadConst { dst, idx } => write!(f, "{:?} := consts[{:?}]", &dst, idx),
+            Instruction::LoadConst { dst, idx } => write!(f, "{:?} := consts[{:?}]", dst, idx),
             Instruction::LoadArgs {
                 locs,
                 complex: false,
@@ -240,10 +240,10 @@ impl fmt::Debug for Instruction {
                 ultra,
             } => write!(f, "Save Args; n = {}; complex, {}", num_args, ultra),
             Instruction::Fused { op, dst, a, b, c } => match op {
-                FusedOp::MulAdd => write!(f, "{:?} := {:?} * {:?} + {:?}", &dst, &a, &b, &c),
-                FusedOp::NegMulAdd => write!(f, "{:?} := - {:?} * {:?} + {:?}", &dst, &a, &b, &c),
-                FusedOp::MulSub => write!(f, "{:?} := {:?} * {:?} - {:?}", &dst, &a, &b, &c),
-                FusedOp::NegMulSub => write!(f, "{:?} := - {:?} * {:?} - {:?}", &dst, &a, &b, &c),
+                FusedOp::MulAdd => write!(f, "{:?} := {:?} * {:?} + {:?}", dst, a, b, c),
+                FusedOp::NegMulAdd => write!(f, "{:?} := - {:?} * {:?} + {:?}", dst, a, b, c),
+                FusedOp::MulSub => write!(f, "{:?} := {:?} * {:?} - {:?}", dst, a, b, c),
+                FusedOp::NegMulSub => write!(f, "{:?} := - {:?} * {:?} - {:?}", dst, a, b, c),
             },
             Instruction::IfElse {
                 dst,
@@ -253,9 +253,9 @@ impl fmt::Debug for Instruction {
             } => write!(
                 f,
                 "{:?} := {:?} ? {:?} : {:?}",
-                &dst, cond, &true_val, &false_val
+                dst, cond, true_val, false_val
             ),
-            Self::Label { label } => write!(f, "{:?}:", &label),
+            Self::Label { label } => write!(f, "{:?}:", label),
             Self::Branch { label } => write!(f, "goto {:?}", label),
             Self::BranchIf {
                 cond,
@@ -263,23 +263,19 @@ impl fmt::Debug for Instruction {
                 is_else,
             } => {
                 if *is_else {
-                    write!(f, "if not {:?} goto {:?}", &cond, label)
+                    write!(f, "if not {:?} goto {:?}", cond, label)
                 } else {
-                    write!(f, "if {:?} goto {:?}", &cond, label)
+                    write!(f, "if {:?} goto {:?}", cond, label)
                 }
             }
             Self::LoadMath { op, dst, s1, loc } => {
-                write!(
-                    f,
-                    "{:?} := {:?} {:?} {:?} # load/math",
-                    &dst, &s1, &op, &loc
-                )
+                write!(f, "{:?} := {:?} {:?} {:?} # load/math", dst, s1, op, loc)
             }
             Self::LoadConstMath { op, dst, s1, idx } => {
                 write!(
                     f,
                     "{:?} := {:?} {:?} consts[{:?}] # load const/math",
-                    &dst, &s1, &op, &idx
+                    dst, s1, op, idx
                 )
             }
             Self::ComplexBi {
@@ -294,7 +290,7 @@ impl fmt::Debug for Instruction {
                 write!(
                     f,
                     "({:?} + {:?}*im) := ({:?} + {:?}*im) {:?} ({:?} + {:?}*im)",
-                    &xd, &yd, &x1, &y1, &op, &x2, &y2
+                    xd, yd, x1, y1, op, x2, y2
                 )
             }
         }
@@ -306,8 +302,8 @@ impl Instruction {
         match self {
             Instruction::Nop => "nop".into(),
             Instruction::End => "end".into(),
-            Instruction::Uni { op, .. } => format!("uniop {:?}", &op),
-            Instruction::Bi { op, .. } => format!("binop {:?}", &op),
+            Instruction::Uni { op, .. } => format!("uniop {:?}", op),
+            Instruction::Bi { op, .. } => format!("binop {:?}", op),
             Instruction::Call { label, .. } => format!("call {}", label),
             Instruction::Mov { .. } => "mov".into(),
             Instruction::Load { .. } => "load".into(),
@@ -319,14 +315,14 @@ impl Instruction {
             Instruction::LoadArgs { complex: true, .. } => "load_arg_complex".into(),
             Instruction::SaveArgs { complex: false, .. } => "save_arg".into(),
             Instruction::SaveArgs { complex: true, .. } => "save_arg_complex".into(),
-            Instruction::Fused { op, .. } => format!("fused op {:?}", &op),
+            Instruction::Fused { op, .. } => format!("fused op {:?}", op),
             Instruction::IfElse { .. } => "if_else".into(),
             Self::Label { .. } => "label".into(),
             Self::Branch { .. } => "branch".into(),
             Self::BranchIf { .. } => "branch_if".into(),
-            Self::LoadMath { op, .. } => format!("load math {:?}", &op),
-            Self::LoadConstMath { op, .. } => format!("load const math {:?}", &op),
-            Self::ComplexBi { op, .. } => format!("complex binop {:?}", &op),
+            Self::LoadMath { op, .. } => format!("load math {:?}", op),
+            Self::LoadConstMath { op, .. } => format!("load const math {:?}", op),
+            Self::ComplexBi { op, .. } => format!("complex binop {:?}", op),
         }
     }
 }
@@ -341,8 +337,8 @@ pub struct Mir {
 
 impl fmt::Debug for Mir {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "config: {:?}", &self.config)?;
-        writeln!(f, "ip: {}", &self.code.ip)?;
+        writeln!(f, "config: {:?}", self.config)?;
+        writeln!(f, "ip: {}", self.code.ip)?;
 
         for (i, ins) in self.code.iter().enumerate() {
             writeln!(f, "{:05}\t{:?}", i, ins)?;
@@ -1180,7 +1176,7 @@ impl Mir {
         }
 
         let op = if self.config.is_complex() && !self.config.is_external_func(op) {
-            &format!("cplx_{}", &op)
+            &format!("cplx_{}", op)
         } else {
             op
         };
