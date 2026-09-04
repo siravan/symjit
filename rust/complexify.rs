@@ -3,7 +3,7 @@ use std::collections::HashSet;
 
 use super::code::Func;
 use super::config::Config;
-use super::generator::Generator;
+use super::generator::{Generator, GeneratorType};
 use super::mir::Mir;
 use super::symbol::Loc;
 use super::utils::Reg;
@@ -146,6 +146,10 @@ impl Generator for Complexifier {
 
     fn bytes(&mut self) -> Vec<u8> {
         Vec::new()
+    }
+
+    fn what(&self) -> GeneratorType {
+        GeneratorType::Complexifier
     }
 
     fn seal(&mut self) {}

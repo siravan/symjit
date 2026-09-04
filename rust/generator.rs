@@ -28,11 +28,26 @@ impl StackRegions {
     }
 }
 
+pub enum GeneratorType {
+    Unknown,
+    Complexifier,
+    AmdScalar(bool),
+    AmdVectorF64x4(bool),
+    AmdVectorF64x8(bool),
+    AmdComplex,
+    AmdSSE(bool),
+    ArmScalar(bool),
+    ArmVector(bool),
+    ArmComplex,
+    RiscvScalar(bool),
+}
+
 #[allow(dead_code)]
 pub trait Generator {
     fn count_shadows(&self) -> u8;
     fn three_address(&self) -> bool;
     fn bytes(&mut self) -> Vec<u8>;
+    fn what(&self) -> GeneratorType;
 
     fn seal(&mut self);
     fn align(&mut self);

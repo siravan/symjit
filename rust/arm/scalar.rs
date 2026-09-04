@@ -3,7 +3,7 @@ use anyhow::Result;
 use super::super::assembler::{Assembler, Jumper};
 use super::super::code::Func;
 use super::super::config::{Config, ABI_AREA};
-use super::super::generator::Generator;
+use super::super::generator::{Generator, GeneratorType};
 use super::super::symbol::Loc;
 use super::super::utils::{align_stack, Reg};
 
@@ -93,6 +93,10 @@ impl Generator for ArmGenerator {
 
     fn count_shadows(&self) -> u8 {
         14
+    }
+
+    fn what(&self) -> GeneratorType {
+        GeneratorType::ArmScalar(self.config.is_complex())
     }
 
     fn seal(&mut self) {

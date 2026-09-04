@@ -3,7 +3,7 @@ use anyhow::{anyhow, Result};
 use super::super::assembler::{Assembler, Jumper};
 use super::super::code::Func;
 use super::super::config::{Config, KernelType, ABI_AREA};
-use super::super::generator::{Generator, StackRegions};
+use super::super::generator::{Generator, GeneratorType, StackRegions};
 use super::super::symbol::Loc;
 use super::super::utils::{align_stack, Reg};
 
@@ -131,6 +131,10 @@ impl Generator for ArmSimdGenerator {
 
     fn count_shadows(&self) -> u8 {
         14
+    }
+
+    fn what(&self) -> GeneratorType {
+        GeneratorType::ArmVector(self.config.is_complex())
     }
 
     fn seal(&mut self) {

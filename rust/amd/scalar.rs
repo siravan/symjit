@@ -1,7 +1,7 @@
 use super::super::code::Func;
 use super::super::config::KernelType;
 use super::super::config::{Config, ABI_AREA};
-use super::super::generator::{Generator, StackRegions};
+use super::super::generator::{Generator, GeneratorType, StackRegions};
 use super::super::symbol::Loc;
 use super::super::utils::align_stack;
 use super::super::utils::{DataType, Reg};
@@ -124,6 +124,10 @@ impl Generator for AmdScalarGenerator {
 
     fn three_address(&self) -> bool {
         true
+    }
+
+    fn what(&self) -> GeneratorType {
+        GeneratorType::AmdScalar(self.config.is_complex())
     }
 
     fn seal(&mut self) {

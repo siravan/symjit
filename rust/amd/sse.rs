@@ -1,6 +1,6 @@
 use super::super::code::Func;
 use super::super::config::{Config, KernelType, ABI_AREA};
-use super::super::generator::{Generator, StackRegions};
+use super::super::generator::{Generator, GeneratorType, StackRegions};
 use super::super::symbol::Loc;
 use super::super::utils::align_stack;
 use super::super::utils::{DataType, Reg};
@@ -128,6 +128,10 @@ impl Generator for AmdSSEGenerator {
 
     fn three_address(&self) -> bool {
         false
+    }
+
+    fn what(&self) -> GeneratorType {
+        GeneratorType::AmdSSE(self.config.is_complex())
     }
 
     fn seal(&mut self) {
