@@ -356,6 +356,20 @@ impl RiscV {
             self.emit(rvv! {fsd f(r+1), x(Self::t0), 8});
         }
     }
+
+    fn j(&mut self, label: &str) {
+        self.jump(
+            label,
+            0,
+            |offset, _| rvv! {auipc x(Self::t0), hi(offset as u32)},
+        );
+
+        self.jump(
+            label,
+            0,
+            |offset, _| rvv! {jalr x(Self::zero), x(Self::t0), lo((offset + 4) as u32)},
+        );
+    }
 }
 
 impl Generator for RiscV {
@@ -382,7 +396,7 @@ impl Generator for RiscV {
     }
 
     fn branch(&mut self, label: &str) {
-        self.jump(label, 0, |offset, _| rvv! {j offset});
+        self.j(label);
     }
 
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
@@ -394,7 +408,7 @@ impl Generator for RiscV {
             self.emit(rvv! {bne x(Self::t0), x(Self::zero), 8});
         }
 
-        self.jump(label, 0, |offset, _| rvv! {j offset});
+        self.j(label);
     }
 
     fn fuse_load_math(&mut self) {}
@@ -929,6 +943,9 @@ impl Generator for RiscV {
         count_obs: usize,
         _count_params: usize,
     ) {
+        self.emit(rvv! {addi x(Self::a0), x(Self::zero), 0});
+        self.set_label("@epilogue");
+
         self.jump("@done", 0, |offset, _| {
             rvv! {beq x(STATES), x(Self::zero), offset}
         });
