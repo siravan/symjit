@@ -464,12 +464,12 @@ def is_complex(table):
     return any(args["dtype"] == "complex128" for (args, _) in table)
 
 def print_stats(table):
-    print("dtype = 'float64':")
-    print(f"\tsimd:         {tobulate(table, "use_simd", False, "float64")} vs {tobulate(table, "use_simd", True, "float64")}")
-    print(f"\tthreads:      {tobulate(table, "use_threads", False, "float64")} vs {tobulate(table, "use_threads", True, "float64")}")
-    print(f"\tcse:          {tobulate(table, "cse", False, "float64")} vs {tobulate(table, "cse", True, "float64")}")
-    print(f"\tfastmath:     {tobulate(table, "fastmath", False, "float64")} vs {tobulate(table, "fastmath", True, "float64")}")
-    print(f"\tfast_complex: {tobulate(table, "fast_complex", False, "float64")} vs {tobulate(table, "fast_complex", True, "float64")}")
+    print('dtype = "float64":')
+    print(f'\tsimd:         {tobulate(table, "use_simd", False, "float64")} vs {tobulate(table, "use_simd", True, "float64")}')
+    print(f'\tthreads:      {tobulate(table, "use_threads", False, "float64")} vs {tobulate(table, "use_threads", True, "float64")}')
+    print(f'\tcse:          {tobulate(table, "cse", False, "float64")} vs {tobulate(table, "cse", True, "float64")}')
+    print(f'\tfastmath:     {tobulate(table, "fastmath", False, "float64")} vs {tobulate(table, "fastmath", True, "float64")}')
+    print(f'\tfast_complex: {tobulate(table, "fast_complex", False, "float64")} vs {tobulate(table, "fast_complex", True, "float64")}')
     print(f"""\topt_level:
         \t0: {tobulate(table, "opt_level", 0, "float64")}
         \t1: {tobulate(table, "opt_level", 1, "float64")}
@@ -478,12 +478,12 @@ def print_stats(table):
 
     if is_complex(table):
         print()
-        print("dtype = 'complex128':")
-        print(f"\tsimd:         {tobulate(table, "use_simd", False, "complex128")} vs {tobulate(table, "use_simd", True, "complex128")}")
-        print(f"\tthreads:      {tobulate(table, "use_threads", False, "complex128")} vs {tobulate(table, "use_threads", True, "complex128")}")
-        print(f"\tcse:          {tobulate(table, "cse", False, "complex128")} vs {tobulate(table, "cse", True, "complex128")}")
-        print(f"\tfastmath:     {tobulate(table, "fastmath", False, "complex128")} vs {tobulate(table, "fastmath", True, "complex128")}")
-        print(f"\tfast_complex: {tobulate(table, "fast_complex", False, "complex128")} vs {tobulate(table, "fast_complex", True, "complex128")}")
+        print('dtype = "complex128":')
+        print(f'\tsimd:         {tobulate(table, "use_simd", False, "complex128")} vs {tobulate(table, "use_simd", True, "complex128")}')
+        print(f'\tthreads:      {tobulate(table, "use_threads", False, "complex128")} vs {tobulate(table, "use_threads", True, "complex128")}')
+        print(f'\tcse:          {tobulate(table, "cse", False, "complex128")} vs {tobulate(table, "cse", True, "complex128")}')
+        print(f'\tfastmath:     {tobulate(table, "fastmath", False, "complex128")} vs {tobulate(table, "fastmath", True, "complex128")}')
+        print(f'\tfast_complex: {tobulate(table, "fast_complex", False, "complex128")} vs {tobulate(table, "fast_complex", True, "complex128")}')
         print(f"""\topt_level:
             \t0: {tobulate(table, "opt_level", 0, "complex128")}
             \t1: {tobulate(table, "opt_level", 1, "complex128")}

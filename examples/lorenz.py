@@ -18,9 +18,6 @@ t0 = time.time()
 
 f = compile_ode(t, (x, y, z), ode, params=(sigma, rho, beta), **args)
 
-if args["ty"] == "debug":
-    print(f.dumps())
-
 u0 = (1.0, 1.0, 1.0)
 p = (10.0, 28.0, 8 / 3)
 t_eval = np.arange(0, 100, 0.01)

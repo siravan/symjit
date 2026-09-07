@@ -41,13 +41,13 @@ def lemniscate(x):
 f = compile_func([x], [2 / viete(x), 2 / lemniscate(x)], **args)
 f.save("pi.sjb")
 
-print(f.dumps("bytecode"))
+# print(f.dumps("bytecode"))
 p, q = f(1 / 2)
 print(p, "?= ", math.pi, "(pi)")
 print(q, "?= ", 2.622057554292119, "(lemniscate constant)")
 
 g = load_func("pi.sjb")
-print(g.dumps("bytecode"))
+# print(g.dumps("bytecode"))
 
 p, q = g(1 / 2)
 print(p, "?= ", math.pi, "(pi)")
