@@ -411,8 +411,14 @@ impl Config {
         self.test(USE_THREADS)
     }
 
+    #[cfg(not(target_arch = "aarch64"))]
     pub fn fastmath(&self) -> bool {
         self.test(FASTMATH) && (self.has_avx() || self.is_arm64() || self.is_riscv64())
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    pub fn fastmath(&self) -> bool {
+        self.test(FASTMATH) && self.is_arm64() && std::arch::is_aarch64_feature_detected!("fcma")
     }
 
     pub fn compact(&self) -> bool {
