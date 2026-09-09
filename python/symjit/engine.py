@@ -268,12 +268,13 @@ class Matrix:
     def __init__(self):
         self.p: int = lib.create_matrix()
         self.rows: list[NDArray] = []  # the list of new rows owned by self
+        self.lib: Engine = lib
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        lib.finalize_matrix(self.p)
+        self.lib.finalize_matrix(self.p)
 
     def add_row(self, row):
         v = np.ascontiguousarray(row, dtype=np.double)
@@ -292,6 +293,7 @@ class Defuns:
     def __init__(self, defuns):
         self.p: int = lib.create_defuns()
         self.funcs = {}
+        self.lib: Engine = lib
 
         fac1 = ctypes.CFUNCTYPE(ctypes.c_double, ctypes.c_double)
         fac2 = ctypes.CFUNCTYPE(ctypes.c_double, ctypes.c_double, ctypes.c_double)
@@ -320,7 +322,7 @@ class Defuns:
 
     def __del__(self):
         if hasattr(self, "p"):
-            lib.finalize_defuns(self.p)
+            self.lib.finalize_defuns(self.p)
 
 
 class RustyCompiler:
@@ -349,6 +351,8 @@ class RustyCompiler:
         huge: bool=False,
         parallel_mul: bool=True,
     ):
+        self.lib: Engine = lib
+
         if convert:
             model = json.dumps(model)
 
@@ -413,7 +417,7 @@ class RustyCompiler:
 
     def __del__(self):
         if hasattr(self, "p"):
-            lib.finalize(self.p)
+            self.lib.finalize(self.p)
 
     def save(self, file: str):
         lib.save(self.p, file.encode("utf-8"))

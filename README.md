@@ -53,6 +53,12 @@ Another way to install SymJit is to use `mamba`:
 mamba install symjit
 ```
 
+Alternatively, you may use `pixi` to install Symjit:
+
+```
+pixi add symjit
+```
+
 It is possible to list all of the versions of SymJit available on your platform with `conda`:
 
 ```
