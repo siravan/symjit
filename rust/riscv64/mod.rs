@@ -2,6 +2,7 @@
 mod macros;
 
 use super::assembler::{Assembler, Jumper};
+use super::code::Func;
 use super::config::{Config, ABI_AREA};
 use super::generator::{Generator, GeneratorType};
 use super::symbol::Loc;
@@ -821,10 +822,30 @@ impl Generator for RiscV {
         }
     }
 
-    fn add_func(&mut self, f: &str, p: super::code::Func) {
-        let label = format!("_func_{}_", f);
-        self.set_label(label.as_str());
-        self.append_quad(p.func_ptr());
+    fn add_func(&mut self, op: &str, f: Func) {
+        match f {
+            Func::Slice { f_scalar, env, .. } => {
+                let label = format!("_func_{}_", op);
+                self.set_label(label.as_str());
+                self.append_quad(f_scalar as u64);
+
+                let label = format!("_env_{}_", op);
+                self.set_label(label.as_str());
+                self.append_quad(env as u64);
+            }
+            Func::App(app) => {
+                if let Some(f) = app.scalar_kernel() {
+                    let label = format!("_func_{}_", op);
+                    self.set_label(label.as_str());
+                    self.append_quad(f as usize as u64);
+                }
+            }
+            _ => {
+                let label = format!("_func_{}_", op);
+                self.set_label(label.as_str());
+                self.append_quad(f.func_ptr());
+            }
+        }
     }
 
     fn call(&mut self, op: &str, num_args: usize) -> Result<()> {

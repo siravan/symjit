@@ -998,8 +998,11 @@ impl Config {
                 "root".into()
             }
         } else if let Some(op) = fun.strip_prefix("symbolica_") {
+            // Aliases
             let op = match op {
                 "log" => "ln", // because of discrepency between real/complex log/ln
+                "imag" => "imaginary",
+                "conj" => "conjugate",
                 "asin" => "arcsin",
                 "acos" => "arccos",
                 "atan" => "arctan",

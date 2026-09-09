@@ -394,6 +394,12 @@ impl CellModel {
     }
 }
 
+impl Default for CellModel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Transformer for CellModel {
     fn transform(&self, builder: &mut Builder) -> Result<Node> {
         for eq in &self.obs {
