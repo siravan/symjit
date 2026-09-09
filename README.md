@@ -7,19 +7,17 @@ SymJit has two different code-generating backends. The default is a Rust library
 
 The following table shows the supported CPU profiles and operating systems. Tier-1 are heavily tested and receive the latest features. Tier-2 are also distributed as binary and pass the test suite; however, they may not have the full features and optimizations. Tier-3 may work but are not routinely tested. 
 
-| Tiers  | Supported CPU/OS             | Comments           |
+| **Tiers**  | **Supported OS/CPU**     | **Comments**       |
 |--------|------------------------------|--------------------|
 | Tier 1 | Linux x86-64-v3              | 256-bit AVX2 SIMD  |
-|        | Linux x86-64-v4              | 512-bit AVX512 SIMD|
-|        | MacOS aarch64 (Apple silicon)|                    |
-|--------|------------------------------|--------------------|
+| Tier 1 | Linux x86-64-v4              | 512-bit AVX512 SIMD|
+| Tier 1 | MacOS aarch64 (Apple silicon)|                    |
 | Tier 2 | Windows x86-64-v3            | 256-bit AVX2 SIMD  |
-|        | Windows x86-64-v4            | 512-bit AVX512 SIMD|
-|        | Linux aarch64                | Raspberry Pi 4/5   |
-|        | Linux riscv64                | GC profile         |
-|--------|------------------------------|--------------------|
+| Tier 2 | Windows x86-64-v4            | 512-bit AVX512 SIMD|
+| Tier 2 | Linux aarch64                | Raspberry Pi 4/5   |
+| Tier 2 | Linux riscv64                | GC profile         |
 | Tier 3 | Windows aarch64              |                    |
-|        | MacOS x64                    |                    |
+| Tier 3 | MacOS x64                    |                    |
 
 
 Symjit in the central package of a [family of JIT compilers](./docs/COMPANIOS.md). Moreover, SymJit is the JIT backend for the [Symbolica](./docs/SYMBOLICA.md) computer algebra system. 
