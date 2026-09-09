@@ -490,39 +490,76 @@ impl Generator for ArmComplexGenerator {
         self.emit(arm! {not v(ϕ(dst)).16b, v(ϕ(s1)).16b});
     }
 
+    #[cfg(target_arch = "aarch64")]
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.emit(arm! {fmov q(T1), q(ϕ(s3))});
-        self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #0});
-        self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #90});
-        self.emit(arm! {fmov q(ϕ(dst)), q(T1)});
+        if std::arch::is_aarch64_feature_detected!("fcma") {
+            self.emit(arm! {fmov q(T1), q(ϕ(s3))});
+            self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #0});
+            self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #90});
+            self.emit(arm! {fmov q(ϕ(dst)), q(T1)});
+        } else {
+            self.times(Reg::Temp, s1, s2);
+            self.plus(dst, Reg::Temp, s3);
+        }
     }
+
+    #[cfg(not(target_arch = "aarch64"))]
+    fn fused_mul_add(&mut self, _dst: Reg, _s1: Reg, _s2: Reg, _s3: Reg) {}
 
     // fused_mul_sub is s1 * s2 - s3, corresponding to fnmsub in aarch64
     // and vmsub... in amd64
+    #[cfg(target_arch = "aarch64")]
     fn fused_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.emit(arm! {fneg q(T1), q(ϕ(s3))});
-        self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #0});
-        self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #90});
-        self.emit(arm! {fmov q(ϕ(dst)), q(T1)});
+        if std::arch::is_aarch64_feature_detected!("fcma") {
+            self.emit(arm! {fneg q(T1), q(ϕ(s3))});
+            self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #0});
+            self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #90});
+            self.emit(arm! {fmov q(ϕ(dst)), q(T1)});
+        } else {
+            self.times(Reg::Temp, s1, s2);
+            self.minus(dst, Reg::Temp, s3);
+        }
     }
+
+    #[cfg(not(target_arch = "aarch64"))]
+    fn fused_mul_sub(&mut self, _dst: Reg, _s1: Reg, _s2: Reg, _s3: Reg) {}
 
     // fused_neg_mul_add is s3 - s1 * s2, corresponding to fmsub in aarch64
     // and vnmadd... in amd64
+    #[cfg(target_arch = "aarch64")]
     fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.emit(arm! {fneg q(T1), q(ϕ(s3))});
-        self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #0});
-        self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #90});
-        self.emit(arm! {fneg q(ϕ(dst)), q(T1)});
+        if std::arch::is_aarch64_feature_detected!("fcma") {
+            self.emit(arm! {fneg q(T1), q(ϕ(s3))});
+            self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #0});
+            self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #90});
+            self.emit(arm! {fneg q(ϕ(dst)), q(T1)});
+        } else {
+            self.times(Reg::Temp, s1, s2);
+            self.minus(dst, s3, Reg::Temp);
+        }
     }
+
+    #[cfg(not(target_arch = "aarch64"))]
+    fn fused_neg_mul_add(&mut self, _dst: Reg, _s1: Reg, _s2: Reg, _s3: Reg) {}
 
     // fused_neg_mul_sub is -s3 - s1 * s2, corresponding to fnmadd in aarch64
     // and vnmsub... in amd64
+    #[cfg(target_arch = "aarch64")]
     fn fused_neg_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.emit(arm! {fmov q(T1), q(ϕ(s3))});
-        self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #0});
-        self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #90});
-        self.emit(arm! {fneg q(ϕ(dst)), q(T1)});
+        if std::arch::is_aarch64_feature_detected!("fcma") {
+            self.emit(arm! {fmov q(T1), q(ϕ(s3))});
+            self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #0});
+            self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #90});
+            self.emit(arm! {fneg q(ϕ(dst)), q(T1)});
+        } else {
+            self.times(Reg::Temp, s1, s2);
+            self.plus(dst, Reg::Temp, s3);
+            self.neg(dst, dst);
+        }
     }
+
+    #[cfg(not(target_arch = "aarch64"))]
+    fn fused_neg_mul_sub(&mut self, _dst: Reg, _s1: Reg, _s2: Reg, _s3: Reg) {}
 
     fn add_consts(&mut self, consts: &[f64]) {
         self.align();
