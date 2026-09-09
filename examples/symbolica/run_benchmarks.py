@@ -1,30 +1,20 @@
 import math
 import os
-import random
 import time
 
 import numpy as np
 import symjit
-from symbolica import E
 
 K = 20
 P = 60
 N = 25000
 
-CONFIG = os.path.join(os.path.dirname(__file__), "symjit.toml")
+INSTRUCTIONS = os.path.join(
+    os.path.dirname(__file__), f"benchmark_instructions.txt"
+)
 
-
-def build_evaluator_poly(num_terms: int, num_factors: int):
-    vars = [E(f"x_{i}") for i in range(P)]
-
-    expr = math.prod(vars)
-
-    for _ in range(num_terms):
-        random.shuffle(vars)
-        expr += random.random() * math.prod(vars[:num_factors])
-
-    ev = expr.evaluator(vars, jit_compile=False, cpe_iterations=0, iterations=0)
-    return ev
+with open(INSTRUCTIONS, "rt", encoding="utf-8") as fd:
+    ev = fd.read()
 
 
 rng = np.random.default_rng(1349)
@@ -32,8 +22,7 @@ inputs = rng.random((N, P)) + rng.random((N, P)) * 1j - (0.5 + 0.5j)
 num_terms = math.floor(1.5**K)
 threashold = 1e-14 * math.sqrt(num_terms)
 
-ev = build_evaluator_poly(num_terms, 10)
-res_eager = sum(ev.evaluate_complex(inputs))
+res_eager = [-0.449997965985545 + -0.313506785844491j]
 
 def run_config(args):
     f = symjit.compile_evaluator(ev, dtype="complex128", **args)
