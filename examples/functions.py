@@ -60,6 +60,7 @@ eqs = [
     [floor(x)],
     [ceiling(x)],
     [frac(x)],
+    [arg(x)],
     [Si(x)],
     [Ci(x)],
     # [Shi(x)],
