@@ -12,10 +12,12 @@ The following table shows the supported CPU profiles and operating systems. Tier
 | Tier 1 | Linux x86-64-v3              | 256-bit AVX2 SIMD  |
 | Tier 1 | Linux x86-64-v4              | 512-bit AVX512 SIMD|
 | Tier 1 | MacOS aarch64 (Apple silicon)|                    |
-| Tier 2 | Windows x86-64-v3            | 256-bit AVX2 SIMD  |
-| Tier 2 | Windows x86-64-v4            | 512-bit AVX512 SIMD|
+| Tier 1 | Windows x86-64-v3            | 256-bit AVX2 SIMD  |
+| Tier 1 | Windows x86-64-v4            | 512-bit AVX512 SIMD|
 | Tier 2 | Linux aarch64                | Raspberry Pi 4/5   |
 | Tier 2 | Linux riscv64                | GC profile         |
+| Tier 2 | Linux x86-64-v2              | SSE (no AVX)       |
+| Tier 2 | Windows x86-64-v2            | SSE (no AVX)       |
 | Tier 3 | Windows aarch64              |                    |
 | Tier 3 | MacOS x64                    |                    |
 
