@@ -5,9 +5,24 @@
 
 SymJit has two different code-generating backends. The default is a Rust library with minimum external dependencies. The Rust backend generates **AMD64** (also known as x86-64), **ARM64** (also known as aarch64), and 64-bit **RISC-V** (riscv64) machine code on Linux, Windows, and Darwin (MacOS) platforms. The Python backend is written in plain Python, relies solely on the Python standard library and NumPy, is considered obsolete, and will be moved to a separate package as of version 3.0.
 
-The Rust backend generates AVX-compatible code by default for x86-64/AMD64 processors but can downgrade to SSE2 instructions if the processor does not support AVX or if explicitly requested by passing `ty='amd-sse'` to compile functions (see below). SSE2 instructions were introduced in 2000, meaning that virtually all current 64-bit x86-64 processors support them. Intel introduced the AVX instruction set in 2011; therefore, most processors support it. In version 3.0, Symjit will move to a minimum of `x86-64-v3` profile. On ARM64 processors, both the Rust and Python backends generate code for the aarch64 instruction set. ARM32 and IA32 are not supported.
+The following table shows the supported CPU profiles and operating systems. Tier-1 are heavily tested and receive the latest features. Tier-2 are also distributed as binary and pass the test suite; however, they may not have the full features and optimizations. Tier-3 may work but are not routinely tested. 
 
-Symjit in the central package of a [family of JIT compilers](./docs/COMPANIOS.md). Moreover, SymJit is a JIT backend for the [Symbolica](./docs/SYMBOLICA.md) computer algebra system. 
+| Tiers  | Supported CPU/OS             | Comments           |
+|--------|------------------------------|--------------------|
+| Tier 1 | Linux x86-64-v3              | 256-bit AVX2 SIMD  |
+|        | Linux x86-64-v4              | 512-bit AVX512 SIMD|
+|        | MacOS aarch64 (Apple silicon)|                    |
+|--------|------------------------------|--------------------|
+| Tier 2 | Windows x86-64-v3            | 256-bit AVX2 SIMD  |
+|        | Windows x86-64-v4            | 512-bit AVX512 SIMD|
+|        | Linux aarch64                | Raspberry Pi 4/5   |
+|        | Linux riscv64                | GC profile         |
+|--------|------------------------------|--------------------|
+| Tier 3 | Windows aarch64              |                    |
+|        | MacOS x64                    |                    |
+
+
+Symjit in the central package of a [family of JIT compilers](./docs/COMPANIOS.md). Moreover, SymJit is the JIT backend for the [Symbolica](./docs/SYMBOLICA.md) computer algebra system. 
 
 In addition to using Symjit to compile SymPy or Symbolica expressions, a low-level interface is exposed through [Composer](.docs/COMPOSER.md) interface to give the user fine-control over the generated code.
 
@@ -71,14 +86,7 @@ python -m pip install symjit
 
 However, the pip install may not include the correct binary Rust backend for different platforms and the conda-forge install is preferable.
 
-Currently, **RISC-V binaries are not available from conda-forge**. If you want to use SymJit on a RISC-V computer, you need to compile it from the source. See [Compilation](./docs/COMPILATION.md) for details.
-
-```
-cd symjit
-python -m pip install .
-```
-
-For the last option, you need a working Rust compiler and toolchains.
+To build Symjit from the source, see [Compilation](./docs/COMPILATION.md).
 
 # Tutorial
 

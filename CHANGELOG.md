@@ -1,3 +1,13 @@
+# Version 2.25.0
+
+* Adding inner functions and compression modes to riscv and aarch64.
+* Binary release for Linux arch64 (Raspberry Pi) and riscv64.
+* Alias for `conj` and `imag`.
+
+# Version 2.24.1
+
+* Fixing compression mode in Windows. 
+
 # Version 2.24.0
 
 * Inner function calls (`add_applet`).
