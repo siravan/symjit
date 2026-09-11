@@ -476,7 +476,7 @@ macro_rules! arm {
     (fmov d($rd:expr), #2.0) => { 0x1e601000 | rd!($rd) };
     (fmov d($rd:expr), #-1.0) => { 0x1e7e1000 | rd!($rd) };
 
-    (fmov q($rd:expr), #0.0) => { 0x6f07f7e0 | rd!($rd) };
+    (movi v($rd:expr).16b, #0) => { 0x4f00e400 | rd!($rd) };
     (fmov q($rd:expr), #0.5) => { 0x6f03f400 | rd!($rd) };
     (fmov q($rd:expr), #1.0) => { 0x6f03f600 | rd!($rd) };
     (fmov q($rd:expr), #2.0) => { 0x6f00f400 | rd!($rd) };
