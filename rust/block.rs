@@ -59,12 +59,17 @@ impl Block {
         self.stmts.push(Statement::Label {
             label: label.to_string(),
         });
+
+        // calls.clear() is to fix a bug, where two similar calls in the different
+        // branches of an if-then-else block were merged.
+        self.calls.clear();
     }
 
     pub fn add_branch(&mut self, label: &str) {
         self.stmts.push(Statement::Branch {
             label: label.to_string(),
-        })
+        });
+        self.calls.clear();
     }
 
     pub fn add_branch_if(&mut self, cond: Node, label: &str, is_else: bool) {
@@ -72,7 +77,8 @@ impl Block {
             cond,
             label: label.to_string(),
             is_else,
-        })
+        });
+        self.calls.clear();
     }
 
     pub fn add_assign(&mut self, lhs: Node, rhs: Node) {
@@ -101,8 +107,6 @@ impl Block {
             stmt.compile(ir, &mut self.topology)?;
         }
 
-        // println!("{:?}", &self.topology);
-
         Ok(())
     }
 
@@ -126,10 +130,7 @@ impl Block {
         self.sym_table.add_stack(name);
         let sym = self.sym_table.find_sym(name).unwrap();
 
-        Node::Var {
-            sym,
-            // status: VarStatus::Unknown,
-        }
+        Node::Var { sym }
     }
 
     pub fn var_exists(&self, name: &str) -> bool {
@@ -250,19 +251,6 @@ impl Block {
         } else {
             Node::create_binary(op, left, right, power, cond)
         }
-
-        /*/
-        let right =
-            if left.ershov_number() == count_scratch && right.ershov_number() == count_scratch {
-                let lhs = self.create_tmp();
-                self.stmts.push(Statement::assign(lhs.clone(), right));
-                lhs
-            } else {
-                right
-            };
-
-        Node::create_binary(op, left, right, power, cond)
-        */
     }
 
     pub fn break_call_binary(&mut self, op: Operation, left: Node, right: Node) -> Node {
