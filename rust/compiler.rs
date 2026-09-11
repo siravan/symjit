@@ -893,6 +893,12 @@ impl IndirectTranslator {
         let ssa = std::mem::take(&mut self.ssa);
         self.cache = vec![None; self.count_statics];
 
+        for i in 0..self.count_outs {
+            // outs are consumed twice to prevent them from moving
+            self.consume(&Slot::Out(i))?;
+            self.consume(&Slot::Out(i))?;
+        }
+
         for line in ssa.iter() {
             match line {
                 Instruction::Add(lhs, args, n) => {
