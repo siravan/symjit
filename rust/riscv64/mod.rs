@@ -97,7 +97,7 @@ impl RiscV {
     const ft11: u8 = 31;
 }
 
-const FMAP: [u8; 30] = [
+const FMAP: [u8; 32] = [
     RiscV::fa2,
     RiscV::fa3,
     RiscV::fa4,
@@ -128,6 +128,8 @@ const FMAP: [u8; 30] = [
     RiscV::fs9,
     RiscV::fs10,
     RiscV::fs11,
+    RiscV::fa0,
+    RiscV::fa1,
 ];
 
 fn ϕ(r: Reg) -> u8 {

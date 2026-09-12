@@ -27,9 +27,9 @@ const TEMP: u8 = ϕ(Reg::Temp);
  * registers v8 to v15 are ABI-preserved
  * registers v29-v31 can be temporary
  */
-const FMAP: [u8; 30] = [
+const FMAP: [u8; 32] = [
     2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 8, 9, 10, 11, 12, 13, 14,
-    15, 29, 30, 31,
+    15, 29, 30, 31, 0, 1,
 ];
 
 const T0: u8 = 29;

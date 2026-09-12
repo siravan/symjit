@@ -353,17 +353,13 @@ impl Builder {
     }
 
     fn save_registers(mir: &Mir, ir: &mut impl Generator) {
-        if ir.count_shadows() < mir.config.count_scratch() {
-            let used = mir.used_registers();
-            ir.save_used_registers(&used);
-        }
+        let used = mir.used_registers();
+        ir.save_used_registers(&used);
     }
 
     fn restore_registers(mir: &Mir, ir: &mut impl Generator) {
-        if ir.count_shadows() < mir.config.count_scratch() {
-            let used = mir.used_registers();
-            ir.load_used_registers(&used);
-        }
+        let used = mir.used_registers();
+        ir.load_used_registers(&used);
     }
 
     pub fn compile_from_mir(
