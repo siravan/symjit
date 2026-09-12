@@ -56,16 +56,10 @@ pub struct Complexifier {
 
 impl Complexifier {
     pub fn new(reals: &HashSet<Loc>, config: Config) -> Complexifier {
-        let mut real_locs: HashSet<Loc> = HashSet::new();
-        for loc in reals {
-            if let Loc::Param(idx) = loc {
-                real_locs.insert(Loc::Param(*idx * 2));
-            }
-        }
-
         Complexifier {
             mir: Mir::new(config),
-            real_locs,
+            // Real declarations have the same scalar offsets as MIR loads.
+            real_locs: reals.clone(),
             real_regs: [false; 32],
         }
     }

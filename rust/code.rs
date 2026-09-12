@@ -347,6 +347,14 @@ impl VirtualTable {
         }
     }
 
+    fn inv(z: Complex<f64>) -> Complex<f64> {
+        if z.re.is_infinite() {
+            return Complex::ZERO;
+        } else {
+            z.inv()
+        }
+    }
+
     pub extern "C" fn cplx_sin(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).sin();
     }
@@ -360,15 +368,15 @@ impl VirtualTable {
     }
 
     pub extern "C" fn cplx_csc(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = Complex::new(xr, xi).sin().inv();
+        *z = Self::inv(Complex::new(xr, xi).sin());
     }
 
     pub extern "C" fn cplx_sec(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = Complex::new(xr, xi).cos().inv();
+        *z = Self::inv(Complex::new(xr, xi).cos());
     }
 
     pub extern "C" fn cplx_cot(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = Complex::new(xr, xi).tan().inv();
+        *z = Self::inv(Complex::new(xr, xi).tan());
     }
 
     pub extern "C" fn cplx_sinh(xr: f64, xi: f64, z: &mut Complex<f64>) {
@@ -384,15 +392,15 @@ impl VirtualTable {
     }
 
     pub extern "C" fn cplx_csch(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = Complex::new(xr, xi).sinh().inv();
+        *z = Self::inv(Complex::new(xr, xi).sinh());
     }
 
     pub extern "C" fn cplx_sech(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = Complex::new(xr, xi).cosh().inv();
+        *z = Self::inv(Complex::new(xr, xi).cosh());
     }
 
     pub extern "C" fn cplx_coth(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = Complex::new(xr, xi).tanh().inv();
+        *z = Self::inv(Complex::new(xr, xi).tanh());
     }
 
     pub extern "C" fn cplx_asin(xr: f64, xi: f64, z: &mut Complex<f64>) {

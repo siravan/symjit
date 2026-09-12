@@ -196,7 +196,8 @@ impl DirectTranslator {
     fn mark_real(&mut self, slot: &Slot, is_real: bool) {
         if let Slot::Param(idx) = slot {
             if is_real {
-                self.reals.insert(Loc::Param(*idx as u32));
+                self.reals
+                    .insert(Loc::Param((self.prog.config().sizeof() * idx) as u32));
             }
         }
     }
@@ -259,11 +260,7 @@ impl DirectTranslator {
         let n = args.len();
         assert!(n <= SLICE_CAP);
 
-        if let Slot::Param(idx) = lhs {
-            if is_real {
-                self.reals.insert(Loc::Param(*idx as u32));
-            }
-        }
+        self.mark_real(lhs, is_real);
 
         if VirtualTable::from_str(op).is_ok() || op.starts_with("composer_") {
             if n == 1 {
