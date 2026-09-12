@@ -682,6 +682,7 @@ impl AmdSSEGenerator {
     }
 
     fn epilogue_sympy(&mut self, regions: &StackRegions) {
+        self.set_label("@success");
         self.amd.xor(Amd::RAX, Amd::RAX);
         self.set_label("@epilogue");
 
@@ -708,6 +709,7 @@ impl AmdSSEGenerator {
     }
 
     fn epilogue_symbolica(&mut self, _regions: &StackRegions) {
+        self.set_label("@success");
         self.amd.xor(Amd::RAX, Amd::RAX);
         self.set_label("@epilogue");
         load_nonvolatile_regs(&mut self.amd);

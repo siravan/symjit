@@ -57,13 +57,24 @@ impl Hash for Symbol {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SymbolTable {
     pub syms: HashMap<String, Rc<RefCell<Symbol>>>,
     pub num_stack: usize,
     pub num_mem: usize,
     pub num_param: usize,
     pub slot_size: usize,
+}
+
+impl fmt::Debug for SymbolTable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (k, v) in &self.syms {
+            if !k.starts_with("_") {
+                writeln!(f, "{}:\t{:?}", k, v.borrow().loc)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 impl SymbolTable {

@@ -619,6 +619,7 @@ impl Generator for ArmGenerator {
         count_obs: usize,
         _count_params: usize,
     ) {
+        self.set_label("@success");
         self.emit(arm! {eor x(0), x(0), x(0)});
         self.set_label("@epilogue");
 

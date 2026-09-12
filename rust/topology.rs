@@ -100,7 +100,7 @@ impl Topology {
 
     pub fn compile(&self, ir: &mut Mir) -> Result<()> {
         if !self.subs.is_empty() {
-            ir.branch("@epilogue");
+            ir.branch("@success");
         }
 
         for f in self.subs.values() {

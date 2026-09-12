@@ -933,7 +933,7 @@ impl IndirectTranslator {
 
         // Important! Outs are cached and should be written to final outputs.
         let base = if self.arena_mode {
-            self.count_params
+            self.count_params.max(self.num_params)
         } else {
             0
         };

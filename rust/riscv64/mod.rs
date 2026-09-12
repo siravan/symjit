@@ -995,6 +995,7 @@ impl Generator for RiscV {
         count_obs: usize,
         _count_params: usize,
     ) {
+        self.set_label("@success");
         self.emit(rvv! {addi x(Self::a0), x(Self::zero), 0});
         self.set_label("@epilogue");
 

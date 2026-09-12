@@ -854,6 +854,7 @@ impl AmdVectorF64x4Generator {
     }
 
     fn epilogue_sympy(&mut self, regions: &StackRegions) {
+        self.set_label("@success");
         self.amd.xor(Amd::RAX, Amd::RAX);
         self.set_label("@epilogue");
 
@@ -908,6 +909,7 @@ impl AmdVectorF64x4Generator {
     }
 
     fn epilogue_symbolica(&mut self, regions: &StackRegions) {
+        self.set_label("@success");
         self.amd.xor(Amd::RAX, Amd::RAX);
         self.set_label("@epilogue");
 

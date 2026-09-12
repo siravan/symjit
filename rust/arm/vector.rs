@@ -846,6 +846,7 @@ impl ArmSimdGenerator {
     }
 
     fn epilogue_sympy(&mut self, regions: &StackRegions) {
+        self.set_label("@success");
         self.emit(arm! {eor x(0), x(0), x(0)});
         self.set_label("@epilogue");
 
@@ -913,6 +914,7 @@ impl ArmSimdGenerator {
     }
 
     fn epilogue_symbolica(&mut self, regions: &StackRegions) {
+        self.set_label("@success");
         self.emit(arm! {eor x(0), x(0), x(0)});
         self.set_label("@epilogue");
 

@@ -24,7 +24,7 @@ const COUNTER: u8 = 12;
 const TEMP: u8 = ϕ(Reg::Temp);
 
 /*
- * registers v8 to v16 are ABI-preserved
+ * registers v8 to v15 are ABI-preserved
  * registers v29-v31 can be temporary
  */
 const FMAP: [u8; 30] = [
