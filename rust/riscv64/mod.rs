@@ -997,10 +997,6 @@ impl Generator for RiscV {
         count_obs: usize,
         _count_params: usize,
     ) {
-        self.set_label("@success");
-        self.emit(rvv! {addi x(Self::a0), x(Self::zero), 0});
-        self.set_label("@epilogue");
-
         self.jump("@done", 0, |offset, _| {
             rvv! {beq x(STATES), x(Self::zero), offset}
         });
@@ -1044,6 +1040,10 @@ impl Generator for RiscV {
     }
 
     fn load_used_registers(&mut self, used: &[Reg]) {
+        self.set_label("@success");
+        self.emit(rvv! {addi x(Self::a0), x(Self::zero), 0});
+        self.set_label("@epilogue");
+
         for r in used {
             let phys_reg = ϕ(*r);
             if (8..=9).contains(&phys_reg) {

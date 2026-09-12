@@ -53,6 +53,7 @@ impl Assembler {
     }
 
     pub fn set_label(&mut self, label: &str) {
+        assert!(!self.labels.contains_key(label));
         self.labels.insert(label.to_string(), self.ip());
     }
 

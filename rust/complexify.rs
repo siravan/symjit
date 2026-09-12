@@ -306,7 +306,7 @@ impl Generator for Complexifier {
 
     fn abs(&mut self, dst: Reg, s1: Reg) {
         if self.is_real_reg(s1) {
-            self.mir.abs(dst, s1);
+            self.mir.abs(re(dst), re(s1));
             self.set_reg_real(dst);
         } else {
             self.mir.times(Self::T0, re(s1), re(s1));
@@ -779,10 +779,15 @@ impl Generator for Complexifier {
     }
 
     fn call_funclet(&mut self, label: &str) {
-        self.mir.call(label, 0).unwrap()
+        self.mir.call(label, 0).unwrap();
+        // A helper returns a complete complex value, independently of the
+        // caller's prior temporary. Change metadata, not the returned data.
+        self.set_reg_complex(Reg::Ret);
     }
 
     fn ret(&mut self) {
+        // A real helper result still owes the caller a zero imaginary part.
+        self.ensure_complex(Reg::Ret);
         self.branch(".ret");
     }
 

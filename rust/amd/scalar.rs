@@ -729,18 +729,26 @@ impl Generator for AmdScalarGenerator {
             for r in used {
                 let phys_reg = ϕ(*r);
                 if (6..=15).contains(&phys_reg) {
-                    self.save_stack(*r, phys_reg as u32);
+                    // self.save_stack(*r, phys_reg as u32);
+                    self.amd
+                        .vmovsd_mem_xmm(SP, (phys_reg as u32 * REG_SIZE) as i32, phys_reg);
                 }
             }
         }
     }
 
     fn load_used_registers(&mut self, used: &[Reg]) {
+        self.set_label("@success");
+        self.amd.xor(Amd::RAX, Amd::RAX);
+        self.set_label("@epilogue");
+
         if cfg!(target_family = "windows") {
             for r in used {
                 let phys_reg = ϕ(*r);
                 if (6..=15).contains(&phys_reg) {
-                    self.load_stack(*r, phys_reg as u32);
+                    // self.load_stack(*r, phys_reg as u32);
+                    self.amd
+                        .vmovsd_xmm_mem(phys_reg, SP, (phys_reg as u32 * REG_SIZE) as i32);
                 }
             }
         }
@@ -770,10 +778,6 @@ impl AmdScalarGenerator {
     }
 
     fn epilogue_sympy(&mut self, regions: &StackRegions) {
-        self.set_label("@success");
-        self.amd.xor(Amd::RAX, Amd::RAX);
-        self.set_label("@epilogue");
-
         self.amd.or(STATES, STATES);
         self.amd.jz("@done");
 
@@ -796,9 +800,6 @@ impl AmdScalarGenerator {
     }
 
     fn epilogue_symbolica(&mut self, _regions: &StackRegions) {
-        self.set_label("@success");
-        self.amd.xor(Amd::RAX, Amd::RAX);
-        self.set_label("@epilogue");
         load_nonvolatile_regs(&mut self.amd);
         self.amd.ret();
     }

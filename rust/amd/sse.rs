@@ -648,6 +648,10 @@ impl Generator for AmdSSEGenerator {
     }
 
     fn load_used_registers(&mut self, used: &[Reg]) {
+        self.set_label("@success");
+        self.amd.xor(Amd::RAX, Amd::RAX);
+        self.set_label("@epilogue");
+
         if cfg!(target_family = "windows") {
             for r in used {
                 let phys_reg = ϕ(*r);
@@ -682,10 +686,6 @@ impl AmdSSEGenerator {
     }
 
     fn epilogue_sympy(&mut self, regions: &StackRegions) {
-        self.set_label("@success");
-        self.amd.xor(Amd::RAX, Amd::RAX);
-        self.set_label("@epilogue");
-
         self.amd.or(STATES, STATES);
         self.amd.jz("@done");
 
@@ -709,9 +709,6 @@ impl AmdSSEGenerator {
     }
 
     fn epilogue_symbolica(&mut self, _regions: &StackRegions) {
-        self.set_label("@success");
-        self.amd.xor(Amd::RAX, Amd::RAX);
-        self.set_label("@epilogue");
         load_nonvolatile_regs(&mut self.amd);
         self.amd.ret();
     }

@@ -817,6 +817,10 @@ impl Generator for AmdVectorF64x4Generator {
     }
 
     fn load_used_registers(&mut self, used: &[Reg]) {
+        self.set_label("@success");
+        self.amd.xor(Amd::RAX, Amd::RAX);
+        self.set_label("@epilogue");
+
         if cfg!(target_family = "windows") {
             for r in used {
                 let phys_reg = ϕ(*r);
@@ -854,10 +858,6 @@ impl AmdVectorF64x4Generator {
     }
 
     fn epilogue_sympy(&mut self, regions: &StackRegions) {
-        self.set_label("@success");
-        self.amd.xor(Amd::RAX, Amd::RAX);
-        self.set_label("@epilogue");
-
         self.amd.or(STATES, STATES);
         self.amd.jz("@done");
 
@@ -909,10 +909,6 @@ impl AmdVectorF64x4Generator {
     }
 
     fn epilogue_symbolica(&mut self, regions: &StackRegions) {
-        self.set_label("@success");
-        self.amd.xor(Amd::RAX, Amd::RAX);
-        self.set_label("@epilogue");
-
         self.amd.or(IDX, IDX);
         self.amd.jz("@done");
 

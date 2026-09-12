@@ -309,7 +309,7 @@ impl Generator for ArmSimdGenerator {
             ultra,
             32,
             |a, arg| {
-                emit(a, arm! {str q(arg), [x(STACK), x(8), lsl #4]});
+                emit(a, arm! {ldr q(arg), [x(STACK), x(8), lsl #4]});
             },
             |a, arg, dst| {
                 save_q_to_loc(a, arg, dst);
@@ -812,6 +812,10 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn load_used_registers(&mut self, used: &[Reg]) {
+        self.set_label("@success");
+        self.emit(arm! {eor x(0), x(0), x(0)});
+        self.set_label("@epilogue");
+
         for r in used {
             let phys_reg = ϕ(*r);
             if (8..=15).contains(&phys_reg) {
@@ -846,10 +850,6 @@ impl ArmSimdGenerator {
     }
 
     fn epilogue_sympy(&mut self, regions: &StackRegions) {
-        self.set_label("@success");
-        self.emit(arm! {eor x(0), x(0), x(0)});
-        self.set_label("@epilogue");
-
         self.emit(arm! {tst x(STATES), x(STATES)});
         self.jump("@done", 0, |offset, _| arm! {b.eq label(offset)});
 
@@ -914,10 +914,6 @@ impl ArmSimdGenerator {
     }
 
     fn epilogue_symbolica(&mut self, regions: &StackRegions) {
-        self.set_label("@success");
-        self.emit(arm! {eor x(0), x(0), x(0)});
-        self.set_label("@epilogue");
-
         self.emit(arm! {tst x(IDX), x(IDX)});
         self.jump("@done", 0, |offset, _| arm! {b.eq label(offset)});
 

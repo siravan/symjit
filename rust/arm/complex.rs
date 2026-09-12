@@ -697,10 +697,6 @@ impl Generator for ArmComplexGenerator {
         count_obs: usize,
         _count_params: usize,
     ) {
-        self.set_label("@success");
-        self.emit(arm! {eor x(0), x(0), x(0)});
-        self.set_label("@epilogue");
-
         self.emit(arm! {tst x(STATES), x(STATES)});
         self.jump("@done", 0, |offset, _| arm! {b.eq label(offset)});
 
@@ -721,16 +717,22 @@ impl Generator for ArmComplexGenerator {
         for r in used {
             let phys_reg = ϕ(*r);
             if (8..=15).contains(&phys_reg) {
-                self.save_stack(*r, phys_reg as u32);
+                // self.save_stack(*r, phys_reg as u32);
+                save_d_to_mem(&mut self.a, phys_reg, SP, phys_reg as u32);
             }
         }
     }
 
     fn load_used_registers(&mut self, used: &[Reg]) {
+        self.set_label("@success");
+        self.emit(arm! {eor x(0), x(0), x(0)});
+        self.set_label("@epilogue");
+
         for r in used {
             let phys_reg = ϕ(*r);
             if (8..=15).contains(&phys_reg) {
-                self.load_stack(*r, phys_reg as u32);
+                // self.load_stack(*r, phys_reg as u32);
+                load_d_from_mem(&mut self.a, phys_reg, SP, phys_reg as u32);
             }
         }
     }
