@@ -48,9 +48,6 @@ impl ArmSimdGenerator {
         let ofs = ABI_AREA as u32 * REG_SIZE;
         let ker = self.config.is_kernel_func(op);
 
-        let label = format!("_simd_{}_", op);
-        load_long(&mut self.a, CALL, &label);
-
         if ker {
             self.emit(arm! {add x(0), x(SP), #0});
             self.emit(arm! {eor x(1), x(1), x(1)});
@@ -63,7 +60,13 @@ impl ArmSimdGenerator {
             self.emit(arm! {add x(3), x(SP), #0});
         }
 
-        self.emit(arm! {blr x(CALL)});
+        if op == "@self" {
+            self.call_funclet("@self");
+        } else {
+            let label = format!("_simd_{}_", op);
+            load_long(&mut self.a, CALL, &label);
+            self.emit(arm! {blr x(CALL)});
+        }
 
         if self.config.is_complex() {
             let l2 = self.a.create_label();

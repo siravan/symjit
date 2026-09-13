@@ -240,7 +240,11 @@ impl RiscV {
             self.emit(rvv! {addi x(Self::a3), x(SP), 0});
         }
 
-        self.j_indirect(&format!("_func_{}_", op), Self::ra);
+        if op == "@self" {
+            self.call_funclet("@self");
+        } else {
+            self.j_indirect(&format!("_func_{}_", op), Self::ra);
+        }
 
         self.load_stack(Reg::Ret, 0);
         if self.config.is_complex() {

@@ -69,9 +69,13 @@ impl ArmGenerator {
             self.emit(arm! {add x(3), x(SP), #0});
         }
 
-        let label = format!("_func_{}_", op);
-        load_long(&mut self.a, 9, &label);
-        self.emit(arm! {blr x(9)});
+        if op == "@self" {
+            self.call_funclet("@self");
+        } else {
+            let label = format!("_func_{}_", op);
+            load_long(&mut self.a, 9, &label);
+            self.emit(arm! {blr x(9)});
+        }
 
         self.load_stack(Reg::Ret, 0);
         if self.config.is_complex() {

@@ -88,9 +88,13 @@ impl AmdComplexGenerator {
             self.amd.lea_mem(ARGS[3], SP, 4 * REG_SIZE as i32);
         }
 
-        self.vzeroupper();
+        if op == "@self" {
+            self.call_funclet("@self");
+        } else {
+            self.vzeroupper();
+            self.amd.call_indirect(&format!("_func_{}_", op));
+        }
 
-        self.amd.call_indirect(&format!("_func_{}_", op));
         self.load_stack(Reg::Ret, 4);
 
         Ok(())

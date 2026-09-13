@@ -186,6 +186,10 @@ impl Defuns {
             .insert(name.to_string(), Func::App(Box::new(app)));
     }
 
+    pub fn add_self(&mut self, name: &str) {
+        self.funcs.insert(name.to_string(), Func::Recursive);
+    }
+
     pub fn add_sliced_func<T>(&mut self, name: &str, closure: ExternalFunction<T>) -> Result<()>
     where
         T: Copy + Sized + Element,

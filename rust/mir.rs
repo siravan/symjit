@@ -1490,7 +1490,7 @@ impl Mir {
                             Self::set(regs, Reg::Ret, val.re);
                             Self::set(regs, Reg::Temp, val.im);
                         },
-                        Func::App(..) => unimplemented!(),
+                        Func::App(..) | Func::Recursive => unimplemented!(),
                     }
                 }
                 Instruction::Fused { op, dst, a, b, c } => {
@@ -1914,13 +1914,8 @@ impl Mir {
                     } else {
                         let f = self.find_op(label).unwrap();
                         match f {
-                            Func::Unary(_) => ir.call(label, *num_args)?,
-                            Func::Binary(_) => ir.call(label, *num_args)?,
-                            Func::UnaryCplx(_) => ir.call_complex(label, *num_args)?,
-                            Func::BinaryCplx(_) => ir.call_complex(label, *num_args)?,
-                            Func::PairedUnary(_) => ir.call(label, *num_args)?,
-                            Func::Slice { .. } => ir.call(label, *num_args)?,
-                            Func::App { .. } => ir.call(label, *num_args)?,
+                            Func::Recursive => ir.call("@self", *num_args)?,
+                            _ => ir.call(label, *num_args)?,
                         }
                     }
                 }

@@ -41,6 +41,7 @@ const STACK: u8 = Amd::RBX;
 const SP: u8 = Amd::RSP;
 
 fn save_nonvolatile_regs(amd: &mut Amd) {
+    amd.a.set_label("@self");
     amd.push(Amd::RBP);
     amd.sub_rsp(48);
     amd.mov_mem_reg(SP, 0x00, MEM);
@@ -218,6 +219,7 @@ fn add_func(amd: &mut Amd, op: &str, f: Func) {
                 amd.a.append_quad(f as usize as u64);
             }
         }
+        Func::Recursive => {}
         _ => {
             let label = format!("_func_{}_", op);
             amd.a.set_label(label.as_str());

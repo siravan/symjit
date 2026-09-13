@@ -55,6 +55,7 @@ pub enum Func {
         env: *const c_void,
     },
     App(Box<Applet>),
+    Recursive,
 }
 
 impl Func {
@@ -70,6 +71,7 @@ impl Func {
                 Some(f) => f as usize as u64,
                 None => 0,
             },
+            Func::Recursive => 0,
         }
     }
 }

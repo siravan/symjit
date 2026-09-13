@@ -208,9 +208,12 @@ impl AmdVectorF64x8Generator {
             self.amd.lea_mem(ARGS[3], SP, 4 * REG_SIZE);
         }
 
-        self.vzeroupper();
-
-        self.amd.call_indirect(&format!("_simd_{}_", op));
+        if op == "@self" {
+            self.call_funclet("@self");
+        } else {
+            self.vzeroupper();
+            self.amd.call_indirect(&format!("_simd_{}_", op));
+        }
 
         if self.config.is_complex() {
             let l1 = format!(".P{}", self.amd.a.ip());
