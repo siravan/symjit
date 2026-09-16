@@ -57,6 +57,10 @@ impl Assembler {
         self.labels.insert(label.to_string(), self.ip());
     }
 
+    pub fn has_label(&self, label: &str) -> bool {
+        self.labels.contains_key(label)
+    }
+
     pub fn jump(&mut self, label: &str, code: u32, f: Jumper) {
         self.jumps
             .push((label.to_string(), self.ip(), code, f, true));

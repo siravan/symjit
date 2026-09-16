@@ -86,7 +86,7 @@ impl AmdSSEGenerator {
         let cap = ABI_AREA as u32;
 
         if self.config.is_kernel_func(op) {
-            self.amd.lea_mem(ARGS[0], SP, 4 * REG_SIZE as i32);
+            self.amd.lea_mem(ARGS[0], STACK, 4 * REG_SIZE as i32);
             self.amd.xor(ARGS[1], ARGS[1]);
             self.amd.xor(ARGS[2], ARGS[2]);
             self.amd.lea_mem(ARGS[3], STACK, (cap * REG_SIZE) as i32);
@@ -94,7 +94,7 @@ impl AmdSSEGenerator {
             self.amd.mov_reg_label(ARGS[0], &format!("_env_{}_", op));
             self.amd.lea_mem(ARGS[1], STACK, (cap * REG_SIZE) as i32);
             self.amd.mov_imm(ARGS[2], num_args as u32);
-            self.amd.lea_mem(ARGS[3], SP, 4 * REG_SIZE as i32);
+            self.amd.lea_mem(ARGS[3], STACK, 4 * REG_SIZE as i32);
         }
 
         if op == "@self" {
@@ -157,8 +157,7 @@ impl Generator for AmdSSEGenerator {
     }
 
     fn branch(&mut self, label: &str) {
-        self.amd.xor(Amd::RAX, Amd::RAX);
-        self.amd.jz(label);
+        self.amd.jmp(label);
     }
 
     /// jump to label if cond == is_else
@@ -228,22 +227,13 @@ impl Generator for AmdSSEGenerator {
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-
-        if idx < ABI_AREA as u32 {
-            self.amd.movsd_xmm_mem(ϕ(dst), SP, (idx * REG_SIZE) as i32);
-        } else {
-            self.amd
-                .movsd_xmm_mem(ϕ(dst), STACK, (idx * REG_SIZE) as i32);
-        }
+        self.amd
+            .movsd_xmm_mem(ϕ(dst), STACK, (idx * REG_SIZE) as i32);
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        if idx < ABI_AREA as u32 {
-            self.amd.movsd_mem_xmm(SP, (idx * REG_SIZE) as i32, ϕ(dst));
-        } else {
-            self.amd
-                .movsd_mem_xmm(STACK, (idx * REG_SIZE) as i32, ϕ(dst));
-        }
+        self.amd
+            .movsd_mem_xmm(STACK, (idx * REG_SIZE) as i32, ϕ(dst));
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
@@ -507,9 +497,9 @@ impl Generator for AmdSSEGenerator {
         }
 
         if cfg!(target_family = "windows") {
-            self.amd.lea_mem(Amd::R8, SP, 32);
+            self.amd.lea_mem(Amd::R8, STACK, 32);
         } else {
-            self.amd.lea_mem(Amd::RDI, SP, 32);
+            self.amd.lea_mem(Amd::RDI, STACK, 32);
         }
 
         self.amd.call_indirect(&label);

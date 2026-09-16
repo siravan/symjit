@@ -1931,8 +1931,15 @@ impl Mir {
                     } else {
                         let f = self.find_op(label).unwrap();
                         match f {
+                            Func::Unary(_)
+                            | Func::Binary(_)
+                            | Func::PairedUnary(_)
+                            | Func::Slice { .. }
+                            | Func::App(_) => ir.call(label, *num_args)?,
+                            Func::UnaryCplx(_) | Func::BinaryCplx(_) => {
+                                ir.call_complex(label, *num_args)?
+                            }
                             Func::Recursive => ir.call("@self", *num_args)?,
-                            _ => ir.call(label, *num_args)?,
                         }
                     }
                 }

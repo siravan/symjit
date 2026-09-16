@@ -382,9 +382,41 @@ macro_rules! arm {
         0x5ee0d800 | rd!($rd) | rn!($rn)
     };
 
+    (fcmge d($rd:expr), d($rn:expr), #0.0) => {
+        0x7ee0c800 | rd!($rd) | rn!($rn)
+    };
+
+    (fcmlt d($rd:expr), d($rn:expr), #0.0) => {
+        0x5ee0e800 | rd!($rd) | rn!($rn)
+    };
+
     // compare d(..) with 0.0 and set the flags (NZCV)
     (fcmp d($rn:expr), #0.0) => {
         0x1e602008 | rn!($rn)
+    };
+
+    (fcsel d($rd:expr), d($rn:expr), d($rm:expr), eq) => {
+        0x1e600c00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
+    (fcsel d($rd:expr), d($rn:expr), d($rm:expr), ne) => {
+        0x1e601c00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
+    (fcsel d($rd:expr), d($rn:expr), d($rm:expr), lt) => {
+        0x1e60bc00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
+    (fcsel d($rd:expr), d($rn:expr), d($rm:expr), le) => {
+        0x1e60dc00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
+    (fcsel d($rd:expr), d($rn:expr), d($rm:expr), gt) => {
+        0x1e60cc00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
+    (fcsel d($rd:expr), d($rn:expr), d($rm:expr), ge) => {
+        0x1e60ac00 | rd!($rd) | rn!($rn) | rm!($rm)
     };
 
     // misc

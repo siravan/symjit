@@ -58,7 +58,7 @@ impl ArmGenerator {
         let ofs = ABI_AREA as u32 * REG_SIZE;
 
         if self.config.is_kernel_func(op) {
-            self.emit(arm! {add x(0), x(SP), #0});
+            self.emit(arm! {add x(0), x(STACK), #0});
             self.emit(arm! {eor x(1), x(1), x(1)});
             self.emit(arm! {eor x(2), x(2), x(2)});
             self.emit(arm! {add x(3), x(STACK), #ofs});
@@ -66,7 +66,7 @@ impl ArmGenerator {
             load_x_from_label(&mut self.a, 0, &format!("_env_{}_", op));
             self.emit(arm! {add x(1), x(STACK), #ofs});
             self.emit(arm! {movz x(2), #num_args});
-            self.emit(arm! {add x(3), x(SP), #0});
+            self.emit(arm! {add x(3), x(STACK), #0});
         }
 
         if op == "@self" {
@@ -184,19 +184,11 @@ impl Generator for ArmGenerator {
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
-        if idx < 16 {
-            load_d_from_mem(&mut self.a, ϕ(dst), SP, idx);
-        } else {
-            load_d_from_mem(&mut self.a, ϕ(dst), STACK, idx);
-        }
+        load_d_from_mem(&mut self.a, ϕ(dst), STACK, idx);
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        if idx < 16 {
-            save_d_to_mem(&mut self.a, ϕ(dst), SP, idx);
-        } else {
-            save_d_to_mem(&mut self.a, ϕ(dst), STACK, idx);
-        }
+        save_d_to_mem(&mut self.a, ϕ(dst), STACK, idx);
     }
 
     fn load_mem_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
@@ -212,19 +204,11 @@ impl Generator for ArmGenerator {
     }
 
     fn load_stack_complex(&mut self, xd: Reg, yd: Reg, idx: u32) {
-        if idx < 16 {
-            load_paired_d_from_mem(&mut self.a, ϕ(xd), ϕ(yd), SP, idx);
-        } else {
-            load_paired_d_from_mem(&mut self.a, ϕ(xd), ϕ(yd), STACK, idx);
-        }
+        load_paired_d_from_mem(&mut self.a, ϕ(xd), ϕ(yd), STACK, idx);
     }
 
     fn save_stack_complex(&mut self, xs: Reg, ys: Reg, idx: u32) {
-        if idx < 16 {
-            save_paired_d_to_mem(&mut self.a, ϕ(xs), ϕ(ys), SP, idx);
-        } else {
-            save_paired_d_to_mem(&mut self.a, ϕ(xs), ϕ(ys), STACK, idx);
-        }
+        save_paired_d_to_mem(&mut self.a, ϕ(xs), ϕ(ys), STACK, idx);
     }
 
     fn save_stack_result(&mut self, idx: u32) {
@@ -521,7 +505,7 @@ impl Generator for ArmGenerator {
     }
 
     fn call_complex(&mut self, op: &str, num_args: usize) -> Result<()> {
-        self.emit(arm! {add x(0), x(SP), #0});
+        self.emit(arm! {add x(0), x(STACK), #0});
 
         if num_args == 2 {
             self.save_stack(Reg::Gen(0), 0);

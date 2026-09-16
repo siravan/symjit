@@ -77,7 +77,7 @@ impl AmdComplexGenerator {
         let cap = ABI_AREA as u32;
 
         if self.config.is_kernel_func(op) {
-            self.amd.lea_mem(ARGS[0], SP, 4 * REG_SIZE as i32);
+            self.amd.lea_mem(ARGS[0], STACK, 4 * REG_SIZE as i32);
             self.amd.xor(ARGS[1], ARGS[1]);
             self.amd.xor(ARGS[2], ARGS[2]);
             self.amd.lea_mem(ARGS[3], STACK, (cap * REG_SIZE) as i32);
@@ -85,7 +85,7 @@ impl AmdComplexGenerator {
             self.amd.mov_reg_label(ARGS[0], &format!("_env_{}_", op));
             self.amd.lea_mem(ARGS[1], STACK, (cap * REG_SIZE) as i32);
             self.amd.mov_imm(ARGS[2], num_args as u32);
-            self.amd.lea_mem(ARGS[3], SP, 4 * REG_SIZE as i32);
+            self.amd.lea_mem(ARGS[3], STACK, 4 * REG_SIZE as i32);
         }
 
         if op == "@self" {
@@ -146,8 +146,7 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn branch(&mut self, label: &str) {
-        self.amd.xor(Amd::RAX, Amd::RAX);
-        self.amd.jz(label);
+        self.amd.jmp(label);
     }
 
     /// jump to label if cond == is_else
@@ -214,22 +213,13 @@ impl Generator for AmdComplexGenerator {
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
-
-        if idx < ABI_AREA as u32 {
-            self.amd.vmovdd_xmm_mem(ϕ(dst), SP, (idx * REG_SIZE) as i32);
-        } else {
-            self.amd
-                .vmovdd_xmm_mem(ϕ(dst), STACK, (idx * REG_SIZE) as i32);
-        }
+        self.amd
+            .vmovdd_xmm_mem(ϕ(dst), STACK, (idx * REG_SIZE) as i32);
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
-        if idx < ABI_AREA as u32 {
-            self.amd.vmovdd_mem_xmm(SP, (idx * REG_SIZE) as i32, ϕ(dst));
-        } else {
-            self.amd
-                .vmovdd_mem_xmm(STACK, (idx * REG_SIZE) as i32, ϕ(dst));
-        }
+        self.amd
+            .vmovdd_mem_xmm(STACK, (idx * REG_SIZE) as i32, ϕ(dst));
     }
 
     fn load_mem_complex(&mut self, _xd: Reg, _yd: Reg, _idx: u32) {}
@@ -303,38 +293,49 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn root(&mut self, dst: Reg, s1: Reg) {
-        self.amd.vmuldd(T1, ϕ(s1), ϕ(s1));
-        self.amd.vhadddd(T1, T1, T1);
+        self.fmov(Reg::Ret, s1);
+        self.call_funclet("@complex_root");
+        self.fmov(dst, Reg::Ret);
 
-        self.amd.vsqrtsd(T1, T1);
-        self.amd.vmovsd_xmm_label(T0, "_minus_zero_");
-        self.amd.vandnpd(T2, T0, ϕ(s1));
-        self.amd.vaddsd(T1, T1, T2);
-        self.amd.vmovsd_xmm_label(T0, "_half_");
-        self.amd.vmulsd(T1, T1, T0);
-        self.amd.vsqrtsd(T1, T1);
+        if !self.amd.a.has_label("@complex_root") {
+            self.branch("@jump_over_complex_root");
 
-        self.amd.vunpckhdd(T2, ϕ(s1), ϕ(s1));
-        self.amd.vdivsd(T2, T2, T1);
-        self.amd.vmulsd(T2, T2, T0);
+            self.set_label("@complex_root");
+            self.amd.vmuldd(T1, ϕ(Reg::Ret), ϕ(Reg::Ret));
+            self.amd.vhadddd(T1, T1, T1);
 
-        self.amd.vcmpeqsd(T0, T2, T2);
-        self.amd.vandpd(T2, T2, T0);
+            self.amd.vsqrtsd(T1, T1);
+            self.amd.vmovsd_xmm_label(T0, "_minus_zero_");
+            self.amd.vandnpd(T2, T0, ϕ(Reg::Ret));
+            self.amd.vaddsd(T1, T1, T2);
+            self.amd.vmovsd_xmm_label(T0, "_half_");
+            self.amd.vmulsd(T1, T1, T0);
+            self.amd.vsqrtsd(T1, T1);
 
-        self.amd.vmovsd_xmm_label(T0, "_minus_zero_");
-        self.amd.vucomisd(ϕ(s1), T0);
+            self.amd.vunpckhdd(T2, ϕ(Reg::Ret), ϕ(Reg::Ret));
+            self.amd.vdivsd(T2, T2, T1);
+            self.amd.vmulsd(T2, T2, T0);
 
-        self.amd.vunpckldd(ϕ(dst), T1, T2);
+            self.amd.vcmpeqsd(T0, T2, T2);
+            self.amd.vandpd(T2, T2, T0);
 
-        let label = format!(".Y{}", self.amd.a.ip());
-        self.amd.jnb(&label);
+            let label = format!(".Y{}", self.amd.a.ip());
 
-        self.amd.vandpd(T0, T0, T2);
-        self.amd.vxorpd(T1, T1, T0);
-        self.amd.vxorpd(T2, T2, T0);
-        self.amd.vunpckldd(ϕ(dst), T2, T1);
+            self.amd.vmovsd_xmm_label(T0, "_minus_zero_");
+            self.amd.vucomisd(ϕ(Reg::Ret), T0);
+            self.amd.vunpckldd(ϕ(Reg::Ret), T1, T2);
+            self.amd.jnb(&label);
 
-        self.set_label(&label);
+            self.amd.vandpd(T0, T0, T2);
+            self.amd.vxorpd(T1, T1, T0);
+            self.amd.vxorpd(T2, T2, T0);
+            self.amd.vunpckldd(ϕ(Reg::Ret), T2, T1);
+
+            self.set_label(&label);
+            self.ret();
+
+            self.set_label("@jump_over_complex_root");
+        }
     }
 
     fn real_root(&mut self, dst: Reg, s1: Reg) {
@@ -640,9 +641,9 @@ impl Generator for AmdComplexGenerator {
         self.vzeroupper();
 
         if cfg!(target_family = "windows") {
-            self.amd.lea_mem(Amd::R8, SP, 32);
+            self.amd.lea_mem(Amd::R8, STACK, 32);
         } else {
-            self.amd.lea_mem(Amd::RDI, SP, 32);
+            self.amd.lea_mem(Amd::RDI, STACK, 32);
         }
 
         self.amd.call_indirect(&label);
