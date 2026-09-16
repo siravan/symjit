@@ -515,9 +515,12 @@ impl Generator for ArmComplexGenerator {
             self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #0});
             self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #90});
             self.emit(arm! {fmov q(ϕ(dst)), q(T1)});
-        } else {
+        } else if s3 != Reg::Temp {
             self.times(Reg::Temp, s1, s2);
             self.plus(dst, Reg::Temp, s3);
+        } else {
+            self.times(Reg::Ret, s1, s2);
+            self.plus(dst, Reg::Ret, s3);
         }
     }
 
@@ -533,9 +536,12 @@ impl Generator for ArmComplexGenerator {
             self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #0});
             self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #90});
             self.emit(arm! {fmov q(ϕ(dst)), q(T1)});
-        } else {
+        } else if s3 != Reg::Temp {
             self.times(Reg::Temp, s1, s2);
             self.minus(dst, Reg::Temp, s3);
+        } else {
+            self.times(Reg::Ret, s1, s2);
+            self.minus(dst, Reg::Ret, s3);
         }
     }
 
@@ -551,9 +557,12 @@ impl Generator for ArmComplexGenerator {
             self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #0});
             self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #90});
             self.emit(arm! {fneg q(ϕ(dst)), q(T1)});
-        } else {
+        } else if s3 != Reg::Temp {
             self.times(Reg::Temp, s1, s2);
             self.minus(dst, s3, Reg::Temp);
+        } else {
+            self.times(Reg::Ret, s1, s2);
+            self.minus(dst, Reg::Ret, s3);
         }
     }
 
@@ -569,9 +578,13 @@ impl Generator for ArmComplexGenerator {
             self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #0});
             self.emit(arm! {fcmla q(T1), q(ϕ(s1)), q(ϕ(s2)), #90});
             self.emit(arm! {fneg q(ϕ(dst)), q(T1)});
-        } else {
+        } else if s3 != Reg::Temp {
             self.times(Reg::Temp, s1, s2);
             self.plus(dst, Reg::Temp, s3);
+            self.neg(dst, dst);
+        } else {
+            self.times(Reg::Ret, s1, s2);
+            self.plus(dst, Reg::Ret, s3);
             self.neg(dst, dst);
         }
     }
