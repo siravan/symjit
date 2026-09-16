@@ -344,6 +344,12 @@ impl Amd {
         self.append_byte(0x0f);
     }
 
+    pub fn rip_relative(&mut self, reg: u8, label: &str) {
+        // modr/m byte with MOD=00 and R/M=101 (RIP-relative address)
+        self.append_byte(5 | ((reg & 7) << 3));
+        self.jump(label);
+    }
+
     // AVX rules!
     pub fn vmovapd(&mut self, reg: u8, rm: u8) {
         self.vex_pd(reg, 0, rm, 0);
@@ -589,10 +595,22 @@ impl Amd {
         self.modrm_reg(reg, rm);
     }
 
+    pub fn vandpd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        self.vex_pd(reg, vreg, 0, 0);
+        self.append_byte(0x54);
+        self.rip_relative(reg, label);
+    }
+
     pub fn vandnpd(&mut self, reg: u8, vreg: u8, rm: u8) {
         self.vex_pd(reg, vreg, rm, 0);
         self.append_byte(0x55);
         self.modrm_reg(reg, rm);
+    }
+
+    pub fn vandnpd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        self.vex_pd(reg, vreg, 0, 0);
+        self.append_byte(0x55);
+        self.rip_relative(reg, label);
     }
 
     pub fn vorpd(&mut self, reg: u8, vreg: u8, rm: u8) {
@@ -601,10 +619,22 @@ impl Amd {
         self.modrm_reg(reg, rm);
     }
 
+    pub fn vorpd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        self.vex_pd(reg, vreg, 0, 0);
+        self.append_byte(0x56);
+        self.rip_relative(reg, label);
+    }
+
     pub fn vxorpd(&mut self, reg: u8, vreg: u8, rm: u8) {
         self.vex_pd(reg, vreg, rm, 0);
         self.append_byte(0x57);
         self.modrm_reg(reg, rm);
+    }
+
+    pub fn vxorpd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        self.vex_pd(reg, vreg, 0, 0);
+        self.append_byte(0x57);
+        self.rip_relative(reg, label);
     }
 
     pub fn vcmpeqpd(&mut self, reg: u8, vreg: u8, rm: u8) {
@@ -674,9 +704,11 @@ impl Amd {
     pub fn vbroadcastdd_label(&mut self, reg: u8, label: &str) {
         self.vex3dd(reg, 0, 0, 0, 2);
         self.append_byte(0x19);
+        self.rip_relative(reg, label);
+
         // modr/m byte with MOD=00 and R/M=101 (RIP-relative address)
-        self.append_byte(5 | ((reg & 7) << 3));
-        self.jump(label);
+        //self.append_byte(5 | ((reg & 7) << 3));
+        //self.jump(label);
     }
 
     pub fn vmovdd_xmm_mem(&mut self, reg: u8, rm: u8, offset: i32) {
@@ -694,9 +726,11 @@ impl Amd {
     pub fn vmovdd_xmm_label(&mut self, reg: u8, label: &str) {
         self.vex_dd(reg, 0, 0, 0);
         self.append_byte(0x10);
+        self.rip_relative(reg, label);
+
         // modr/m byte with MOD=00 and R/M=101 (RIP-relative address)
-        self.append_byte(5 | ((reg & 7) << 3));
-        self.jump(label);
+        // self.append_byte(5 | ((reg & 7) << 3));
+        // self.jump(label);
     }
 
     pub fn vmovdd_mem_xmm(&mut self, rm: u8, offset: i32, reg: u8) {
@@ -765,10 +799,22 @@ impl Amd {
         self.modrm_reg(reg, rm);
     }
 
+    pub fn vanddd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        self.vex_dd(reg, vreg, 0, 0);
+        self.append_byte(0x54);
+        self.rip_relative(reg, label);
+    }
+
     pub fn vandndd(&mut self, reg: u8, vreg: u8, rm: u8) {
         self.vex_dd(reg, vreg, rm, 0);
         self.append_byte(0x55);
         self.modrm_reg(reg, rm);
+    }
+
+    pub fn vandndd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        self.vex_dd(reg, vreg, 0, 0);
+        self.append_byte(0x55);
+        self.rip_relative(reg, label);
     }
 
     pub fn vordd(&mut self, reg: u8, vreg: u8, rm: u8) {
@@ -777,10 +823,22 @@ impl Amd {
         self.modrm_reg(reg, rm);
     }
 
+    pub fn vordd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        self.vex_dd(reg, vreg, 0, 0);
+        self.append_byte(0x56);
+        self.rip_relative(reg, label);
+    }
+
     pub fn vxordd(&mut self, reg: u8, vreg: u8, rm: u8) {
         self.vex_dd(reg, vreg, rm, 0);
         self.append_byte(0x57);
         self.modrm_reg(reg, rm);
+    }
+
+    pub fn vxordd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        self.vex_dd(reg, vreg, 0, 0);
+        self.append_byte(0x57);
+        self.rip_relative(reg, label);
     }
 
     pub fn vcmpeqdd(&mut self, reg: u8, vreg: u8, rm: u8) {
@@ -953,9 +1011,11 @@ impl Amd {
     pub fn movsd_xmm_label(&mut self, reg: u8, label: &str) {
         self.sse_sd(reg, 0);
         self.append_byte(0x10);
+        self.rip_relative(reg, label);
+
         // modr/m byte with MOD=00 and R/M=101 (RIP-relative address)
-        self.append_byte(5 | ((reg & 7) << 3));
-        self.jump(label);
+        // self.append_byte(5 | ((reg & 7) << 3));
+        // self.jump(label);
     }
 
     pub fn movsd_mem_xmm(&mut self, rm: u8, offset: i32, reg: u8) {
@@ -1080,10 +1140,22 @@ impl Amd {
         self.modrm_reg(reg, rm);
     }
 
+    pub fn andpd_label(&mut self, reg: u8, label: &str) {
+        self.sse_pd(reg, 0);
+        self.append_byte(0x54);
+        self.rip_relative(reg, label);
+    }
+
     pub fn andnpd(&mut self, reg: u8, rm: u8) {
         self.sse_pd(reg, rm);
         self.append_byte(0x55);
         self.modrm_reg(reg, rm);
+    }
+
+    pub fn andnpd_label(&mut self, reg: u8, label: &str) {
+        self.sse_pd(reg, 0);
+        self.append_byte(0x55);
+        self.rip_relative(reg, label);
     }
 
     pub fn orpd(&mut self, reg: u8, rm: u8) {
@@ -1092,10 +1164,22 @@ impl Amd {
         self.modrm_reg(reg, rm);
     }
 
+    pub fn orpd_label(&mut self, reg: u8, label: &str) {
+        self.sse_pd(reg, 0);
+        self.append_byte(0x56);
+        self.rip_relative(reg, label);
+    }
+
     pub fn xorpd(&mut self, reg: u8, rm: u8) {
         self.sse_pd(reg, rm);
         self.append_byte(0x57);
         self.modrm_reg(reg, rm);
+    }
+
+    pub fn xorpd_label(&mut self, reg: u8, label: &str) {
+        self.sse_pd(reg, 0);
+        self.append_byte(0x57);
+        self.rip_relative(reg, label);
     }
 
     pub fn vmovmskpd(&mut self, reg: u8, rm: u8) {
@@ -1131,9 +1215,11 @@ impl Amd {
     pub fn mov_reg_label(&mut self, reg: u8, label: &str) {
         self.rex(reg, 0);
         self.append_byte(0x8b);
+        self.rip_relative(reg, label);
+
         // modr/m byte with MOD=00 and R/M=101 (RIP-relative address)
-        self.append_byte(5 | ((reg & 7) << 3));
-        self.jump(label);
+        // self.append_byte(5 | ((reg & 7) << 3));
+        //self.jump(label);
     }
 
     pub fn mov_mem_reg(&mut self, rm: u8, offset: i32, reg: u8) {
@@ -1348,6 +1434,18 @@ impl Amd {
     pub fn js(&mut self, label: &str) {
         // jump if sign = 1
         self.append_bytes(&[0x0f, 0x88]);
+        self.jump(label);
+    }
+
+    pub fn jb(&mut self, label: &str) {
+        // jump if below
+        self.append_bytes(&[0x0f, 0x82]);
+        self.jump(label);
+    }
+
+    pub fn jnb(&mut self, label: &str) {
+        // jump if below
+        self.append_bytes(&[0x0f, 0x83]);
         self.jump(label);
     }
 

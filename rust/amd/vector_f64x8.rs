@@ -487,6 +487,11 @@ impl Generator for AmdVectorF64x8Generator {
         self.xor(dst, s1, Reg::Temp);
     }
 
+    fn sign(&mut self, dst: Reg, s1: Reg) {
+        self.load_const_by_name(Reg::Temp, "_minus_zero_");
+        self.and(dst, s1, Reg::Temp);
+    }
+
     fn abs(&mut self, dst: Reg, s1: Reg) {
         self.load_const_by_name(Reg::Temp, "_minus_zero_");
         self.andnot(dst, Reg::Temp, s1);

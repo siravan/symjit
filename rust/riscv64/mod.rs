@@ -602,6 +602,11 @@ impl Generator for RiscV {
         self.emit(rvv! {fneg.d f(ϕ(dst)), f(ϕ(s1))});
     }
 
+    fn sign(&mut self, dst: Reg, s1: Reg) {
+        self.emit(rvv! {fmv.d.x f(ϕ(Reg::Temp)), x(Self::zero)});
+        self.emit(rvv! {fsgnj.d f(ϕ(dst)), f(ϕ(Reg::Temp)), f(ϕ(s1))});
+    }
+
     fn abs(&mut self, dst: Reg, s1: Reg) {
         self.emit(rvv! {fabs.d f(ϕ(dst)), f(ϕ(s1))});
     }

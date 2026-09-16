@@ -80,6 +80,7 @@ pub trait Generator {
     fn save_stack_result(&mut self, idx: u32);
 
     fn neg(&mut self, dst: Reg, s1: Reg);
+    fn sign(&mut self, dst: Reg, s1: Reg);
     fn abs(&mut self, dst: Reg, s1: Reg);
     fn root(&mut self, dst: Reg, s1: Reg);
     fn real_root(&mut self, dst: Reg, s1: Reg);

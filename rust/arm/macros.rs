@@ -471,12 +471,14 @@ macro_rules! arm {
     (ret) => { 0xd65f03c0 };
     (nop) => { 0x91000000 };
 
+    (fmov d($rd:expr), #0.0) => { 0x4f00e400 | rd!($rd) };  // alias for movi v(..), #0
     (fmov d($rd:expr), #0.5) => { 0x1e6c1000 | rd!($rd) };
     (fmov d($rd:expr), #1.0) => { 0x1e6e1000 | rd!($rd) };
     (fmov d($rd:expr), #2.0) => { 0x1e601000 | rd!($rd) };
     (fmov d($rd:expr), #-1.0) => { 0x1e7e1000 | rd!($rd) };
 
     (movi v($rd:expr).16b, #0) => { 0x4f00e400 | rd!($rd) };
+    (fmov q($rd:expr), #0.0) => { 0x4f00e400 | rd!($rd) };  // alias for movi v(..), #0
     (fmov q($rd:expr), #0.5) => { 0x6f03f400 | rd!($rd) };
     (fmov q($rd:expr), #1.0) => { 0x6f03f600 | rd!($rd) };
     (fmov q($rd:expr), #2.0) => { 0x6f00f400 | rd!($rd) };

@@ -38,6 +38,7 @@ pub enum UniOp {
     Half,
     IsZero,
     IsNotZero,
+    Sign,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Hash)]
@@ -610,6 +611,14 @@ impl Mir {
     pub fn neg(&mut self, dst: Reg, s1: Reg) {
         self.push(Instruction::Uni {
             op: UniOp::Neg,
+            dst,
+            s1,
+        });
+    }
+
+    pub fn sign(&mut self, dst: Reg, s1: Reg) {
+        self.push(Instruction::Uni {
+            op: UniOp::Sign,
             dst,
             s1,
         });
@@ -1238,6 +1247,13 @@ impl Mir {
             UniOp::Half => s1 / 2.0,
             UniOp::IsZero => bool_to_f64(s1 == 0.0),
             UniOp::IsNotZero => bool_to_f64(s1 != 0.0),
+            UniOp::Sign => {
+                if s1 < 0.0 {
+                    -0.0
+                } else {
+                    0.0
+                }
+            }
         };
 
         Self::set(regs, dst, val);
@@ -1803,6 +1819,7 @@ impl Mir {
                 ir.xor(Reg::Temp, Reg::Temp, Reg::Temp);
                 ir.neq(dst, s1, Reg::Temp);
             }
+            UniOp::Sign => ir.sign(dst, s1),
         };
     }
 

@@ -298,6 +298,16 @@ impl Generator for Complexifier {
         self.copy_real(dst, s1);
     }
 
+    fn sign(&mut self, dst: Reg, s1: Reg) {
+        self.mir.sign(re(dst), re(s1));
+
+        if !self.is_real_reg(s1) {
+            self.mir.sign(im(dst), im(s1));
+        }
+
+        self.copy_real(dst, s1);
+    }
+
     fn abs(&mut self, dst: Reg, s1: Reg) {
         if self.is_real_reg(s1) {
             self.mir.abs(re(dst), re(s1));
@@ -338,6 +348,10 @@ impl Generator for Complexifier {
 
         self.mir.ifelse(re(dst), x, y, Loc::Stack(1));
         self.mir.ifelse(im(dst), y, x, Loc::Stack(1));
+
+        self.mir.sign(x, re(dst));
+        self.mir.xor(re(dst), re(dst), x);
+        self.mir.xor(im(dst), im(dst), x);
 
         self.set_reg_complex(dst);
     }

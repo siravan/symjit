@@ -257,6 +257,12 @@ impl Generator for ArmComplexGenerator {
         self.emit(arm! {fneg q(ϕ(dst)), q(ϕ(s1))});
     }
 
+    fn sign(&mut self, dst: Reg, s1: Reg) {
+        self.emit(arm! {fmov q(ϕ(Reg::Temp)), #0.0});
+        self.emit(arm! {fneg q(ϕ(Reg::Temp)), q(ϕ(Reg::Temp))});
+        self.and(dst, s1, Reg::Temp);
+    }
+
     fn abs(&mut self, dst: Reg, s1: Reg) {
         self.emit(arm! {fmul q(T2), q(ϕ(s1)), q(ϕ(s1))});
         self.emit(arm! {eor v(ϕ(dst)).16b, v(ϕ(dst)).16b, v(ϕ(dst)).16b});

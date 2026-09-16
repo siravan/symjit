@@ -302,6 +302,12 @@ impl Generator for ArmGenerator {
         self.emit(arm! {fneg d(ϕ(dst)), d(ϕ(s1))});
     }
 
+    fn sign(&mut self, dst: Reg, s1: Reg) {
+        self.emit(arm! {fmov d(ϕ(Reg::Temp)), #0.0});
+        self.emit(arm! {fneg d(ϕ(Reg::Temp)), d(ϕ(Reg::Temp))});
+        self.and(dst, s1, Reg::Temp);
+    }
+
     fn abs(&mut self, dst: Reg, s1: Reg) {
         self.emit(arm! {fabs d(ϕ(dst)), d(ϕ(s1))});
     }

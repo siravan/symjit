@@ -288,6 +288,12 @@ impl Generator for AmdComplexGenerator {
         self.xor(dst, s1, Reg::Temp);
     }
 
+    fn sign(&mut self, dst: Reg, s1: Reg) {
+        self.load_const_by_name(Reg::Temp, "_minus_zero_");
+        self.amd.vunpckldd(ϕ(Reg::Temp), ϕ(Reg::Temp), ϕ(Reg::Temp));
+        self.and(dst, s1, Reg::Temp);
+    }
+
     fn abs(&mut self, dst: Reg, s1: Reg) {
         self.amd.vmuldd(T1, ϕ(s1), ϕ(s1));
         self.amd.vhadddd(T1, T1, T1);
@@ -297,8 +303,6 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn root(&mut self, dst: Reg, s1: Reg) {
-        self.amd.vmovq_reg_xmm(Amd::RAX, ϕ(s1));
-
         self.amd.vmuldd(T1, ϕ(s1), ϕ(s1));
         self.amd.vhadddd(T1, T1, T1);
 
@@ -317,13 +321,19 @@ impl Generator for AmdComplexGenerator {
         self.amd.vcmpeqsd(T0, T2, T2);
         self.amd.vandpd(T2, T2, T0);
 
-        self.amd.vunpckldd(ϕ(dst), T2, T1);
+        self.amd.vmovsd_xmm_label(T0, "_minus_zero_");
+        self.amd.vucomisd(ϕ(s1), T0);
+
+        self.amd.vunpckldd(ϕ(dst), T1, T2);
 
         let label = format!(".Y{}", self.amd.a.ip());
-        // self.amd.mov_reg_mem(Amd::RAX, SP, 0);
-        self.amd.or(Amd::RAX, Amd::RAX);
-        self.amd.js(&label);
-        self.amd.vshufdd(ϕ(dst), ϕ(dst), ϕ(dst), 1);
+        self.amd.jnb(&label);
+
+        self.amd.vandpd(T0, T0, T2);
+        self.amd.vxorpd(T1, T1, T0);
+        self.amd.vxorpd(T2, T2, T0);
+        self.amd.vunpckldd(ϕ(dst), T2, T1);
+
         self.set_label(&label);
     }
 

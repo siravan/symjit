@@ -328,11 +328,25 @@ impl Amd {
         self.modrm_reg(reg, rm);
     }
 
+    pub fn vandqd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        // self.vex_pd(reg, vreg, rm, 0);
+        Prefix::new(reg, vreg, 0).evex(self);
+        self.append_byte(0x54);
+        self.rip_relative(reg, label);
+    }
+
     pub fn vandnqd(&mut self, reg: u8, vreg: u8, rm: u8) {
         // self.vex_pd(reg, vreg, rm, 0);
         Prefix::new(reg, vreg, rm).evex(self);
         self.append_byte(0x55);
         self.modrm_reg(reg, rm);
+    }
+
+    pub fn vandnqd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        // self.vex_pd(reg, vreg, rm, 0);
+        Prefix::new(reg, vreg, 0).evex(self);
+        self.append_byte(0x55);
+        self.rip_relative(reg, label);
     }
 
     pub fn vorqd(&mut self, reg: u8, vreg: u8, rm: u8) {
@@ -342,11 +356,25 @@ impl Amd {
         self.modrm_reg(reg, rm);
     }
 
+    pub fn vorqd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        // self.vex_pd(reg, vreg, rm, 0);
+        Prefix::new(reg, vreg, 0).evex(self);
+        self.append_byte(0x56);
+        self.rip_relative(reg, label);
+    }
+
     pub fn vxorqd(&mut self, reg: u8, vreg: u8, rm: u8) {
         // self.vex_pd(reg, vreg, rm, 0);
         Prefix::new(reg, vreg, rm).evex(self);
         self.append_byte(0x57);
         self.modrm_reg(reg, rm);
+    }
+
+    pub fn vxorqd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        // self.vex_pd(reg, vreg, rm, 0);
+        Prefix::new(reg, vreg, 0).evex(self);
+        self.append_byte(0x57);
+        self.rip_relative(reg, label);
     }
 
     pub fn vcmpeqqd(&mut self, reg: u8, vreg: u8, rm: u8) {

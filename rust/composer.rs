@@ -388,6 +388,7 @@ impl Composer for DirectTranslator {
         self.mir.setup_call_binary(reg(0), reg(1));
         self.mir.call("power", 2)?;
         self.save(Reg::Ret, lhs)?;
+        self.ft.insert("power".to_string());
         Ok(())
     }
 
