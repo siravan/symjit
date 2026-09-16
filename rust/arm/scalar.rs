@@ -520,7 +520,7 @@ impl Generator for ArmGenerator {
     }
 
     fn call_funclet(&mut self, label: &str) {
-        self.jump(label, 0, |offset, _| arm! {bl label(offset)});
+        call_funclet(&mut self.a, label);
     }
 
     fn ret(&mut self) {

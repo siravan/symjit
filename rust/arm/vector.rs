@@ -731,7 +731,7 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn call_funclet(&mut self, label: &str) {
-        self.jump(label, 0, |offset, _| arm! {bl label(offset)});
+        call_funclet(&mut self.a, label);
     }
 
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {

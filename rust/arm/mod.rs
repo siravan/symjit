@@ -23,6 +23,9 @@ const SCRATCH3: u8 = 11;
 const COUNTER: u8 = 12;
 const TEMP: u8 = ϕ(Reg::Temp);
 
+const LR: u8 = 30;
+const LR2: u8 = 15;
+
 /*
  * registers v8 to v15 are ABI-preserved
  * registers v29-v31 can be temporary
@@ -87,6 +90,17 @@ fn load_nonvolatile_regs(a: &mut Assembler) {
 fn allocate_stack(a: &mut Assembler, size: u32, _with_arena: bool) {
     sub_stack(a, size);
     emit(a, arm! {mov x(STACK), sp});
+}
+
+fn call_funclet(a: &mut Assembler, label: &str) {
+    if label == "@complex_root" {
+        emit(a, arm! {mov x(LR2), x(LR)});
+        a.jump(label, 0, |offset, _| arm! {bl label(offset)});
+        emit(a, arm! {mov x(LR), x(LR2)});
+        return;
+    }
+
+    a.jump(label, 0, |offset, _| arm! {bl label(offset)});
 }
 
 fn load_long(a: &mut Assembler, reg: u8, label: &str) {
