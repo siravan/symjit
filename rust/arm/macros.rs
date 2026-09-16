@@ -153,9 +153,16 @@ macro_rules! arm {
     (fmov x($rd:expr), d($rn:expr)) => {
         0x9e660000 | rd!($rd) | rn!($rn)
     };
-    (mov x($rd:expr), x($rm:expr)) => {
-        0xaa0003e0 | rd!($rd) | rm!($rm)
-    };
+    (mov x($rd:expr), x($rm:expr)) => {{
+        let rd = $rd;
+        let rm = $rm;
+
+        if rd == 31 || rm == 31 {
+            arm! {add x(rd), x(rm), #0}
+        } else {
+            arm! {orr x(rd), x(31), x(rm)}
+        }
+    }};
     (movz x($rd:expr), #$imm16:expr) => {
         0xd2800000 | rd!($rd) | imm16!($imm16)
     };

@@ -263,7 +263,7 @@ impl Generator for ArmComplexGenerator {
     }
 
     fn root(&mut self, dst: Reg, s1: Reg) {
-        self.fmov(Reg::Ret, s1);
+        self.fmov(Reg::Temp, s1);
         self.call_funclet("@complex_root");
         self.fmov(dst, Reg::Ret);
 
@@ -272,30 +272,33 @@ impl Generator for ArmComplexGenerator {
 
             self.set_label("@complex_root");
 
-            self.emit(arm! {fmul q(T1), q(ϕ(s1)), q(ϕ(s1))});
+            let s1 = ϕ(Reg::Temp);
+            let dst = ϕ(Reg::Ret);
+
+            self.emit(arm! {fmul q(T1), q(s1), q(s1)});
             self.emit(arm! {faddp d(T1), q(T1)});
             self.emit(arm! {fsqrt d(T1), d(T1)});
-            self.emit(arm! {fabs d(T2), d(ϕ(s1))});
+            self.emit(arm! {fabs d(T2), d(s1)});
             self.emit(arm! {fadd d(T1), d(T1), d(T2)});
             self.emit(arm! {fmov d(T0), #0.5});
             self.emit(arm! {fmul d(T1), d(T1), d(T0)});
             self.emit(arm! {fsqrt d(T1), d(T1)});
 
-            self.emit(arm! {zip2 q(T2), q(ϕ(s1)), q(ϕ(s1))});
+            self.emit(arm! {zip2 q(T2), q(s1), q(s1)});
             self.emit(arm! {fdiv d(T2), d(T2), d(T1)});
             self.emit(arm! {fmul d(T2), d(T2), d(T0)});
 
             self.emit(arm! {fcmeq d(T0), d(T2), d(T2)});
             self.emit(arm! {and v(T2).8b, v(T2).8b, v(T0).8b});
 
-            self.emit(arm! {fcmp d(ϕ(s1)), #0.0});
+            self.emit(arm! {fcmp d(s1), #0.0});
             self.emit(arm! {fcsel d(T0), d(T1), d(T2), ge});
             self.emit(arm! {fcsel d(T2), d(T1), d(T2), lt});
             self.emit(arm! {fabs d(T1), d(T0)});
             self.emit(arm! {eor v(T0).8b, v(T0).8b, v(T1).8b});
             self.emit(arm! {eor v(T2).8b, v(T0).8b, v(T2).8b});
 
-            self.emit(arm! {zip1 q(ϕ(dst)), q(T1), q(T2)});
+            self.emit(arm! {zip1 q(dst), q(T1), q(T2)});
             self.ret();
 
             self.set_label("@jump_over_complex_root");

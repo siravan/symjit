@@ -338,8 +338,8 @@ impl Generator for Complexifier {
             self.set_label("@complex_root");
 
             let s1 = Reg::Temp;
-            let x = re(Reg::Gen(0));
-            let y = im(Reg::Gen(0));
+            let x = Self::T0;
+            let y = Self::T1;
 
             self.mir.xor(x, x, x);
             self.mir.lt(x, x, re(s1)); // lt intead of ge for SSE to work correctly

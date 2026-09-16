@@ -95,10 +95,7 @@ impl ArmSimdGenerator {
     }
 
     fn sub_stack(&mut self, size: u32) {
-        self.emit(arm! {sub x(STACK), x(STACK), #size & 0x0fff});
-        if size >> 12 != 0 {
-            self.emit(arm! {sub x(STACK), x(STACK), #size >> 12, lsl #12});
-        }
+        sub_stack(&mut self.a, size);
     }
 
     /*
@@ -901,7 +898,7 @@ impl ArmSimdGenerator {
 
         self.sub_stack(align_stack(regions.count_obs * REG_SIZE));
         self.emit(arm! {mov x(STATES), x(MEM)});
-        self.emit(arm! {mov x(MEM), x(STACK)});
+        self.emit(arm! {mov x(MEM), x(SP)});
 
         self.set_label("@main");
 
