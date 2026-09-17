@@ -61,7 +61,7 @@ impl RiscV {
     // const t3: u8 = 28;
     // const t4: u8 = 29;
     // const t5: u8 = 30;
-    // const t6: u8 = 31;
+    const t6: u8 = 31;
 
     const ft0: u8 = 0;
     const ft1: u8 = 1;
@@ -868,6 +868,13 @@ impl Generator for RiscV {
     }
 
     fn call_funclet(&mut self, label: &str) {
+        if label == "@complex_root" {
+            self.emit(rvv! {mv x(Self::t6), x(Self::ra)});
+            self.j(label, Self::ra);
+            self.emit(rvv! {mv x(Self::ra), x(Self::t6)});
+            return;
+        }
+
         self.j(label, Self::ra);
     }
 

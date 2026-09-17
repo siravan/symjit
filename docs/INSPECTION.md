@@ -13,10 +13,16 @@ f.dump('test.bin', what='scalar')
 
 Passing `what='simd'` dumps the vectorized version of the function and `what='fast'` to dump the fast function. 
 
-On a Linux system, we can invoke `objdump` to disassemble the output as below:
+On a Linux x64 system, we can invoke `objdump` to disassemble the output as below:
 
 ```
 objdump -b binary -m i386:x86-64 -M intel -D test.bin
+```
+
+Similarly for a riscv system:
+
+```
+objdump -b binary -m riscv:rv64 -D test.bin
 ```
 
 On a MacOS `aarch64` (Apple Silicon), the `-b` option is not available. You need to first use `objcopy` to make

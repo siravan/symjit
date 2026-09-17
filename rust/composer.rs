@@ -24,6 +24,7 @@ pub trait Composer {
     fn append_goto(&mut self, id: usize) -> Result<()>;
     fn append_external_fun(&mut self, lhs: &Slot, op: &str, args: &[Slot]) -> Result<()>;
     fn append_fun(&mut self, lhs: &Slot, fun: &str, args: &[Slot], is_real: bool) -> Result<()>;
+    #[allow(unused)]
     fn append_fun_v1(
         &mut self,
         lhs: &Slot,
