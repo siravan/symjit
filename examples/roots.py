@@ -18,6 +18,7 @@ test(X, use_simd=False, fast_complex=False)
 test(X, use_simd=False, fast_complex=True)
 test(X, use_simd=True, fast_complex=False)
 f = test(X, use_simd=True, fast_complex=True)
-print(f.dumps('simd'))
+
+# print(f.dumps('simd'))
 
 print('ok')

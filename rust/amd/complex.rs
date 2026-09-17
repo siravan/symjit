@@ -319,6 +319,32 @@ impl Generator for AmdComplexGenerator {
             self.amd.vcmpeqsd(T0, T2, T2);
             self.amd.vandpd(T2, T2, T0);
 
+            // branch-free selection: compute a mask M = (re < 0), duplicated
+            // to both lanes, and blend the re>=0 and re<0 results with it
+            // instead of jumping over the correction.
+            self.amd.vxorpd(T0, T0, T0);
+            self.amd.vcmpltsd(T0, ϕ(Reg::Ret), T0);
+            self.amd.vunpckldd(T0, T0, T0); // T0 = M
+
+            // sign(t), single lane meaningful; `Reg::Ret` (the original z)
+            // is no longer needed after this, so it is reused as scratch.
+            self.amd.vmovsd_xmm_label(ϕ(Reg::Ret), "_minus_zero_");
+            self.amd.vandpd(ϕ(Reg::Ret), ϕ(Reg::Ret), T2); // Ret = sign(t)
+
+            self.amd.vxorpd(T1, T1, ϕ(Reg::Ret)); // T1 = copysign(w, t)
+            self.amd.vxorpd(T2, T2, ϕ(Reg::Ret)); // T2 = |t|
+            self.amd.vunpckldd(T1, T1, T2); // T1 = V = [copysign(w,t), |t|]
+
+            self.amd.vshufdd(T2, T1, T1, 1); // T2 = swap(V) = [|t|, copysign(w,t)] (re<0 case)
+
+            self.amd.vunpckldd(ϕ(Reg::Ret), ϕ(Reg::Ret), ϕ(Reg::Ret)); // Ret = dup(sign(t))
+            self.amd.vxorpd(T1, T1, ϕ(Reg::Ret)); // T1 = V ^ dup(sign(t)) = [w, t] (re>=0 case)
+
+            self.amd.vandpd(ϕ(Reg::Ret), T0, T2); // Ret = M & (re<0 case)
+            self.amd.vandnpd(T0, T0, T1); // T0 = ~M & (re>=0 case)
+            self.amd.vorpd(ϕ(Reg::Ret), ϕ(Reg::Ret), T0); // Ret = final result
+
+            /*
             let label = format!(".Y{}", self.amd.a.ip());
 
             self.amd.vmovsd_xmm_label(T0, "_minus_zero_");
@@ -332,6 +358,7 @@ impl Generator for AmdComplexGenerator {
             self.amd.vunpckldd(ϕ(Reg::Ret), T2, T1);
 
             self.set_label(&label);
+            */
             self.ret();
 
             self.set_label("@jump_over_complex_root");
