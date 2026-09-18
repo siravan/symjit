@@ -723,6 +723,12 @@ impl Application {
             }
             "mir-size" => self.bytecode.mir.code.ip,
             "stack-size" => self.prog.builder.stack_size(),
+            "version" => {
+                let major: usize = env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap_or(99);
+                let minor: usize = env!("CARGO_PKG_VERSION_MINOR").parse().unwrap_or(99);
+                let patch: usize = env!("CARGO_PKG_VERSION_PATCH").parse().unwrap_or(99);
+                major * 10000 + minor * 100 + patch
+            }
             _ => 0,
         }
     }
