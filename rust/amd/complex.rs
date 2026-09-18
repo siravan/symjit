@@ -319,6 +319,11 @@ impl Generator for AmdComplexGenerator {
             self.amd.vcmpeqsd(T0, T2, T2);
             self.amd.vandpd(T2, T2, T0);
 
+            // The branch-free code was written with the help of Claude code.
+            // It works correctly; however, micro-benchmarking (examples/composer/julia.py)
+            // shows 1-2% performance degradation. Therefore, we use the standard code below.
+
+            /*
             // branch-free selection: compute a mask M = (re < 0), duplicated
             // to both lanes, and blend the re>=0 and re<0 results with it
             // instead of jumping over the correction.
@@ -343,22 +348,25 @@ impl Generator for AmdComplexGenerator {
             self.amd.vandpd(ϕ(Reg::Ret), T0, T2); // Ret = M & (re<0 case)
             self.amd.vandnpd(T0, T0, T1); // T0 = ~M & (re>=0 case)
             self.amd.vorpd(ϕ(Reg::Ret), ϕ(Reg::Ret), T0); // Ret = final result
+            */
 
-            /*
             let label = format!(".Y{}", self.amd.a.ip());
 
             self.amd.vmovsd_xmm_label(T0, "_minus_zero_");
             self.amd.vucomisd(ϕ(Reg::Ret), T0);
-            self.amd.vunpckldd(ϕ(Reg::Ret), T1, T2);
             self.amd.jnb(&label);
 
-            self.amd.vandpd(T0, T0, T2);
-            self.amd.vxorpd(T1, T1, T0);
-            self.amd.vxorpd(T2, T2, T0);
-            self.amd.vunpckldd(ϕ(Reg::Ret), T2, T1);
+            // real(s1) < 0
+            self.amd.vandpd(T0, T0, T2); // T0 = sign(T2)
+            self.amd.vxorpd(T1, T1, T0); // T1 = copysign(T2, T1)
+            self.amd.vxorpd(T2, T2, T0); // T2 = |T2|
+            self.amd.vunpckldd(ϕ(Reg::Ret), T2, T1); // T1 <-> T2
+            self.ret();
 
+            // real(s1) >= 0
             self.set_label(&label);
-            */
+            self.amd.vunpckldd(ϕ(Reg::Ret), T1, T2);
+
             self.ret();
 
             self.set_label("@jump_over_complex_root");
