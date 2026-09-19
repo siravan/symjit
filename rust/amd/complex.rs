@@ -292,6 +292,76 @@ impl Generator for AmdComplexGenerator {
         self.amd.vunpckldd(ϕ(dst), T2, T1);
     }
 
+    /*
+     * root uses a classic square root algorithm to find the square root of a complex number.
+     * It is a conservative algorithm, but has a branch depending on whether the real part of
+     * the input is non-negative or negative.
+     *
+     * We tried to avoid the branch in two different ways, but both were either similar or slightly
+     * slower than the standard code.
+     *
+     * The first approach is proposed by Claude code based on masking instead of the branch:
+     *
+     '''
+        // The branch-free code was written with the help of Claude code.
+        // It works correctly; however, micro-benchmarking (examples/composer/julia.py)
+        // shows 1-2% performance degradation. Therefore, we use the standard code below.
+        // branch-free selection: compute a mask M = (re < 0), duplicated
+        // to both lanes, and blend the re>=0 and re<0 results with it
+        // instead of jumping over the correction.
+        self.amd.vmuldd(T1, ϕ(Reg::Ret), ϕ(Reg::Ret));
+        self.amd.vhadddd(T1, T1, T1);
+        self.amd.vsqrtsd(T1, T1);
+        self.amd.vmovsd_xmm_label(T0, "_minus_zero_");
+        self.amd.vandnpd(T2, T0, ϕ(Reg::Ret));
+        self.amd.vaddsd(T1, T1, T2);
+        self.amd.vmovsd_xmm_label(T0, "_half_");
+        self.amd.vmulsd(T1, T1, T0);
+        self.amd.vsqrtsd(T1, T1);
+        self.amd.vunpckhdd(T2, ϕ(Reg::Ret), ϕ(Reg::Ret));
+        self.amd.vdivsd(T2, T2, T1);
+        self.amd.vmulsd(T2, T2, T0);
+        self.amd.vcmpeqsd(T0, T2, T2);
+        self.amd.vandpd(T2, T2, T0);
+        self.amd.vunpckldd(T0, T0, T0); // T0 = M
+        // sign(t), single lane meaningful; `Reg::Ret` (the original z)
+        // is no longer needed after this, so it is reused as scratch.
+        self.amd.vmovsd_xmm_label(ϕ(Reg::Ret), "_minus_zero_");
+        self.amd.vandpd(ϕ(Reg::Ret), ϕ(Reg::Ret), T2); // Ret = sign(t)
+        self.amd.vxorpd(T1, T1, ϕ(Reg::Ret)); // T1 = copysign(w, t)
+        self.amd.vxorpd(T2, T2, ϕ(Reg::Ret)); // T2 = |t|
+        self.amd.vunpckldd(T1, T1, T2); // T1 = V = [copysign(w,t), |t|]
+        self.amd.vshufdd(T2, T1, T1, 1); // T2 = swap(V) = [|t|, copysign(w,t)] (re<0 case)
+        self.amd.vunpckldd(ϕ(Reg::Ret), ϕ(Reg::Ret), ϕ(Reg::Ret)); // Ret = dup(sign(t))
+        self.amd.vxorpd(T1, T1, ϕ(Reg::Ret)); // T1 = V ^ dup(sign(t)) = [w, t] (re>=0 case)
+        self.amd.vandpd(ϕ(Reg::Ret), T0, T2); // Ret = M & (re<0 case)
+        self.amd.vandnpd(T0, T0, T1); // T0 = ~M & (re>=0 case)
+        self.amd.vorpd(ϕ(Reg::Ret), ϕ(Reg::Ret), T0); // Ret = final result
+        self.amd.ret()
+    ```
+    *
+    * The second approach is based on calculating both the real and imaginary parts together
+    * using f64x2 SIMD instructions:
+
+    ```
+        self.amd.vmuldd(T1, ϕ(Reg::Ret), ϕ(Reg::Ret)); // T1 = y^2:x^2
+        self.amd.vhadddd(T1, T1, T1); // T1 = x^2+y^2:x^2+y^2
+        self.amd.vsqrtpd(T1, T1); // T1 = sqrt(x^2+y^2):sqrt(x^2+y^2)
+        self.amd.vunpckldd(T2, ϕ(Reg::Ret), ϕ(Reg::Ret)); // T2 = x:x
+        self.amd.vaddsubdd(T1, T1, T2); // T1 = sqrt(x^2+y^2)+x:sqrt(x^2+y^2)-x
+        self.amd.vbroadcastsd_label(T0, "_half_"); // T0 = 0.5:0.5
+        self.amd.vmulpd(T1, T1, T0); // T1 = (sqrt(x^2+y^2)+x)/2:(sqrt(x^2+y^2)-x)/2
+        self.amd.vsqrtpd(T1, T1); // T1 = sqrt((sqrt(x^2+y^2)+x)/2):sqrt((sqrt(x^2+y^2)-x)/2)
+        self.amd.vcmpeqdd(T0, T1, T1);
+        self.amd.vandpd(T1, T1, T0);
+        self.amd.vunpckhdd(T2, ϕ(Reg::Ret), ϕ(Reg::Ret));
+        self.amd.vmovsd_xmm_label(T0, "_minus_zero_");
+        self.amd.vandpd(T0, T0, T2); // T0 = sign(T2)
+        self.amd.vxorpd(T1, T1, T0); // T1 = copysign(T2, T1)
+        self.amd.vshufdd(ϕ(Reg::Ret), T1, T1, 1);
+        self.ret();
+    ```
+    */
     fn root(&mut self, dst: Reg, s1: Reg) {
         self.fmov(Reg::Ret, s1);
         self.call_funclet("@complex_root");
@@ -300,73 +370,48 @@ impl Generator for AmdComplexGenerator {
         if !self.amd.a.has_label("@complex_root") {
             self.branch("@jump_over_complex_root");
 
+            let s1 = ϕ(Reg::Ret);
+            let dst = ϕ(Reg::Ret);
+
             self.set_label("@complex_root");
-            self.amd.vmuldd(T1, ϕ(Reg::Ret), ϕ(Reg::Ret));
-            self.amd.vhadddd(T1, T1, T1);
 
-            self.amd.vsqrtsd(T1, T1);
+            self.amd.vbroadcastsd_label(T0, "_half_");
+            self.amd.vmuldd(s1, s1, T0);
+
+            self.amd.vmulsd(T1, s1, s1);
+            self.amd.vunpckhdd(T2, s1, s1);
+            self.amd.vfmadd231dd(T1, T2, T2);
+            self.amd.vsqrtsd(T1, T1); // T1 == sqrt(real(s1)^2 + imag(s1)^2) / 2
+
             self.amd.vmovsd_xmm_label(T0, "_minus_zero_");
-            self.amd.vandnpd(T2, T0, ϕ(Reg::Ret));
-            self.amd.vaddsd(T1, T1, T2);
-            self.amd.vmovsd_xmm_label(T0, "_half_");
-            self.amd.vmulsd(T1, T1, T0);
-            self.amd.vsqrtsd(T1, T1);
+            self.amd.vucomisd(s1, T0); // set the flags here for jmup lower down
+            self.amd.vandnpd(s1, T0, s1); // s1 = |real(s1)|
+            self.amd.vaddsd(T1, T1, s1); // T1 == (sqrt(real(s1)^2 + imag(s1)^2) + abs(real(s1))) / 2
 
-            self.amd.vunpckhdd(T2, ϕ(Reg::Ret), ϕ(Reg::Ret));
-            self.amd.vdivsd(T2, T2, T1);
-            self.amd.vmulsd(T2, T2, T0);
+            self.amd.vsqrtsd(T1, T1); // T1 == sqrt(T1 == sqrt(real(s1)^2 + imag(s1)^2) + abs(real(s1)) / 2)
+            self.amd.vdivsd(T2, T2, T1); // T2 == imag(s1) / (2 * T1)
 
-            self.amd.vcmpeqsd(T0, T2, T2);
-            self.amd.vandpd(T2, T2, T0);
-
-            // The branch-free code was written with the help of Claude code.
-            // It works correctly; however, micro-benchmarking (examples/composer/julia.py)
-            // shows 1-2% performance degradation. Therefore, we use the standard code below.
-
-            /*
-            // branch-free selection: compute a mask M = (re < 0), duplicated
-            // to both lanes, and blend the re>=0 and re<0 results with it
-            // instead of jumping over the correction.
-            self.amd.vxorpd(T0, T0, T0);
-            self.amd.vcmpltsd(T0, ϕ(Reg::Ret), T0);
-            self.amd.vunpckldd(T0, T0, T0); // T0 = M
-
-            // sign(t), single lane meaningful; `Reg::Ret` (the original z)
-            // is no longer needed after this, so it is reused as scratch.
-            self.amd.vmovsd_xmm_label(ϕ(Reg::Ret), "_minus_zero_");
-            self.amd.vandpd(ϕ(Reg::Ret), ϕ(Reg::Ret), T2); // Ret = sign(t)
-
-            self.amd.vxorpd(T1, T1, ϕ(Reg::Ret)); // T1 = copysign(w, t)
-            self.amd.vxorpd(T2, T2, ϕ(Reg::Ret)); // T2 = |t|
-            self.amd.vunpckldd(T1, T1, T2); // T1 = V = [copysign(w,t), |t|]
-
-            self.amd.vshufdd(T2, T1, T1, 1); // T2 = swap(V) = [|t|, copysign(w,t)] (re<0 case)
-
-            self.amd.vunpckldd(ϕ(Reg::Ret), ϕ(Reg::Ret), ϕ(Reg::Ret)); // Ret = dup(sign(t))
-            self.amd.vxorpd(T1, T1, ϕ(Reg::Ret)); // T1 = V ^ dup(sign(t)) = [w, t] (re>=0 case)
-
-            self.amd.vandpd(ϕ(Reg::Ret), T0, T2); // Ret = M & (re<0 case)
-            self.amd.vandnpd(T0, T0, T1); // T0 = ~M & (re>=0 case)
-            self.amd.vorpd(ϕ(Reg::Ret), ϕ(Reg::Ret), T0); // Ret = final result
-            */
+            self.amd.vcmpeqsd(s1, T2, T2);
+            self.amd.vandpd(T2, T2, s1); // set T2 to 0 if it is NaN (if imag(s1) is 0)
 
             let label = format!(".Y{}", self.amd.a.ip());
 
-            self.amd.vmovsd_xmm_label(T0, "_minus_zero_");
-            self.amd.vucomisd(ϕ(Reg::Ret), T0);
+            /*
+             * At this stage, T0 = _minus_zero_, and T1 and T2 are the preliminary real/imag results.
+             */
+
             self.amd.jnb(&label);
 
             // real(s1) < 0
             self.amd.vandpd(T0, T0, T2); // T0 = sign(T2)
             self.amd.vxorpd(T1, T1, T0); // T1 = copysign(T2, T1)
             self.amd.vxorpd(T2, T2, T0); // T2 = |T2|
-            self.amd.vunpckldd(ϕ(Reg::Ret), T2, T1); // T1 <-> T2
+            self.amd.vunpckldd(dst, T2, T1); // T1 <-> T2
             self.ret();
 
             // real(s1) >= 0
             self.set_label(&label);
-            self.amd.vunpckldd(ϕ(Reg::Ret), T1, T2);
-
+            self.amd.vunpckldd(dst, T1, T2);
             self.ret();
 
             self.set_label("@jump_over_complex_root");
