@@ -394,13 +394,11 @@ impl Generator for AmdComplexGenerator {
             self.amd.vcmpeqsd(s1, T2, T2);
             self.amd.vandpd(T2, T2, s1); // set T2 to 0 if it is NaN (if imag(s1) is 0)
 
-            let label = format!(".Y{}", self.amd.a.ip());
-
             /*
              * At this stage, T0 = _minus_zero_, and T1 and T2 are the preliminary real/imag results.
              */
 
-            self.amd.jnb(&label);
+            self.amd.jnb("@complex_root_l1");
 
             // real(s1) < 0
             self.amd.vandpd(T0, T0, T2); // T0 = sign(T2)
@@ -410,7 +408,7 @@ impl Generator for AmdComplexGenerator {
             self.ret();
 
             // real(s1) >= 0
-            self.set_label(&label);
+            self.set_label("@complex_root_l1");
             self.amd.vunpckldd(dst, T1, T2);
             self.ret();
 
