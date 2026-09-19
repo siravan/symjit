@@ -39,6 +39,7 @@ pub enum UniOp {
     IsZero,
     IsNotZero,
     Sign,
+    Abs2,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Hash)]
@@ -627,6 +628,14 @@ impl Mir {
     pub fn abs(&mut self, dst: Reg, s1: Reg) {
         self.push(Instruction::Uni {
             op: UniOp::Abs,
+            dst,
+            s1,
+        });
+    }
+
+    pub fn abs2(&mut self, dst: Reg, s1: Reg) {
+        self.push(Instruction::Uni {
+            op: UniOp::Abs2,
             dst,
             s1,
         });
@@ -1234,6 +1243,7 @@ impl Mir {
             UniOp::Neg => -s1,
             UniOp::Not => f64::from_bits(!s1.to_bits()),
             UniOp::Abs => s1.abs(),
+            UniOp::Abs2 => s1.abs().powi(2),
             UniOp::Root => s1.sqrt(),
             UniOp::RealRoot => s1.sqrt(),
             UniOp::Recip => 1.0 / s1,
@@ -1572,6 +1582,7 @@ impl Mir {
             UniOp::Neg => ir.neg(dst, s1),
             UniOp::Not => ir.not(dst, s1),
             UniOp::Abs => ir.abs(dst, s1),
+            UniOp::Abs2 => ir.abs2(dst, s1),
             UniOp::Root => ir.root(dst, s1),
             UniOp::RealRoot => ir.real_root(dst, s1),
             UniOp::Recip => ir.recip(dst, s1),

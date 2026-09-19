@@ -296,6 +296,10 @@ impl Generator for AmdSSEGenerator {
         self.andnot(dst, Reg::Temp, s1);
     }
 
+    fn abs2(&mut self, dst: Reg, s1: Reg) {
+        self.times(dst, s1, s1);
+    }
+
     fn root(&mut self, dst: Reg, s1: Reg) {
         uniop!(self, sqrtsd, dst, s1);
     }

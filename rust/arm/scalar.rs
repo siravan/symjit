@@ -296,6 +296,10 @@ impl Generator for ArmGenerator {
         self.emit(arm! {fabs d(ϕ(dst)), d(ϕ(s1))});
     }
 
+    fn abs2(&mut self, dst: Reg, s1: Reg) {
+        self.times(dst, s1, s1);
+    }
+
     fn root(&mut self, dst: Reg, s1: Reg) {
         self.emit(arm! {fsqrt d(ϕ(dst)), d(ϕ(s1))});
     }

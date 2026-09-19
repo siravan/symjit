@@ -324,6 +324,19 @@ impl Generator for Complexifier {
         }
     }
 
+    fn abs2(&mut self, dst: Reg, s1: Reg) {
+        if self.is_real_reg(s1) {
+            self.mir.abs(re(dst), re(s1));
+            self.set_reg_real(dst);
+        } else {
+            self.mir.times(Self::T0, re(s1), re(s1));
+            self.mir.times(Self::T1, im(s1), im(s1));
+            self.mir.plus(re(dst), Self::T0, Self::T1);
+            self.mir.xor(im(dst), im(dst), im(dst));
+            self.set_reg_complex(dst);
+        }
+    }
+
     fn root(&mut self, dst: Reg, s1: Reg) {
         self.ensure_complex(s1);
         self.fmov(Reg::Temp, s1);
@@ -687,12 +700,16 @@ impl Generator for Complexifier {
     }
 
     fn eq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
+        self.mir.eq(im(dst), im(s1), im(s2));
         self.mir.eq(re(dst), re(s1), re(s2));
+        self.mir.and(re(dst), re(dst), im(dst));
         self.set_reg_real(dst);
     }
 
     fn neq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
+        self.mir.neq(im(dst), im(s1), im(s2));
         self.mir.neq(re(dst), re(s1), re(s2));
+        self.mir.and(re(dst), re(dst), im(dst));
         self.set_reg_real(dst);
     }
 

@@ -292,6 +292,13 @@ impl Generator for AmdComplexGenerator {
         self.amd.vunpckldd(ϕ(dst), T2, T1);
     }
 
+    fn abs2(&mut self, dst: Reg, s1: Reg) {
+        self.amd.vmuldd(T1, ϕ(s1), ϕ(s1));
+        self.amd.vhadddd(T2, T1, T1);
+        self.amd.vxorpd(T1, T1, T1);
+        self.amd.vunpckldd(ϕ(dst), T2, T1);
+    }
+
     /*
      * root uses a classic square root algorithm to find the square root of a complex number.
      * It is a conservative algorithm, but has a branch depending on whether the real part of
@@ -613,13 +620,15 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn eq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, vcmpeqsd, dst, s1, s2);
-        binop!(self, vunpckldd, dst, dst, dst);
+        binop!(self, vcmpeqdd, dst, s1, s2);
+        self.amd.vshufdd(T1, ϕ(dst), ϕ(dst), 1);
+        self.amd.vandpd(ϕ(dst), ϕ(dst), T1);
     }
 
     fn neq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, vcmpneqsd, dst, s1, s2);
-        binop!(self, vunpckldd, dst, dst, dst);
+        self.amd.vshufdd(T1, ϕ(dst), ϕ(dst), 1);
+        self.amd.vandpd(ϕ(dst), ϕ(dst), T1);
     }
 
     fn and(&mut self, dst: Reg, s1: Reg, s2: Reg) {

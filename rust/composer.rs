@@ -366,14 +366,6 @@ impl Composer for DirectTranslator {
             2 => self.mir.square(reg(1), reg(0)),
             3 => self.mir.cube(reg(1), reg(0)),
             -1 => self.mir.recip(reg(1), reg(0)),
-            -2 => {
-                self.mir.recip(reg(1), reg(0));
-                self.mir.square(reg(1), reg(0))
-            }
-            -3 => {
-                self.mir.recip(reg(1), reg(0));
-                self.mir.cube(reg(1), reg(0))
-            }
             p => self.mir.powi(reg(1), reg(0), p as i32),
         }
         self.save(reg(1), lhs)?;

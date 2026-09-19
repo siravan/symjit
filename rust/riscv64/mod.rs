@@ -595,6 +595,10 @@ impl Generator for RiscV {
         self.emit(rvv! {fabs.d f(ϕ(dst)), f(ϕ(s1))});
     }
 
+    fn abs2(&mut self, dst: Reg, s1: Reg) {
+        self.times(dst, s1, s1);
+    }
+
     fn root(&mut self, dst: Reg, s1: Reg) {
         self.emit(rvv! {fsqrt.d f(ϕ(dst)), f(ϕ(s1))});
     }

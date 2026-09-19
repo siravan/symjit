@@ -82,6 +82,7 @@ pub trait Generator {
     fn neg(&mut self, dst: Reg, s1: Reg);
     fn sign(&mut self, dst: Reg, s1: Reg);
     fn abs(&mut self, dst: Reg, s1: Reg);
+    fn abs2(&mut self, dst: Reg, s1: Reg);
     fn root(&mut self, dst: Reg, s1: Reg);
     fn real_root(&mut self, dst: Reg, s1: Reg);
     fn recip(&mut self, dst: Reg, s1: Reg);

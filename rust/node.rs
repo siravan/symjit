@@ -319,6 +319,7 @@ impl Node {
                 "neg" => mir.neg(reg(dst), reg(r)),
                 "not" => mir.not(reg(dst), reg(r)),
                 "abs" => mir.abs(reg(dst), reg(r)),
+                "abs2" => mir.abs2(reg(dst), reg(r)),
                 "root" => mir.root(reg(dst), reg(r)),
                 "real_root" => mir.real_root(reg(dst), reg(r)),
                 "square" => mir.square(reg(dst), reg(r)),

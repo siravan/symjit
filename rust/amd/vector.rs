@@ -478,6 +478,10 @@ impl Generator for AmdVectorF64x4Generator {
         self.andnot(dst, Reg::Temp, s1);
     }
 
+    fn abs2(&mut self, dst: Reg, s1: Reg) {
+        self.times(dst, s1, s1);
+    }
+
     fn root(&mut self, dst: Reg, s1: Reg) {
         uniop!(self, vsqrtpd, dst, s1);
     }
@@ -884,18 +888,20 @@ impl AmdVectorF64x4Generator {
         self.amd.mov(Amd::RAX, PARAMS);
         self.amd.mov(PARAMS, SP);
 
-        self.amd.mov_imm(Amd::RCX, regions.count_params);
-        self.set_label(".load");
+        if regions.count_params > 0 {
+            self.amd.mov_imm(Amd::RCX, regions.count_params);
+            self.set_label(".load");
 
-        for j in 0..NUM_LANES {
-            self.amd
-                .vmovsd_xmm_mem(RET, Amd::RAX, (8 * j * regions.count_params) as i32);
-            self.amd.vmovsd_mem_xmm(PARAMS, 8 * j as i32, RET);
+            for j in 0..NUM_LANES {
+                self.amd
+                    .vmovsd_xmm_mem(RET, Amd::RAX, (8 * j * regions.count_params) as i32);
+                self.amd.vmovsd_mem_xmm(PARAMS, 8 * j as i32, RET);
+            }
+            self.amd.add_imm(Amd::RAX, 8);
+            self.amd.add_imm(PARAMS, 8 * NUM_LANES);
+            self.amd.dec(Amd::RCX);
+            self.amd.jnz(".load");
         }
-        self.amd.add_imm(Amd::RAX, 8);
-        self.amd.add_imm(PARAMS, 8 * NUM_LANES);
-        self.amd.dec(Amd::RCX);
-        self.amd.jnz(".load");
 
         self.amd
             .sub_imm(PARAMS, 8 * regions.count_params * NUM_LANES);
