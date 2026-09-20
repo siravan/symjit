@@ -926,6 +926,7 @@ impl Default for Config {
 // machine code
 const UNARY: &[&str] = &[
     "abs",
+    "abs2",
     "not",
     "neg",
     "root",

@@ -151,6 +151,9 @@ class Composer:
     def abs(self, arg: Slot) -> Slot:
         return self.function("abs", arg)
 
+    def abs2(self, arg: Slot) -> Slot:
+        return self.function("abs2", arg)
+
     def sqrt(self, arg: Slot) -> Slot:
         return self.function("root", arg)
 

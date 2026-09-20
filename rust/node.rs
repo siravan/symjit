@@ -606,6 +606,14 @@ impl Node {
         }
     }
 
+    pub fn hashof_arg(&self) -> Option<u64> {
+        if let Node::Unary { arg, .. } = self {
+            Some(arg.hashof())
+        } else {
+            None
+        }
+    }
+
     pub fn arg_power(self) -> Option<(Node, i32)> {
         if let Node::Unary { arg, power, .. } = self {
             Some((*arg, power))

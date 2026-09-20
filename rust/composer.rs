@@ -211,6 +211,7 @@ impl DirectTranslator {
             "neg" => self.mir.neg(dst, r),
             "not" => self.mir.not(dst, r),
             "abs" => self.mir.abs(dst, r),
+            "abs2" => self.mir.abs2(dst, r),
             "root" => self.mir.root(dst, r),
             "real_root" => self.mir.real_root(dst, r),
             "square" => self.mir.square(dst, r),

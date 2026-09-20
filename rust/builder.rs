@@ -263,6 +263,16 @@ impl Builder {
             Operation::Times if right.is_unary("recip") => {
                 self.create_binary(Operation::Divide, left, right.arg().unwrap())?
             }
+            Operation::Times
+                if right.is_unary("conjugate") && right.hashof_arg().unwrap() == left.hashof() =>
+            {
+                self.create_unary(Operation::new("abs2"), left)?
+            }
+            Operation::Times
+                if left.is_unary("conjugate") && left.hashof_arg().unwrap() == right.hashof() =>
+            {
+                self.create_unary(Operation::new("abs2"), right)?
+            }
             Operation::Divide if right.is_unary("recip") => {
                 self.create_binary(Operation::Times, left, right.arg().unwrap())?
             }

@@ -82,6 +82,6 @@ def process_argv():
     global symjit
     symjit = args.pop("symjit")
 
-    print(f"options: {args}")
+    # print(f"options: {args}")
 
     return args
