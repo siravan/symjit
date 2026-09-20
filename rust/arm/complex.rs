@@ -496,14 +496,16 @@ impl Generator for ArmComplexGenerator {
     }
 
     fn eq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(arm! {fcmeq d(ϕ(dst)), d(ϕ(s1)), d(ϕ(s2))});
-        self.emit(arm! {dup q(ϕ(dst)), q(ϕ(dst))[0]});
+        self.emit(arm! {fcmeq q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
+        self.emit(arm! {ext q(T1), q(ϕ(dst)), q(ϕ(dst)), #8}); // flipping lanes
+        self.emit(arm! {and v(ϕ(dst)).16b, v(ϕ(dst)).16b, v(T1).16b});
     }
 
     fn neq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.emit(arm! {fcmeq d(ϕ(dst)), d(ϕ(s1)), d(ϕ(s2))});
-        self.emit(arm! {not v(ϕ(dst)).8b, v(ϕ(dst)).8b});
-        self.emit(arm! {dup q(ϕ(dst)), q(ϕ(dst))[0]});
+        self.emit(arm! {fcmeq q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
+        self.emit(arm! {not v(ϕ(dst)).16b, v(ϕ(dst)).16b});
+        self.emit(arm! {ext q(T1), q(ϕ(dst)), q(ϕ(dst)), #8});
+        self.emit(arm! {and v(ϕ(dst)).16b, v(ϕ(dst)).16b, v(T1).16b});
     }
 
     fn and(&mut self, dst: Reg, s1: Reg, s2: Reg) {
