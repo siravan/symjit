@@ -153,6 +153,7 @@ fn emit(a: &mut Assembler, w: u32) {
 }
 
 fn save_nonvolatile_regs(a: &mut Assembler) {
+    a.set_label("@self");
     emit(a, rvv! {addi x(RiscV::sp), x(RiscV::sp), -64});
 
     emit(a, rvv! {sd x(RiscV::ra), x(RiscV::sp), 0});
