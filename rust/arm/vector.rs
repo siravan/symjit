@@ -366,6 +366,10 @@ impl Generator for ArmSimdGenerator {
         self.times(dst, s1, s1);
     }
 
+    fn times_i(&mut self, dst: Reg, s1: Reg) {}
+
+    fn times_neg_i(&mut self, dst: Reg, s1: Reg) {}
+
     fn root(&mut self, dst: Reg, s1: Reg) {
         self.emit(arm! {fsqrt q(ϕ(dst)), q(ϕ(s1))});
     }

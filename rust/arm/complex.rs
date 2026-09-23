@@ -278,6 +278,16 @@ impl Generator for ArmComplexGenerator {
         self.emit(arm! {faddp d(ϕ(dst)), q(T2)});
     }
 
+    fn times_i(&mut self, dst: Reg, s1: Reg) {
+        self.emit(arm! {ext q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s1)), #8});
+        self.emit(arm! {fneg d(ϕ(dst)), d(ϕ(dst))});
+    }
+
+    fn times_neg_i(&mut self, dst: Reg, s1: Reg) {
+        self.emit(arm! {fneg d(ϕ(dst)), d(ϕ(s1))});
+        self.emit(arm! {ext q(ϕ(dst)), q(ϕ(dst)), q(ϕ(dst)), #8});
+    }
+
     fn root(&mut self, dst: Reg, s1: Reg) {
         self.fmov(Reg::Temp, s1);
         self.call_funclet("@complex_root");

@@ -273,6 +273,18 @@ impl Builder {
             {
                 self.create_unary(Operation::new("abs2"), right)?
             }
+            Operation::Times if right.is_imaginary_unit() => {
+                self.create_unary(Operation::new("times_i"), left)?
+            }
+            Operation::Times if left.is_imaginary_unit() => {
+                self.create_unary(Operation::new("times_i"), right)?
+            }
+            Operation::Times if right.is_neg_imaginary_unit() => {
+                self.create_unary(Operation::new("times_neg_i"), left)?
+            }
+            Operation::Times if left.is_neg_imaginary_unit() => {
+                self.create_unary(Operation::new("times_neg_i"), right)?
+            }
             Operation::Divide if right.is_unary("recip") => {
                 self.create_binary(Operation::Times, left, right.arg().unwrap())?
             }

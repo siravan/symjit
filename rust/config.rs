@@ -946,6 +946,8 @@ const UNARY: &[&str] = &[
     "conjugate",
     "iszero",
     "isnotzero",
+    "times_i",
+    "times_neg_i",
 ];
 
 // the list of intrinsic binary ops, i.e., operations that can be implemented directly in

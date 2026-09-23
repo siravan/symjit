@@ -337,6 +337,32 @@ impl Generator for Complexifier {
         }
     }
 
+    fn times_i(&mut self, dst: Reg, s1: Reg) {
+        if self.is_real_reg(s1) {
+            self.mir.fmov(im(dst), re(s1));
+            self.mir.xor(re(dst), re(dst), re(dst));
+        } else {
+            self.mir.neg(Self::T1, im(s1));
+            self.mir.fmov(im(dst), re(s1));
+            self.mir.fmov(re(dst), Self::T1);
+        }
+
+        self.set_reg_complex(dst);
+    }
+
+    fn times_neg_i(&mut self, dst: Reg, s1: Reg) {
+        if self.is_real_reg(s1) {
+            self.mir.neg(im(dst), re(s1));
+            self.mir.xor(re(dst), re(dst), re(dst));
+        } else {
+            self.mir.fmov(Self::T1, im(s1));
+            self.mir.neg(im(dst), re(s1));
+            self.mir.fmov(re(dst), Self::T1);
+        }
+
+        self.set_reg_complex(dst);
+    }
+
     fn root(&mut self, dst: Reg, s1: Reg) {
         self.ensure_complex(s1);
         self.fmov(Reg::Temp, s1);

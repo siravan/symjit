@@ -40,6 +40,8 @@ pub enum UniOp {
     IsNotZero,
     Sign,
     Abs2,
+    TimesI,
+    TimesNegI,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Hash)]
@@ -636,6 +638,22 @@ impl Mir {
     pub fn abs2(&mut self, dst: Reg, s1: Reg) {
         self.push(Instruction::Uni {
             op: UniOp::Abs2,
+            dst,
+            s1,
+        });
+    }
+
+    pub fn times_i(&mut self, dst: Reg, s1: Reg) {
+        self.push(Instruction::Uni {
+            op: UniOp::TimesI,
+            dst,
+            s1,
+        });
+    }
+
+    pub fn times_neg_i(&mut self, dst: Reg, s1: Reg) {
+        self.push(Instruction::Uni {
+            op: UniOp::TimesNegI,
             dst,
             s1,
         });
@@ -1264,6 +1282,7 @@ impl Mir {
                     0.0
                 }
             }
+            UniOp::TimesI | UniOp::TimesNegI => 0.0,
         };
 
         Self::set(regs, dst, val);
@@ -1583,6 +1602,8 @@ impl Mir {
             UniOp::Not => ir.not(dst, s1),
             UniOp::Abs => ir.abs(dst, s1),
             UniOp::Abs2 => ir.abs2(dst, s1),
+            UniOp::TimesI => ir.times_i(dst, s1),
+            UniOp::TimesNegI => ir.times_neg_i(dst, s1),
             UniOp::Root => ir.root(dst, s1),
             UniOp::RealRoot => ir.real_root(dst, s1),
             UniOp::Recip => ir.recip(dst, s1),

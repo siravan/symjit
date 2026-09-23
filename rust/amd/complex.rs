@@ -299,6 +299,18 @@ impl Generator for AmdComplexGenerator {
         self.amd.vunpckldd(ϕ(dst), T2, T1);
     }
 
+    fn times_i(&mut self, dst: Reg, s1: Reg) {
+        self.amd.vxorpd(T1, T1, T1);
+        self.amd.vshufdd(ϕ(dst), ϕ(s1), ϕ(s1), 1);
+        self.amd.vaddsubdd(ϕ(dst), T1, ϕ(dst));
+    }
+
+    fn times_neg_i(&mut self, dst: Reg, s1: Reg) {
+        self.amd.vxorpd(T1, T1, T1);
+        self.amd.vaddsubdd(ϕ(dst), T1, ϕ(s1));
+        self.amd.vshufdd(ϕ(dst), ϕ(dst), ϕ(dst), 1);
+    }
+
     fn root(&mut self, dst: Reg, s1: Reg) {
         self.fmov(Reg::Ret, s1);
         self.call_funclet("@complex_root");
