@@ -709,7 +709,7 @@ impl Generator for Complexifier {
     fn neq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.mir.neq(im(dst), im(s1), im(s2));
         self.mir.neq(re(dst), re(s1), re(s2));
-        self.mir.and(re(dst), re(dst), im(dst));
+        self.mir.or(re(dst), re(dst), im(dst)); // de Morgan's law
         self.set_reg_real(dst);
     }
 

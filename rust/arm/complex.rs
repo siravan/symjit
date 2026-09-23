@@ -505,7 +505,7 @@ impl Generator for ArmComplexGenerator {
         self.emit(arm! {fcmeq q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
         self.emit(arm! {not v(ϕ(dst)).16b, v(ϕ(dst)).16b});
         self.emit(arm! {ext q(T1), q(ϕ(dst)), q(ϕ(dst)), #8});
-        self.emit(arm! {and v(ϕ(dst)).16b, v(ϕ(dst)).16b, v(T1).16b});
+        self.emit(arm! {orr v(ϕ(dst)).16b, v(ϕ(dst)).16b, v(T1).16b});
     }
 
     fn and(&mut self, dst: Reg, s1: Reg, s2: Reg) {
