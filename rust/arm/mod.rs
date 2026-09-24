@@ -43,6 +43,9 @@ mod complex;
 mod scalar;
 mod vector;
 
+#[cfg(test)]
+mod tests;
+
 pub use complex::ArmComplexGenerator;
 pub use scalar::ArmGenerator;
 pub use vector::ArmSimdGenerator;

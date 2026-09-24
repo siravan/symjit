@@ -622,7 +622,7 @@ impl Composer for Translator {
             app.dump(&format!("symjit_{}_scalar.bin", self.salt), "scalar");
         };
 
-        if self.config.debug_scalar() {
+        if self.config.debug_simd() {
             app.dump(&format!("symjit_{}_simd.bin", self.salt), "simd");
         };
 

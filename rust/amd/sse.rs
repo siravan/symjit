@@ -164,7 +164,7 @@ impl Generator for AmdSSEGenerator {
     /// note that `is_else` is not the correct name anymore and should be
     /// changed to `expectation`
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool) {
-        self.amd.vucomisd(ϕ(cond), ϕ(cond));
+        self.amd.ucomisd(ϕ(cond), ϕ(cond));
         /*
          * if is_else (expectation) is true, jump if cond is true (all-1, NaN).
          * In this situation, vucomisd returns an unordered result, setting

@@ -68,7 +68,18 @@ impl Amd {
     }
 
     pub fn modrm_sib(&mut self, reg: u8, base: u8, index: u8, scale: u8) {
-        self.append_byte(0x04 + ((reg & 7) << 3)); // R/M = 0b100, MOD = 0b00
+        // SIB.index = 0b100 with REX/VEX.X = 0 means "no index", so RSP
+        // cannot be an index register (R12, whose low bits are also 0b100
+        // but which sets X, can).
+        assert!(index != Self::RSP, "RSP cannot be used as a SIB index");
+
+        // With MOD=00, SIB.base = 0b101 (RBP *and* R13) does not mean
+        // [base]: it means "no base, disp32 follows". For those bases,
+        // switch to MOD=01 and append an explicit zero disp8.
+        let needs_disp8 = (base & 7) == (Self::RBP & 7);
+        let modbits = if needs_disp8 { 0x40 } else { 0x00 };
+
+        self.append_byte(0x04 + modbits + ((reg & 7) << 3)); // R/M = 0b100 (SIB follows)
         let scale = match scale {
             1 => 0,
             2 => 1 << 6,
@@ -79,6 +90,10 @@ impl Amd {
             }
         };
         self.append_byte((scale | (index & 7) << 3) | (base & 7));
+
+        if needs_disp8 {
+            self.append_byte(0);
+        }
     }
 
     pub fn rex(&mut self, reg: u8, rm: u8) {
@@ -107,8 +122,12 @@ impl Amd {
             self.append_byte(0x80 + ((reg & 7) << 3) + (rm & 7))
         }
 
-        if rm == Self::RSP {
-            self.append_byte(0x24); // SIB byte for RSP
+        // A base whose low three bits are 0b100 (RSP *and* R12, which
+        // differ only in the REX/VEX.B bit) can't be encoded directly in
+        // ModRM.rm: that value means "a SIB byte follows". Emit the
+        // degenerate SIB (no index, base = the register) for both.
+        if (rm & 7) == (Self::RSP & 7) {
+            self.append_byte(0x24);
         }
 
         if small {
@@ -119,7 +138,22 @@ impl Amd {
     }
 
     pub fn modrm_sib_mem(&mut self, reg: u8, base: u8, index: u8, scale: u8, offset: i32) {
-        let small = (-128..128).contains(&offset);
+        self.modrm_sib_mem_n(reg, base, index, scale, offset, 1);
+    }
+
+    // `n` is the EVEX disp8*N scale (1 for legacy/VEX encodings): a disp8 is
+    // used only if `offset` is a multiple of `n` and `offset / n` fits in i8.
+    pub fn modrm_sib_mem_n(
+        &mut self,
+        reg: u8,
+        base: u8,
+        index: u8,
+        scale: u8,
+        offset: i32,
+        n: i32,
+    ) {
+        assert!(index != Self::RSP, "RSP cannot be used as an SIB index");
+        let small = offset % n == 0 && (-128..128).contains(&(offset / n));
 
         if small {
             self.append_byte(0x44 + ((reg & 7) << 3))
@@ -139,7 +173,7 @@ impl Amd {
         self.append_byte((scale | (index & 7) << 3) | (base & 7));
 
         if small {
-            self.append_byte(offset as u8);
+            self.append_byte((offset / n) as u8);
         } else {
             self.append_word(offset as u32);
         }
@@ -198,7 +232,7 @@ impl Amd {
     pub fn vex3pd_w1(&mut self, reg: u8, vreg: u8, rm: u8, index: u8, encoding: u8) {
         // This is the three-byte VEX prefix (VEX3) for packed-double (pd)
         // and 256-bit ymm registers
-        // fnault encoding is 1
+        // default encoding is 1
         let r = (!reg & 8) << 4;
         let x = (!index & 8) << 3;
         let b = (!rm & 8) << 2;
@@ -1229,7 +1263,7 @@ impl Amd {
     }
 
     pub fn lea_indexed(&mut self, reg: u8, base: u8, index: u8, scale: u8) {
-        self.rex(reg, 0);
+        self.rex_index(reg, base, index);
         self.append_byte(0x8d);
         self.modrm_sib(reg, base, index, scale);
     }
@@ -1307,6 +1341,24 @@ impl Amd {
     pub fn sub_rsp(&mut self, imm: u32) {
         self.append_bytes(&[0x48, 0x81, 0xec]);
         self.append_word(imm);
+    }
+
+    // CMOVZ r64, r/m64 (REX.W 0F 44 /r): reg = rm if ZF is set (also
+    // known as CMOVE). Register-to-register form only.
+    pub fn cmovz(&mut self, reg: u8, rm: u8) {
+        self.rex(reg, rm);
+        self.append_byte(0x0f);
+        self.append_byte(0x44);
+        self.modrm_reg(reg, rm);
+    }
+
+    // CMOVNZ r64, r/m64 (REX.W 0F 45 /r): reg = rm if ZF is clear (also
+    // known as CMOVNE). Register-to-register form only.
+    pub fn cmovnz(&mut self, reg: u8, rm: u8) {
+        self.rex(reg, rm);
+        self.append_byte(0x0f);
+        self.append_byte(0x45);
+        self.modrm_reg(reg, rm);
     }
 
     pub fn or(&mut self, reg: u8, rm: u8) {

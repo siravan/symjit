@@ -1,6 +1,9 @@
 #[macro_use]
 mod macros;
 
+#[cfg(test)]
+mod tests;
+
 use super::assembler::{Assembler, Jumper};
 use super::code::Func;
 use super::config::{Config, ABI_AREA};

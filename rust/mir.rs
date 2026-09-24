@@ -2568,8 +2568,9 @@ impl Mir {
                     op: BinOp::Plus, ..
                 } = *q2
                 {
-                    if (q2.s1() == q0.dst() && q2.s2() == q1.dst())
-                        || (q2.s1() == q1.dst() && q2.s2() == q0.dst())
+                    if ((q2.s1() == q0.dst() && q2.s2() == q1.dst())
+                        || (q2.s1() == q1.dst() && q2.s2() == q0.dst()))
+                        && (q0.s1() != Reg::Temp && q0.s2() != Reg::Temp)
                     {
                         code.push(&Instruction::LoadConst {
                             dst: Reg::Temp,
@@ -2596,8 +2597,9 @@ impl Mir {
                     op: BinOp::Plus, ..
                 } = *q2
                 {
-                    if (q2.s1() == q0.dst() && q2.s2() == q1.dst())
-                        || (q2.s1() == q1.dst() && q2.s2() == q0.dst())
+                    if ((q2.s1() == q0.dst() && q2.s2() == q1.dst())
+                        || (q2.s1() == q1.dst() && q2.s2() == q0.dst()))
+                        && (q0.s1() != Reg::Temp && q0.s2() != Reg::Temp)
                     {
                         code.push(&Instruction::Load {
                             dst: Reg::Temp,
@@ -2624,7 +2626,10 @@ impl Mir {
                     op: BinOp::Minus, ..
                 } = *q2
                 {
-                    if q2.s1() == q0.dst() && q2.s2() == q1.dst() {
+                    if q2.s1() == q0.dst()
+                        && q2.s2() == q1.dst()
+                        && (q0.s1() != Reg::Temp && q0.s2() != Reg::Temp)
+                    {
                         code.push(&Instruction::LoadConst {
                             dst: Reg::Temp,
                             idx,
@@ -2636,7 +2641,10 @@ impl Mir {
                             b: q0.s2(),
                             c: Reg::Temp,
                         });
-                    } else if q2.s1() == q1.dst() && q2.s2() == q0.dst() {
+                    } else if q2.s1() == q1.dst()
+                        && q2.s2() == q0.dst()
+                        && (q0.s1() != Reg::Temp && q0.s2() != Reg::Temp)
+                    {
                         code.push(&Instruction::LoadConst {
                             dst: Reg::Temp,
                             idx,

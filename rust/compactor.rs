@@ -44,7 +44,7 @@ impl Compactor {
         self.collect_last(mir); // first pass, collect live info
         self.compact_stack(mir); // second pass, rename stack slots
         mir.code = std::mem::take(&mut self.code);
-        Ok((self.fixed + self.count_stack) as usize)
+        Ok((self.count_stack) as usize)
     }
 
     fn push(&mut self, ins: Instruction) {

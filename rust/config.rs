@@ -1080,7 +1080,7 @@ impl Storage for Config {
             opt,
             ty,
             df: config.df.clone(),
-            stack: DEFAULT_STACK_LIMIT,
+            stack: DEFAULT_STACK_LIMIT, // todo: save and load stack_limit
         })
     }
 }

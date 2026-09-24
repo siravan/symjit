@@ -598,7 +598,7 @@ impl Generator for ArmComplexGenerator {
             self.minus(dst, s3, Reg::Temp);
         } else {
             self.times(Reg::Ret, s1, s2);
-            self.minus(dst, Reg::Ret, s3);
+            self.minus(dst, s3, Reg::Ret);
         }
     }
 

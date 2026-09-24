@@ -7,6 +7,9 @@ mod asm;
 mod f64x8;
 mod fused;
 
+#[cfg(test)]
+mod tests;
+
 use asm::Amd;
 
 mod complex;

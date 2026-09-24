@@ -489,7 +489,7 @@ impl Application {
 
     fn prepare_fast(&mut self) {
         // fast func compilation is lazy!
-        if self.compiled_simd.is_none() && self.can_fast {
+        if self.compiled_fast.is_none() && self.can_fast {
             if self.config.is_amd64() {
                 self.compiled_fast = Self::compile_amd_fast(
                     &self.bytecode.mir,
