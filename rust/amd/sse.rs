@@ -300,9 +300,9 @@ impl Generator for AmdSSEGenerator {
         self.times(dst, s1, s1);
     }
 
-    fn times_i(&mut self, dst: Reg, s1: Reg) {}
+    fn times_i(&mut self, _dst: Reg, _s1: Reg) {}
 
-    fn times_neg_i(&mut self, dst: Reg, s1: Reg) {}
+    fn times_neg_i(&mut self, _dst: Reg, _s1: Reg) {}
 
     fn root(&mut self, dst: Reg, s1: Reg) {
         uniop!(self, sqrtsd, dst, s1);

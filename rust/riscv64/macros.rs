@@ -85,6 +85,7 @@ macro_rules! utype {
     }};
 }
 
+#[allow(unused)]
 macro_rules! jtype {
     ($rd:expr, $imm:expr, $code:expr) => {{
         let rd = $rd as u32;

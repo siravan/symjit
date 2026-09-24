@@ -300,9 +300,9 @@ impl Generator for ArmGenerator {
         self.times(dst, s1, s1);
     }
 
-    fn times_i(&mut self, dst: Reg, s1: Reg) {}
+    fn times_i(&mut self, _dst: Reg, _s1: Reg) {}
 
-    fn times_neg_i(&mut self, dst: Reg, s1: Reg) {}
+    fn times_neg_i(&mut self, _dst: Reg, _s1: Reg) {}
 
     fn root(&mut self, dst: Reg, s1: Reg) {
         self.emit(arm! {fsqrt d(ϕ(dst)), d(ϕ(s1))});
