@@ -282,18 +282,18 @@ impl Generator for AmdSSEGenerator {
     }
 
     fn neg(&mut self, dst: Reg, s1: Reg) {
-        self.amd.xorpd_label(ϕ(s1), "_minus_zero_");
         self.amd.movapd(ϕ(dst), ϕ(s1));
+        self.amd.xorpd_label(ϕ(dst), "_minus_zero_");
     }
 
     fn sign(&mut self, dst: Reg, s1: Reg) {
-        self.amd.andpd_label(ϕ(s1), "_minus_zero_");
         self.amd.movapd(ϕ(dst), ϕ(s1));
+        self.amd.andpd_label(ϕ(dst), "_minus_zero_");
     }
 
     fn abs(&mut self, dst: Reg, s1: Reg) {
-        self.amd.andpd_label(ϕ(s1), "_not_minus_zero_");
         self.amd.movapd(ϕ(dst), ϕ(s1));
+        self.amd.andpd_label(ϕ(dst), "_not_minus_zero_");
     }
 
     fn abs2(&mut self, dst: Reg, s1: Reg) {
@@ -325,8 +325,8 @@ impl Generator for AmdSSEGenerator {
     }
 
     fn half(&mut self, dst: Reg, s1: Reg) {
-        self.amd.mulsd_label(ϕ(s1), "_half_");
         self.amd.movapd(ϕ(dst), ϕ(s1));
+        self.amd.mulsd_label(ϕ(dst), "_half_");
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {
