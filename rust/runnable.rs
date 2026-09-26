@@ -11,7 +11,7 @@ use super::applet::Applet;
 use super::arm::{ArmComplexGenerator, ArmGenerator, ArmSimdGenerator};
 use super::complexify::Complexifier;
 use super::config::Config;
-use super::generator::Generator;
+use super::generator::{Generator, GeneratorType};
 use super::machine::MachineCode;
 use super::matrix::{combine_matrixes, Matrix};
 use super::mir::{CompiledMir, Mir};
@@ -296,56 +296,44 @@ impl Application {
     fn compile_avx_simd(mir: &Mir, prog: &mut Program) -> Result<MachineCode<f64>> {
         let stack_size = prog.builder.stack_size();
         let stack_limit = prog.config().stack_limit();
+        let is_complex = prog.config().is_complex();
 
-        if prog.config().use_simd512() {
-            if stack_size * std::mem::size_of::<f64x8>() <= stack_limit {
-                return Self::compile::<AmdVectorF64x8Generator>(
-                    mir,
-                    prog,
-                    AmdVectorF64x8Generator::new(prog.config().clone()),
-                    prog.mem_size() * 8,
-                    "x86_64",
-                    8,
-                );
-            } else if stack_size * std::mem::size_of::<f64x4>() > stack_limit {
-                eprintln!(
-                    "SIMD (f64x8) request downgraded to scalar f64 due to the stack limit (= {}).",
-                    stack_limit
-                );
+        let p = if stack_size * std::mem::size_of::<f64x8>() <= stack_limit
+            && prog.config().use_simd512()
+        {
+            GeneratorType::AmdVectorF64x8(is_complex)
+        } else if stack_size * std::mem::size_of::<f64x4>() <= stack_limit
+            && prog.config().use_simd()
+        {
+            GeneratorType::AmdVectorF64x4(is_complex)
+        } else {
+            GeneratorType::AmdScalar(is_complex)
+        };
+
+        match p {
+            GeneratorType::AmdVectorF64x8(_) => Self::compile::<AmdVectorF64x8Generator>(
+                mir,
+                prog,
+                AmdVectorF64x8Generator::new(prog.config().clone()),
+                prog.mem_size() * 8,
+                "x86_64",
+                8,
+            ),
+            GeneratorType::AmdVectorF64x4(_) => Self::compile::<AmdVectorF64x4Generator>(
+                mir,
+                prog,
+                AmdVectorF64x4Generator::new(prog.config().clone()),
+                prog.mem_size() * 4,
+                "x86_64",
+                4,
+            ),
+            _ => {
                 return Err(anyhow!(
-                    "Cannot use SIMD due to the stack limit (= {}).",
+                    "Cannot use SIMD (f64x4) due to the stack limit (= {}).",
                     stack_limit
-                ));
-            } else {
-                eprintln!(
-                    "SIMD (f64x8) request downgraded to f64x4 due to the stack limit (= {}).",
-                    stack_limit
-                )
+                ))
             }
         }
-
-        if prog.config().use_simd() {
-            if stack_size * std::mem::size_of::<f64x4>() <= stack_limit {
-                return Self::compile::<AmdVectorF64x4Generator>(
-                    mir,
-                    prog,
-                    AmdVectorF64x4Generator::new(prog.config().clone()),
-                    prog.mem_size() * 4,
-                    "x86_64",
-                    4,
-                );
-            } else {
-                eprintln!(
-                    "SIMD (f64x4) request downgraded to scalar f64 due to the stack limit (= {}).",
-                    stack_limit
-                )
-            }
-        }
-
-        Err(anyhow!(
-            "Cannot use SIMD (f64x4) due to the stack limit (= {}).",
-            stack_limit
-        ))
     }
 
     fn compile_arm(mir: &Mir, prog: &mut Program) -> Result<MachineCode<f64>> {
