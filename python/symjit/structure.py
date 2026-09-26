@@ -175,7 +175,9 @@ def var(sym, val=0.0):
 
 def expr(y):
     try:
-        if isinstance(y, Sum) or isinstance(y, Product):
+        if isinstance(y, dict):
+            return y
+        elif isinstance(y, Sum) or isinstance(y, Product):
             return loops(y)
         elif isinstance(y, numbers.Number) or y.is_number:
             return {"type": "Const", "val": float(y)}

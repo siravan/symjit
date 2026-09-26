@@ -277,49 +277,48 @@ impl Amd {
     }
 
     pub fn vmovqd_indexed_zmm(&mut self, base: u8, index: u8, scale: u8, reg: u8) {
-        // self.vex_pd(reg, 0, base, index);
         Prefix::new(reg, 0, base).set_index(index).evex(self);
         self.append_byte(0x11);
         self.modrm_sib(reg, base, index, scale);
     }
 
     pub fn vaddqd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        // self.vex_pd(reg, vreg, rm, 0);
         Prefix::new(reg, vreg, rm).evex(self);
         self.append_byte(0x58);
         self.modrm_reg(reg, rm);
     }
 
     pub fn vsubqd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        // self.vex_pd(reg, vreg, rm, 0);
         Prefix::new(reg, vreg, rm).evex(self);
         self.append_byte(0x5c);
         self.modrm_reg(reg, rm);
     }
 
     pub fn vmulqd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        // self.vex_pd(reg, vreg, rm, 0);
         Prefix::new(reg, vreg, rm).evex(self);
         self.append_byte(0x59);
         self.modrm_reg(reg, rm);
     }
 
+    pub fn vmulqd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        Prefix::new(reg, vreg, 0).evex(self);
+        self.append_byte(0x59);
+        self.rip_relative(reg, label);
+    }
+
     pub fn vdivqd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        // self.vex_pd(reg, vreg, rm, 0);
         Prefix::new(reg, vreg, rm).evex(self);
         self.append_byte(0x5e);
         self.modrm_reg(reg, rm);
     }
 
     pub fn vsqrtqd(&mut self, reg: u8, rm: u8) {
-        // self.vex_pd(reg, 0, rm, 0);
         Prefix::new(reg, 0, rm).evex(self);
         self.append_byte(0x51);
         self.modrm_reg(reg, rm);
     }
 
     pub fn vroundqd(&mut self, reg: u8, rm: u8, mode: RoundingMode) {
-        // self.vex3pd(reg, 0, rm, 0, 3);
         Prefix::new(reg, 0, rm).set_encoding(3).evex(self);
         self.append_byte(0x09);
         self.modrm_reg(reg, rm);
@@ -332,63 +331,54 @@ impl Amd {
     }
 
     pub fn vandqd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        // self.vex_pd(reg, vreg, rm, 0);
         Prefix::new(reg, vreg, rm).evex(self);
         self.append_byte(0x54);
         self.modrm_reg(reg, rm);
     }
 
     pub fn vandqd_label(&mut self, reg: u8, vreg: u8, label: &str) {
-        // self.vex_pd(reg, vreg, rm, 0);
         Prefix::new(reg, vreg, 0).evex(self);
         self.append_byte(0x54);
         self.rip_relative(reg, label);
     }
 
     pub fn vandnqd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        // self.vex_pd(reg, vreg, rm, 0);
         Prefix::new(reg, vreg, rm).evex(self);
         self.append_byte(0x55);
         self.modrm_reg(reg, rm);
     }
 
     pub fn vandnqd_label(&mut self, reg: u8, vreg: u8, label: &str) {
-        // self.vex_pd(reg, vreg, rm, 0);
         Prefix::new(reg, vreg, 0).evex(self);
         self.append_byte(0x55);
         self.rip_relative(reg, label);
     }
 
     pub fn vorqd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        // self.vex_pd(reg, vreg, rm, 0);
         Prefix::new(reg, vreg, rm).evex(self);
         self.append_byte(0x56);
         self.modrm_reg(reg, rm);
     }
 
     pub fn vorqd_label(&mut self, reg: u8, vreg: u8, label: &str) {
-        // self.vex_pd(reg, vreg, rm, 0);
         Prefix::new(reg, vreg, 0).evex(self);
         self.append_byte(0x56);
         self.rip_relative(reg, label);
     }
 
     pub fn vxorqd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        // self.vex_pd(reg, vreg, rm, 0);
         Prefix::new(reg, vreg, rm).evex(self);
         self.append_byte(0x57);
         self.modrm_reg(reg, rm);
     }
 
     pub fn vxorqd_label(&mut self, reg: u8, vreg: u8, label: &str) {
-        // self.vex_pd(reg, vreg, rm, 0);
         Prefix::new(reg, vreg, 0).evex(self);
         self.append_byte(0x57);
         self.rip_relative(reg, label);
     }
 
     pub fn vcmpeqqd(&mut self, reg: u8, vreg: u8, rm: u8) {
-        // self.vex_pd(reg, vreg, rm, 0);
         Prefix::new(reg, vreg, rm).evex(self);
         self.append_byte(0xc2);
         self.modrm_reg(reg, rm);
@@ -396,7 +386,6 @@ impl Amd {
     }
 
     pub fn vcmpltqd(&mut self, k: u8, vreg: u8, rm: u8) {
-        // self.vex_pd(reg, vreg, rm, 0);
         Prefix::new(k, vreg, rm).evex(self);
         self.append_byte(0xc2);
         self.modrm_reg(k, rm);

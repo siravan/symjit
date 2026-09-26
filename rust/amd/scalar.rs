@@ -108,7 +108,7 @@ impl AmdScalarGenerator {
 
     fn predefined_consts(&mut self) {
         self.align();
-        predefined_consts(&mut self.amd);
+        predefined_consts(&mut self.amd, 2);
     }
 }
 
@@ -141,7 +141,7 @@ impl Generator for AmdScalarGenerator {
     fn align(&mut self) {
         let mut n = self.amd.a.ip();
 
-        while (n & 7) != 0 {
+        while (n & 15) != 0 {
             self.amd.nop();
             n += 1
         }
@@ -327,18 +327,15 @@ impl Generator for AmdScalarGenerator {
     }
 
     fn neg(&mut self, dst: Reg, s1: Reg) {
-        self.load_const_by_name(Reg::Temp, "_minus_zero_");
-        self.xor(dst, s1, Reg::Temp);
+        self.amd.vxordd_label(ϕ(dst), ϕ(s1), "_minus_zero_");
     }
 
     fn sign(&mut self, dst: Reg, s1: Reg) {
-        self.load_const_by_name(Reg::Temp, "_minus_zero_");
-        self.and(dst, s1, Reg::Temp);
+        self.amd.vanddd_label(ϕ(dst), ϕ(s1), "_minus_zero_");
     }
 
     fn abs(&mut self, dst: Reg, s1: Reg) {
-        self.load_const_by_name(Reg::Temp, "_minus_zero_");
-        self.andnot(dst, Reg::Temp, s1);
+        self.amd.vanddd_label(ϕ(dst), ϕ(s1), "_not_minus_zero_");
     }
 
     fn abs2(&mut self, dst: Reg, s1: Reg) {
@@ -358,13 +355,19 @@ impl Generator for AmdScalarGenerator {
     }
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
-        self.load_const_by_name(Reg::Temp, "_one_");
-        self.divide(dst, Reg::Temp, s1);
+        if dst != s1 {
+            self.load_const_by_name(dst, "_one_");
+            self.divide(dst, dst, s1);
+        } else if dst != Reg::Temp {
+            self.load_const_by_name(Reg::Temp, "_one_");
+            self.divide(dst, Reg::Temp, s1);
+        } else {
+            panic!("no scratch register available")
+        }
     }
 
     fn half(&mut self, dst: Reg, s1: Reg) {
-        self.load_const_by_name(Reg::Temp, "_half_");
-        self.times(dst, s1, Reg::Temp);
+        self.amd.vmulsd_label(ϕ(dst), ϕ(s1), "_half_");
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {
@@ -510,8 +513,7 @@ impl Generator for AmdScalarGenerator {
     }
 
     fn not(&mut self, dst: Reg, s1: Reg) {
-        self.load_const_by_name(Reg::Temp, "_all_ones_");
-        self.xor(dst, s1, Reg::Temp);
+        self.amd.vxordd_label(ϕ(dst), ϕ(s1), "_all_ones_");
     }
 
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {

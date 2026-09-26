@@ -123,18 +123,31 @@ fn ϕ(r: Reg) -> u8 {
     }
 }
 
-fn predefined_consts(amd: &mut Amd) {
+fn predefined_consts(amd: &mut Amd, num_labels: usize) {
     amd.a.set_label("_minus_zero_");
-    amd.a.append_quad((-0.0f64).to_bits());
+    for _ in 0..num_labels {
+        amd.a.append_quad((-0.0f64).to_bits());
+    }
+
+    amd.a.set_label("_not_minus_zero_");
+    for _ in 0..num_labels {
+        amd.a.append_quad(!(-0.0f64).to_bits());
+    }
 
     amd.a.set_label("_one_");
-    amd.a.append_quad(1.0f64.to_bits());
+    for _ in 0..num_labels {
+        amd.a.append_quad(1.0f64.to_bits());
+    }
 
     amd.a.set_label("_half_");
-    amd.a.append_quad(0.5f64.to_bits());
+    for _ in 0..num_labels {
+        amd.a.append_quad(0.5f64.to_bits());
+    }
 
     amd.a.set_label("_all_ones_");
-    amd.a.append_quad(0xffffffffffffffff);
+    for _ in 0..num_labels {
+        amd.a.append_quad(0xffffffffffffffff);
+    }
 }
 
 /*

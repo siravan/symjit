@@ -129,8 +129,8 @@ impl Builder {
                     0.5 => return self.create_unary(Operation::new("root"), left),
                     ONE_THIRD => return self.add_unary(Operation::new("cbrt"), left),
                     1.5 => {
-                        let arg = self.create_unary(Operation::new("cube"), left)?;
-                        return self.create_unary(Operation::new("root"), arg);
+                        let arg = self.create_unary(Operation::new("root"), left.clone())?;
+                        return self.create_binary(Operation::Times, left, arg);
                     }
                     _ => {}
                 }

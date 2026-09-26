@@ -2553,10 +2553,7 @@ impl Mir {
         q1: &Instruction,
         q2: &Instruction,
     ) -> Option<Instruction> {
-        // TODO: fix the FMA bug for complex noted on `runtests complex`
-        if !self.config.fastmath()
-        /*|| self.config.is_complex()*/
-        {
+        if !self.config.fastmath() {
             return None;
         }
 
@@ -2671,7 +2668,10 @@ impl Mir {
                     op: BinOp::Minus, ..
                 } = *q2
                 {
-                    if q2.s1() == q0.dst() && q2.s2() == q1.dst() {
+                    if q2.s1() == q0.dst()
+                        && q2.s2() == q1.dst()
+                        && (q0.s1() != Reg::Temp && q0.s2() != Reg::Temp)
+                    {
                         code.push(&Instruction::Load {
                             dst: Reg::Temp,
                             loc: q1.loc(),
@@ -2683,7 +2683,10 @@ impl Mir {
                             b: q0.s2(),
                             c: Reg::Temp,
                         });
-                    } else if q2.s1() == q1.dst() && q2.s2() == q0.dst() {
+                    } else if q2.s1() == q1.dst()
+                        && q2.s2() == q0.dst()
+                        && (q0.s1() != Reg::Temp && q0.s2() != Reg::Temp)
+                    {
                         code.push(&Instruction::Load {
                             dst: Reg::Temp,
                             loc: q1.loc(),

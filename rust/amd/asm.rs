@@ -448,6 +448,12 @@ impl Amd {
         self.modrm_reg(reg, rm);
     }
 
+    pub fn vmulsd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        self.vex_sd(reg, vreg, 0, 0);
+        self.append_byte(0x59);
+        self.rip_relative(reg, label);
+    }
+
     pub fn vdivsd(&mut self, reg: u8, vreg: u8, rm: u8) {
         self.vex_sd(reg, vreg, rm, 0);
         self.append_byte(0x5e);
@@ -603,6 +609,12 @@ impl Amd {
         self.vex_pd(reg, vreg, rm, 0);
         self.append_byte(0x59);
         self.modrm_reg(reg, rm);
+    }
+
+    pub fn vmulpd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        self.vex_pd(reg, vreg, 0, 0);
+        self.append_byte(0x59);
+        self.rip_relative(reg, label);
     }
 
     pub fn vdivpd(&mut self, reg: u8, vreg: u8, rm: u8) {
@@ -807,6 +819,12 @@ impl Amd {
         self.vex_dd(reg, vreg, rm, 0);
         self.append_byte(0x59);
         self.modrm_reg(reg, rm);
+    }
+
+    pub fn vmuldd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        self.vex_dd(reg, vreg, 0, 0);
+        self.append_byte(0x59);
+        self.rip_relative(reg, label);
     }
 
     pub fn vdivdd(&mut self, reg: u8, vreg: u8, rm: u8) {
@@ -1086,6 +1104,12 @@ impl Amd {
         self.sse_sd(reg, rm);
         self.append_byte(0x59);
         self.modrm_reg(reg, rm);
+    }
+
+    pub fn mulsd_label(&mut self, reg: u8, label: &str) {
+        self.sse_sd(reg, 0);
+        self.append_byte(0x59);
+        self.rip_relative(reg, label);
     }
 
     pub fn divsd(&mut self, reg: u8, rm: u8) {

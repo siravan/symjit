@@ -102,7 +102,7 @@ impl AmdComplexGenerator {
 
     fn predefined_consts(&mut self) {
         self.align();
-        predefined_consts(&mut self.amd);
+        predefined_consts(&mut self.amd, 2);
     }
 }
 
@@ -135,7 +135,7 @@ impl Generator for AmdComplexGenerator {
     fn align(&mut self) {
         let mut n = self.amd.a.ip();
 
-        while (n & 7) != 0 {
+        while (n & 15) != 0 {
             self.amd.nop();
             n += 1
         }
@@ -273,15 +273,11 @@ impl Generator for AmdComplexGenerator {
     fn save_args_complex(&mut self, _num_args: u8, _ultra: bool) {}
 
     fn neg(&mut self, dst: Reg, s1: Reg) {
-        self.load_const_by_name(Reg::Temp, "_minus_zero_");
-        self.amd.vunpckldd(ϕ(Reg::Temp), ϕ(Reg::Temp), ϕ(Reg::Temp));
-        self.xor(dst, s1, Reg::Temp);
+        self.amd.vxordd_label(ϕ(dst), ϕ(s1), "_minus_zero_");
     }
 
     fn sign(&mut self, dst: Reg, s1: Reg) {
-        self.load_const_by_name(Reg::Temp, "_minus_zero_");
-        self.amd.vunpckldd(ϕ(Reg::Temp), ϕ(Reg::Temp), ϕ(Reg::Temp));
-        self.and(dst, s1, Reg::Temp);
+        self.amd.vanddd_label(ϕ(dst), ϕ(s1), "_minus_zero_");
     }
 
     fn abs(&mut self, dst: Reg, s1: Reg) {
@@ -324,9 +320,7 @@ impl Generator for AmdComplexGenerator {
 
             self.set_label("@complex_root");
 
-            self.amd.vbroadcastsd_label(T0, "_half_");
-            self.amd.vmuldd(s1, s1, T0);
-
+            self.amd.vmuldd_label(s1, s1, "_half_");
             self.amd.vmulsd(T1, s1, s1);
             self.amd.vunpckhdd(T2, s1, s1);
             self.amd.vfmadd231dd(T1, T2, T2);
@@ -383,9 +377,7 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn half(&mut self, dst: Reg, s1: Reg) {
-        self.load_const_by_name(Reg::Temp, "_half_");
-        self.amd.vunpckldd(ϕ(Reg::Temp), ϕ(Reg::Temp), ϕ(Reg::Temp));
-        self.amd.vmuldd(ϕ(dst), ϕ(s1), ϕ(Reg::Temp));
+        self.amd.vmuldd_label(ϕ(dst), ϕ(s1), "_half_");
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {
@@ -590,9 +582,7 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn not(&mut self, dst: Reg, s1: Reg) {
-        self.load_const_by_name(Reg::Temp, "_all_ones_");
-        self.amd.vunpckldd(ϕ(Reg::Temp), ϕ(Reg::Temp), ϕ(Reg::Temp));
-        self.xor(dst, s1, Reg::Temp);
+        self.amd.vxordd_label(ϕ(dst), ϕ(s1), "_all_ones_");
     }
 
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
