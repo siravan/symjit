@@ -462,8 +462,7 @@ impl Generator for AmdVectorF64x8Generator {
             |amd, arg| {
                 amd.shl_imm(Amd::RAX, 3);
                 amd.vmovqd_zmm_indexed(2 * arg, STACK, Amd::RAX, 8);
-                // note that the offset is 1 and not 64 due to EVEX compressed displacement mode
-                amd.vmovqd_zmm_indexed_mem(2 * arg + 1, STACK, Amd::RAX, 8, 1);
+                amd.vmovqd_zmm_indexed_mem(2 * arg + 1, STACK, Amd::RAX, 8, 64);
             },
             |amd, arg, dst| {
                 save_f64x8_to_loc(amd, 2 * arg, dst);

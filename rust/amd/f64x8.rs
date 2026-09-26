@@ -172,7 +172,6 @@ impl Prefix {
     // `n` is the disp8*N scale: the full vector size in bytes for full-vector
     // accesses, but the element size (8 for f64) for embedded broadcasts.
     pub fn modrm_mem_n(&mut self, amd: &mut Amd, offset: i32, n: i32) {
-
         // compressed, aka, disp8*N mode
         let compressed = offset & (n - 1) == 0 && (-128..128).contains(&(offset / n));
 
@@ -250,9 +249,14 @@ impl Amd {
     }
 
     pub fn vmovqd_zmm_indexed_mem(&mut self, reg: u8, base: u8, index: u8, scale: u8, offset: i32) {
+        assert!(offset % 64 == 0);
         Prefix::new(reg, 0, base).set_index(index).evex(self);
         self.append_byte(0x10);
-        self.modrm_sib_mem_n(reg, base, index, scale, offset, 64); // disp8*64
+        if offset < 128 * 64 {
+            self.modrm_sib_mem(reg, base, index, scale, offset / 64); // disp8*64
+        } else {
+            self.modrm_sib_mem(reg, base, index, scale, offset);
+        }
     }
 
     pub fn vmovqd_zmm_label(&mut self, reg: u8, label: &str) {
