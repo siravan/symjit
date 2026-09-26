@@ -528,7 +528,7 @@ impl Config {
 
     pub fn available_registers(&self) -> u8 {
         if (self.is_arm64() || self.is_riscv64()) && self.opt_level() == 3 && !self.compress() {
-            32
+            29 // three scratch registers
         } else {
             16
         }

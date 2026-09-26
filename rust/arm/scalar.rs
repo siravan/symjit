@@ -289,17 +289,9 @@ impl Generator for ArmGenerator {
     }
 
     fn sign(&mut self, dst: Reg, s1: Reg) {
-        if dst != s1 {
-            self.emit(arm! {fmov d(ϕ(dst)), #0.0});
-            self.emit(arm! {fneg d(ϕ(dst)), d(ϕ(dst))});
-            self.and(dst, s1, dst);
-        } else if dst != Reg::Temp {
-            self.emit(arm! {fmov d(ϕ(Reg::Temp)), #0.0});
-            self.emit(arm! {fneg d(ϕ(Reg::Temp)), d(ϕ(Reg::Temp))});
-            self.and(dst, s1, Reg::Temp);
-        } else {
-            panic!("no scratch register available")
-        }
+        self.emit(arm! {fmov d(T2), #0.0});
+        self.emit(arm! {fneg d(T2), d(T2)});
+        self.emit(arm! {and v(ϕ(dst)).8b, v(ϕ(s1)).8b, v(T2).8b});
     }
 
     fn abs(&mut self, dst: Reg, s1: Reg) {
@@ -323,27 +315,13 @@ impl Generator for ArmGenerator {
     }
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
-        if dst != s1 {
-            self.emit(arm! {fmov d(ϕ(dst)), #1.0});
-            self.emit(arm! {fdiv d(ϕ(dst)), d(ϕ(dst)), d(ϕ(s1))});
-        } else if dst != Reg::Temp {
-            self.emit(arm! {fmov d(TEMP), #1.0});
-            self.emit(arm! {fdiv d(ϕ(dst)), d(TEMP), d(ϕ(s1))});
-        } else {
-            panic!("no scratch register available")
-        }
+        self.emit(arm! {fmov d(T2), #1.0});
+        self.emit(arm! {fdiv d(ϕ(dst)), d(T2), d(ϕ(s1))});
     }
 
     fn half(&mut self, dst: Reg, s1: Reg) {
-        if dst != s1 {
-            self.emit(arm! {fmov d(ϕ(dst)), #0.5});
-            self.emit(arm! {fmul d(ϕ(dst)), d(ϕ(s1)), d(ϕ(dst))});
-        } else if dst != Reg::Temp {
-            self.emit(arm! {fmov d(TEMP), #0.5});
-            self.emit(arm! {fmul d(ϕ(dst)), d(ϕ(s1)), d(TEMP)});
-        } else {
-            panic!("no scratch register available")
-        }
+        self.emit(arm! {fmov d(T2), #0.5});
+        self.emit(arm! {fmul d(ϕ(dst)), d(ϕ(s1)), d(T2)});
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {
@@ -363,8 +341,8 @@ impl Generator for ArmGenerator {
     }
 
     fn frac(&mut self, dst: Reg, s1: Reg) {
-        self.floor(Reg::Temp, s1);
-        self.minus(dst, s1, Reg::Temp);
+        self.emit(arm! {frintm d(T2), d(ϕ(s1))});
+        self.emit(arm! {fsub d(ϕ(dst)), d(ϕ(s1)), d(T2)});
     }
 
     fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
