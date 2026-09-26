@@ -972,3 +972,18 @@ pub unsafe extern "C" fn add_func(
     let name = unsafe { CStr::from_ptr(name).to_str().unwrap() };
     df.add_func(name, p, num_args);
 }
+
+/// Adds self (recursive) to a `Defun`.
+///
+/// # Safety
+///     1, df should point to a valid Defun object created by create_defun.
+///     2. name should be a valid utf8 string.
+///     3. p should point to a valid C-styple function pointer that accepts
+///         num_args double arguments.
+///
+#[no_mangle]
+pub unsafe extern "C" fn add_self(df: *mut Defuns, name: *const c_char) {
+    let df: &mut Defuns = unsafe { &mut *df };
+    let name = unsafe { CStr::from_ptr(name).to_str().unwrap() };
+    df.add_self(name);
+}

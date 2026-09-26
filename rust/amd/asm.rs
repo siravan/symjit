@@ -269,6 +269,26 @@ impl Amd {
         self.append_byte(w | vvvv | pp);
     }
 
+    pub fn vex3sd_w1(&mut self, reg: u8, vreg: u8, rm: u8, index: u8, encoding: u8) {
+        // This is the three-byte VEX prefix (VEX3) for scalar-double (sd)
+        // with VEX.W = 1 (e.g., 64-bit general register operands)
+        // default encoding is 1
+        let r = (!reg & 8) << 4;
+        let x = (!index & 8) << 3;
+        let b = (!rm & 8) << 2;
+        let w = 0x80;
+        let vvvv = (!vreg & 0x0f) << 3;
+
+        let pp = match self.dtype {
+            DataType::F32 => 2, // ss
+            DataType::F64 => 3, // sd
+        };
+
+        self.append_byte(0xc4);
+        self.append_byte(r | x | b | encoding);
+        self.append_byte(w | vvvv | pp);
+    }
+
     pub fn vex_sd(&mut self, reg: u8, vreg: u8, rm: u8, index: u8) {
         if rm < 8 && index < 8 {
             self.vex2sd(reg, vreg);
@@ -1358,6 +1378,21 @@ impl Amd {
         self.rex(reg, rm);
         self.append_byte(0x0f);
         self.append_byte(0x45);
+        self.modrm_reg(reg, rm);
+    }
+
+    // CVTTSD2SI r64, xmm (F2 REX.W 0F 2C /r): reg = trunc(rm), a double to a signed
+    // 64-bit integer (CVTTSS2SI with DataType::F32). Register-to-register form only.
+    pub fn cvttsd2si(&mut self, reg: u8, rm: u8) {
+        self.sse_sd(reg, rm); // F2 (F3 for f32), REX.W, 0F
+        self.append_byte(0x2c);
+        self.modrm_reg(reg, rm);
+    }
+
+    // VCVTTSD2SI r64, xmm (VEX.LIG.F2.0F.W1 2C /r): the AVX form of cvttsd2si.
+    pub fn vcvttsd2si(&mut self, reg: u8, rm: u8) {
+        self.vex3sd_w1(reg, 0, rm, 0, 1);
+        self.append_byte(0x2c);
         self.modrm_reg(reg, rm);
     }
 

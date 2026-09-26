@@ -6,6 +6,7 @@ from sympy import Symbol, lambdify, Expr
 
 from . import engine, pyengine, structure
 from .composer import *
+from .disasm import *
 from .func import *
 from .ode import *
 

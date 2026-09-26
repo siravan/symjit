@@ -1806,6 +1806,42 @@ fn vmovq_xmm_reg_2() {
 }
 
 #[test]
+fn cvttsd2si_0() {
+    // cvttsd2si rcx, xmm2
+    check(DataType::F64, &[0xf2, 0x48, 0x0f, 0x2c, 0xca], |a| { a.cvttsd2si(1, 2); });
+}
+
+#[test]
+fn cvttsd2si_1() {
+    // cvttsd2si r9, xmm10
+    check(DataType::F64, &[0xf2, 0x4d, 0x0f, 0x2c, 0xca], |a| { a.cvttsd2si(9, 10); });
+}
+
+#[test]
+fn cvttsd2si_2() {
+    // cvttsd2si rdx, xmm8
+    check(DataType::F64, &[0xf2, 0x49, 0x0f, 0x2c, 0xd0], |a| { a.cvttsd2si(2, 8); });
+}
+
+#[test]
+fn vcvttsd2si_0() {
+    // vcvttsd2si rcx, xmm2
+    check(DataType::F64, &[0xc4, 0xe1, 0xfb, 0x2c, 0xca], |a| { a.vcvttsd2si(1, 2); });
+}
+
+#[test]
+fn vcvttsd2si_1() {
+    // vcvttsd2si r9, xmm10
+    check(DataType::F64, &[0xc4, 0x41, 0xfb, 0x2c, 0xca], |a| { a.vcvttsd2si(9, 10); });
+}
+
+#[test]
+fn vcvttsd2si_2() {
+    // vcvttsd2si rdx, xmm8
+    check(DataType::F64, &[0xc4, 0xc1, 0xfb, 0x2c, 0xd0], |a| { a.vcvttsd2si(2, 8); });
+}
+
+#[test]
 fn vmovaqd_0() {
     // vmovapd zmm1, zmm2
     check(DataType::F64, &[0x62, 0xf1, 0xfd, 0x48, 0x28, 0xca], |a| { a.vmovaqd(1, 2); });

@@ -236,6 +236,13 @@ class Engine:
         ]
         self.add_func.restype = None
 
+        self.add_self = self.dll.add_self
+        self.add_self.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_char_p,
+        ]
+        self.add_self.restype = None
+
         self.finalize_defuns = self.dll.finalize_defuns
         self.finalize_defuns.argtypes = [ctypes.c_void_p]
         self.finalize_defuns.restype = None
@@ -300,6 +307,10 @@ class Defuns:
 
         if defuns is not None:
             for sym, f in defuns.items():
+                if f is None:
+                    lib.add_self(self.p, sym.encode("utf8"))
+                    continue
+
                 if hasattr(f, "fast_func"):
                     f = f.fast_func()
 
