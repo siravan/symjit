@@ -2176,6 +2176,7 @@ impl Mir {
         if let Instruction::Save { .. } = *q0 {
             if let Instruction::Load { .. } = *q1 {
                 if let Instruction::Save { .. } = *q2 {
+                    code.push(q0);
                     if q0.src() == Reg::Ret && q0.loc() == q1.loc() && q1.dst() == q2.src() {
                         return Some(Instruction::Save {
                             src: Reg::Ret,

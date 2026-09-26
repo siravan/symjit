@@ -28,5 +28,6 @@ test([x + y, x * y])
 test((x + y, x * y))
 test([sin(x + y), cos(x * y)])
 test((sin(x + y), cos(x * y)))
+test((sin(y), x * sin(y)))  # fuse_save3 bug
 
 print("ok!")
