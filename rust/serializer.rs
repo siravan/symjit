@@ -249,8 +249,16 @@ impl MirWriter {
                 label, num_args, ..
             } => {
                 self.append_byte(CALL);
-                assert!(*num_args < 256);
-                self.append_byte(*num_args as u8);
+                assert!(*num_args < 32768);
+                let n = *num_args;
+
+                if n < 128 {
+                    self.append_byte(n as u8);
+                } else {
+                    self.append_byte((n & 0x7f) as u8 | 0x80);
+                    self.append_byte((n >> 7) as u8);
+                }
+
                 self.string(label);
             }
             Instruction::Label { label } => {
@@ -754,7 +762,12 @@ impl MirIterator {
                 })
             }
             CALL => {
-                let num_args = self.pop()? as usize;
+                let mut num_args = self.pop()? as usize;
+
+                if num_args & 0x80 != 0 {
+                    num_args = (num_args & 0x7f) | (self.pop()? as usize) << 7;
+                }
+
                 let op = self.string()?;
                 Ok(Instruction::Call {
                     label: op.to_string(),
