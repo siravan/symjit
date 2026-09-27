@@ -48,7 +48,7 @@ pub const SPILL_AREA: usize = 16;
 pub const ABI_AREA: usize = 16;
 
 #[cfg(feature = "symbolica")]
-pub const SLICE_CAP: usize = 256;
+pub const SLICE_CAP: usize = 1024;
 
 #[cfg(not(feature = "symbolica"))]
 pub const SLICE_CAP: usize = 32;
