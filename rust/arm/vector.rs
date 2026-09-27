@@ -601,7 +601,6 @@ impl Generator for ArmSimdGenerator {
     // fused_neg_mul_add is s3 - s1 * s2, corresponding to fmsub in aarch64
     // and vnmadd... in amd64
     fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        assert!(s1 != Reg::Temp && s2 != Reg::Temp);
         if dst == s3 {
             self.emit(arm! {fmls q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
         } else if s1 != dst && s2 != dst {
