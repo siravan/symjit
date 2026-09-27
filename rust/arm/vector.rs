@@ -97,6 +97,27 @@ impl ArmSimdGenerator {
     fn sub_stack(&mut self, size: u32) {
         sub_stack(&mut self.a, size);
     }
+
+    /*
+    fn add_stack(&mut self, size: u32) {
+        if size >> 12 != 0 {
+            self.emit(arm! {add x(STACK), sp, #size >> 12, lsl #12});
+        }
+        self.emit(arm! {add sp, sp, #size & 0x0fff});
+    }
+    */
+
+    fn find_temp(s1: Reg, s2: Reg) -> Reg {
+        if s1 != Reg::Temp && s2 != Reg::Temp {
+            Reg::Temp
+        } else if s1 != Reg::Gen(2) && s2 != Reg::Gen(2) {
+            Reg::Gen(2)
+        } else if s1 != Reg::Gen(3) && s2 != Reg::Gen(3) {
+            Reg::Gen(3)
+        } else {
+            panic!("cannot find a temporary register");
+        }
+    }
 }
 
 impl Generator for ArmSimdGenerator {
@@ -332,9 +353,17 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn sign(&mut self, dst: Reg, s1: Reg) {
-        self.emit(arm! {fmov q(T2), #0.0});
-        self.emit(arm! {fneg q(T2), q(ϕ(Reg::Temp))});
-        self.emit(arm! {and v(ϕ(dst)).16b, v(ϕ(s1)).16b, v(T2).16b});
+        if dst != s1 {
+            self.emit(arm! {fmov q(ϕ(dst)), #0.0});
+            self.emit(arm! {fneg q(ϕ(dst)), q(ϕ(dst))});
+            self.and(dst, s1, dst);
+        } else if dst != Reg::Temp {
+            self.emit(arm! {fmov q(ϕ(Reg::Temp)), #0.0});
+            self.emit(arm! {fneg q(ϕ(Reg::Temp)), q(ϕ(Reg::Temp))});
+            self.and(dst, s1, Reg::Temp);
+        } else {
+            panic!("no scratch register available")
+        }
     }
 
     fn abs(&mut self, dst: Reg, s1: Reg) {
@@ -358,13 +387,27 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
-        self.emit(arm! {fmov q(T2), #1.0});
-        self.emit(arm! {fdiv q(ϕ(dst)), q(T2), q(ϕ(s1))});
+        if dst != s1 {
+            self.emit(arm! {fmov q(ϕ(dst)), #1.0});
+            self.emit(arm! {fdiv q(ϕ(dst)), q(ϕ(dst)), q(ϕ(s1))});
+        } else if dst != Reg::Temp {
+            self.emit(arm! {fmov q(TEMP), #1.0});
+            self.emit(arm! {fdiv q(ϕ(dst)), q(TEMP), q(ϕ(s1))});
+        } else {
+            panic!("no scratch register available")
+        }
     }
 
     fn half(&mut self, dst: Reg, s1: Reg) {
-        self.emit(arm! {fmov q(T2), #0.5});
-        self.emit(arm! {fmul q(ϕ(dst)), q(ϕ(s1)), q(T2)});
+        if dst != s1 {
+            self.emit(arm! {fmov q(ϕ(dst)), #0.5});
+            self.emit(arm! {fmul q(ϕ(dst)), q(ϕ(s1)), q(ϕ(dst))});
+        } else if dst != Reg::Temp {
+            self.emit(arm! {fmov q(TEMP), #0.5});
+            self.emit(arm! {fmul q(ϕ(dst)), q(ϕ(s1)), q(TEMP)});
+        } else {
+            panic!("no scratch register available")
+        }
     }
 
     fn round(&mut self, dst: Reg, s1: Reg) {
@@ -384,8 +427,8 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn frac(&mut self, dst: Reg, s1: Reg) {
-        self.emit(arm! {frintm q(T2), q(ϕ(s1))});
-        self.emit(arm! {fsub q(ϕ(dst)), q(ϕ(s1)), q(T2)});
+        self.floor(Reg::Temp, s1);
+        self.minus(dst, s1, Reg::Temp);
     }
 
     fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
@@ -534,9 +577,10 @@ impl Generator for ArmSimdGenerator {
             self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(s3))});
             self.emit(arm! {fmla q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
         } else {
-            self.emit(arm! {fmov q(T2), q(ϕ(s3))});
-            self.emit(arm! {fmla q(T2), q(ϕ(s1)), q(ϕ(s2))});
-            self.emit(arm! {fmov q(ϕ(dst)), q(T2)});
+            let t = Self::find_temp(s1, s2);
+            self.emit(arm! {fmov q(ϕ(t)), q(ϕ(s3))});
+            self.emit(arm! {fmla q(ϕ(t)), q(ϕ(s1)), q(ϕ(s2))});
+            self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(t))});
         }
     }
 
@@ -547,25 +591,27 @@ impl Generator for ArmSimdGenerator {
             self.emit(arm! {fneg q(ϕ(dst)), q(ϕ(s3))});
             self.emit(arm! {fmla q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
         } else {
-            self.emit(arm! {fneg q(T2), q(ϕ(s3))});
-            self.emit(arm! {fmla q(T2), q(ϕ(s1)), q(ϕ(s2))});
-            self.emit(arm! {fmov q(ϕ(dst)), q(T2)});
+            let t = Self::find_temp(s1, s2);
+            self.emit(arm! {fneg q(ϕ(t)), q(ϕ(s3))});
+            self.emit(arm! {fmla q(ϕ(t)), q(ϕ(s1)), q(ϕ(s2))});
+            self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(t))});
         }
     }
 
     // fused_neg_mul_add is s3 - s1 * s2, corresponding to fmsub in aarch64
     // and vnmadd... in amd64
     fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        //assert!(s1 != Reg::Temp && s2 != Reg::Temp);
+        assert!(s1 != Reg::Temp && s2 != Reg::Temp);
         if dst == s3 {
             self.emit(arm! {fmls q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
         } else if s1 != dst && s2 != dst {
             self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(s3))});
             self.emit(arm! {fmls q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
         } else {
-            self.emit(arm! {fmov q(T2), q(ϕ(s3))});
-            self.emit(arm! {fmls q(T2), q(ϕ(s1)), q(ϕ(s2))});
-            self.emit(arm! {fmov q(ϕ(dst)), q(T2)});
+            let t = Self::find_temp(s1, s2);
+            self.emit(arm! {fmov q(ϕ(t)), q(ϕ(s3))});
+            self.emit(arm! {fmls q(ϕ(t)), q(ϕ(s1)), q(ϕ(s2))});
+            self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(t))});
         }
     }
 
@@ -576,9 +622,10 @@ impl Generator for ArmSimdGenerator {
             self.emit(arm! {fneg q(ϕ(dst)), q(ϕ(s3))});
             self.emit(arm! {fmls q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
         } else {
-            self.emit(arm! {fneg q(T2), q(ϕ(s3))});
-            self.emit(arm! {fmls q(T2), q(ϕ(s1)), q(ϕ(s2))});
-            self.emit(arm! {fmov q(ϕ(dst)), q(T2)});
+            let t = Self::find_temp(s1, s2);
+            self.emit(arm! {fneg q(ϕ(t)), q(ϕ(s3))});
+            self.emit(arm! {fmls q(ϕ(t)), q(ϕ(s1)), q(ϕ(s2))});
+            self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(t))});
         }
     }
 
