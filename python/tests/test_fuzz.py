@@ -170,11 +170,32 @@ def inputs(n, seed, dtype):
 
 
 def reference(exprs, X, dtype):
+    """The numpy ground truth for `exprs`, evaluated with sympy's vectorized lambdify.
+
+    Some sympy/numpy version combinations (reported on macOS/arm64, not reproducible with the
+    versions pinned here) print an expression's vectorized numpy code so that, when called with
+    array inputs, it builds a ragged Python sequence -- e.g. mixing an array-valued and a
+    scalar-valued (expression-invariant) sub-result and stacking them directly -- instead of a
+    plain (n,) array. Recent numpy (>=1.24) raises a hard ValueError for that ("inhomogeneous
+    shape"), where older numpy only warned and silently fell back to an object array; the
+    ValueError can surface either while the vectorized call itself runs or afterwards, while
+    turning its return value into an array.
+    Each expression is therefore lambdified and evaluated on its own (not as one combined list,
+    so one expression's failure cannot be masked by another's success), and if either step
+    raises, it is retried with scalar (pointwise) evaluation: every sub-result collapses to a
+    plain float there, so the same ragged stacking cannot occur.
+    """
     n = X.shape[1]
+    rows = []
     with np.errstate(all="ignore"), warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        f = sp.lambdify(V, exprs, "numpy")
-        return np.array([np.broadcast_to(np.asarray(r, dtype=dtype), (n,)) for r in f(*X)])
+        for e in exprs:
+            fi = sp.lambdify(V, e, "numpy")
+            try:
+                rows.append(np.broadcast_to(np.asarray(fi(*X), dtype=dtype), (n,)))
+            except ValueError:
+                rows.append(np.array([fi(*pt) for pt in X.T], dtype=dtype))
+        return np.array(rows)
 
 
 def build_case(family, gen, seed):

@@ -27,10 +27,21 @@ ZC = np.array([0.5 + 0.3j, -1.2 + 0.4j, 2 + 0j, -2 + 0j, 0.1 - 0.9j, -0.5 - 0.5j
 
 
 def reference(exprs, X):
+    """See test_fuzz.reference: falls back to pointwise evaluation for an expression whose
+    vectorized numpy code raises a ragged-array ValueError (some sympy/numpy version
+    combinations, e.g. on macOS/arm64, hit this for expressions such as `Min(0, -z)`; not
+    reproducible with the versions pinned here)."""
+    n = X.shape[1]
+    rows = []
     with np.errstate(all="ignore"), warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        n = X.shape[1]
-        return np.array([np.broadcast_to(np.asarray(r), (n,)) for r in sp.lambdify([x, y, z], exprs, "numpy")(*X)])
+        for e in exprs:
+            fi = sp.lambdify([x, y, z], e, "numpy")
+            try:
+                rows.append(np.broadcast_to(np.asarray(fi(*X)), (n,)))
+            except ValueError:
+                rows.append(np.array([fi(*pt) for pt in X.T]))
+        return np.array(rows)
 
 
 OPTS = [dict(opt_level=0), dict(opt_level=1), dict(opt_level=2), dict(opt_level=3), dict(opt_level=2, compact=False)]
