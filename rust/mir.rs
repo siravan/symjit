@@ -2244,7 +2244,11 @@ impl Mir {
                 op: BinOp::Times, ..
             } = *q1
             {
-                if q0.dst() == q1.s2() {
+                if q1.s1() == q1.s2() {
+                    // r * r with r = recip(x): both operands are the recip result, so
+                    // the fusion below (which discards the recip and divides by its
+                    // source instead) would be wrong; leave the pair unfused.
+                } else if q0.dst() == q1.s2() {
                     return Some(Instruction::Bi {
                         op: BinOp::Divide,
                         dst: q1.dst(),
