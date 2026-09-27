@@ -18,8 +18,8 @@
 //  * `vbroadcastdd`/`vbroadcastdd_label`: VBROADCASTSD has no 128-bit form (use
 //    VMOVDDUP); the emitted bytes are #UD.
 
+use super::super::utils::DataType;
 use super::asm::{Amd, RoundingMode};
-use crate::utils::DataType;
 
 #[track_caller]
 fn check<F: FnOnce(&mut Amd)>(dtype: DataType, expected: &[u8], f: F) {

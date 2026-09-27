@@ -42,15 +42,6 @@ pub enum GeneratorType {
     RiscvScalar(bool),
 }
 
-pub fn elem_size<G: Generator>(generator: &G) -> u32 {
-    match generator.what() {
-        GeneratorType::AmdVectorF64x4(_) => 32,
-        GeneratorType::AmdVectorF64x8(_) => 64,
-        GeneratorType::ArmVector(_) => 16,
-        _ => 8,
-    }
-}
-
 #[allow(dead_code)]
 pub trait Generator {
     fn count_shadows(&self) -> u8;

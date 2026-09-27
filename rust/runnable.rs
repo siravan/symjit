@@ -327,12 +327,10 @@ impl Application {
                 "x86_64",
                 4,
             ),
-            _ => {
-                return Err(anyhow!(
-                    "Cannot use SIMD (f64x4) due to the stack limit (= {}).",
-                    stack_limit
-                ))
-            }
+            _ => Err(anyhow!(
+                "Cannot use SIMD (f64x4) due to the stack limit (= {}).",
+                stack_limit
+            )),
         }
     }
 

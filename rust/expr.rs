@@ -22,7 +22,6 @@ use super::model::{Equation, Variable};
 /// let x = Expr::var("x");     # create a new variable
 /// let c = Expr::from(2.5);    # create a new constant (f64)
 /// let expr = &x * &(x.sin() + &c)
-/// ...
 /// ```
 ///
 /// Note that the overloaded operators expect `&Expr`; therefore, the need

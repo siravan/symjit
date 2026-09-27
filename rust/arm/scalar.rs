@@ -1,5 +1,3 @@
-use std::panic;
-
 use anyhow::Result;
 
 use super::super::assembler::{Assembler, Jumper};
