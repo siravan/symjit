@@ -29,6 +29,21 @@ def can_use_python(backend):
     return pyengine.can_compile()
 
 
+def get_instructions(evaluator, num_params=0):
+    if isinstance(evaluator, str):
+        return evaluator, num_params
+
+    insts = evaluator.get_instructions()
+
+    if hasattr(insts, "input_count"):
+        # Symbolica v3
+        assert len(insts.sub_evaluators) == 0, "sub-evaluators are not supported"
+        return str((insts.instructions, insts.temporary_count, insts.constants)), insts.input_count
+    else:
+        # Symbolica v2
+        return str(insts), num_params
+
+
 def compile_func(
     states: list[Symbol]|Symbol,
     eqs: list[Expr]|Expr,
@@ -493,10 +508,7 @@ def compile_evaluator(
     if not can_use_rust(backend):
         raise ValueError("unsupported platform")
 
-    if isinstance(evaluator, str):
-        model = evaluator
-    else:
-        model = str(evaluator.get_instructions())
+    model, num_params = get_instructions(evaluator, num_params)
 
     if order == "c":
         return SymbolicaFunc(
@@ -632,7 +644,7 @@ def compile_composer(
     if not can_use_rust(backend):
         raise ValueError("unsupported platform")
 
-    model = str(composer.get_instructions())
+    model, num_params = get_instructions(composer, composer.num_params)
 
     return SymbolicaFunc(
         model,
@@ -647,7 +659,7 @@ def compile_composer(
         dtype=dtype,
         action="translate",
         convert=False,
-        num_params=composer.num_params,
+        num_params=num_params,
         order="c",
         simd_branch=simd_branch,
         fast_complex=fast_complex,

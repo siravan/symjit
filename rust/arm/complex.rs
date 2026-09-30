@@ -383,7 +383,7 @@ impl Generator for ArmComplexGenerator {
     }
 
     fn times(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        if self.config.compress() && self.supports_fcma() {
+        if self.supports_fcma() {
             if dst != s1 && dst != s2 {
                 self.emit(arm! {fmov q(ϕ(dst)), #0.0});
                 self.emit(arm! {fcmla q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2)), #0});
