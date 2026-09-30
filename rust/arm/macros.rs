@@ -315,9 +315,25 @@ macro_rules! arm {
         0x4e60cc00 | rd!($rd) | rn!($rn) | rm!($rm)
     };
 
+    (fmla q($rd:expr), q($rn:expr), d($rm:expr)[0]) => {
+        0x4fc01000 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
+    (fmla q($rd:expr), q($rn:expr), d($rm:expr)[1]) => {
+        0x4fc01800 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
     // rd -= rn * rm (vector)
     (fmls q($rd:expr), q($rn:expr), q($rm:expr)) => {
         0x4ee0cc00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
+    (fmls q($rd:expr), q($rn:expr), d($rm:expr)[0]) => {
+        0x4fc05000 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+
+    (fmls q($rd:expr), q($rn:expr), d($rm:expr)[1]) => {
+        0x4fc05800 | rd!($rd) | rn!($rn) | rm!($rm)
     };
 
     // round double to integral (double-coded integer)
@@ -585,6 +601,12 @@ macro_rules! arm {
     };
     (fmul q($rd:expr), q($rn:expr), q($rm:expr)) => {
         0x6e60dc00 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (fmul q($rd:expr), q($rn:expr), d($rm:expr)[0]) => {
+        0x4fc09000 | rd!($rd) | rn!($rn) | rm!($rm)
+    };
+    (fmul q($rd:expr), q($rn:expr), d($rm:expr)[1]) => {
+        0x4fc09800 | rd!($rd) | rn!($rn) | rm!($rm)
     };
     (fdiv q($rd:expr), q($rn:expr), q($rm:expr)) => {
         0x6e60fc00 | rd!($rd) | rn!($rn) | rm!($rm)
