@@ -11,7 +11,6 @@
 //
 // `#[ignore]`d tests document known defects; run with `cargo test arm::tests -- --ignored`.
 
-
 #[test]
 fn fmov_dd_0() {
     // fmov d1, d2
@@ -2659,6 +2658,62 @@ fn fcmla_270_3() {
 }
 
 #[test]
+fn fcadd_90_0() {
+    // fcadd v1.2d, v2.2d, v3.2d, #0x5a   [expected word from capstone]
+    let w: u32 = arm! { fcadd q(1), q(2), q(3), #90 };
+    assert_eq!(w, 0x6ec3e441);
+}
+
+#[test]
+fn fcadd_90_1() {
+    // fcadd v17.2d, v18.2d, v19.2d, #0x5a   [expected word from capstone]
+    let w: u32 = arm! { fcadd q(17), q(18), q(19), #90 };
+    assert_eq!(w, 0x6ed3e651);
+}
+
+#[test]
+fn fcadd_90_2() {
+    // fcadd v30.2d, v29.2d, v28.2d, #0x5a   [expected word from capstone]
+    let w: u32 = arm! { fcadd q(30), q(29), q(28), #90 };
+    assert_eq!(w, 0x6edce7be);
+}
+
+#[test]
+fn fcadd_90_3() {
+    // fcadd v0.2d, v5.2d, v10.2d, #0x5a   [expected word from capstone]
+    let w: u32 = arm! { fcadd q(0), q(5), q(10), #90 };
+    assert_eq!(w, 0x6ecae4a0);
+}
+
+#[test]
+fn fcadd_270_0() {
+    // fcadd v1.2d, v2.2d, v3.2d, #0x10e   [expected word from capstone]
+    let w: u32 = arm! { fcadd q(1), q(2), q(3), #270 };
+    assert_eq!(w, 0x6ec3f441);
+}
+
+#[test]
+fn fcadd_270_1() {
+    // fcadd v17.2d, v18.2d, v19.2d, #0x10e   [expected word from capstone]
+    let w: u32 = arm! { fcadd q(17), q(18), q(19), #270 };
+    assert_eq!(w, 0x6ed3f651);
+}
+
+#[test]
+fn fcadd_270_2() {
+    // fcadd v30.2d, v29.2d, v28.2d, #0x10e   [expected word from capstone]
+    let w: u32 = arm! { fcadd q(30), q(29), q(28), #270 };
+    assert_eq!(w, 0x6edcf7be);
+}
+
+#[test]
+fn fcadd_270_3() {
+    // fcadd v0.2d, v5.2d, v10.2d, #0x10e   [expected word from capstone]
+    let w: u32 = arm! { fcadd q(0), q(5), q(10), #270 };
+    assert_eq!(w, 0x6ecaf4a0);
+}
+
+#[test]
 fn and_xxx_0() {
     // and x1, x2, x3
     let w: u32 = arm! { and x(1), x(2), x(3) };
@@ -3261,7 +3316,7 @@ fn ret() {
 }
 
 #[test]
-    #[ignore = "the macro encodes `add x0, x0, #0` (functionally a no-op, but not the architectural NOP 0xd503201f)"]
+#[ignore = "the macro encodes `add x0, x0, #0` (functionally a no-op, but not the architectural NOP 0xd503201f)"]
 fn nop() {
     // nop
     let w: u32 = arm! { nop };
