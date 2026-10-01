@@ -13,7 +13,7 @@ use super::utils::Reg;
 
 // LoadArgs/SaveArgs encode the count in six bits; the high bits are flags.
 // This limit is separate from the external-function argument capacity.
-const COMPRESSED_ARGS_CAP: usize = 0x3f;
+pub const COMPRESSED_ARGS_CAP: usize = 64;
 
 #[derive(Clone, Debug)]
 pub struct Subroutine {
@@ -75,7 +75,7 @@ impl Topology {
         for (k, v) in self.counts.iter() {
             let nx = k.chars().filter(|c| *c == 'X').count();
 
-            if (3..=SLICE_CAP.min(COMPRESSED_ARGS_CAP)).contains(&nx) && *v >= 3 {
+            if (3..SLICE_CAP.min(COMPRESSED_ARGS_CAP)).contains(&nx) && *v >= 3 {
                 self.subs.insert(
                     k.clone(),
                     Subroutine {

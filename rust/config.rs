@@ -53,6 +53,8 @@ pub const SLICE_CAP: usize = 1024;
 #[cfg(not(feature = "symbolica"))]
 pub const SLICE_CAP: usize = 32;
 
+pub const SLICE_MIN: usize = 32;
+
 pub const DEFAULT_STACK_LIMIT: usize = 1 << 20;
 
 #[derive(Clone)]
