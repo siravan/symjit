@@ -4,16 +4,12 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::rc::Rc;
 
-use super::config::{Config, SLICE_CAP};
+use super::config::{Config, COMPRESSED_ARGS_CAP, SLICE_CAP};
 use super::mir::Mir;
 use super::node::Node;
 use super::symbol::Symbol;
 use super::utils::reg;
 use super::utils::Reg;
-
-// LoadArgs/SaveArgs encode the count in six bits; the high bits are flags.
-// This limit is separate from the external-function argument capacity.
-pub const COMPRESSED_ARGS_CAP: usize = 64;
 
 #[derive(Clone, Debug)]
 pub struct Subroutine {

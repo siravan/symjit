@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 
-use super::config::Config;
+use super::config::{Config, COMPRESSED_ARGS_CAP};
 use super::mir::{ArithOp, BinOp, FusedOp, Instruction, Mir, UniOp};
 use super::symbol::Loc;
 use super::utils::*;
@@ -199,6 +199,7 @@ impl MirWriter {
             } => {
                 self.append_byte(LOAD_ARGS);
                 let num_args = locs.len() as u8;
+                assert!((num_args as usize) < COMPRESSED_ARGS_CAP);
                 self.append_byte(
                     num_args | if *complex { 0x80 } else { 0 } | if *ultra { 0x40 } else { 0 },
                 );

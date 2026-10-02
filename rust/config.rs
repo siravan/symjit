@@ -51,9 +51,11 @@ pub const ABI_AREA: usize = 16;
 pub const SLICE_CAP: usize = 1024;
 
 #[cfg(not(feature = "symbolica"))]
-pub const SLICE_CAP: usize = 32;
+pub const SLICE_CAP: usize = 64;
 
-pub const SLICE_MIN: usize = 32;
+// LoadArgs/SaveArgs encode the count in six bits; the high bits are flags.
+// This limit is separate from the external-function argument capacity.
+pub const COMPRESSED_ARGS_CAP: usize = 64;
 
 pub const DEFAULT_STACK_LIMIT: usize = 1 << 20;
 

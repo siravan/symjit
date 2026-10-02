@@ -1,11 +1,10 @@
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 
-use super::config::{Config, SLICE_CAP, SPILL_AREA};
+use super::config::{Config, COMPRESSED_ARGS_CAP, SLICE_CAP, SPILL_AREA};
 use super::mir::{Instruction, Mir};
 use super::serializer::MirWriter;
 use super::symbol::Loc;
-use super::topology::COMPRESSED_ARGS_CAP;
 
 // #[derive(Debug)]
 pub struct Compactor {
@@ -53,7 +52,7 @@ impl Compactor {
     fn consume(&mut self, loc: &Loc, ip: usize) {
         if let Loc::Stack(idx) = loc {
             if *idx >= self.fixed {
-                if let Some(x) = self.live.get_mut(&loc) {
+                if let Some(x) = self.live.get_mut(loc) {
                     *x = ip;
                 }
             } else {
