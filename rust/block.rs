@@ -4,8 +4,9 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
+use crate::config::COMPRESSED_ARGS_CAP;
+
 use super::config::Config;
-use super::config::SLICE_CAP;
 use super::mir::Mir;
 use super::node::Node;
 use super::operation::Operation;
@@ -27,10 +28,10 @@ pub struct Block {
 
 impl Block {
     pub fn new(config: Config) -> Block {
-        let sym_table = SymbolTable::new(config.is_complex());
+        let sym_table = SymbolTable::new(&config);
 
         let mut args: Vec<Rc<RefCell<Symbol>>> = Vec::new();
-        for i in 0..SLICE_CAP {
+        for i in 0..COMPRESSED_ARGS_CAP {
             let name = format!("__Arg{}", i);
             let sym = sym_table.find_sym(&name).unwrap();
             args.push(sym);

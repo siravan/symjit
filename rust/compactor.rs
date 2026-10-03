@@ -20,7 +20,8 @@ pub struct Compactor {
 }
 
 impl Compactor {
-    pub fn new(config: Config, fixed: u32) -> Compactor {
+    pub fn new(config: Config) -> Compactor {
+        let fixed = config.fixed();
         Compactor {
             config,
             code: MirWriter::new(),

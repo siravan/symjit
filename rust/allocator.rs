@@ -3,7 +3,7 @@ use std::fmt;
 
 use anyhow::Result;
 
-use super::config::{Config, SLICE_CAP, SPILL_AREA};
+use super::config::Config;
 use super::mir::{Instruction, Mir};
 use super::serializer::MirWriter;
 use super::symbol::Loc;
@@ -639,11 +639,7 @@ impl GreedyAllocator {
     // Removes unnessasary instructions.
     fn contract(&mut self) -> Result<()> {
         let code = std::mem::take(&mut self.code);
-        let fixed = if self.config.is_complex() {
-            (2 * SLICE_CAP + SPILL_AREA) as u32
-        } else {
-            (SLICE_CAP + SPILL_AREA) as u32
-        };
+        let fixed = self.config.fixed();
 
         for ins in code.iter() {
             match ins {

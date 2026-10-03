@@ -8,7 +8,7 @@ use super::applet::{recast_as_f64, recast_as_f64_mut};
 use super::builder::Builder;
 use super::code::VirtualTable;
 use super::composer::{Composer, DirectTranslator};
-use super::config::{Config, SLICE_CAP};
+use super::config::Config;
 use super::expr::Expr;
 use super::instruction::{rationalize_complex, BuiltinSymbol, Instruction, Slot, SymbolicaModel};
 use super::model::{CellModel, Equation, Program, Variable};
@@ -1108,7 +1108,6 @@ impl IndirectTranslator {
         is_real: bool,
     ) -> Result<()> {
         let n = args.len();
-        assert!(n <= SLICE_CAP);
 
         if let Slot::Param(idx) = lhs {
             if is_real {

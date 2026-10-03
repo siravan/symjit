@@ -365,10 +365,7 @@ impl Builder {
         }
 
         if self.config.compact() {
-            self.count_stack =
-                Compactor::new(self.config.clone(), self.symbol_table().fixed as u32)
-                    .compact(mir)
-                    .ok();
+            self.count_stack = Compactor::new(self.config.clone()).compact(mir).ok();
         }
 
         mir.add_consts(&self.consts);

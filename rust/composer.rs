@@ -3,7 +3,7 @@ use num_complex::Complex;
 use std::collections::HashSet;
 
 use super::code::VirtualTable;
-use super::config::{Config, SLICE_CAP};
+use super::config::Config;
 use super::instruction::{BuiltinSymbol, Slot};
 use super::mir::Mir;
 use super::model::{CellModel, Program};
@@ -263,8 +263,6 @@ impl DirectTranslator {
         is_real: bool,
     ) -> Result<()> {
         let n = args.len();
-        assert!(n <= SLICE_CAP);
-
         self.mark_real(lhs, is_real);
 
         if VirtualTable::from_str(op).is_ok() || op.starts_with("composer_") {

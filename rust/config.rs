@@ -46,12 +46,7 @@ pub const OPT_LEVEL_SHIFT: usize = 8;
 
 pub const SPILL_AREA: usize = 16;
 pub const ABI_AREA: usize = 16;
-
-#[cfg(feature = "symbolica")]
-pub const SLICE_CAP: usize = 1024;
-
-#[cfg(not(feature = "symbolica"))]
-pub const SLICE_CAP: usize = 64;
+pub const SLICE_CAP: usize = 2048;
 
 // LoadArgs/SaveArgs encode the count in six bits; the high bits are flags.
 // This limit is separate from the external-function argument capacity.
@@ -65,6 +60,7 @@ pub struct Config {
     pub ty: CompilerType,
     pub df: Option<Arc<Defuns>>,
     pub stack: usize,
+    pub args: u32,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -96,6 +92,7 @@ struct Options {
     direct_arena_identity_output: bool,
     opt_level: u8,
     stack_limit: usize,
+    num_args: u32,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -186,9 +183,10 @@ impl std::fmt::Debug for Config {
 
         write!(
             f,
-            "opt_level = {}, stack limit = {}}}",
+            "opt_level = {}, stack limit = {}, num_args = {}",
             self.opt_level(),
-            self.stack_limit()
+            self.stack_limit(),
+            self.num_args()
         )
     }
 }
@@ -202,6 +200,7 @@ impl Config {
             ty,
             df: None,
             stack: DEFAULT_STACK_LIMIT,
+            args: COMPRESSED_ARGS_CAP as u32,
         })
     }
 
@@ -252,6 +251,7 @@ impl Config {
 
         config.set_opt_level(c.options.opt_level);
         config.set_stack_limit(c.options.stack_limit);
+        config.set_num_args(c.options.num_args);
 
         config.set_debug_bytecode(c.debug.bytecode);
         config.set_debug_scalar(c.debug.scalar);
@@ -292,6 +292,7 @@ impl Config {
             fast_complex: self.fast_complex(),
             opt_level: self.opt_level(),
             stack_limit: self.stack_limit(),
+            num_args: self.num_args(),
             huge: self.huge(),
             parallel_mul: self.parallel_mul(),
             direct_arena: self.direct_arena(),
@@ -495,6 +496,10 @@ impl Config {
 
     pub fn stack_limit(&self) -> usize {
         self.stack
+    }
+
+    pub fn num_args(&self) -> u32 {
+        self.args
     }
 
     pub fn compiler_type(&self) -> CompilerType {
@@ -762,6 +767,18 @@ impl Config {
         self.stack = stack_limit.max(DEFAULT_STACK_LIMIT);
     }
 
+    pub fn set_num_args(&mut self, num_args: u32) {
+        self.args = num_args.clamp(COMPRESSED_ARGS_CAP as u32, SLICE_CAP as u32);
+    }
+
+    pub fn fixed(&self) -> u32 {
+        if self.is_complex() {
+            2 * self.num_args() + SPILL_AREA as u32
+        } else {
+            self.num_args() + SPILL_AREA as u32
+        }
+    }
+
     pub fn max_lanes(&self) -> usize {
         if self.use_simd512() {
             8
@@ -831,6 +848,9 @@ impl Config {
             }
             "stack_limit" => {
                 self.set_stack_limit(val.parse::<usize>()?);
+            }
+            "num_args" => {
+                self.set_num_args(val.parse::<u32>()?);
             }
             "debug_bytecode" => {
                 self.set_debug_bytecode(val.parse::<bool>()?);
@@ -1051,6 +1071,13 @@ impl Storage for Config {
 
         let val: usize = (self.opt as usize) | (ty << 32);
         stream.write_all(&val.to_le_bytes())?;
+
+        let val: usize = self.stack_limit() as usize;
+        stream.write_all(&val.to_le_bytes())?;
+
+        let val: usize = self.num_args() as usize;
+        stream.write_all(&val.to_le_bytes())?;
+
         Ok(())
     }
 
@@ -1068,6 +1095,12 @@ impl Storage for Config {
         let opt: u32 = (val & 0xffffffff) as u32;
         let ty: u32 = (val >> 32) as u32;
 
+        stream.read_exact(&mut bytes)?;
+        let stack: usize = usize::from_le_bytes(bytes);
+
+        stream.read_exact(&mut bytes)?;
+        let args: u32 = usize::from_le_bytes(bytes) as u32;
+
         let ty: CompilerType = match ty {
             0 => CompilerType::Native,
             1 => CompilerType::Amd,
@@ -1084,7 +1117,8 @@ impl Storage for Config {
             opt,
             ty,
             df: config.df.clone(),
-            stack: DEFAULT_STACK_LIMIT, // todo: save and load stack_limit
+            stack,
+            args,
         })
     }
 }

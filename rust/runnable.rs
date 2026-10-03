@@ -768,7 +768,7 @@ impl Storage for Application {
     fn save(&self, stream: &mut impl Write) -> Result<()> {
         stream.write_all(&Self::MAGIC.to_le_bytes())?;
 
-        let version: usize = 3;
+        let version: usize = 4;
         stream.write_all(&version.to_le_bytes())?;
 
         self.prog.save(stream)?;
@@ -814,7 +814,7 @@ impl Storage for Application {
 
         stream.read_exact(&mut bytes)?;
 
-        if usize::from_le_bytes(bytes) != 3 {
+        if usize::from_le_bytes(bytes) != 4 {
             return Err(anyhow!("invalid sjb version"));
         }
 
