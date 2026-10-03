@@ -64,6 +64,7 @@ pub struct SymbolTable {
     pub num_mem: usize,
     pub num_param: usize,
     pub slot_size: usize,
+    pub fixed: usize,
 }
 
 impl fmt::Debug for SymbolTable {
@@ -85,6 +86,7 @@ impl SymbolTable {
             num_mem: 0,
             num_param: 0,
             slot_size: 1,
+            fixed: 0,
         };
 
         /*
@@ -106,6 +108,8 @@ impl SymbolTable {
         for i in 0..SLICE_CAP {
             s.add_stack(&format!("__Arg{}", i));
         }
+
+        s.fixed = s.num_stack;
 
         s
     }

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 
-use super::config::{Config, COMPRESSED_ARGS_CAP, SLICE_CAP, SPILL_AREA};
+use super::config::Config;
 use super::mir::{Instruction, Mir};
 use super::serializer::MirWriter;
 use super::symbol::Loc;
@@ -17,13 +17,10 @@ pub struct Compactor {
     count_stack: u32, // next stack id to use if the pool is empty
     depth: isize,     // loop depth
     fixed: u32,
-    slot_size: u32,
 }
 
 impl Compactor {
-    pub fn new(config: Config) -> Compactor {
-        let slot_size: u32 = if config.is_complex() { 2 } else { 1 };
-
+    pub fn new(config: Config, fixed: u32) -> Compactor {
         Compactor {
             config,
             code: MirWriter::new(),
@@ -31,10 +28,9 @@ impl Compactor {
             stack: HashMap::new(),
             pool: Vec::new(),
             labels: HashSet::new(),
-            count_stack: slot_size * COMPRESSED_ARGS_CAP as u32 + SPILL_AREA as u32,
+            count_stack: fixed,
             depth: 0,
-            fixed: slot_size * SLICE_CAP as u32 + SPILL_AREA as u32,
-            slot_size,
+            fixed,
         }
     }
 
@@ -49,18 +45,6 @@ impl Compactor {
         self.code.push(&ins);
     }
 
-    fn consume(&mut self, loc: &Loc, ip: usize) {
-        if let Loc::Stack(idx) = loc {
-            if *idx >= self.fixed {
-                if let Some(x) = self.live.get_mut(loc) {
-                    *x = ip;
-                }
-            } else {
-                self.count_stack = self.count_stack.max(*idx + self.slot_size);
-            }
-        }
-    }
-
     fn collect_last(&mut self, mir: &Mir) {
         for (ip, ins) in mir.code.iter().enumerate() {
             match ins {
@@ -68,7 +52,13 @@ impl Compactor {
                 | Instruction::IfElse { cond: loc, .. }
                 | Instruction::LoadMath { loc, .. }
                 | Instruction::LoadComplex { loc, .. } => {
-                    self.consume(&loc, ip);
+                    if let Loc::Stack(idx) = loc {
+                        if idx >= self.fixed {
+                            if let Some(x) = self.live.get_mut(&loc) {
+                                *x = ip;
+                            }
+                        }
+                    }
                 }
                 Instruction::LoadArgs { locs, .. } => {
                     for loc in locs {

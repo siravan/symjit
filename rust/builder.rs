@@ -364,8 +364,12 @@ impl Builder {
             // ColoringAllocator::new(self.config.clone()).optimize(mir)?;
         }
 
-        // compacting the stack if requested
-        self.count_stack = Compactor::new(self.config.clone()).compact(mir).ok();
+        if self.config.compact() {
+            self.count_stack =
+                Compactor::new(self.config.clone(), self.symbol_table().fixed as u32)
+                    .compact(mir)
+                    .ok();
+        }
 
         mir.add_consts(&self.consts);
         mir.populate_labels();
