@@ -135,6 +135,11 @@ impl Statement {
                 ir.branch_if(reg(cond), label, *is_else);
             }
             Statement::LoadArgs { args } => {
+                if topology.args.len() < args.len() {
+                    return Err(anyhow::anyhow!("function call with {} args, but only {} are available. Use `Config.set_num_args`.",
+                        args.len(), topology.args.len()));
+                }
+
                 for (src, dst) in args.iter().zip(topology.args.iter()) {
                     let r = src.compile_tree(ir)?;
                     Self::save(ir, r, &Node::Var { sym: dst.clone() });

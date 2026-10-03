@@ -5,7 +5,6 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use super::config::Config;
-use super::config::COMPRESSED_ARGS_CAP;
 use super::mir::Mir;
 use super::node::Node;
 use super::operation::Operation;
@@ -30,7 +29,7 @@ impl Block {
         let sym_table = SymbolTable::new(&config);
 
         let mut args: Vec<Rc<RefCell<Symbol>>> = Vec::new();
-        for i in 0..COMPRESSED_ARGS_CAP {
+        for i in 0..config.num_args() {
             let name = format!("__Arg{}", i);
             let sym = sym_table.find_sym(&name).unwrap();
             args.push(sym);
