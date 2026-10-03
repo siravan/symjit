@@ -768,6 +768,9 @@ impl Config {
     }
 
     pub fn set_num_args(&mut self, num_args: u32) {
+        if num_args > SLICE_CAP as u32 {
+            eprintln!("Warning! Max number of arguments is {}.", SLICE_CAP);
+        }
         self.args = num_args.clamp(COMPRESSED_ARGS_CAP as u32, SLICE_CAP as u32);
     }
 
