@@ -85,7 +85,7 @@ impl fmt::Debug for Func {
     }
 }
 
-#[cfg(target_family = "unix")]
+#[cfg(all(target_family = "unix", feature = "libm"))]
 #[link(name = "m")]
 extern "C" {
     fn csin(z: Complex<f64>) -> Complex<f64>;
@@ -367,184 +367,184 @@ impl VirtualTable {
         }
     }
 
-    #[cfg(target_family = "unix")]
+    #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_sin(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = unsafe { csin(Complex::new(xr, xi)) };
     }
 
-    #[cfg(target_family = "unix")]
+    #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_cos(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = unsafe { ccos(Complex::new(xr, xi)) };
     }
 
-    #[cfg(target_family = "unix")]
+    #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_tan(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = unsafe { ctan(Complex::new(xr, xi)) };
     }
 
-    #[cfg(target_family = "unix")]
+    #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_csc(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = unsafe { csin(Complex::new(xr, xi)).inv() };
     }
 
-    #[cfg(target_family = "unix")]
+    #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_sec(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = unsafe { ccos(Complex::new(xr, xi)).inv() };
     }
 
-    #[cfg(target_family = "unix")]
+    #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_cot(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = unsafe { ctan(Complex::new(xr, xi)).inv() };
     }
 
-    #[cfg(target_family = "unix")]
+    #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_sinh(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = unsafe { csinh(Complex::new(xr, xi)) };
     }
 
-    #[cfg(target_family = "unix")]
+    #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_cosh(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = unsafe { ccosh(Complex::new(xr, xi)) };
     }
 
-    #[cfg(target_family = "unix")]
+    #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_tanh(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = unsafe { ctanh(Complex::new(xr, xi)) };
     }
 
-    #[cfg(target_family = "unix")]
+    #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_csch(xr: f64, xi: f64, z: &mut Complex<f64>) {
         let t = unsafe { ctanh(Complex::new(xr, xi)) };
         *z = unsafe { csqrt(Complex::new(1.0, 0.0) - t * t) / t };
     }
 
-    #[cfg(target_family = "unix")]
+    #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_sech(xr: f64, xi: f64, z: &mut Complex<f64>) {
         let t = unsafe { ctanh(Complex::new(xr, xi)) };
         *z = unsafe { csqrt(Complex::new(1.0, 0.0) - t * t) };
     }
 
-    #[cfg(target_family = "unix")]
+    #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_coth(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = unsafe { ctanh(Complex::new(xr, xi)).inv() };
     }
 
-    #[cfg(target_family = "unix")]
+    #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_asin(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = unsafe { casin(Complex::new(xr, xi)) };
     }
 
-    #[cfg(target_family = "unix")]
+    #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_acos(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = unsafe { cacos(Complex::new(xr, xi)) };
     }
 
-    #[cfg(target_family = "unix")]
+    #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_atan(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = unsafe { catan(Complex::new(xr, xi)) };
     }
 
-    #[cfg(target_family = "unix")]
+    #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_asinh(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = unsafe { casinh(Complex::new(xr, xi)) };
     }
 
-    #[cfg(target_family = "unix")]
+    #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_acosh(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = unsafe { cacosh(Complex::new(xr, xi)) };
     }
 
-    #[cfg(target_family = "unix")]
+    #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_atanh(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = unsafe { catanh(Complex::new(xr, xi)) };
     }
 
-    #[cfg(not(target_family = "unix"))]
+    #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_sin(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).sin();
     }
 
-    #[cfg(not(target_family = "unix"))]
+    #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_cos(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).cos();
     }
 
-    #[cfg(not(target_family = "unix"))]
+    #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_tan(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).tan();
     }
 
-    #[cfg(not(target_family = "unix"))]
+    #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_csc(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).sin().inv();
     }
 
-    #[cfg(not(target_family = "unix"))]
+    #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_sec(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).cos().inv();
     }
 
-    #[cfg(not(target_family = "unix"))]
+    #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_cot(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).tan().inv();
     }
 
-    #[cfg(not(target_family = "unix"))]
+    #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_sinh(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).sinh();
     }
 
-    #[cfg(not(target_family = "unix"))]
+    #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_cosh(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).cosh();
     }
 
-    #[cfg(not(target_family = "unix"))]
+    #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_tanh(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).tanh();
     }
 
-    #[cfg(not(target_family = "unix"))]
+    #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_csch(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).sinh().inv();
     }
 
-    #[cfg(not(target_family = "unix"))]
+    #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_sech(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).cosh().inv();
     }
 
-    #[cfg(not(target_family = "unix"))]
+    #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_coth(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).tanh().inv();
     }
 
-    #[cfg(not(target_family = "unix"))]
+    #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_asin(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).asin();
     }
 
-    #[cfg(not(target_family = "unix"))]
+    #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_acos(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).acos();
     }
 
-    #[cfg(not(target_family = "unix"))]
+    #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_atan(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).atan();
     }
 
-    #[cfg(not(target_family = "unix"))]
+    #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_asinh(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).asinh();
     }
 
-    #[cfg(not(target_family = "unix"))]
+    #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_acosh(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).acosh();
     }
 
-    #[cfg(not(target_family = "unix"))]
+    #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_atanh(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).atanh();
     }
