@@ -148,6 +148,17 @@ class Engine:
         self.measure.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
         self.measure.restype = ctypes.c_size_t
 
+        if hasattr(self.dll, "write_obj"):  # libraries older than 2.27 lack it
+            self.write_obj = self.dll.write_obj
+            self.write_obj.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_char_p,
+                ctypes.c_char_p,
+                ctypes.c_char_p,
+                ctypes.c_size_t,
+            ]
+            self.write_obj.restype = ctypes.c_bool
+
         self.finalize = self.dll.finalize
         self.finalize.argtypes = [ctypes.c_void_p]
         self.finalize.restype = None
@@ -456,11 +467,13 @@ class RustyCompiler:
         elif t == 4:
             self.ty = "arm"
         elif t == 5:
-            self.ty = "risvc"
+            self.ty = "riscv"
         elif t == 6:
             self.ty = "bytecode"
         elif t == 7:
             self.ty = "debug"
+        elif t == 8:
+            self.ty = "wasm"
 
     def get_u0(self):
         if self.json_model is None:
@@ -501,6 +514,17 @@ class RustyCompiler:
             return b.decode("utf8")
         else:
             return b.hex()
+
+    def write_obj(self, name: str, format: str|None=None):
+        """Writes the object file `name`.o and its C header `name`.h."""
+        if not hasattr(lib, "write_obj"):
+            raise ValueError("this symjit library cannot write object files")
+        if format not in (None, "elf", "macho"):
+            raise ValueError('`format` should be None (the host\'s), "elf" or "macho"')
+        err = ctypes.create_string_buffer(1024)
+        fmt = (format or "").encode("utf-8")
+        if not lib.write_obj(self.p, name.encode("utf-8"), fmt, err, len(err)):
+            raise ValueError(err.value.decode("utf-8", "replace"))
 
     def measure(self, what: str) -> int:
         return lib.measure(self.p, what.encode("utf-8"))

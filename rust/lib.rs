@@ -42,6 +42,9 @@ mod utils;
 mod riscv64;
 #[cfg(feature = "wasm")]
 mod wasm;
+// object files (`Application::write_obj`)
+#[cfg(feature = "obj")]
+mod linker;
 
 pub use compiler::Compiler;
 pub use config::Config;
@@ -257,6 +260,62 @@ pub unsafe extern "C" fn translate(
 pub unsafe extern "C" fn check_status(q: *const CompilerResult) -> *const c_char {
     let q: &CompilerResult = unsafe { &*q };
     q.msg.as_ptr() as *const _
+}
+
+/// Writes the relocatable object file `<name>.o` and its C header `<name>.h` (see
+/// `Application::write_obj`). `format` is "" (the host's), "elf" or "macho". Returns
+/// false on failure, with the error message in `err` (at most `err_len` bytes,
+/// null-terminated). Fails if symjit was built without the `obj` feature.
+///
+/// # Safety
+///     q must point to a valid CompilerResult, `name` and `format` to null-terminated
+///     strings, and `err` to `err_len` writable bytes.
+///
+#[no_mangle]
+pub unsafe extern "C" fn write_obj(
+    q: *mut CompilerResult,
+    name: *const c_char,
+    format: *const c_char,
+    err: *mut c_char,
+    err_len: usize,
+) -> bool {
+    let q: &mut CompilerResult = unsafe { &mut *q };
+    let result = (|| -> anyhow::Result<()> {
+        let name = unsafe { CStr::from_ptr(name) }.to_str()?;
+        let format = unsafe { CStr::from_ptr(format) }.to_str()?;
+        write_obj_impl(q, name, format)
+    })();
+
+    match result {
+        Ok(()) => true,
+        Err(e) => {
+            if !err.is_null() && err_len > 0 {
+                let msg = e.to_string();
+                let n = msg.len().min(err_len - 1);
+                unsafe {
+                    std::ptr::copy_nonoverlapping(msg.as_ptr(), err as *mut u8, n);
+                    *err.add(n) = 0;
+                }
+            }
+            false
+        }
+    }
+}
+
+#[cfg(feature = "obj")]
+fn write_obj_impl(q: &mut CompilerResult, name: &str, format: &str) -> anyhow::Result<()> {
+    let target = Application::object_target(format)?;
+    match &mut q.app {
+        Some(app) => app.write_obj_for(name, target),
+        None => Err(anyhow::anyhow!("nothing is compiled")),
+    }
+}
+
+#[cfg(not(feature = "obj"))]
+fn write_obj_impl(_q: &mut CompilerResult, _name: &str, _format: &str) -> anyhow::Result<()> {
+    Err(anyhow::anyhow!(
+        "symjit was built without the `obj` feature (object files); rebuild with `--features obj`"
+    ))
 }
 
 /// Checks the status of a `CompilerResult`.

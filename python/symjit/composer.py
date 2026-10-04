@@ -106,13 +106,23 @@ class Composer:
         self.ir.append(("fun", t, name, [], [*arg], False))
         return t
 
-    def call(self, fun: Callable, *arg: Slot) -> Slot:
+    def register_function(self, fun: Callable) -> str:
+        if self.parent is not None:
+            return self.parent.register_function(fun)
+
         if self.defuns is None:
-            name = "composer_func0"
-            self.defuns = {name: fun}
+            self.defuns = {}
+        name = f"composer_func{len(self.defuns)}"
+        self.defuns[name] = fun
+        return name
+
+    def call(self, fun: Callable, *arg: Slot) -> Slot:
+        if self.parent is not None:
+            # functions are registered on the root composer, which is compiled
+            # (a recursive call, `fun=None`, is usually made in a block)
+            name = self.parent.register_function(fun)
         else:
-            name = f"composer_func{len(self.defuns)}"
-            self.defuns[name] = fun
+            name = self.register_function(fun)
 
         t = self.new_temp()
         self.ir.append(("fun", t, name, [], [*arg], True))

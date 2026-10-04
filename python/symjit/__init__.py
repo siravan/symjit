@@ -83,6 +83,8 @@ def compile_func(
         * "amd-avx": generates x86-64 AVX instrcutions.
         * "arm": generates arm aarch64 instructions.
         * "riscv": generates 64-bit RISC-V instructions.
+        * "wasm": generates a WebAssembly module, written with `f.dump(path, "wasm")`
+            (see docs/WASM.md); calls from Python run on the bytecode interpreter.
         * "bytecode": bytecode interpreter for testing and running on unsupported hardware.
         * "native" (default): selects the correct mode based on the processor.
         * "debug": runs "native" and "bytecode" codes and throws an exception if different.
@@ -472,6 +474,7 @@ def compile_evaluator(
         * "riscv": generates 64-bit RISC-V instructions.
         * "native" (default): selects the correct mode based on the processor.
         * "bytecode": not supported by the Symbolica bridge.
+        * "wasm": not supported by the Symbolica bridge.
         * "debug": : not supported by the Symbolica bridge.
     backend (default `rust`): should be `rust`.
     dtype (default `float64`): the data type. Possibilities are `float64` and `complex128`.
@@ -608,6 +611,7 @@ def compile_composer(
         * "riscv": generates 64-bit RISC-V instructions.
         * "native" (default): selects the correct mode based on the processor.
         * "bytecode": not supported by the Symbolica bridge.
+        * "wasm": not supported by the Symbolica bridge.
         * "debug": : not supported by the Symbolica bridge.
     backend (default `rust`): should be `rust`.
     dtype (default `float64`): the data type. Possibilities are `float64` and `complex128`.

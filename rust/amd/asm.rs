@@ -1338,6 +1338,15 @@ impl Amd {
         self.jump(label);
     }
 
+    /// `call rel32` to an external function in object mode: the rel32 field is 0 and its
+    /// offset is recorded as a relocation against `symbol`.
+    pub fn call_symbol(&mut self, symbol: &str) {
+        self.append_byte(0xe8);
+        let at = self.a.ip();
+        self.a.relocations.push((at, symbol.to_string()));
+        self.append_bytes(&[0, 0, 0, 0]);
+    }
+
     pub fn call_relative(&mut self, label: &str) {
         self.append_byte(0xe8);
         self.jump(label);

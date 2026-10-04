@@ -21,6 +21,8 @@ use super::symbol::Loc;
 use super::utils::*;
 #[cfg(feature = "wasm")]
 use super::wasm::WasmGenerator;
+#[cfg(feature = "obj")]
+use super::linker::{header, Arch, Format, HeaderInfo, ObjectBuilder, Relocation, Target};
 
 use rayon::prelude::*;
 
@@ -810,6 +812,138 @@ fn load_reals(stream: &mut impl Read) -> Result<HashSet<Loc>> {
     }
 
     Ok(reals)
+}
+
+#[cfg(feature = "obj")]
+impl Application {
+    /// Writes the relocatable object file `<name>.o` for the host (ELF on Linux, Mach-O
+    /// on macOS) and its C header `<name>.h`. The kernels are named after the last
+    /// component of `name`, which must be a C identifier (see `object`).
+    pub fn write_obj(&mut self, name: &str) -> Result<()> {
+        self.write_obj_for(name, Target::host()?)
+    }
+
+    /// `write_obj` for another object format.
+    pub fn write_obj_for(&mut self, name: &str, target: Target) -> Result<()> {
+        let symbol = std::path::Path::new(name)
+            .file_name()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| anyhow!("`{}` does not end in a file name", name))?;
+
+        let obj = self.object(symbol, target)?;
+        let fast = obj.functions.len() > 1;
+        let imports = obj.undefined_symbols();
+        let bytes = obj.build()?;
+
+        let cpu = if self.config.has_avx() {
+            "AVX and FMA (x86-64-v3)"
+        } else {
+            "SSE2"
+        };
+        let text = header(&HeaderInfo {
+            name: symbol,
+            target,
+            count_states: self.count_states,
+            count_obs: self.count_obs,
+            count_params: self.count_params,
+            count_diffs: self.count_diffs,
+            mem_size: self.prog.mem_size(),
+            complex: self.config.is_complex(),
+            fast,
+            symbolica: self.config.symbolica(),
+            cpu,
+            imports: &imports,
+            version: env!("CARGO_PKG_VERSION"),
+        });
+
+        std::fs::write(format!("{}.o", name), bytes)?;
+        std::fs::write(format!("{}.h", name), text)?;
+        Ok(())
+    }
+
+    /// The object format named `format`: "" (the host), "elf" or "macho".
+    pub fn object_target(format: &str) -> Result<Target> {
+        match format {
+            "" => Target::host(),
+            "elf" => Ok(Target::new(Format::Elf, Arch::X86_64)),
+            "macho" => Ok(Target::new(Format::MachO, Arch::X86_64)),
+            _ => Err(anyhow!("unknown object format `{}` (use \"elf\" or \"macho\")", format)),
+        }
+    }
+
+    /// The kernels of the model as functions of a relocatable object file: `name`, the
+    /// scalar kernel (with the native kernels' calling convention,
+    /// `int name(double *mem, const void *states, size_t idx, const double *params)`),
+    /// and `<name>_fast` (`double name_fast(double x0, ...)`) for models that have a
+    /// fast kernel. Calls to math functions become relocations against the C math
+    /// library; models calling other functions are rejected. x86-64 only (so far).
+    pub fn object(&mut self, name: &str, target: Target) -> Result<ObjectBuilder> {
+        if !matches!(target.arch, Arch::X86_64) || !self.config.is_amd64() {
+            return Err(anyhow!(
+                "object files are supported for x86-64 kernels only (so far)"
+            ));
+        }
+
+        let mut config = self.config.clone();
+        config.set_relocatable(true);
+        let mut obj = ObjectBuilder::new(target);
+
+        // the scalar kernel, compiled as `compile_ty` does
+        let (code, relocs) = if config.is_complex() && config.fast_complex() {
+            let mir = self.original.as_ref().unwrap_or(&self.bytecode.mir);
+            Self::object_code(mir, &mut self.prog, AmdComplexGenerator::new(config.clone()), None)?
+        } else if config.has_avx() {
+            Self::object_code(&self.bytecode.mir, &mut self.prog, AmdScalarGenerator::new(config.clone()), None)?
+        } else {
+            Self::object_code(&self.bytecode.mir, &mut self.prog, AmdSSEGenerator::new(config.clone()), None)?
+        };
+        obj.add_function(name, &code, &relocs)?;
+
+        // the fast kernel, as `compile_amd_fast`
+        if self.can_fast {
+            let idx_ret = Some(self.first_obs as u32);
+            let (code, relocs) = if config.has_avx() {
+                Self::object_code(&self.bytecode.mir, &mut self.prog, AmdScalarGenerator::new(config), idx_ret)?
+            } else {
+                Self::object_code(&self.bytecode.mir, &mut self.prog, AmdSSEGenerator::new(config), idx_ret)?
+            };
+            obj.add_function(&format!("{}_fast", name), &code, &relocs)?;
+        }
+
+        Ok(obj)
+    }
+
+    // the machine code and relocations of a kernel (a fast kernel if `idx_ret` is given)
+    fn object_code<G: Generator>(
+        mir: &Mir,
+        prog: &mut Program,
+        mut generator: G,
+        idx_ret: Option<u32>,
+    ) -> Result<(Vec<u8>, Vec<Relocation>)> {
+        match idx_ret {
+            None => prog.builder.compile_from_mir(
+                mir,
+                &mut generator,
+                prog.count_states,
+                prog.count_obs,
+                prog.count_params,
+            )?,
+            Some(idx) => prog.builder.compile_fast_from_mir(
+                mir,
+                &mut generator,
+                prog.count_states,
+                prog.count_obs,
+                idx as i32,
+            )?,
+        }
+
+        let relocs = generator
+            .relocations()
+            .iter()
+            .map(|(at, symbol)| Relocation::call(*at, symbol))
+            .collect();
+        Ok((generator.bytes(), relocs))
+    }
 }
 
 impl Storage for Application {

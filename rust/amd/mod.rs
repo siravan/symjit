@@ -1,4 +1,4 @@
-use super::code::Func;
+use super::code::{Func, VirtualTable};
 use super::config::Config;
 use super::symbol::Loc;
 use super::utils::{align_stack, Reg};
@@ -200,6 +200,34 @@ fn fuse_load_math(amd: &mut Amd, last_load: usize) {
             }
         }
     }
+}
+
+// Object mode (`Config::is_relocatable`): math functions are called directly in the C
+// library through relocations, and there is no table of function addresses.
+
+fn object_call(amd: &mut Amd, config: &Config, op: &str) -> anyhow::Result<()> {
+    if config.is_user_func(op) {
+        return Err(object_external_error(op));
+    }
+    match VirtualTable::c_name(op) {
+        Some(name) => {
+            amd.call_symbol(name);
+            Ok(())
+        }
+        None => Err(anyhow::anyhow!(
+            "`{}` is not a C math library function, so it cannot be called from an object file",
+            op
+        )),
+    }
+}
+
+// user-defined (Python or Rust) functions live in the compiling process
+fn object_external_error(op: &str) -> anyhow::Error {
+    anyhow::anyhow!("the user-defined function `{}` cannot be called from an object file", op)
+}
+
+fn object_complex_error(op: &str) -> anyhow::Error {
+    anyhow::anyhow!("the complex function `{}` cannot be called from an object file", op)
 }
 
 fn add_func(amd: &mut Amd, op: &str, f: Func) {

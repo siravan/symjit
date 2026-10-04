@@ -106,6 +106,42 @@ extern "C" {
 pub struct VirtualTable;
 
 impl VirtualTable {
+    /// The C math library (libm) function computing `op`, for object files; None if
+    /// there is none (e.g. `csc`, `sinc`, complex functions). Note that symjit's `log`
+    /// is the decimal logarithm and `ln` the natural one.
+    pub fn c_name(op: &str) -> Option<&'static str> {
+        let name = match op {
+            "sin" => "sin",
+            "cos" => "cos",
+            "tan" => "tan",
+            "sinh" => "sinh",
+            "cosh" => "cosh",
+            "tanh" => "tanh",
+            "arcsin" => "asin",
+            "arccos" => "acos",
+            "arctan" => "atan",
+            "arcsinh" => "asinh",
+            "arccosh" => "acosh",
+            "arctanh" => "atanh",
+            "exp" => "exp",
+            "expm1" => "expm1",
+            "exp2" => "exp2",
+            "ln" => "log",
+            "log" => "log10",
+            "log1p" => "log1p",
+            "log2" => "log2",
+            "cbrt" => "cbrt",
+            "erf" => "erf",
+            "erfc" => "erfc",
+            "gamma" => "tgamma",
+            "loggamma" => "lgamma",
+            "power" => "pow",
+            "atan2" => "atan2",
+            _ => return None,
+        };
+        Some(name)
+    }
+
     // Finds the function reference for op
     pub fn from_str(op: &str) -> Result<Func> {
         let f = match op {

@@ -49,6 +49,10 @@ pub trait Generator {
     fn count_shadows(&self) -> u8;
     fn three_address(&self) -> bool;
     fn bytes(&mut self) -> Vec<u8>;
+    /// (offset, symbol) of the calls to external functions in `bytes` (object mode)
+    fn relocations(&self) -> Vec<(usize, String)> {
+        Vec::new()
+    }
     fn what(&self) -> GeneratorType;
 
     fn seal(&mut self);
