@@ -450,12 +450,20 @@ impl VirtualTable {
 
     #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_csch(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = unsafe { csinh(Complex::new(xr, xi)).inv() };
+        let mut t = unsafe { csinh(Complex::new(xr, xi)).inv() };
+        if t.re.is_nan() {
+            t.re = 0.0;
+        }
+        *z = t;
     }
 
     #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_sech(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = unsafe { ccosh(Complex::new(xr, xi)).inv() };
+        let mut t = unsafe { ccosh(Complex::new(xr, xi)).inv() };
+        if t.re.is_nan() {
+            t.re = 0.0;
+        }
+        *z = t;
     }
 
     #[cfg(all(target_family = "unix", feature = "libm"))]
