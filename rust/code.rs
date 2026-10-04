@@ -85,8 +85,9 @@ impl fmt::Debug for Func {
     }
 }
 
+// std already links libm; an explicit #[link(name = "m")] moves it ahead of
+// compiler_builtins and silently replaces the real cbrt with glibc's (~3 ulp).
 #[cfg(all(target_family = "unix", feature = "libm"))]
-#[link(name = "m")]
 extern "C" {
     fn csin(z: Complex<f64>) -> Complex<f64>;
     fn ccos(z: Complex<f64>) -> Complex<f64>;
@@ -100,12 +101,87 @@ extern "C" {
     fn casinh(z: Complex<f64>) -> Complex<f64>;
     fn cacosh(z: Complex<f64>) -> Complex<f64>;
     fn catanh(z: Complex<f64>) -> Complex<f64>;
-    fn csqrt(z: Complex<f64>) -> Complex<f64>;
+}
+
+// 1/w for the reciprocal functions (csc, sec, cot, csch, sech, coth). `Complex::inv`
+// computes conj(w)/|w|^2, which overflows for |w| > 1.3e154 (giving 0 instead of tiny
+// values) and gives NaN for an infinite w. Smith's algorithm avoids the overflow, and
+// 1/inf = 0 with the signs of conj(1/w) (C99 Annex G); NaN arguments stay NaN.
+fn recip(w: Complex<f64>) -> Complex<f64> {
+    if w.re.is_infinite() || w.im.is_infinite() {
+        return Complex::new(0.0f64.copysign(w.re), (-0.0f64).copysign(w.im));
+    }
+    if w.re.abs() >= w.im.abs() {
+        let r = w.im / w.re;
+        let d = w.re + w.im * r;
+        Complex::new(1.0 / d, -r / d)
+    } else {
+        let r = w.re / w.im;
+        let d = w.re * r + w.im;
+        Complex::new(r / d, -1.0 / d)
+    }
+}
+
+// tanh for the default (non-libm) build: `Complex::tanh` divides sinh(2x) by
+// cosh(2x) + cos(2y), which overflows to NaN for |x| > ~355. For |x| > 22, tanh(z) is
+// +-1 to double precision and its imaginary part 2 sin(2y) / (cosh 2x + cos 2y) is
+// 4 sin(y) cos(y) exp(-2|x|) (as in C99 ctanh).
+#[allow(dead_code)] // unused with the `libm` feature
+fn tanh_c(z: Complex<f64>) -> Complex<f64> {
+    if z.re.abs() > 22.0 {
+        let e = (-2.0 * z.re.abs()).exp();
+        Complex::new(1.0f64.copysign(z.re), 4.0 * z.im.sin() * z.im.cos() * e)
+    } else {
+        z.tanh()
+    }
+}
+
+// tan(z) = -i tanh(iz)
+#[allow(dead_code)] // unused with the `libm` feature
+fn tan_c(z: Complex<f64>) -> Complex<f64> {
+    let t = tanh_c(Complex::new(-z.im, z.re));
+    Complex::new(t.im, -t.re)
 }
 
 pub struct VirtualTable;
 
 impl VirtualTable {
+    /// The C math library (libm) function computing `op`, for object files; None if
+    /// there is none (e.g. `csc`, `sinc`, complex functions). Note that symjit's `log`
+    /// is the decimal logarithm and `ln` the natural one.
+    pub fn c_name(op: &str) -> Option<&'static str> {
+        let name = match op {
+            "sin" => "sin",
+            "cos" => "cos",
+            "tan" => "tan",
+            "sinh" => "sinh",
+            "cosh" => "cosh",
+            "tanh" => "tanh",
+            "arcsin" => "asin",
+            "arccos" => "acos",
+            "arctan" => "atan",
+            "arcsinh" => "asinh",
+            "arccosh" => "acosh",
+            "arctanh" => "atanh",
+            "exp" => "exp",
+            "expm1" => "expm1",
+            "exp2" => "exp2",
+            "ln" => "log",
+            "log" => "log10",
+            "log1p" => "log1p",
+            "log2" => "log2",
+            "cbrt" => "cbrt",
+            "erf" => "erf",
+            "erfc" => "erfc",
+            "gamma" => "tgamma",
+            "loggamma" => "lgamma",
+            "power" => "pow",
+            "atan2" => "atan2",
+            _ => return None,
+        };
+        Some(name)
+    }
+
     // Finds the function reference for op
     pub fn from_str(op: &str) -> Result<Func> {
         let f = match op {
@@ -384,17 +460,17 @@ impl VirtualTable {
 
     #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_csc(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = unsafe { csin(Complex::new(xr, xi)).inv() };
+        *z = recip(unsafe { csin(Complex::new(xr, xi)) });
     }
 
     #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_sec(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = unsafe { ccos(Complex::new(xr, xi)).inv() };
+        *z = recip(unsafe { ccos(Complex::new(xr, xi)) });
     }
 
     #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_cot(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = unsafe { ctan(Complex::new(xr, xi)).inv() };
+        *z = recip(unsafe { ctan(Complex::new(xr, xi)) });
     }
 
     #[cfg(all(target_family = "unix", feature = "libm"))]
@@ -414,25 +490,17 @@ impl VirtualTable {
 
     #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_csch(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        let mut t = unsafe { csinh(Complex::new(xr, xi)).inv() };
-        if t.re.is_nan() {
-            t.re = 0.0;
-        }
-        *z = t;
+        *z = recip(unsafe { csinh(Complex::new(xr, xi)) });
     }
 
     #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_sech(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        let mut t = unsafe { ccosh(Complex::new(xr, xi)).inv() };
-        if t.re.is_nan() {
-            t.re = 0.0;
-        }
-        *z = t;
+        *z = recip(unsafe { ccosh(Complex::new(xr, xi)) });
     }
 
     #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_coth(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = unsafe { ctanh(Complex::new(xr, xi)).inv() };
+        *z = recip(unsafe { ctanh(Complex::new(xr, xi)) });
     }
 
     #[cfg(all(target_family = "unix", feature = "libm"))]
@@ -477,22 +545,22 @@ impl VirtualTable {
 
     #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_tan(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = Complex::new(xr, xi).tan();
+        *z = tan_c(Complex::new(xr, xi));
     }
 
     #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_csc(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = Complex::new(xr, xi).sin().inv();
+        *z = recip(Complex::new(xr, xi).sin());
     }
 
     #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_sec(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = Complex::new(xr, xi).cos().inv();
+        *z = recip(Complex::new(xr, xi).cos());
     }
 
     #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_cot(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = Complex::new(xr, xi).tan().inv();
+        *z = recip(tan_c(Complex::new(xr, xi)));
     }
 
     #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
@@ -507,22 +575,22 @@ impl VirtualTable {
 
     #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_tanh(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = Complex::new(xr, xi).tanh();
+        *z = tanh_c(Complex::new(xr, xi));
     }
 
     #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_csch(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = Complex::new(xr, xi).sinh().inv();
+        *z = recip(Complex::new(xr, xi).sinh());
     }
 
     #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_sech(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = Complex::new(xr, xi).cosh().inv();
+        *z = recip(Complex::new(xr, xi).cosh());
     }
 
     #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
     pub extern "C" fn cplx_coth(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = Complex::new(xr, xi).tanh().inv();
+        *z = recip(tanh_c(Complex::new(xr, xi)));
     }
 
     #[cfg(any(not(target_family = "unix"), not(feature = "libm")))]
