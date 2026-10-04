@@ -1,3 +1,23 @@
+# Version 2.27.0
+
+* Saved files (`.sjb`) now store the stack limit and `num_args`; the format version is 4 and
+  files saved by earlier versions must be regenerated.
+* Support for Symbolica v3 evaluators in `compile_evaluator` and `compile_composer`
+  (sub-evaluators are not supported).
+* New `libm` cargo feature.
+* Fixing complex `sech`/`csch` with the `libm` feature.
+
+# Version 2.26.2
+
+* Raising the function call argument limit to 1024 with the `symbolica` feature.
+* Fixes for bugs found by fuzzing.
+
+# Version 2.26.1
+
+* Recursive calls: a `defuns` entry set to `None` calls the function being compiled.
+* Querying the library version (`"version"`).
+* Fixing two identical calls in the different branches of an if-else being merged.
+
 # Version 2.25.0
 
 * Adding inner functions and compression modes to riscv and aarch64.

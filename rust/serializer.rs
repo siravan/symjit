@@ -198,8 +198,8 @@ impl MirWriter {
                 ultra,
             } => {
                 self.append_byte(LOAD_ARGS);
+                assert!(locs.len() < COMPRESSED_ARGS_CAP);
                 let num_args = locs.len() as u8;
-                assert!((num_args as usize) < COMPRESSED_ARGS_CAP);
                 self.append_byte(
                     num_args | if *complex { 0x80 } else { 0 } | if *ultra { 0x40 } else { 0 },
                 );
@@ -213,6 +213,7 @@ impl MirWriter {
                 ultra,
             } => {
                 self.append_byte(SAVE_ARGS);
+                assert!((*num_args as usize) < COMPRESSED_ARGS_CAP);
                 self.append_byte(
                     num_args | if *complex { 0x80 } else { 0 } | if *ultra { 0x40 } else { 0 },
                 );

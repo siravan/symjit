@@ -40,6 +40,8 @@ pub enum GeneratorType {
     ArmVector(bool),
     ArmComplex,
     RiscvScalar(bool),
+    #[cfg(feature = "wasm")]
+    Wasm,
 }
 
 #[allow(dead_code)]

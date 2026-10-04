@@ -19,6 +19,8 @@ use super::model::Program;
 use super::riscv64::RiscV;
 use super::symbol::Loc;
 use super::utils::*;
+#[cfg(feature = "wasm")]
+use super::wasm::WasmGenerator;
 
 use rayon::prelude::*;
 
@@ -38,6 +40,9 @@ pub enum CompilerType {
     Arm,
     /// generates riscv64 (RISC V) code.
     RiscV,
+    /// generates a WebAssembly module (not executed in-process;
+    /// calls run on the bytecode interpreter). Needs the `wasm` feature.
+    Wasm,
     /// debug mode, generates both bytecode and native codes
     /// and compares the outputs.
     Debug,
@@ -69,6 +74,7 @@ pub struct Application {
     pub first_param: usize,
     pub first_diff: usize,
     pub count_diffs: usize,
+    pub wasm: Option<Vec<u8>>,
 }
 
 impl Application {
@@ -88,6 +94,13 @@ impl Application {
     }
 
     pub fn with_mir(mut prog: Program, reals: HashSet<Loc>, mut mir: Mir) -> Result<Application> {
+        #[cfg(not(feature = "wasm"))]
+        if prog.config().is_wasm() {
+            return Err(anyhow!(
+                "symjit was built without the `wasm` feature (`ty = \"wasm\"`); rebuild with `--features wasm`"
+            ));
+        }
+
         let first_state = 0;
         let first_param = 0;
         let first_obs = first_state + prog.count_states;
@@ -125,6 +138,15 @@ impl Application {
             compiled = Self::compile_ty(&config, &mir, &mut prog)?;
         }
 
+        #[cfg(feature = "wasm")]
+        let wasm = if config.is_wasm() {
+            Some(Self::compile_wasm(&mir, &mut prog)?)
+        } else {
+            None
+        };
+        #[cfg(not(feature = "wasm"))]
+        let wasm = None;
+
         let use_simd = config.use_simd() && prog.count_loops == 0;
         let use_threads = config.use_threads();
 
@@ -158,6 +180,7 @@ impl Application {
             config,
             reals,
             original,
+            wasm,
         })
     }
 
@@ -171,7 +194,7 @@ impl Application {
             CompilerType::AmdSSE => Some(Self::compile_sse(mir, prog)?),
             CompilerType::Arm => Some(Self::compile_arm(mir, prog)?),
             CompilerType::RiscV => Some(Self::compile_riscv(mir, prog)?),
-            CompilerType::ByteCode => None,
+            CompilerType::ByteCode | CompilerType::Wasm => None,
             CompilerType::Debug => {
                 println!("`ty = debug` is deprecated");
                 None
@@ -251,6 +274,24 @@ impl Application {
             1,
             prog.config().huge(),
         ))
+    }
+
+    #[cfg(feature = "wasm")]
+    fn compile_wasm(mir: &Mir, prog: &mut Program) -> Result<Vec<u8>> {
+        let mut generator = WasmGenerator::new(prog.config().clone());
+        generator.set_mem_size(prog.mem_size());
+        if prog.count_params == 0 && prog.count_obs == 1 && prog.count_diffs == 0 {
+            generator.export_fast(prog.mem_size());
+        }
+        prog.builder.compile_from_mir(
+            mir,
+            &mut generator,
+            prog.count_states,
+            prog.count_obs,
+            prog.count_params,
+        )?;
+        generator.check()?;
+        Ok(generator.bytes())
     }
 
     fn compile_bytecode(mir: Mir, prog: &mut Program) -> Result<CompiledMir> {
@@ -520,6 +561,10 @@ impl Application {
             } else {
                 self.exec_vectorized_scalar(states, obs, self.use_threads);
             }
+        } else {
+            // no machine code (`ty = "bytecode"` or `"wasm"`): one column at a time on
+            // the bytecode interpreter
+            self.exec_vectorized_simple(states, obs);
         }
     }
 
@@ -631,6 +676,9 @@ impl Application {
 
     pub fn dump(&mut self, name: &str, what: &str) -> bool {
         match what {
+            "scalar" | "wasm" if self.wasm.is_some() => {
+                std::fs::write(name, self.wasm.as_ref().unwrap()).is_ok()
+            }
             "scalar" => {
                 if let Some(f) = &self.compiled {
                     f.dump(name);

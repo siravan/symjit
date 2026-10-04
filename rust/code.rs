@@ -85,8 +85,9 @@ impl fmt::Debug for Func {
     }
 }
 
+// std already links libm; an explicit #[link(name = "m")] moves it ahead of
+// compiler_builtins and silently replaces the real cbrt with glibc's (~3 ulp).
 #[cfg(all(target_family = "unix", feature = "libm"))]
-#[link(name = "m")]
 extern "C" {
     fn csin(z: Complex<f64>) -> Complex<f64>;
     fn ccos(z: Complex<f64>) -> Complex<f64>;
@@ -100,7 +101,6 @@ extern "C" {
     fn casinh(z: Complex<f64>) -> Complex<f64>;
     fn cacosh(z: Complex<f64>) -> Complex<f64>;
     fn catanh(z: Complex<f64>) -> Complex<f64>;
-    fn csqrt(z: Complex<f64>) -> Complex<f64>;
 }
 
 pub struct VirtualTable;
@@ -414,14 +414,12 @@ impl VirtualTable {
 
     #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_csch(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        let t = unsafe { ctanh(Complex::new(xr, xi)) };
-        *z = unsafe { csqrt(Complex::new(1.0, 0.0) - t * t) / t };
+        *z = unsafe { csinh(Complex::new(xr, xi)).inv() };
     }
 
     #[cfg(all(target_family = "unix", feature = "libm"))]
     pub extern "C" fn cplx_sech(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        let t = unsafe { ctanh(Complex::new(xr, xi)) };
-        *z = unsafe { csqrt(Complex::new(1.0, 0.0) - t * t) };
+        *z = unsafe { ccosh(Complex::new(xr, xi)).inv() };
     }
 
     #[cfg(all(target_family = "unix", feature = "libm"))]

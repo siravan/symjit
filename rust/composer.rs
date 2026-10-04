@@ -265,7 +265,12 @@ impl DirectTranslator {
         let n = args.len();
         self.mark_real(lhs, is_real);
 
-        if VirtualTable::from_str(op).is_ok() || op.starts_with("composer_") {
+        // kernel functions (recursive calls, applets) take their arguments in the
+        // `__Arg` slots, not in registers, even when named `composer_*`
+        let by_register = !self.mir.config.is_kernel_func(op)
+            && (VirtualTable::from_str(op).is_ok() || op.starts_with("composer_"));
+
+        if by_register {
             if n == 1 {
                 self.load(reg(0), &args[0])?;
                 self.mir.setup_call_unary(reg(0));
