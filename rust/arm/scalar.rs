@@ -156,6 +156,14 @@ impl Generator for ArmGenerator {
 
     fn load_const(&mut self, dst: Reg, idx: u32) {
         let label = format!("_const_{}_", idx);
+
+        if self.config.is_relocatable() {
+            // object files: a PC-relative literal load; `adrp` below assumes that the
+            // code starts at a page boundary, which holds in the JIT but not in an object
+            self.jump(&label, ϕ(dst) as u32, |offset, dst| arm! {ldr d(dst), label(offset)});
+            return;
+        }
+
         self.jump_abs(&label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
             arm! {adrp x(0), label((offset - pg as i32) as u32)}
         });
@@ -497,12 +505,25 @@ impl Generator for ArmGenerator {
     }
 
     fn add_func(&mut self, op: &str, f: Func) {
-        add_func(&mut self.a, op, f);
+        if !self.config.is_relocatable() {
+            add_func(&mut self.a, op, f);
+        }
+    }
+
+    fn relocations(&self) -> Vec<(usize, String)> {
+        self.a.relocations.clone()
     }
 
     fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
         if self.config.is_external_func(op) {
+            if self.config.is_relocatable() && op != "@self" {
+                return Err(object_external_error(op));
+            }
             return self.call_external(op, num_args);
+        }
+
+        if self.config.is_relocatable() {
+            return object_call(&mut self.a, &self.config, op);
         }
 
         let label = format!("_func_{}_", op);
@@ -513,6 +534,10 @@ impl Generator for ArmGenerator {
     }
 
     fn call_complex(&mut self, op: &str, num_args: usize) -> Result<()> {
+        if self.config.is_relocatable() {
+            return Err(object_complex_error(op));
+        }
+
         self.emit(arm! {add x(0), x(STACK), #0});
 
         if num_args == 2 {

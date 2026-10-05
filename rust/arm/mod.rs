@@ -4,6 +4,7 @@ mod macros;
 use super::assembler::Assembler;
 use super::code::Func;
 use super::config::Config;
+use super::generator::{object_complex_error, object_external_error, object_symbol};
 use super::symbol::Loc;
 use super::utils::Reg;
 
@@ -430,6 +431,14 @@ fn add_consts(a: &mut Assembler, consts: &[f64]) {
     }
 }
 
+// object mode: `bl` to the C library function, with a relocation at the instruction
+fn object_call(a: &mut Assembler, config: &Config, op: &str) -> anyhow::Result<()> {
+    let symbol = object_symbol(config, op)?;
+    a.relocations.push((a.ip(), symbol.to_string()));
+    a.append_word(arm! {bl label(0i32)});
+    Ok(())
+}
+
 fn add_func(a: &mut Assembler, op: &str, f: Func) {
     match f {
         Func::Slice {
@@ -560,5 +569,44 @@ fn save_args_helper<F1, F2>(
         for arg in 0..num_args.min(n) {
             f2(a, arg, config.location(arg))
         }
+    }
+}
+
+// Hand-assembled AArch64 functions for the object-file tests (rust/linker/tests.rs),
+// encoded with `arm!` (whose encodings are pinned by tests.rs).
+#[cfg(all(test, feature = "obj"))]
+pub(crate) mod object_samples {
+    // double twice_sin(double x) { return 2 * sin(x); }; the `bl` is at offset 8
+    pub fn twice_sin() -> Vec<u32> {
+        vec![
+            arm! {sub sp, sp, #16},
+            arm! {stp lr, x(29), [sp, #0]},
+            arm! {bl label(0i32)},
+            arm! {fadd d(0), d(0), d(0)},
+            arm! {ldp lr, x(29), [sp, #0]},
+            arm! {add sp, sp, #16},
+            arm! {ret},
+        ]
+    }
+
+    // double power(double x, double y) { return pow(x, y); }; the `bl` is at offset 8
+    pub fn power() -> Vec<u32> {
+        vec![
+            arm! {sub sp, sp, #16},
+            arm! {stp lr, x(29), [sp, #0]},
+            arm! {bl label(0i32)},
+            arm! {ldp lr, x(29), [sp, #0]},
+            arm! {add sp, sp, #16},
+            arm! {ret},
+        ]
+    }
+
+    // double plus_pi(double x) { return x + PI; }, with PI at offset 16 (after a udf)
+    pub fn plus_pi() -> Vec<u32> {
+        vec![arm! {ldr d(1), label(16i32)}, arm! {fadd d(0), d(0), d(1)}, arm! {ret}, 0]
+    }
+
+    pub fn bl(offset: i32) -> u32 {
+        arm! {bl label(offset)}
     }
 }
