@@ -1,7 +1,8 @@
 // End-to-end tests of object files holding compiled kernels: models are compiled with
-// the Rust API, written as ELF objects, linked into a C program with `cc ... -lm` and
-// run; the results must match the JIT-compiled kernels. Skipped unless on x86-64 Linux
-// with a C compiler.
+// the Rust API, written as objects in the host's format, linked into a C program with
+// `cc ... -lm` and run; the results must match the JIT-compiled kernels. They run on
+// Linux and macOS, x86-64 and AArch64, with a C compiler. `arm_kernels_cross_compiled`
+// checks AArch64 objects (`ty = "arm"`) on any host.
 
 use super::{Format, Target};
 use crate::compiler::Compiler;
@@ -10,7 +11,10 @@ use crate::expr::Expr;
 use crate::runnable::Application;
 
 fn host_ok() -> bool {
-    cfg!(all(target_os = "linux", target_arch = "x86_64"))
+    cfg!(all(
+        any(target_os = "linux", target_os = "macos"),
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))
 }
 
 // explicit options (Config::default() would read a symjit.toml in the working directory)
@@ -28,7 +32,8 @@ struct Model {
 /// scalar kernel (direct mode) and, if present, the fast kernel, and returns, per point,
 /// (status, outputs, fast output). None if there is no C compiler.
 fn run_object(m: &mut Model, name: &str) -> Option<Vec<(i32, Vec<f64>, Option<f64>)>> {
-    let obj = m.app.object(name, Target::new(Format::Elf, super::Arch::X86_64)).unwrap();
+    let target = m.app.object_target("").unwrap();
+    let obj = m.app.object(name, target).unwrap();
     let fast = obj.functions.iter().any(|f| f.name == format!("{}_fast", name));
 
     let dir = std::env::temp_dir().join(format!("symjit-kernel-{}-{}", name, std::process::id()));
@@ -149,7 +154,8 @@ fn real_model(cfg: Config) -> Model {
 #[test]
 fn imports_use_c_library_names() {
     let mut m = real_model(config("native", 0));
-    let obj = m.app.object("model", Target::new(Format::Elf, super::Arch::X86_64)).unwrap();
+    let target = m.app.object_target("").unwrap();
+    let obj = m.app.object("model", target).unwrap();
     // ln -> log, log (decimal) -> log10, power -> pow
     assert_eq!(obj.undefined_symbols(), ["atan2", "cos", "exp", "log", "log10", "pow", "sin", "tanh"]);
     assert_eq!(obj.functions.len(), 1); // 8 outputs: no fast kernel
@@ -175,6 +181,9 @@ fn opt_levels_match_the_jit() {
 
 #[test]
 fn sse_kernels_match_the_jit() {
+    if !cfg!(target_arch = "x86_64") {
+        return;
+    }
     let mut m = real_model(config("amd-sse", 0));
     check(&mut m, "sse_model", 0.0);
 }
@@ -185,7 +194,8 @@ fn fast_kernel_is_exported() {
     let obs = vec![&(&x.sin() * &y) + &(&x / &(&Expr::from(1.0) + &(&y * &y)))];
     let app = Compiler::with_config(config("native", 0)).compile(&[x, y], &obs).unwrap();
     let mut m = Model { app, points: vec![vec![0.5, 2.0], vec![-1.0, 0.25], vec![3.0, -1.5]], params: vec![] };
-    let obj = m.app.object("fast_model", Target::new(Format::Elf, super::Arch::X86_64)).unwrap();
+    let target = m.app.object_target("").unwrap();
+    let obj = m.app.object("fast_model", target).unwrap();
     let names: Vec<&str> = obj.functions.iter().map(|f| f.name.as_str()).collect();
     assert_eq!(names, ["fast_model", "fast_model_fast"]);
     check(&mut m, "fast_model", 0.0);
@@ -217,9 +227,9 @@ fn complex_model_matches_the_jit() {
 #[test]
 fn functions_outside_libm_are_rejected() {
     let x = Expr::var("x");
-    let target = Target::new(Format::Elf, super::Arch::X86_64);
 
     let mut app = Compiler::with_config(config("native", 0)).compile(&[x.clone()], &[x.csc()]).unwrap();
+    let target = app.object_target("").unwrap();
     let err = app.object("f", target).err().unwrap().to_string();
     assert!(err.contains("`csc` is not a C math library function"), "{}", err);
 
@@ -227,21 +237,29 @@ fn functions_outside_libm_are_rejected() {
     let mut app = Compiler::with_config(config("native", COMPLEX | FAST_COMPLEX))
         .compile(&[x.clone()], &[x.sin()])
         .unwrap();
+    let target = app.object_target("").unwrap();
     let err = app.object("f", target).err().unwrap().to_string();
     assert!(err.contains("complex function"), "{}", err);
 }
 
 /// With SYMJIT_LINKER_SAMPLES set to a directory, writes the kernels of `real_model` as
-/// model_elf.o and model_macho.o (x86-64), for inspection with external tools.
+/// model_elf.o and model_macho.o (the host's architecture), and model_arm64_elf.o and
+/// model_arm64_macho.o (AArch64), for inspection with external tools.
 #[test]
 fn write_sample_kernel() {
     let Ok(dir) = std::env::var("SYMJIT_LINKER_SAMPLES") else {
         return;
     };
     std::fs::create_dir_all(&dir).unwrap();
-    for (format, file) in [(Format::Elf, "model_elf.o"), (Format::MachO, "model_macho.o")] {
-        let mut m = real_model(config("native", 0));
-        let obj = m.app.object("model", Target::new(format, super::Arch::X86_64)).unwrap();
+    for (ty, format, file) in [
+        ("native", "elf", "model_elf.o"),
+        ("native", "macho", "model_macho.o"),
+        ("arm", "elf", "model_arm64_elf.o"),
+        ("arm", "macho", "model_arm64_macho.o"),
+    ] {
+        let mut m = real_model(config(ty, 0));
+        let target = m.app.object_target(format).unwrap();
+        let obj = m.app.object("model", target).unwrap();
         obj.write(&format!("{}/{}", dir, file)).unwrap();
     }
 }
@@ -306,13 +324,84 @@ fn write_obj_names_and_formats() {
 
     // a path: files in that directory, kernels named after the last component
     let base = dir.join("kernel_one");
-    app.write_obj_for(base.to_str().unwrap(), Application::object_target("macho").unwrap()).unwrap();
+    let target = app.object_target("macho").unwrap();
+    app.write_obj_for(base.to_str().unwrap(), target).unwrap();
     let bytes = std::fs::read(format!("{}.o", base.display())).unwrap();
     assert_eq!(&bytes[..4], &0xfeedfacfu32.to_le_bytes());
     let header = std::fs::read_to_string(format!("{}.h", base.display())).unwrap();
-    assert!(header.contains("int kernel_one(double *mem") && header.contains("x86-64 Mach-O"));
+    let arch = if cfg!(target_arch = "aarch64") { "AArch64" } else { "x86-64" };
+    assert!(header.contains("int kernel_one(double *mem") && header.contains(&format!("{} Mach-O", arch)));
 
     assert!(app.write_obj(dir.join("not-an-identifier").to_str().unwrap()).is_err());
-    assert!(Application::object_target("coff").is_err());
+    assert!(app.object_target("coff").is_err());
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+// AArch64 kernels compiled on any host (`ty = "arm"`): the object calls the C library with
+// `bl` + relocations exactly where the JIT kernel calls its own functions (`blr x9`).
+#[test]
+fn arm_kernels_cross_compiled() {
+    let bl = 0x9400_0000u32;
+    let blr_x9 = 0xd63f_0120u32;
+    let words = |code: &[u8]| -> Vec<u32> {
+        code.chunks_exact(4).map(|c| u32::from_le_bytes(c.try_into().unwrap())).collect()
+    };
+
+    let mut m = real_model(config("arm", 0));
+    let jit_calls = words(&m.app.dumps()).iter().filter(|w| **w == blr_x9).count();
+    for format in [Format::Elf, Format::MachO] {
+        let obj = m.app.object("model", Target::new(format, super::Arch::Aarch64)).unwrap();
+        assert_eq!(obj.undefined_symbols(), ["atan2", "cos", "exp", "log", "log10", "pow", "sin", "tanh"]);
+        assert_eq!(obj.relocations.len(), jit_calls);
+        for r in obj.relocations.iter() {
+            let w = u32::from_le_bytes(obj.code[r.offset..r.offset + 4].try_into().unwrap());
+            assert_eq!(w, bl, "relocation against {} at {}", r.symbol, r.offset);
+        }
+        // object mode emits no `blr x9` through the function table, and no `adrp` (which
+        // assumes the code starts at a page boundary)
+        let ws = words(&obj.code);
+        assert!(!ws.contains(&blr_x9));
+        assert!(!ws.iter().any(|w| w & 0x9f00_0000 == 0x9000_0000), "adrp in object code");
+
+        // constants are PC-relative literal loads (`ldr d, label`) of the model's constants
+        let mut loaded = Vec::new();
+        for (k, w) in ws.iter().enumerate() {
+            if w & 0xff00_0000 == 0x5c00_0000 {
+                let imm = (((w >> 5) & 0x7ffff) as i32) << 13 >> 13; // sign-extended imm19
+                let target = (4 * k as i64 + 4 * imm as i64) as usize;
+                assert!(target % 4 == 0 && target + 8 <= obj.code.len(), "literal at {} -> {}", 4 * k, target);
+                loaded.push(f64::from_le_bytes(obj.code[target..target + 8].try_into().unwrap()));
+            }
+        }
+        for c in [1.0, 2.0] {
+            assert!(loaded.contains(&c), "{} is not loaded ({:?})", c, loaded);
+        }
+        obj.build().unwrap();
+    }
+
+    // the architecture must be the model's
+    let err = m.app.object("model", Target::new(Format::Elf, super::Arch::X86_64)).err().unwrap();
+    assert!(err.to_string().contains("compiled for Arm"), "{}", err);
+
+    // a fast kernel, and the packed-complex generator
+    let (x, y) = (Expr::var("x"), Expr::var("y"));
+    let mut app = Compiler::with_config(config("arm", 0))
+        .compile(&[x.clone(), y.clone()], &[&x.sin() * &y])
+        .unwrap();
+    let target = app.object_target("macho").unwrap();
+    assert_eq!(target, Target::new(Format::MachO, super::Arch::Aarch64));
+    let obj = app.object("f", target).unwrap();
+    assert_eq!(obj.functions.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), ["f", "f_fast"]);
+    assert_eq!(obj.relocations.len(), 2); // sin, in each kernel
+
+    let mut app = Compiler::with_config(config("arm", COMPLEX | FAST_COMPLEX))
+        .compile(&[x.clone(), y.clone()], &[&(&x * &y) + &x])
+        .unwrap();
+    let obj = app.object("c", Target::new(Format::MachO, super::Arch::Aarch64)).unwrap();
+    assert!(obj.relocations.is_empty());
+
+    // functions outside the C library
+    let mut app = Compiler::with_config(config("arm", 0)).compile(&[x.clone()], &[x.csc()]).unwrap();
+    let err = app.object("f", Target::new(Format::MachO, super::Arch::Aarch64)).err().unwrap();
+    assert!(err.to_string().contains("`csc` is not a C math library function"), "{}", err);
 }

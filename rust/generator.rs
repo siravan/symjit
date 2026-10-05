@@ -1,8 +1,34 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
-use super::code::Func;
+use super::code::{Func, VirtualTable};
+use super::config::Config;
 use super::symbol::Loc;
 use super::utils::Reg;
+
+// Object mode (`Config::is_relocatable`): math functions are called directly in the C
+// library through relocations, and there is no table of function addresses.
+
+/// The C library symbol a call to `op` goes to in object mode, or the error to report.
+pub fn object_symbol(config: &Config, op: &str) -> Result<&'static str> {
+    if config.is_user_func(op) {
+        return Err(object_external_error(op));
+    }
+    VirtualTable::c_name(op).ok_or_else(|| {
+        anyhow!(
+            "`{}` is not a C math library function, so it cannot be called from an object file",
+            op
+        )
+    })
+}
+
+/// User-defined (Python or Rust) functions live in the compiling process.
+pub fn object_external_error(op: &str) -> anyhow::Error {
+    anyhow!("the user-defined function `{}` cannot be called from an object file", op)
+}
+
+pub fn object_complex_error(op: &str) -> anyhow::Error {
+    anyhow!("the complex function `{}` cannot be called from an object file", op)
+}
 
 #[derive(Clone, Debug)]
 pub struct StackRegions {

@@ -332,9 +332,10 @@ fn macho_symbols_and_relocations() {
     assert_eq!(relocs, vec![(33, 3, 1, 2, 1, 2), (5, 4, 1, 2, 1, 2)]); // X86_64_RELOC_BRANCH pow, sin
 }
 
-/// Writes the sample objects (funcs_elf.o, funcs_macho.o) and a C driver (main.c) to
-/// the directory named by SYMJIT_LINKER_SAMPLES, for checking them with external tools,
-/// e.g. on macOS:  cc -arch x86_64 main.c funcs_macho.o -o main && ./main
+/// Writes the sample objects (funcs_elf.o, funcs_macho.o for x86-64, funcs_arm64_elf.o,
+/// funcs_arm64_macho.o for AArch64) and a C driver (main.c) to the directory named by
+/// SYMJIT_LINKER_SAMPLES, for checking them with external tools, e.g. on an Apple
+/// silicon Mac:  cc main.c funcs_arm64_macho.o -o main && ./main
 #[test]
 fn write_sample_objects() {
     let Ok(dir) = std::env::var("SYMJIT_LINKER_SAMPLES") else {
@@ -343,6 +344,8 @@ fn write_sample_objects() {
     std::fs::create_dir_all(&dir).unwrap();
     sample(Format::Elf).write(&format!("{}/funcs_elf.o", dir)).unwrap();
     sample(Format::MachO).write(&format!("{}/funcs_macho.o", dir)).unwrap();
+    arm_sample(Format::Elf).write(&format!("{}/funcs_arm64_elf.o", dir)).unwrap();
+    arm_sample(Format::MachO).write(&format!("{}/funcs_arm64_macho.o", dir)).unwrap();
     let c = r#"#include <math.h>
 #include <stdio.h>
 double twice_sin(double x);
@@ -356,4 +359,101 @@ int main(void) {
 }
 "#;
     std::fs::write(format!("{}/main.c", dir), c).unwrap();
+}
+
+/***************************** AArch64 *****************************/
+
+fn words(ws: &[u32]) -> Vec<u8> {
+    ws.iter().flat_map(|w| w.to_le_bytes()).collect()
+}
+
+use crate::arm::object_samples;
+
+fn arm_twice_sin() -> Vec<u8> {
+    words(&object_samples::twice_sin())
+}
+const ARM_TWICE_SIN_CALL: usize = 8;
+
+fn arm_power() -> Vec<u8> {
+    words(&object_samples::power())
+}
+const ARM_POWER_CALL: usize = 8;
+
+fn arm_plus_pi() -> Vec<u8> {
+    let mut code = words(&object_samples::plus_pi());
+    code.extend(std::f64::consts::PI.to_le_bytes());
+    code
+}
+
+fn arm_sample(format: Format) -> ObjectBuilder {
+    let mut obj = ObjectBuilder::new(Target::new(format, Arch::Aarch64));
+    obj.add_function("twice_sin", &arm_twice_sin(), &[Relocation::call(ARM_TWICE_SIN_CALL, "sin")])
+        .unwrap();
+    obj.add_function("power", &arm_power(), &[Relocation::call(ARM_POWER_CALL, "pow")])
+        .unwrap();
+    obj.add_function("plus_pi", &arm_plus_pi(), &[]).unwrap();
+    obj
+}
+
+#[test]
+fn arm_relocations_must_be_at_bl() {
+    let mut obj = ObjectBuilder::new(Target::new(Format::Elf, Arch::Aarch64));
+    let code = arm_twice_sin();
+    assert!(obj.add_function("f", &code, &[Relocation::call(4, "sin")]).is_err()); // stp, not bl
+    assert!(obj.add_function("f", &code, &[Relocation::call(9, "sin")]).is_err()); // unaligned
+    assert!(obj.add_function("f", &code, &[Relocation::call(28, "sin")]).is_err()); // outside
+    let mut taken = code.clone();
+    taken[8..12].copy_from_slice(&object_samples::bl(64).to_le_bytes());
+    assert!(obj.add_function("f", &taken, &[Relocation::call(8, "sin")]).is_err()); // nonzero offset
+    obj.add_function("f", &code, &[Relocation::call(8, "sin")]).unwrap();
+    assert_eq!(obj.relocations, vec![Relocation::call(8, "sin")]);
+}
+
+#[test]
+fn arm_elf() {
+    let obj = arm_sample(Format::Elf);
+    let b = obj.build().unwrap();
+    assert_eq!(u16_at(&b, 0x12), 183); // EM_AARCH64
+
+    let s = elf_sections(&b);
+    let text = &s[1];
+    assert_eq!(&b[text.offset..text.offset + text.size], &obj.code[..]);
+    // functions at 0, 32 (28 bytes, padded with udf #0), 64
+    assert_eq!(obj.functions.iter().map(|f| f.offset).collect::<Vec<_>>(), [0, 32, 64]);
+    assert_eq!(obj.code[28..32], [0; 4]);
+
+    let rela = &s[2];
+    let relocs: Vec<(u64, u64, u64, i64)> = (0..rela.size / 24)
+        .map(|k| {
+            let e = rela.offset + 24 * k;
+            let info = u64_at(&b, e + 8);
+            (u64_at(&b, e), info >> 32, info & 0xffff_ffff, u64_at(&b, e + 16) as i64)
+        })
+        .collect();
+    // R_AARCH64_CALL26 at the `bl`s, addend 0; symbols 5 = pow, 6 = sin
+    assert_eq!(relocs, vec![(8, 6, 283, 0), (40, 5, 283, 0)]);
+}
+
+#[test]
+fn arm_macho() {
+    let obj = arm_sample(Format::MachO);
+    let b = obj.build().unwrap();
+    assert_eq!(u32_at(&b, 4), 0x0100_000c); // CPU_TYPE_ARM64
+    assert_eq!(u32_at(&b, 8), 0); // CPU_SUBTYPE_ARM64_ALL
+
+    let sect = 32 + 72;
+    let offset = u32_at(&b, sect + 48) as usize;
+    assert_eq!(&b[offset..offset + obj.code.len()], &obj.code[..]);
+    let bv = 32 + 72 + 80;
+    assert_eq!((u32_at(&b, bv), u32_at(&b, bv + 12)), (0x32, 0x000b_0000)); // macOS 11.0
+
+    let (reloff, nreloc) = (u32_at(&b, sect + 56) as usize, u32_at(&b, sect + 60) as usize);
+    let relocs: Vec<(u32, u32, u32, u32, u32, u32)> = (0..nreloc)
+        .map(|k| {
+            let w = u32_at(&b, reloff + 8 * k + 4);
+            (u32_at(&b, reloff + 8 * k), w & 0xff_ffff, (w >> 24) & 1, (w >> 25) & 3, (w >> 27) & 1, w >> 28)
+        })
+        .collect();
+    // ARM64_RELOC_BRANCH26 (2), pc-relative, 4 bytes, external: 3 = _pow, 4 = _sin
+    assert_eq!(relocs, vec![(40, 3, 1, 2, 1, 2), (8, 4, 1, 2, 1, 2)]);
 }

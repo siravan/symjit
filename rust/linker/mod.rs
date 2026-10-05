@@ -7,8 +7,10 @@
 // its only references to the outside are calls to external functions (the C math
 // library), recorded as relocations.
 //
-// Supported so far: x86-64 (ELF and Mach-O). The only relocation is a direct call,
-// `call rel32` / `jmp rel32`: R_X86_64_PLT32 in ELF, X86_64_RELOC_BRANCH in Mach-O.
+// Supported: x86-64 and AArch64, as ELF and Mach-O. The only relocation is a direct
+// call: on x86-64 `call rel32` / `jmp rel32` (R_X86_64_PLT32 in ELF,
+// X86_64_RELOC_BRANCH in Mach-O), on AArch64 `bl` (R_AARCH64_CALL26,
+// ARM64_RELOC_BRANCH26).
 
 mod elf;
 mod header;
@@ -32,6 +34,7 @@ pub enum Format {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Arch {
     X86_64,
+    Aarch64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,8 +60,10 @@ impl Target {
 
         let arch = if cfg!(target_arch = "x86_64") {
             Arch::X86_64
+        } else if cfg!(target_arch = "aarch64") {
+            Arch::Aarch64
         } else {
-            return Err(anyhow!("object files are supported for x86-64 only (so far)"));
+            return Err(anyhow!("object files are supported for x86-64 and AArch64"));
         };
 
         Ok(Target { format, arch })
@@ -76,14 +81,16 @@ impl Target {
     fn padding_byte(&self) -> u8 {
         match self.arch {
             Arch::X86_64 => 0xcc, // int3
+            Arch::Aarch64 => 0,   // udf #0 (functions are 4-byte multiples)
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RelocKind {
-    /// x86-64 `call rel32` (e8) or `jmp rel32` (e9) to a function: `offset` is the
-    /// position of the 4-byte rel32 field, which must hold 0.
+    /// A direct call to a function. x86-64: `call rel32` (e8) or `jmp rel32` (e9),
+    /// `offset` is the position of the 4-byte rel32 field, which must hold 0. AArch64:
+    /// `bl`, `offset` is the position of the instruction, whose offset must be 0.
     Call,
 }
 
@@ -147,25 +154,42 @@ impl ObjectBuilder {
                 return Err(anyhow!("`{}` is not a valid C identifier", r.symbol));
             }
             match r.kind {
-                RelocKind::Call => {
-                    if r.offset < 1 || r.offset + 4 > code.len() {
-                        return Err(anyhow!("call relocation at {} is outside `{}`", r.offset, name));
+                RelocKind::Call => match self.target.arch {
+                    Arch::X86_64 => {
+                        if r.offset < 1 || r.offset + 4 > code.len() {
+                            return Err(anyhow!("call relocation at {} is outside `{}`", r.offset, name));
+                        }
+                        if !matches!(code[r.offset - 1], 0xe8 | 0xe9) {
+                            return Err(anyhow!(
+                                "call relocation at {} in `{}` does not follow a call/jmp rel32",
+                                r.offset,
+                                name
+                            ));
+                        }
+                        if code[r.offset..r.offset + 4] != [0; 4] {
+                            return Err(anyhow!(
+                                "the rel32 field of the call at {} in `{}` must be 0",
+                                r.offset,
+                                name
+                            ));
+                        }
                     }
-                    if !matches!(code[r.offset - 1], 0xe8 | 0xe9) {
-                        return Err(anyhow!(
-                            "call relocation at {} in `{}` does not follow a call/jmp rel32",
-                            r.offset,
-                            name
-                        ));
+                    // the relocation is at the `bl` instruction, whose offset must be 0
+                    Arch::Aarch64 => {
+                        if r.offset % 4 != 0 || r.offset + 4 > code.len() {
+                            return Err(anyhow!("call relocation at {} is outside `{}`", r.offset, name));
+                        }
+                        let word = u32::from_le_bytes(code[r.offset..r.offset + 4].try_into().unwrap());
+                        if word != 0x9400_0000 {
+                            return Err(anyhow!(
+                                "call relocation at {} in `{}` is not at a `bl #0` ({:#010x})",
+                                r.offset,
+                                name,
+                                word
+                            ));
+                        }
                     }
-                    if code[r.offset..r.offset + 4] != [0; 4] {
-                        return Err(anyhow!(
-                            "the rel32 field of the call at {} in `{}` must be 0",
-                            r.offset,
-                            name
-                        ));
-                    }
-                }
+                },
             }
         }
 

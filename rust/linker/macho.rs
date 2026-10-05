@@ -1,5 +1,5 @@
 // Mach-O relocatable object (MH_OBJECT) for macOS (<mach-o/loader.h>, <mach-o/nlist.h>,
-// <mach-o/reloc.h>, <mach-o/x86_64/reloc.h>).
+// <mach-o/reloc.h>, <mach-o/x86_64/reloc.h>, <mach-o/arm64/reloc.h>).
 //
 // Layout: mach_header_64 | LC_SEGMENT_64 (one section, __TEXT,__text) | LC_BUILD_VERSION |
 // LC_SYMTAB | LC_DYSYMTAB | text | relocations | symbol table | string table.
@@ -14,6 +14,8 @@ const MH_MAGIC_64: u32 = 0xfeedfacf;
 const MH_OBJECT: u32 = 0x1;
 const CPU_TYPE_X86_64: u32 = 0x0100_0007;
 const CPU_SUBTYPE_X86_64_ALL: u32 = 3;
+const CPU_TYPE_ARM64: u32 = 0x0100_000c;
+const CPU_SUBTYPE_ARM64_ALL: u32 = 0;
 
 const LC_SEGMENT_64: u32 = 0x19;
 const LC_SYMTAB: u32 = 0x2;
@@ -33,12 +35,14 @@ const S_ATTR_SOME_INSTRUCTIONS: u32 = 0x0000_0400;
 const PLATFORM_MACOS: u32 = 1;
 // minimum macOS version, encoded xxxx.yy.zz
 const MIN_MACOS_X86_64: u32 = (10 << 16) | (13 << 8);
+const MIN_MACOS_ARM64: u32 = 11 << 16;
 
 const N_EXT: u8 = 0x01;
 const N_SECT: u8 = 0x0e;
 const N_UNDF: u8 = 0x00;
 
 const X86_64_RELOC_BRANCH: u32 = 2;
+const ARM64_RELOC_BRANCH26: u32 = 2;
 
 const NLIST_SIZE: usize = 16;
 
@@ -95,6 +99,7 @@ pub fn build(obj: &ObjectBuilder) -> Vec<u8> {
     buf.u32(MH_MAGIC_64);
     let (cputype, cpusubtype, minos) = match obj.target.arch {
         Arch::X86_64 => (CPU_TYPE_X86_64, CPU_SUBTYPE_X86_64_ALL, MIN_MACOS_X86_64),
+        Arch::Aarch64 => (CPU_TYPE_ARM64, CPU_SUBTYPE_ARM64_ALL, MIN_MACOS_ARM64),
     };
     buf.u32(cputype);
     buf.u32(cpusubtype);
@@ -174,6 +179,8 @@ pub fn build(obj: &ObjectBuilder) -> Vec<u8> {
         let (ty, pcrel, length) = match (obj.target.arch, r.kind) {
             // rel32 field, PC-relative, 4 bytes (length 2); the addend is the field (0)
             (Arch::X86_64, RelocKind::Call) => (X86_64_RELOC_BRANCH, 1, 2),
+            // the 26-bit offset of `bl`, PC-relative; the addend is the instruction's (0)
+            (Arch::Aarch64, RelocKind::Call) => (ARM64_RELOC_BRANCH26, 1, 2),
         };
         let symbolnum = index[&obj.target.symbol_name(&r.symbol)];
         let r_extern = 1;

@@ -1,4 +1,5 @@
-// ELF64 relocatable object (System V gABI; x86-64 psABI for the relocations).
+// ELF64 relocatable object (System V gABI; the x86-64 and AArch64 psABIs for the
+// relocations).
 //
 // Layout: ELF header | .text | .rela.text | .symtab | .strtab | .shstrtab | section headers.
 // Sections: 0 null, 1 .text, 2 .rela.text, 3 .symtab, 4 .strtab, 5 .shstrtab,
@@ -11,6 +12,7 @@ use std::collections::HashMap;
 use super::{Arch, ObjectBuilder, Put, RelocKind};
 
 const EM_X86_64: u16 = 62;
+const EM_AARCH64: u16 = 183;
 const ET_REL: u16 = 1;
 
 const SHT_PROGBITS: u32 = 1;
@@ -29,6 +31,7 @@ const STT_FUNC: u8 = 2;
 const STT_SECTION: u8 = 3;
 
 const R_X86_64_PLT32: u32 = 4;
+const R_AARCH64_CALL26: u32 = 283;
 
 const TEXT: u16 = 1; // section index of .text
 const SYMTAB: u32 = 3;
@@ -114,6 +117,8 @@ pub fn build(obj: &ObjectBuilder) -> Vec<u8> {
         let (ty, addend) = match (obj.target.arch, r.kind) {
             // S + A - P with P at the rel32 field, which ends 4 bytes later
             (Arch::X86_64, RelocKind::Call) => (R_X86_64_PLT32, -4i64),
+            // S + A - P with P at the `bl`
+            (Arch::Aarch64, RelocKind::Call) => (R_AARCH64_CALL26, 0),
         };
         let sym = index[&r.symbol] as u64;
         buf.u64(r.offset as u64);
@@ -234,6 +239,7 @@ pub fn build(obj: &ObjectBuilder) -> Vec<u8> {
     h.u16(ET_REL);
     h.u16(match obj.target.arch {
         Arch::X86_64 => EM_X86_64,
+        Arch::Aarch64 => EM_AARCH64,
     });
     h.u32(1); // e_version
     h.u64(0); // e_entry

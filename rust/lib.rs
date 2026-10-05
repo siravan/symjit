@@ -304,9 +304,11 @@ pub unsafe extern "C" fn write_obj(
 
 #[cfg(feature = "obj")]
 fn write_obj_impl(q: &mut CompilerResult, name: &str, format: &str) -> anyhow::Result<()> {
-    let target = Application::object_target(format)?;
     match &mut q.app {
-        Some(app) => app.write_obj_for(name, target),
+        Some(app) => {
+            let target = app.object_target(format)?;
+            app.write_obj_for(name, target)
+        }
         None => Err(anyhow::anyhow!("nothing is compiled")),
     }
 }

@@ -31,6 +31,7 @@ pub fn header(h: &HeaderInfo) -> String {
     };
     let arch = match h.target.arch {
         Arch::X86_64 => "x86-64",
+        Arch::Aarch64 => "AArch64",
     };
     let values = if h.complex {
         "Counts are in doubles: complex values are (re, im) pairs."
