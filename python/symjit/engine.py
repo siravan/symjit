@@ -384,6 +384,18 @@ def pack_options(
     )
 
 
+def numeric_options(**options) -> str:
+    """the options with a nonzero value as a suffix of `ty` (`Config::from_name`), e.g.
+    ";yield_every=10000;lockstep=256"; empty if all of them are zero"""
+    s = ""
+    for name, val in options.items():
+        if isinstance(val, bool) or not isinstance(val, (int, np.integer)) or val < 0:
+            raise ValueError(f"`{name}` should be a non-negative integer")
+        if val != 0:
+            s += f";{name}={int(val)}"
+    return s
+
+
 class RustyCompiler:
     def __init__(
         self,
@@ -409,6 +421,8 @@ class RustyCompiler:
         compress: bool=False,
         huge: bool=False,
         parallel_mul: bool=True,
+        yield_every: int=0,
+        lockstep: int=0,
     ):
         self.lib: Engine = lib
 
@@ -439,15 +453,17 @@ class RustyCompiler:
         self.dtype: str = dtype
         self.defuns: Defuns = Defuns(defuns)
         self.ty: str = ty
+        # numeric options travel after the type, e.g. "native;yield_every=10000;lockstep=256"
+        ty_options = ty + numeric_options(yield_every=yield_every, lockstep=lockstep)
 
         if action == "compile":
             self.p = lib.compile(
-                model.encode("utf-8"), ty.encode("utf8"), opt, self.defuns.p
+                model.encode("utf-8"), ty_options.encode("utf8"), opt, self.defuns.p
             )
             self.symbolica: bool = False
         elif action == "translate":
             self.p = lib.translate(
-                model.encode("utf-8"), ty.encode("utf8"), opt, self.defuns.p, num_params
+                model.encode("utf-8"), ty_options.encode("utf8"), opt, self.defuns.p, num_params
             )
             self.symbolica: bool = True
         elif action == "load":

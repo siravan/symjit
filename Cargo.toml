@@ -32,18 +32,20 @@ toml= "1.1"
 hugepage-rs = "0.1"
 lazy_static = "1.5"
 rand = "0.10"
+corosensei = { version = "0.3.4", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_System_Memory"] }
 
 [features]
 selinux-fix = ["memmap2"]
-default = ["wasm", "obj", "experimental"]
+default = ["wasm", "obj", "async"]
 symbolica = []
 libm = []
 wasm = []
 obj = []
 experimental = []
+async = ["experimental", "dep:corosensei"]
 
 [lib]
 # name = "_lib"
