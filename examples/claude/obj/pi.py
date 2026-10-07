@@ -11,7 +11,8 @@ header (`write_obj`, in out/), then builds test_pi.c with them and runs it:
 test_pi.c checks the results against the known value of pi.
 
 Needs a symjit library built with the `obj` cargo feature (cargo build --release
---features obj) on x86-64 Linux or macOS, and a C compiler (`cc`, or $CC).
+--features obj) on Linux or macOS, x86-64 or ARM64 (the objects are in the host's
+format and architecture), and a C compiler (`cc`, or $CC).
 """
 
 import math

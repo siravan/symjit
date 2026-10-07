@@ -12,14 +12,25 @@ results against numpy (or symjit's native compiler) and prints `ok!`.
 | `complex_numbers.py` | a complex model; complex functions are imported as `cplx_<name>` |
 | `defuns.py`          | Python functions in `defuns` become imports the host implements (here in JavaScript) |
 | `recursion.py`       | a recursive `Composer` function (Fibonacci) and what happens when the recursion is too deep |
+| `mandelbrot.py`, `mandelbrot.html` | the Mandelbrot set in the browser: the script writes `out/mandelbrot.wasm` (the Composer program of `examples/composer/manderbrot.py`), the page runs it for every pixel and draws a canvas |
 
 ```
 cd examples/claude/wasm
 python basic.py
 ```
 
-Node must be on `PATH` to run the modules (without it the scripts only write them).
+The examples need a symjit library built with the `wasm` cargo feature (off by
+default; see [docs/WASM.md](../../../docs/WASM.md#enabling-the-backend)). Node must be on
+`PATH` to run the modules (without it the scripts only write them).
 `out/` holds the generated `.wasm` files and their `.json` layouts and can be deleted.
+
+To view the Mandelbrot page, serve this directory (browsers do not load modules from
+`file://` URLs):
+
+```
+python mandelbrot.py
+python -m http.server 8000      # then open http://localhost:8000/mandelbrot.html
+```
 
 ## The host
 

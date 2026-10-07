@@ -39,7 +39,9 @@ ok!
 
 Requirements: a symjit library built with the `obj` cargo feature (off by default:
 `cargo build --release --features obj`, then copy `target/release/libsymjit.so` over
-`python/symjit/_lib*.so`), x86-64 Linux or macOS, and a C compiler (`cc`, or `$CC`).
+`python/symjit/_lib*.so`; on macOS, copy `target/release/libsymjit.dylib` to
+`python/symjit/_lib.cpython-312-darwin.so`), Linux or macOS on x86-64 or ARM64 (e.g. an
+Apple silicon Mac: the objects are then ARM64 Mach-O), and a C compiler (`cc`, or `$CC`).
 The objects and headers go to `out/`, which can be deleted. To build the C program by
 hand:
 
