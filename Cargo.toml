@@ -38,7 +38,7 @@ windows-sys = { version = "0.61", features = ["Win32_System_Memory"] }
 
 [features]
 selinux-fix = ["memmap2"]
-default = ["wasm", "obj"]
+default = ["wasm", "obj", "experimental"]
 symbolica = []
 libm = []
 wasm = []

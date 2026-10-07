@@ -368,6 +368,73 @@ class SaveLoad(unittest.TestCase):
             load_func(os.path.join(self.d.name, "missing.sjb"))
 
 
+# ------------------------------------------------------------------ lockstep options
+class Lockstep(unittest.TestCase):
+    # `compile_evaluator(..., yield_every=, lockstep=)`: yield points in the kernels, and batch
+    # calls that run `lockstep` points in lockstep (cargo feature `async`; other builds keep the
+    # options but ignore them). The results must be bit-identical to plain batch calls.
+    PATH = os.path.join(os.path.dirname(__file__), "..", "..", "examples", "symbolica", "1loop_instructions_2.txt")
+
+    def setUp(self):
+        if not os.path.exists(self.PATH):
+            self.skipTest("examples/symbolica/1loop_instructions_2.txt not found")
+        with open(self.PATH, encoding="utf-8") as fd:
+            self.ev = fd.read()
+        rng = np.random.default_rng(5)
+        # 37 points: SIMD rows of 4 or 8 points and a scalar tail
+        self.X = rng.random((37, 223)) + 1j * rng.random((37, 223))
+
+    def compile(self, **kw):
+        from symjit import compile_evaluator
+
+        return compile_evaluator(self.ev, dtype="complex128", num_params=223, use_threads=False, **kw)
+
+    def test_results_are_identical(self):
+        # Lockstep runs the same kernel, so it gives the bits of sequential calls of it. A yield
+        # point is a statement boundary, which (with fastmath) can keep a multiplication and an
+        # addition from fusing into an FMA, so kernels with yield points may differ from kernels
+        # without them by an ulp; with fastmath=False the scalar kernel is bit-identical (the
+        # complex SIMD kernels still differ by up to 2 ulp there).
+        for simd in [dict(use_simd=False), dict(use_simd=True), dict(use_simd=True, enable_simd512=True)]:
+            plain = self.compile(**simd).evaluate_complex(self.X)
+            for opts in [dict(yield_every=50, lockstep=16), dict(yield_every=1000, lockstep=5), dict(lockstep=8)]:
+                with self.subTest(**simd, **opts):
+                    f = self.compile(**simd, **opts)
+                    self.assertEqual(f.measure("yield-every"), opts.get("yield_every", 0))
+                    self.assertEqual(f.measure("lockstep"), opts["lockstep"])
+                    sequential = self.compile(**simd, yield_every=opts.get("yield_every", 0))
+                    got = f.evaluate_complex(self.X)
+                    np.testing.assert_array_equal(got, sequential.evaluate_complex(self.X))
+                    np.testing.assert_allclose(got, plain, rtol=1e-14)
+                    if not simd["use_simd"]:
+                        exact = self.compile(**simd, **opts, fastmath=False).evaluate_complex(self.X)
+                        want = self.compile(**simd, fastmath=False).evaluate_complex(self.X)
+                        np.testing.assert_array_equal(exact, want)
+
+    def test_yield_points_are_inserted(self):
+        f = self.compile(use_simd=False, yield_every=50)
+        if f.measure("async") == 0:
+            self.skipTest("yield points need the cargo feature `async`")
+        plain = self.compile(use_simd=False)
+        self.assertGreater(f.measure("mir-size"), plain.measure("mir-size"))
+
+    def test_options_are_saved(self):
+        f = self.compile(use_simd=False, yield_every=500, lockstep=32)
+        want = f.evaluate_complex(self.X)
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "ev.sjb")
+            f.save(path)
+            g = load_func(path)
+        self.assertEqual(g.measure("yield-every"), 500)
+        self.assertEqual(g.measure("lockstep"), 32)
+        np.testing.assert_array_equal(g.evaluate_complex(self.X), want)
+
+    def test_invalid_values(self):
+        for opts in [dict(lockstep=-1), dict(yield_every=1.5), dict(lockstep=True), dict(yield_every="10")]:
+            with self.subTest(**opts), self.assertRaises(ValueError):
+                self.compile(use_simd=False, **opts)
+
+
 # ------------------------------------------------------------------ scipy callables
 @unittest.skipUnless(HAVE_SCIPY, "needs scipy")
 class Callables(unittest.TestCase):

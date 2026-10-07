@@ -1,18 +1,23 @@
 # Modified from code by Peter Stahlecker (github.com/Peter230655)
+#
+# Integrates an n-link pendulum with symjit (or lambdify, --no-symjit) and
+# times compilation, single calls and the integration. The last output line,
+# `BENCH {...}`, is read by examples/claude/pendulum_bench.py, which runs this
+# example against several versions of symjit.
 
 import util
 
 args = util.process_argv()
 
 # %%
+import json
 import time
 
-import matplotlib.pyplot as plt
 import numpy as np
 import sympy as sm
 import sympy.physics.mechanics as me
 from scipy.integrate import solve_ivp
-from symjit import OdeFunc, compile_func
+from symjit import compile_func
 
 # %%
 # **A chain**
@@ -38,15 +43,27 @@ from symjit import OdeFunc, compile_func
 #   frame $O$.
 # - $u[i]$: angular speed dto.
 
+
+def best_of(f, repeat=5, number=200):
+    """the best time of `repeat` runs of `number` calls of f, per call (sec)"""
+    best = float("inf")
+    for _ in range(repeat):
+        start = time.perf_counter()
+        for _ in range(number):
+            f()
+        best = min(best, (time.perf_counter() - start) / number)
+    return best
+
+
 # %%
 # ==================
 # n = number of links. The larger n the larger the mass matrix and the
 # force vector
 n = 25
 term_info = True
-plot_energies = True  # if True the energies are plotted
 # ==================
 
+start0 = time.time()
 m, g, iZZ, l, reibung = sm.symbols("m, g, iZZ, l, reibung")
 q = me.dynamicsymbols(f"q:{n}")
 u = me.dynamicsymbols(f"u:{n}")
@@ -56,7 +73,6 @@ t = me.dynamicsymbols._t
 A = sm.symbols(f"A:{n}", cls=me.ReferenceFrame)
 Dmc = sm.symbols(f"Dmc:{n}", cls=me.Point)
 P = sm.symbols(f"P:{n}", cls=me.Point)
-rhs = list(sm.symbols(f"rhs:{n}"))
 
 O = me.ReferenceFrame("O")
 PO = me.Point("PO")
@@ -98,35 +114,20 @@ KM = me.KanesMethod(O, q_ind=q, u_ind=u, kd_eqs=kd)
 (fr, frstar) = KM.kanes_equations(BODY, FL)
 
 MM = KM.mass_matrix_full
-if term_info == True:
-    print("MM DS", me.find_dynamicsymbols(MM))
-    print("MM free symbols", MM.free_symbols)
-    print(
-        f"MM contains {sm.count_ops(MM):,} operations, "
-        f"{sm.count_ops(sm.cse(MM)):,} after cse",
-        "\n",
-    )
-
 force = KM.forcing_full
-if term_info == True:
-    print("force DS", me.find_dynamicsymbols(force))
-    print("force free symbols", force.free_symbols)
-    print(
-        f"force contains {sm.count_ops(force):,} operations "
-        f"{sm.count_ops(sm.cse(force)):,} after cse",
-        "\n",
-    )
+time_sympy = time.time() - start0
+print(f"it took {time_sympy:.3f} sec to derive the equations of motion")
+
+if term_info:
+    print(f"MM contains {sm.count_ops(MM):,} operations")
+    print(f"force contains {sm.count_ops(force):,} operations\n")
 
 # %%
 # Functions for the kinetic and the potential energies.
 # Always useful to detect mistakes.
 
-# %%
-if plot_energies:
-    kin_energie = sum([koerper.kinetic_energy(O) for koerper in BODY])
-    pot_energie = sum([m * g * me.dot(koerper.pos_from(PO), O.y) for koerper in Dmc])
-else:
-    pass
+kin_energie = sum([koerper.kinetic_energy(O) for koerper in BODY])
+pot_energie = sum([m * g * me.dot(koerper.pos_from(PO), O.y) for koerper in Dmc])
 
 # %%
 # Use symjit.
@@ -146,17 +147,12 @@ force1 = me.msubs(force, dict_w, dict_v)
 MM1 = [MM1[i, j] for i in range(MM1.shape[0]) for j in range(MM1.shape[1])]
 force1 = list(force1)
 pL1 = (m, g, l, iZZ, reibung)
+
+start1 = time.time()
 MM_jit = compile_func((*w1, *v1), MM1, params=pL1, **args)
 force_jit = compile_func((*w1, *v1), force1, params=pL1, **args)
-
-# MM_jit.dump("mm.mir", "bytecode")
-# force_jit.dump("force.mir", "bytecode")
-
-# print('w1 = ', w1)
-# print('v1 = ', v1)
-# print('MM1 = ', MM1)
-# print('force1 = ', force1)
-# print('pL1 = ', pL1)
+time_compile = time.time() - start1
+print(f"it took {time_compile:.3f} sec to compile MM and force with symjit")
 
 # %%
 # Lambdification.
@@ -168,12 +164,11 @@ pL = [m, g, l, iZZ, reibung]
 
 MM_lam = sm.lambdify(qL + pL, MM, cse=True)
 force_lam = sm.lambdify(qL + pL, force, cse=True)
+kin_lam = sm.lambdify(qL + pL, kin_energie, cse=True)
+pot_lam = sm.lambdify(qL + pL, pot_energie, cse=True)
 
-if plot_energies:
-    kin_lam = sm.lambdify(qL + pL, kin_energie, cse=True)
-    pot_lam = sm.lambdify(qL + pL, pot_energie, cse=True)
-
-print(f"it took {time.time() - start3:.3f} sec to do the lambdification")
+time_lambdify = time.time() - start3
+print(f"it took {time_lambdify:.3f} sec to do the lambdification")
 
 # %%
 # **Numerical Integration**
@@ -221,13 +216,30 @@ if symJIT is False:
 else:
 
     def gradient(t, y, args):
-        # MM_matrix = np.array(MM_jit(*y, *args)).reshape((n*2, n*2))
-        # force_vector = np.array(force_jit(*y, *args))
         MM_matrix = MM_jit.apply(y, args).reshape((n * 2, n * 2))
         force_vector = force_jit.apply(y, args)
         sol = np.linalg.solve(MM_matrix, force_vector)
         return np.array(sol)
 
+
+# %%
+# Timing of single calls at the initial state.
+
+y0_np = np.array(y0)
+time_mm = best_of(lambda: MM_jit.apply(y0_np, pL_vals))
+time_force = best_of(lambda: force_jit.apply(y0_np, pL_vals))
+time_mm_lam = best_of(lambda: MM_lam(*y0, *pL_vals), number=20)
+time_force_lam = best_of(lambda: force_lam(*y0, *pL_vals), number=20)
+time_gradient = best_of(lambda: gradient(0.0, y0_np, pL_vals))
+print(
+    f"one call of MM takes {time_mm * 1e6:.1f} us with symjit, "
+    f"{time_mm_lam * 1e6:.1f} us with lambdify"
+)
+print(
+    f"one call of force takes {time_force * 1e6:.1f} us with symjit, "
+    f"{time_force_lam * 1e6:.1f} us with lambdify"
+)
+print(f"one call of gradient takes {time_gradient * 1e6:.1f} us\n")
 
 start2 = time.time()
 resultat1 = solve_ivp(
@@ -250,41 +262,36 @@ print(
 )
 
 # %%
-# Plot the energies.
+# The energies.
 
 # %%
-if plot_energies:
-    kin_np = np.empty(schritte)
-    pot_np = np.empty(schritte)
-    total_np = np.empty(schritte)
+kin_np = np.array([kin_lam(*resultat[i], *pL_vals) for i in range(schritte)])
+pot_np = np.array([pot_lam(*resultat[i], *pL_vals) for i in range(schritte)])
+total_np = kin_np + pot_np
 
-    for i in range(schritte):
-        kin_np[i] = kin_lam(
-            *[resultat[i, j] for j in range(resultat.shape[1])], *pL_vals
-        )
-        pot_np[i] = pot_lam(
-            *[resultat[i, j] for j in range(resultat.shape[1])], *pL_vals
-        )
-        total_np[i] = kin_np[i] + pot_np[i]
+max_total = np.max(np.abs(total_np))
+min_total = np.min(np.abs(total_np))
+deviation = (max_total - min_total) / max_total * 100
+if reibung1 == 0.0:
+    print(
+        f"max deviation of total energy from zero is "
+        f"{deviation:.3e} % of max. total energy"
+    )
 
-    if reibung1 == 0.0:
-        max_total = np.max(np.abs(total_np))
-        min_total = np.min(np.abs(total_np))
-        delta = max_total - min_total
-        print(
-            f"max deviation of total energy from zero is "
-            f"{delta / max_total * 100:.3e} % of max. total energy"
-        )
-    fig, ax = plt.subplots(figsize=(10, 5))
-    for i, j in zip(
-        (kin_np, pot_np, total_np),
-        ("kinetic energy", "potential energy", "total energy"),
-    ):
-        ax.plot(times, i, label=j)
-    ax.set_title("Energies of the system")
-    ax.set_xlabel("time (sec)")
-    ax.set_ylabel("energy (Nm)")
-    _ = ax.legend()
-    plt.show()
-else:
-    pass
+bench = dict(
+    symjit=symJIT,
+    nfev=int(resultat1.nfev),
+    energy_deviation_percent=float(deviation),
+    final_q=[float(x) for x in resultat[-1, :3]],
+    sympy_sec=time_sympy,
+    compile_sec=time_compile,
+    lambdify_sec=time_lambdify,
+    mm_call_us=time_mm * 1e6,
+    force_call_us=time_force * 1e6,
+    mm_lambdify_call_us=time_mm_lam * 1e6,
+    force_lambdify_call_us=time_force_lam * 1e6,
+    gradient_call_us=time_gradient * 1e6,
+    integration_sec=end2 - start2,
+    integration_per_nfev_us=(end2 - start2) / resultat1.nfev * 1e6,
+)
+print("BENCH " + json.dumps(bench))

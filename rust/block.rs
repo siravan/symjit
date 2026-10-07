@@ -111,6 +111,43 @@ impl Block {
         }
     }
 
+    /*
+     * insert_yields adds a call to `_yield_` (lockstep evaluation, `lockstep.rs`) after the
+     * statements that complete `every` expression nodes, outside labels and branches. The
+     * call is an ordinary function call, so no values stay in registers across it. Returns
+     * the number of yield points.
+     */
+    #[cfg(feature = "async")]
+    pub fn insert_yields(&mut self, every: usize, zero: Node) -> usize {
+        let stmts = std::mem::take(&mut self.stmts);
+        let mut weight = 0;
+        let mut depth = 0;
+        let mut count = 0;
+
+        for s in stmts {
+            match &s {
+                Statement::Assign { rhs, .. } => weight += rhs.weightof() as usize,
+                Statement::Call { arg, .. } => weight += arg.weightof() as usize,
+                Statement::Label { .. } => depth += 1,
+                Statement::Branch { .. } | Statement::BranchIf { .. } => depth -= 1,
+                Statement::LoadArgs { .. } => {}
+            }
+
+            self.stmts.push(s);
+
+            if depth == 0 && weight >= every {
+                let arg = self.create_unary(Operation::new("_call_"), zero.clone());
+                let lhs = self.create_tmp();
+                self.stmts
+                    .push(Statement::call(Operation::new("_yield_"), lhs, arg, 1));
+                weight = 0;
+                count += 1;
+            }
+        }
+
+        count
+    }
+
     pub fn load_args(&mut self, args: Vec<Node>) {
         self.stmts.push(Statement::load_args(args));
     }

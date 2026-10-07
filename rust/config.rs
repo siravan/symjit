@@ -61,6 +61,11 @@ pub struct Config {
     pub df: Option<Arc<Defuns>>,
     pub stack: usize,
     pub args: u32,
+    /// lockstep evaluation (`async` feature, `lockstep.rs`): the number of expression nodes
+    /// between two yield points of a kernel (0: no yield points)
+    pub yield_every: usize,
+    /// lockstep evaluation: the number of points `evaluate_matrix` runs in lockstep (0: off)
+    pub lockstep: usize,
     /// kernels for relocatable object files (not saved; see `is_relocatable`)
     pub reloc: bool,
 }
@@ -95,6 +100,8 @@ struct Options {
     opt_level: u8,
     stack_limit: usize,
     num_args: u32,
+    yield_every: usize,
+    lockstep: usize,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -185,10 +192,12 @@ impl std::fmt::Debug for Config {
 
         write!(
             f,
-            "opt_level = {}, stack limit = {}, num_args = {}}}",
+            "opt_level = {}, stack limit = {}, num_args = {}, yield_every = {}, lockstep = {}}}",
             self.opt_level(),
             self.stack_limit(),
-            self.num_args()
+            self.num_args(),
+            self.yield_every(),
+            self.lockstep()
         )
     }
 }
@@ -203,11 +212,26 @@ impl Config {
             df: None,
             stack: DEFAULT_STACK_LIMIT,
             args: COMPRESSED_ARGS_CAP as u32,
+            yield_every: 0,
+            lockstep: 0,
             reloc: false,
         })
     }
 
     pub fn from_name(ty: &str, opt: u32) -> Result<Config> {
+        // `ty` may carry numeric options after the type, applied with `set_option`, e.g.
+        // "native;yield_every=10000;lockstep=256" (the Python package passes them this way)
+        if let Some((ty, options)) = ty.split_once(';') {
+            let mut config = Self::from_name(ty, opt)?;
+            for item in options.split(';').filter(|s| !s.trim().is_empty()) {
+                let (key, val) = item
+                    .split_once('=')
+                    .ok_or_else(|| anyhow!("invalid option `{}` (expected key=value)", item))?;
+                config.set_option(key.trim(), val.trim())?;
+            }
+            return Ok(config);
+        }
+
         let ty = match ty {
             "bytecode" => CompilerType::ByteCode,
             "arm" => CompilerType::Arm,
@@ -256,6 +280,8 @@ impl Config {
         config.set_opt_level(c.options.opt_level);
         config.set_stack_limit(c.options.stack_limit);
         config.set_num_args(c.options.num_args);
+        config.set_yield_every(c.options.yield_every);
+        config.set_lockstep(c.options.lockstep);
 
         config.set_debug_bytecode(c.debug.bytecode);
         config.set_debug_scalar(c.debug.scalar);
@@ -298,6 +324,8 @@ impl Config {
             opt_level: self.opt_level(),
             stack_limit: self.stack_limit(),
             num_args: self.num_args(),
+            yield_every: self.yield_every(),
+            lockstep: self.lockstep(),
             huge: self.huge(),
             parallel_mul: self.parallel_mul(),
             direct_arena: self.direct_arena(),
@@ -506,6 +534,14 @@ impl Config {
 
     pub fn stack_limit(&self) -> usize {
         self.stack
+    }
+
+    pub fn yield_every(&self) -> usize {
+        self.yield_every
+    }
+
+    pub fn lockstep(&self) -> usize {
+        self.lockstep
     }
 
     pub fn num_args(&self) -> u32 {
@@ -804,6 +840,14 @@ impl Config {
         self.stack = stack_limit.max(DEFAULT_STACK_LIMIT);
     }
 
+    pub fn set_yield_every(&mut self, yield_every: usize) {
+        self.yield_every = yield_every;
+    }
+
+    pub fn set_lockstep(&mut self, lockstep: usize) {
+        self.lockstep = lockstep;
+    }
+
     pub fn set_num_args(&mut self, num_args: u32) {
         if num_args > SLICE_CAP as u32 {
             eprintln!("Warning! Max number of arguments is {}.", SLICE_CAP);
@@ -891,6 +935,12 @@ impl Config {
             }
             "num_args" => {
                 self.set_num_args(val.parse::<u32>()?);
+            }
+            "yield_every" => {
+                self.set_yield_every(val.parse::<usize>()?);
+            }
+            "lockstep" => {
+                self.set_lockstep(val.parse::<usize>()?);
             }
             "debug_bytecode" => {
                 self.set_debug_bytecode(val.parse::<bool>()?);
@@ -1119,6 +1169,9 @@ impl Storage for Config {
         let val: usize = self.num_args() as usize;
         stream.write_all(&val.to_le_bytes())?;
 
+        stream.write_all(&self.yield_every().to_le_bytes())?;
+        stream.write_all(&self.lockstep().to_le_bytes())?;
+
         Ok(())
     }
 
@@ -1142,6 +1195,12 @@ impl Storage for Config {
         stream.read_exact(&mut bytes)?;
         let args: u32 = usize::from_le_bytes(bytes) as u32;
 
+        stream.read_exact(&mut bytes)?;
+        let yield_every = usize::from_le_bytes(bytes);
+
+        stream.read_exact(&mut bytes)?;
+        let lockstep = usize::from_le_bytes(bytes);
+
         let ty: CompilerType = match ty {
             0 => CompilerType::Native,
             1 => CompilerType::Amd,
@@ -1161,7 +1220,58 @@ impl Storage for Config {
             df: config.df.clone(),
             stack,
             args,
+            yield_every,
+            lockstep,
             reloc: false,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn storage_keeps_lockstep_options() {
+        let mut config = Config::new(CompilerType::Native, USE_SIMD | CSE).unwrap();
+        config.set_stack_limit(3 << 20);
+        config.set_yield_every(12345);
+        config.set_lockstep(256);
+
+        let mut buf: Vec<u8> = Vec::new();
+        config.save(&mut buf).unwrap();
+        let loaded = Config::load(&mut buf.as_slice(), &config).unwrap();
+
+        assert_eq!(loaded.opt, config.opt);
+        assert_eq!(loaded.stack_limit(), 3 << 20);
+        assert_eq!(loaded.yield_every(), 12345);
+        assert_eq!(loaded.lockstep(), 256);
+    }
+
+    #[test]
+    fn set_option_parses_lockstep_options() {
+        let mut config = Config::new(CompilerType::Native, 0).unwrap();
+        config.set_option("yield_every", "10000").unwrap();
+        config.set_option("lockstep", "64").unwrap();
+        assert_eq!(config.yield_every(), 10000);
+        assert_eq!(config.lockstep(), 64);
+        assert!(config.set_option("lockstep", "-1").is_err());
+    }
+
+    #[test]
+    fn from_name_applies_options_after_the_type() {
+        let config = Config::from_name("native;yield_every=10000; lockstep = 256", CSE).unwrap();
+        assert!(matches!(config.ty, CompilerType::Native));
+        assert_eq!(config.opt, CSE);
+        assert_eq!(config.yield_every(), 10000);
+        assert_eq!(config.lockstep(), 256);
+
+        let config = Config::from_name("bytecode;", 0).unwrap();
+        assert!(matches!(config.ty, CompilerType::ByteCode));
+
+        assert!(Config::from_name("native;lockstep", 0).is_err());
+        assert!(Config::from_name("native;lockstep=x", 0).is_err());
+        assert!(Config::from_name("native;unknown=1", 0).is_err());
+        assert!(Config::from_name("nonsense;lockstep=1", 0).is_err());
     }
 }

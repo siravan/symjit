@@ -759,9 +759,15 @@ impl Application {
             }
             "mir-size" => self.bytecode.mir.code.ip,
             "stack-size" => self.prog.builder.stack_size(),
+            // the lockstep options (`Config::yield_every`, `Config::lockstep`)
+            "yield-every" => self.prog.config().yield_every(),
+            "lockstep" => self.prog.config().lockstep(),
             // 1 in a build with the `experimental` feature (unknown keys give 0)
             #[cfg(feature = "experimental")]
             "experimental" => 1,
+            // 1 in a build with the `async` feature (lockstep evaluation)
+            #[cfg(feature = "async")]
+            "async" => 1,
             "version" => {
                 let major: usize = env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap_or(99);
                 let minor: usize = env!("CARGO_PKG_VERSION_MINOR").parse().unwrap_or(99);
@@ -1017,7 +1023,7 @@ impl Storage for Application {
     fn save(&self, stream: &mut impl Write) -> Result<()> {
         stream.write_all(&Self::MAGIC.to_le_bytes())?;
 
-        let version: usize = 4;
+        let version: usize = 5;
         stream.write_all(&version.to_le_bytes())?;
 
         self.prog.save(stream)?;
@@ -1063,7 +1069,8 @@ impl Storage for Application {
 
         stream.read_exact(&mut bytes)?;
 
-        if usize::from_le_bytes(bytes) != 4 {
+        // version 5: Config saves `yield_every` and `lockstep`
+        if usize::from_le_bytes(bytes) != 5 {
             return Err(anyhow!("invalid sjb version"));
         }
 
