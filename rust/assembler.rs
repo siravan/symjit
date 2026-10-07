@@ -60,6 +60,14 @@ impl Assembler {
         self.labels.insert(label.to_string(), self.ip());
     }
 
+    /// Moves an existing label to the current position (jumps are resolved in
+    /// `apply_jumps`, so this is valid until then).
+    #[cfg(feature = "experimental")]
+    pub fn move_label(&mut self, label: &str) {
+        assert!(self.labels.contains_key(label));
+        self.labels.insert(label.to_string(), self.ip());
+    }
+
     pub fn has_label(&self, label: &str) -> bool {
         self.labels.contains_key(label)
     }

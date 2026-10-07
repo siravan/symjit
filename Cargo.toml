@@ -43,6 +43,7 @@ symbolica = []
 libm = []
 wasm = []
 obj = []
+experimental = []
 
 [lib]
 # name = "_lib"

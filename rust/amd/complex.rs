@@ -1,6 +1,10 @@
 use super::super::code::Func;
 use super::super::config::{Config, KernelType, ABI_AREA};
 use super::super::generator::{Generator, GeneratorType, StackRegions};
+#[cfg(feature = "experimental")]
+use super::super::config::SPILL_AREA;
+#[cfg(feature = "experimental")]
+use super::super::mir::ArithOp;
 use super::super::symbol::Loc;
 use super::super::utils::align_stack;
 use super::super::utils::{DataType, Reg};
@@ -41,10 +45,34 @@ fn ϕ(r: Reg) -> u8 {
     }
 }
 
+/// A memory operand of `op_loc`: [base + offset], or [STACK + rax*8] for a funclet
+/// argument whose slot number was decoded into rax.
+#[cfg(feature = "experimental")]
+#[derive(Clone, Copy)]
+enum MemOperand {
+    Disp(u8, i32),
+    Indexed,
+}
+
 pub struct AmdComplexGenerator {
     amd: Amd,
     config: Config,
     last_load: usize,
+    // Compression-mode funclets (see `save_args`): while the body of a funclet is
+    // generated, its first `funclet_args` arguments are read in place, at the stack slot
+    // numbers packed in SUBROUTINE_ARGS (16 bits each), instead of being copied to the
+    // argument area first.
+    #[cfg(feature = "experimental")]
+    funclet_args: u8,
+    #[cfg(feature = "experimental")]
+    funclet_count: usize,
+    #[cfg(feature = "experimental")]
+    last_label: String,
+    #[cfg(feature = "experimental")]
+    ultra_label: Option<String>,
+    // the plain-entry prologue, emitted out of line after the body: (label, arguments)
+    #[cfg(feature = "experimental")]
+    funclet_prologue: Option<(String, Vec<Loc>, String)>,
 }
 
 impl AmdComplexGenerator {
@@ -53,7 +81,76 @@ impl AmdComplexGenerator {
             amd: Amd::new(DataType::F64),
             config,
             last_load: 0,
+            #[cfg(feature = "experimental")]
+            funclet_args: 0,
+            #[cfg(feature = "experimental")]
+            funclet_count: 0,
+            #[cfg(feature = "experimental")]
+            last_label: String::new(),
+            #[cfg(feature = "experimental")]
+            ultra_label: None,
+            #[cfg(feature = "experimental")]
+            funclet_prologue: None,
         }
+    }
+
+    /// The argument number of stack slot `idx` if it is an argument of the funclet whose
+    /// body is being generated (`config.location(arg)`).
+    #[cfg(feature = "experimental")]
+    fn funclet_arg(&self, idx: u32) -> Option<u8> {
+        let base = SPILL_AREA as u32;
+        if self.funclet_args > 0 && idx >= base && (idx - base) % 2 == 0 {
+            let arg = (idx - base) / 2;
+            if arg < self.funclet_args as u32 {
+                return Some(arg as u8);
+            }
+        }
+        None
+    }
+
+    /// rax := the stack slot number of argument `arg` (16 bits of SUBROUTINE_ARGS)
+    #[cfg(feature = "experimental")]
+    fn decode_funclet_arg(&mut self, arg: u8) {
+        self.amd.mov(Amd::RAX, SUBROUTINE_ARGS[arg as usize / 4]);
+        let k = arg % 4;
+        if k > 0 {
+            self.amd.shr_imm(Amd::RAX, 16 * k);
+        }
+        self.amd.movzx(Amd::RAX, Amd::RAX);
+    }
+
+    /// Loads stack slot `idx` into the physical register `r`, reading a funclet argument
+    /// in place. Returns false if `idx` is not a funclet argument (nothing is emitted).
+    #[cfg(feature = "experimental")]
+    fn load_funclet_arg(&mut self, r: u8, idx: u32) -> bool {
+        if let Some(arg) = self.funclet_arg(idx) {
+            self.decode_funclet_arg(arg);
+            self.amd.vmovdd_xmm_indexed(r, STACK, Amd::RAX, 8);
+            // not a plain [base + offset] load: `fuse_load_math` must not patch it
+            self.last_load = 0;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Runs `f` (a call) with SUBROUTINE_ARGS preserved if a funclet body is being
+    /// generated: the callee may clobber them, and later arguments are decoded from them.
+    #[cfg(feature = "experimental")]
+    fn preserving_funclet_args<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        let keep = self.funclet_args > 0;
+        if keep {
+            for r in SUBROUTINE_ARGS {
+                self.amd.push(r);
+            }
+        }
+        let res = f(self);
+        if keep {
+            for r in SUBROUTINE_ARGS.iter().rev() {
+                self.amd.pop(*r);
+            }
+        }
+        res
     }
 
     fn append_quad(&mut self, u: u64) {
@@ -96,6 +193,57 @@ impl AmdComplexGenerator {
             self.vzeroupper();
             self.amd.call_indirect(&format!("_func_{}_", op));
         }
+
+        self.load_stack(Reg::Ret, 4);
+
+        Ok(())
+    }
+
+    #[cfg(feature = "experimental")]
+    fn call_inner(&mut self, op: &str, num_args: usize) -> Result<()> {
+        if self.config.is_external_func(op) {
+            if self.config.is_relocatable() && op != "@self" {
+                return Err(object_external_error(op));
+            }
+            return self.call_external(op, num_args);
+        }
+
+        if self.config.is_relocatable() {
+            self.vzeroupper();
+            return object_call(&mut self.amd, &self.config, op);
+        }
+
+        let label = format!("_func_{}_", op);
+        self.vzeroupper();
+        self.amd.call_indirect(&label);
+
+        Ok(())
+    }
+
+    #[cfg(feature = "experimental")]
+    fn call_complex_inner(&mut self, op: &str, num_args: usize) -> Result<()> {
+        if self.config.is_relocatable() {
+            return Err(object_complex_error(op));
+        }
+
+        let label = format!("_func_{}_", op);
+
+        if num_args == 2 {
+            self.save_stack(Reg::Right, 4);
+        }
+
+        // loading the imaginary part of the argument into xmm1
+        self.amd.vunpckhdd(1, 0, 0);
+
+        self.vzeroupper();
+
+        if cfg!(target_family = "windows") {
+            self.amd.lea_mem(Amd::R8, STACK, 32);
+        } else {
+            self.amd.lea_mem(Amd::RDI, STACK, 32);
+        }
+
+        self.amd.call_indirect(&label);
 
         self.load_stack(Reg::Ret, 4);
 
@@ -145,6 +293,10 @@ impl Generator for AmdComplexGenerator {
 
     fn set_label(&mut self, label: &str) {
         self.amd.a.set_label(label);
+        #[cfg(feature = "experimental")]
+        {
+            self.last_label = label.to_string();
+        }
     }
 
     fn branch(&mut self, label: &str) {
@@ -214,6 +366,10 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
+        #[cfg(feature = "experimental")]
+        if self.load_funclet_arg(ϕ(dst), idx) {
+            return;
+        }
         self.last_load = self.amd.a.ip();
         self.amd
             .vmovdd_xmm_mem(ϕ(dst), STACK, (idx * REG_SIZE) as i32);
@@ -255,6 +411,7 @@ impl Generator for AmdComplexGenerator {
         );
     }
 
+    #[cfg(not(feature = "experimental"))]
     fn save_args(&mut self, num_args: u8, ultra: bool) {
         save_args_helper(
             &mut self.amd,
@@ -269,6 +426,56 @@ impl Generator for AmdComplexGenerator {
                 save_f64x2_to_loc(amd, arg, dst);
             },
         );
+    }
+
+    /*
+     * The two entries of a compression-mode funclet (Topology::compile):
+     *
+     *   "<topo>_ultra":  SaveArgs(ultra)   the caller packed the stack slot numbers of the
+     *                                      arguments in SUBROUTINE_ARGS (pack_locs)
+     *   "<topo>":        SaveArgs(plain)   the caller passed the arguments in xmm0, xmm1, ...
+     *   body ...
+     *   ret
+     *
+     * The body reads its arguments in place (load_stack decodes the slot number into rax)
+     * instead of copying them to the argument area first. The ultra entry, used by
+     * almost every call, falls straight into the body: its label is moved past the plain
+     * entry, which jumps to an out-of-line prologue (emitted after the body's `ret`) that
+     * stores the arguments in the argument area, packs the numbers of those slots and
+     * jumps back to the body. Arguments 16 and above are always in the argument area
+     * (load_args_helper).
+     */
+    #[cfg(feature = "experimental")]
+    fn save_args(&mut self, num_args: u8, ultra: bool) {
+        let n = num_args.min(16);
+
+        if ultra {
+            self.ultra_label = Some(self.last_label.clone());
+            return;
+        }
+
+        let locs: Vec<Loc> = (0..n).map(|arg| self.config.location(arg)).collect();
+
+        match self.ultra_label.take() {
+            Some(ultra) => {
+                let prologue = format!("__funclet_prologue_{}_", self.funclet_count);
+                self.funclet_count += 1;
+                self.amd.jmp(&prologue);
+                self.amd.a.move_label(&ultra); // the body starts here
+                self.funclet_prologue = Some((prologue, locs, ultra));
+            }
+            None => {
+                // no ultra entry: the prologue stays in line
+                for (arg, loc) in locs.iter().enumerate() {
+                    save_f64x2_to_loc(&mut self.amd, arg as u8, *loc);
+                }
+                if !locs.is_empty() {
+                    pack_locs(&mut self.amd, &locs);
+                }
+            }
+        }
+
+        self.funclet_args = n;
     }
 
     fn load_args_complex(&mut self, _locs: Vec<Loc>, _ultra: bool) {}
@@ -482,12 +689,26 @@ impl Generator for AmdComplexGenerator {
                 Loc::Mem(idx) => self.amd.vmovdd_xmm_mem(T0, MEM, (idx * REG_SIZE) as i32),
                 Loc::Param(idx) => self.amd.vmovdd_xmm_mem(T0, PARAMS, (idx * REG_SIZE) as i32),
                 Loc::Stack(idx) => {
-                    // Important! STACK instead of SP here because SP changes in the compression subroutines.
-                    self.amd.vmovdd_xmm_mem(T0, STACK, (idx * REG_SIZE) as i32);
+                    #[cfg(not(feature = "experimental"))]
+                    {
+                        // Important! STACK instead of SP here because SP changes in the compression subroutines.
+                        self.amd.vmovdd_xmm_mem(T0, STACK, (idx * REG_SIZE) as i32);
+                    }
+                    #[cfg(feature = "experimental")]
+                    if !self.load_funclet_arg(T0, idx) {
+                        // Important! STACK instead of SP here because SP changes in the compression subroutines.
+                        self.amd.vmovdd_xmm_mem(T0, STACK, (idx * REG_SIZE) as i32);
+                    }
                 }
             }
 
             match l2 {
+                #[cfg(feature = "experimental")]
+                Loc::Stack(idx) if self.funclet_arg(idx).is_some() => {
+                    // T1 is free until the multiplication below
+                    self.load_funclet_arg(T1, idx);
+                    self.amd.vinsertf128(T0, T0, T1, 1);
+                }
                 Loc::Mem(idx) => self
                     .amd
                     .vinsertf128_mem(T0, T0, MEM, (idx * REG_SIZE) as i32, 1),
@@ -512,6 +733,81 @@ impl Generator for AmdComplexGenerator {
 
             self.amd.vextractf128(ϕ(d2), ϕ(d1), 1);
         }
+    }
+
+    /*
+     * dst := s1 op [loc], with the complex operand read from memory instead of being
+     * loaded into a scratch register first. s1 is read before T0 (= Reg::Temp) is
+     * written, so s1 or dst may be Temp. An argument of a compression-mode funclet is
+     * read in place, at [STACK + rax*8] (see save_args).
+     */
+    #[cfg(feature = "experimental")]
+    fn op_loc(&mut self, op: ArithOp, dst: Reg, s1: Reg, loc: Loc) -> bool {
+        if matches!(op, ArithOp::Divide) {
+            return false; // complex division needs Reg::Temp (node.rs does not fuse it either)
+        }
+
+        let operand = match loc {
+            Loc::Mem(idx) => MemOperand::Disp(MEM, (idx * REG_SIZE) as i32),
+            Loc::Param(idx) => MemOperand::Disp(PARAMS, (idx * REG_SIZE) as i32),
+            Loc::Stack(idx) => match self.funclet_arg(idx) {
+                Some(arg) => {
+                    self.decode_funclet_arg(arg);
+                    MemOperand::Indexed
+                }
+                // STACK, not SP: SP changes in the compression subroutines
+                None => MemOperand::Disp(STACK, (idx * REG_SIZE) as i32),
+            },
+        };
+
+        match op {
+            ArithOp::Plus => match operand {
+                MemOperand::Disp(base, offset) => self.amd.vadddd_mem(ϕ(dst), ϕ(s1), base, offset),
+                MemOperand::Indexed => self.amd.vadddd_indexed(ϕ(dst), ϕ(s1), STACK, Amd::RAX, 8),
+            },
+            ArithOp::Minus => match operand {
+                MemOperand::Disp(base, offset) => self.amd.vsubdd_mem(ϕ(dst), ϕ(s1), base, offset),
+                MemOperand::Indexed => self.amd.vsubdd_indexed(ϕ(dst), ϕ(s1), STACK, Amd::RAX, 8),
+            },
+            ArithOp::Times => {
+                self.amd.vunpckldd(T1, ϕ(s1), ϕ(s1)); // duplicate real
+                self.amd.vunpckhdd(T2, ϕ(s1), ϕ(s1)); // duplicate imag
+
+                if self.config.fastmath() {
+                    // (a.re b.re - a.im b.im, a.re b.im + a.im b.re) with one fused op
+                    match operand {
+                        MemOperand::Disp(base, offset) => {
+                            self.amd.vpermilpd_dd_mem(T0, base, offset, 1); // (b.im, b.re)
+                            self.amd.vmuldd(ϕ(dst), T2, T0);
+                            self.amd.vfmaddsub231dd_mem(ϕ(dst), T1, base, offset);
+                        }
+                        MemOperand::Indexed => {
+                            self.amd.vpermilpd_dd_indexed(T0, STACK, Amd::RAX, 8, 1);
+                            self.amd.vmuldd(ϕ(dst), T2, T0);
+                            self.amd
+                                .vfmaddsub231dd_indexed(ϕ(dst), T1, STACK, Amd::RAX, 8);
+                        }
+                    }
+                } else {
+                    // the same operations as `times` (bit-identical results)
+                    match operand {
+                        MemOperand::Disp(base, offset) => {
+                            self.amd.vmuldd_mem(T1, T1, base, offset);
+                            self.amd.vmuldd_mem(T2, T2, base, offset);
+                        }
+                        MemOperand::Indexed => {
+                            self.amd.vmuldd_indexed(T1, T1, STACK, Amd::RAX, 8);
+                            self.amd.vmuldd_indexed(T2, T2, STACK, Amd::RAX, 8);
+                        }
+                    }
+                    self.amd.vshufdd(T2, T2, T2, 1); // exchange real/imag
+                    self.amd.vaddsubdd(ϕ(dst), T1, T2);
+                }
+            }
+            ArithOp::Divide => unreachable!(),
+        }
+
+        true
     }
 
     fn real(&mut self, dst: Reg, s1: Reg) {
@@ -643,6 +939,7 @@ impl Generator for AmdComplexGenerator {
         self.amd.a.relocations.clone()
     }
 
+    #[cfg(not(feature = "experimental"))]
     fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
         if self.config.is_external_func(op) {
             if self.config.is_relocatable() && op != "@self" {
@@ -663,6 +960,7 @@ impl Generator for AmdComplexGenerator {
         Ok(())
     }
 
+    #[cfg(not(feature = "experimental"))]
     fn call_complex(&mut self, op: &str, num_args: usize) -> Result<()> {
         if self.config.is_relocatable() {
             return Err(object_complex_error(op));
@@ -692,12 +990,47 @@ impl Generator for AmdComplexGenerator {
         Ok(())
     }
 
+    #[cfg(not(feature = "experimental"))]
     fn call_funclet(&mut self, label: &str) {
         self.amd.call_relative(label);
     }
 
+    #[cfg(not(feature = "experimental"))]
     fn ret(&mut self) {
         self.amd.ret();
+    }
+
+    #[cfg(feature = "experimental")]
+    fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
+        self.preserving_funclet_args(|g| g.call_inner(op, num_args))
+    }
+
+    #[cfg(feature = "experimental")]
+    fn call_complex(&mut self, op: &str, num_args: usize) -> Result<()> {
+        self.preserving_funclet_args(|g| g.call_complex_inner(op, num_args))
+    }
+
+    #[cfg(feature = "experimental")]
+    fn call_funclet(&mut self, label: &str) {
+        self.preserving_funclet_args(|g| g.amd.call_relative(label))
+    }
+
+    #[cfg(feature = "experimental")]
+    fn ret(&mut self) {
+        self.funclet_args = 0; // the end of a funclet body
+        self.amd.ret();
+
+        // the out-of-line prologue of the plain entry (see save_args)
+        if let Some((prologue, locs, body)) = self.funclet_prologue.take() {
+            self.amd.a.set_label(&prologue);
+            for (arg, loc) in locs.iter().enumerate() {
+                save_f64x2_to_loc(&mut self.amd, arg as u8, *loc);
+            }
+            if !locs.is_empty() {
+                pack_locs(&mut self.amd, &locs);
+            }
+            self.amd.jmp(&body);
+        }
     }
 
     fn ifelse(&mut self, dst: Reg, true_val: Reg, false_val: Reg, idx: u32) {

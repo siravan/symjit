@@ -347,6 +347,43 @@ class Defuns:
             self.lib.finalize_defuns(self.p)
 
 
+def pack_options(
+    use_simd: bool=True,
+    use_threads: bool=True,
+    cse: bool=True,
+    fastmath: bool=True,
+    enable_simd512: bool=False,
+    dtype: str="float64",
+    order: str="fortran",
+    simd_branch: bool=False,
+    compact: bool=True,
+    compress: bool=False,
+    direct: bool=False,
+    fast_complex: bool=True,
+    huge: bool=False,
+    parallel_mul: bool=True,
+    opt_level: int=1,
+) -> int:
+    """The option bit field of the `compile`/`translate` FFI calls (rust/config.rs)."""
+    return (
+        (0x01 if use_simd else 0)
+        | (0x00000002 if use_threads else 0)
+        | (0x00000004 if cse else 0)
+        | (0x00000008 if fastmath else 0)
+        | (0x00000010 if enable_simd512 else 0)
+        | (0x00000020 if dtype == "complex128" else 0)
+        | (0x00000040 if order == "c" else 0)
+        | (0x00000080 if simd_branch else 0)
+        | (0x00001000 if compact else 0)
+        | (0x00002000 if compress else 0)
+        | (0x00004000 if direct else 0)
+        | (0x00008000 if fast_complex else 0)
+        | (0x00100000 if huge else 0)
+        | (0x00200000 if parallel_mul else 0)
+        | ((opt_level & 0x0F) << 8)
+    )
+
+
 class RustyCompiler:
     def __init__(
         self,
@@ -391,22 +428,11 @@ class RustyCompiler:
                 DeprecationWarning,
             )
 
-        opt = (
-            (0x01 if use_simd else 0)
-            | (0x00000002 if use_threads else 0)
-            | (0x00000004 if cse else 0)
-            | (0x00000008 if fastmath else 0)
-            | (0x00000010 if enable_simd512 else 0)
-            | (0x00000020 if dtype == "complex128" else 0)
-            | (0x00000040 if order == "c" else 0)
-            | (0x00000080 if simd_branch else 0)
-            | (0x00001000 if compact else 0)
-            | (0x00002000 if compress else 0)
-            | (0x00004000 if direct else 0)
-            | (0x00008000 if fast_complex else 0)
-            | (0x00100000 if huge else 0)
-            | (0x00200000 if parallel_mul else 0)
-            | ((opt_level & 0x0F) << 8)
+        opt = pack_options(
+            use_simd=use_simd, use_threads=use_threads, cse=cse, fastmath=fastmath,
+            enable_simd512=enable_simd512, dtype=dtype, order=order, simd_branch=simd_branch,
+            compact=compact, compress=compress, direct=direct, fast_complex=fast_complex,
+            huge=huge, parallel_mul=parallel_mul, opt_level=opt_level,
         )
 
         self.p: int = 0

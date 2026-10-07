@@ -300,6 +300,51 @@ impl Amd {
         self.modrm_reg(reg, rm);
     }
 
+    // reg = vreg op [rm + offset] (full zmm operand, disp8*64 when possible)
+    #[cfg(feature = "experimental")]
+    pub fn vaddqd_mem(&mut self, reg: u8, vreg: u8, rm: u8, offset: i32) {
+        let mut p = Prefix::new(reg, vreg, rm);
+        p.evex(self);
+        self.append_byte(0x58);
+        p.modrm_mem(self, offset);
+    }
+
+    #[cfg(feature = "experimental")]
+    pub fn vsubqd_mem(&mut self, reg: u8, vreg: u8, rm: u8, offset: i32) {
+        let mut p = Prefix::new(reg, vreg, rm);
+        p.evex(self);
+        self.append_byte(0x5c);
+        p.modrm_mem(self, offset);
+    }
+
+    #[cfg(feature = "experimental")]
+    pub fn vmulqd_mem(&mut self, reg: u8, vreg: u8, rm: u8, offset: i32) {
+        let mut p = Prefix::new(reg, vreg, rm);
+        p.evex(self);
+        self.append_byte(0x59);
+        p.modrm_mem(self, offset);
+    }
+
+    // reg = vreg * [rm + offset] + reg
+    #[cfg(feature = "experimental")]
+    pub fn vfmadd231qd_mem(&mut self, reg: u8, vreg: u8, rm: u8, offset: i32) {
+        let mut p = Prefix::new(reg, vreg, rm);
+        p.set_encoding(2).set_w(1);
+        p.evex(self);
+        self.append_byte(0xb8);
+        p.modrm_mem(self, offset);
+    }
+
+    // reg = vreg * [rm + offset] - reg
+    #[cfg(feature = "experimental")]
+    pub fn vfmsub231qd_mem(&mut self, reg: u8, vreg: u8, rm: u8, offset: i32) {
+        let mut p = Prefix::new(reg, vreg, rm);
+        p.set_encoding(2).set_w(1);
+        p.evex(self);
+        self.append_byte(0xba);
+        p.modrm_mem(self, offset);
+    }
+
     pub fn vmulqd_label(&mut self, reg: u8, vreg: u8, label: &str) {
         Prefix::new(reg, vreg, 0).evex(self);
         self.append_byte(0x59);

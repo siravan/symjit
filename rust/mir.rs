@@ -1281,12 +1281,110 @@ impl Mir {
         };
     }
 
+    /*
+     * `dst := [loc]` followed by `d := a op b` that uses dst as one operand (the second, or
+     * either for + and *): emitted as `d := other op [loc]` (Generator::op_loc) if dst is
+     * dead afterwards. Returns false (nothing emitted) otherwise.
+     */
+    #[cfg(feature = "experimental")]
+    fn fold_load(
+        ir: &mut dyn Generator,
+        code: &[Instruction],
+        at: usize,
+        dst: Reg,
+        loc: Loc,
+    ) -> bool {
+        let Some(Instruction::Bi { op, dst: d, s1, s2 }) = code.get(at + 1) else {
+            return false;
+        };
+        let op = match op {
+            BinOp::Plus => ArithOp::Plus,
+            BinOp::Minus => ArithOp::Minus,
+            BinOp::Times => ArithOp::Times,
+            _ => return false,
+        };
+        let other = if *s2 == dst && *s1 != dst {
+            *s1
+        } else if *s1 == dst && *s2 != dst && !matches!(op, ArithOp::Minus) {
+            *s2
+        } else {
+            return false;
+        };
+        if *d != dst && !dead_after(code, at + 1, &[dst]) {
+            return false;
+        }
+        ir.op_loc(op, *d, other, loc)
+    }
+
+    /// The complex counterpart of `fold_load`: `(xd, yd) := [loc]` followed by a ComplexBi
+    /// that uses the pair, emitted with Generator::complex_op_loc.
+    #[cfg(feature = "experimental")]
+    fn fold_load_complex(
+        ir: &mut dyn Generator,
+        code: &[Instruction],
+        at: usize,
+        xd: Reg,
+        yd: Reg,
+        loc: Loc,
+    ) -> bool {
+        let Some(Instruction::ComplexBi {
+            op,
+            xd: dx,
+            yd: dy,
+            x1,
+            y1,
+            x2,
+            y2,
+        }) = code.get(at + 1)
+        else {
+            return false;
+        };
+        if !matches!(op, ArithOp::Plus | ArithOp::Minus | ArithOp::Times) || xd == yd {
+            return false;
+        }
+        let loaded = (xd, yd);
+        let (ox, oy, mem_first) = if (*x2, *y2) == loaded && (*x1, *y1) != loaded {
+            (*x1, *y1, false)
+        } else if (*x1, *y1) == loaded && (*x2, *y2) != loaded && !matches!(op, ArithOp::Minus) {
+            (*x2, *y2, true)
+        } else {
+            return false;
+        };
+        if ox == xd || ox == yd || oy == xd || oy == yd {
+            return false;
+        }
+        let live: Vec<Reg> = [xd, yd]
+            .into_iter()
+            .filter(|r| r != dx && r != dy)
+            .collect();
+        if !dead_after(code, at + 1, &live) {
+            return false;
+        }
+        ir.complex_op_loc(*op, *dx, *dy, ox, oy, loc, mem_first)
+    }
+
     pub fn rerun(&self, ir: &mut dyn Generator) -> Result<()> {
         // let mut funclets: HashSet<(FuncletOp, Vec<Reg>)> = HashSet::new();
 
+        #[cfg(not(feature = "experimental"))]
         let mut iter = self.code.iter().peekable();
 
+        #[cfg(feature = "experimental")]
+        let code: Vec<Instruction> = self.code.iter().collect();
+        #[cfg(feature = "experimental")]
+        let fold = ir.fold_loads();
+        #[cfg(feature = "experimental")]
+        let mut iter = code.iter().peekable();
+        #[cfg(feature = "experimental")]
+        let mut pos: usize = 0; // the index in `code` of the next instruction
+
         while let Some(ins) = iter.next() {
+            #[cfg(feature = "experimental")]
+            let at = {
+                pos += 1;
+                pos - 1
+            };
+
             match &ins {
                 Instruction::Nop | Instruction::End => {}
                 Instruction::Uni { op, dst, s1 } => {
@@ -1301,6 +1399,13 @@ impl Mir {
                     }
                 }
                 Instruction::Load { dst, loc } => {
+                    #[cfg(feature = "experimental")]
+                    if fold && Self::fold_load(ir, &code, at, *dst, *loc) {
+                        iter.next(); // the arithmetic instruction is done
+                        pos += 1;
+                        continue;
+                    }
+
                     match loc {
                         Loc::Mem(idx) => ir.load_mem(*dst, *idx),
                         Loc::Stack(idx) => ir.load_stack(*dst, *idx),
@@ -1315,6 +1420,13 @@ impl Mir {
                     };
                 }
                 Instruction::LoadComplex { xd, yd, loc } => {
+                    #[cfg(feature = "experimental")]
+                    if fold && Self::fold_load_complex(ir, &code, at, *xd, *yd, *loc) {
+                        iter.next();
+                        pos += 1;
+                        continue;
+                    }
+
                     match loc {
                         Loc::Mem(idx) => {
                             ir.load_mem_complex(*xd, *yd, *idx);
@@ -1425,10 +1537,21 @@ impl Mir {
                                 ..
                             }) = iter.next()
                             {
+                                #[cfg(not(feature = "experimental"))]
                                 ir.times2_loc(*dst, *s1, *loc, d2, s2, l2);
+                                #[cfg(feature = "experimental")]
+                                {
+                                    pos += 1;
+                                    ir.times2_loc(*dst, *s1, *loc, *d2, *s2, *l2);
+                                }
                                 continue;
                             }
                         }
+                    }
+
+                    #[cfg(feature = "experimental")]
+                    if ir.op_loc(*op, *dst, *s1, *loc) {
+                        continue;
                     }
 
                     let t = if self.config.is_complex() {
@@ -1499,7 +1622,82 @@ impl Mir {
     }
 }
 
+/// How far `rerun` looks ahead to prove that a folded load's register is dead.
+#[cfg(feature = "experimental")]
+const FOLD_LOOKAHEAD: usize = 64;
+
+/// True if none of `regs` is read after position `pos` before it is written again (within
+/// FOLD_LOOKAHEAD instructions); instructions with implicit register use count as reads.
+#[cfg(feature = "experimental")]
+fn dead_after(code: &[Instruction], pos: usize, regs: &[Reg]) -> bool {
+    let mut pending: Vec<Reg> = Vec::new();
+    for r in regs {
+        if !pending.contains(r) {
+            pending.push(*r);
+        }
+    }
+    if pending.is_empty() {
+        return true;
+    }
+
+    for ins in code.iter().skip(pos + 1).take(FOLD_LOOKAHEAD) {
+        match ins.reads_writes() {
+            None => return false,
+            Some((reads, writes)) => {
+                if pending.iter().any(|r| reads.contains(r)) {
+                    return false;
+                }
+                pending.retain(|r| !writes.contains(r));
+                if pending.is_empty() {
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
+}
+
 impl Instruction {
+    /// The registers this instruction reads and writes, or None for instructions whose
+    /// register use is not explicit (calls, arguments, control flow).
+    #[cfg(feature = "experimental")]
+    fn reads_writes(&self) -> Option<(Vec<Reg>, Vec<Reg>)> {
+        let rw = match self {
+            Instruction::Nop => (vec![], vec![]),
+            Instruction::Uni { dst, s1, .. } => (vec![*s1], vec![*dst]),
+            Instruction::Bi { dst, s1, s2, .. } => (vec![*s1, *s2], vec![*dst]),
+            Instruction::Mov { dst, s1 } => (vec![*s1], vec![*dst]),
+            Instruction::Load { dst, .. } | Instruction::LoadConst { dst, .. } => {
+                (vec![], vec![*dst])
+            }
+            Instruction::Save { src, .. } => (vec![*src], vec![]),
+            Instruction::LoadComplex { xd, yd, .. } => (vec![], vec![*xd, *yd]),
+            Instruction::SaveComplex { xs, ys, .. } => (vec![*xs, *ys], vec![]),
+            Instruction::Fused { dst, a, b, c, .. } => (vec![*a, *b, *c], vec![*dst]),
+            Instruction::IfElse {
+                dst,
+                true_val,
+                false_val,
+                ..
+            } => (vec![*true_val, *false_val], vec![*dst]),
+            Instruction::LoadMath { dst, s1, .. } | Instruction::LoadConstMath { dst, s1, .. } => {
+                (vec![*s1], vec![*dst])
+            }
+            Instruction::ComplexBi {
+                xd,
+                yd,
+                x1,
+                y1,
+                x2,
+                y2,
+                ..
+            } => (vec![*x1, *y1, *x2, *y2], vec![*xd, *yd]),
+            _ => return None,
+        };
+        Some(rw)
+    }
+
     fn regs(&self) -> Vec<Reg> {
         match self {
             Instruction::Bi { dst, s1, s2, .. } => vec![*dst, *s1, *s2],

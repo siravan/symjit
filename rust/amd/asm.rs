@@ -821,6 +821,86 @@ impl Amd {
         self.modrm_reg(reg, rm);
     }
 
+    // reg = vreg + [rm + offset] (128-bit packed doubles)
+    #[cfg(feature = "experimental")]
+    pub fn vadddd_mem(&mut self, reg: u8, vreg: u8, rm: u8, offset: i32) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0x58);
+        self.modrm_mem(reg, rm, offset);
+    }
+
+    // reg = vreg - [rm + offset]
+    #[cfg(feature = "experimental")]
+    pub fn vsubdd_mem(&mut self, reg: u8, vreg: u8, rm: u8, offset: i32) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0x5c);
+        self.modrm_mem(reg, rm, offset);
+    }
+
+    // reg = vreg * [rm + offset]
+    #[cfg(feature = "experimental")]
+    pub fn vmuldd_mem(&mut self, reg: u8, vreg: u8, rm: u8, offset: i32) {
+        self.vex_dd(reg, vreg, rm, 0);
+        self.append_byte(0x59);
+        self.modrm_mem(reg, rm, offset);
+    }
+
+    // vpermilpd xmm, [rm + offset], imm8 (VEX.128.66.0F3A.W0 05 /r ib); imm8 = 1 swaps
+    // the two doubles
+    #[cfg(feature = "experimental")]
+    pub fn vpermilpd_dd_mem(&mut self, reg: u8, rm: u8, offset: i32, imm8: u8) {
+        self.vex3dd(reg, 0, rm, 0, 3);
+        self.append_byte(0x05);
+        self.modrm_mem(reg, rm, offset);
+        self.append_byte(imm8);
+    }
+
+    // reg = vreg * [rm + offset] -/+ reg: even lane subtracts, odd lane adds
+    // (vfmaddsub231pd, VEX.128.66.0F38.W1 B6 /r)
+    #[cfg(feature = "experimental")]
+    pub fn vfmaddsub231dd_mem(&mut self, reg: u8, vreg: u8, rm: u8, offset: i32) {
+        self.vex3dd_w1(reg, vreg, rm, 0, 2);
+        self.append_byte(0xb6);
+        self.modrm_mem(reg, rm, offset);
+    }
+
+    // the same with [base + index*scale] operands (compression-mode funclet arguments)
+    #[cfg(feature = "experimental")]
+    pub fn vadddd_indexed(&mut self, reg: u8, vreg: u8, base: u8, index: u8, scale: u8) {
+        self.vex_dd(reg, vreg, base, index);
+        self.append_byte(0x58);
+        self.modrm_sib(reg, base, index, scale);
+    }
+
+    #[cfg(feature = "experimental")]
+    pub fn vsubdd_indexed(&mut self, reg: u8, vreg: u8, base: u8, index: u8, scale: u8) {
+        self.vex_dd(reg, vreg, base, index);
+        self.append_byte(0x5c);
+        self.modrm_sib(reg, base, index, scale);
+    }
+
+    #[cfg(feature = "experimental")]
+    pub fn vmuldd_indexed(&mut self, reg: u8, vreg: u8, base: u8, index: u8, scale: u8) {
+        self.vex_dd(reg, vreg, base, index);
+        self.append_byte(0x59);
+        self.modrm_sib(reg, base, index, scale);
+    }
+
+    #[cfg(feature = "experimental")]
+    pub fn vpermilpd_dd_indexed(&mut self, reg: u8, base: u8, index: u8, scale: u8, imm8: u8) {
+        self.vex3dd(reg, 0, base, index, 3);
+        self.append_byte(0x05);
+        self.modrm_sib(reg, base, index, scale);
+        self.append_byte(imm8);
+    }
+
+    #[cfg(feature = "experimental")]
+    pub fn vfmaddsub231dd_indexed(&mut self, reg: u8, vreg: u8, base: u8, index: u8, scale: u8) {
+        self.vex3dd_w1(reg, vreg, base, index, 2);
+        self.append_byte(0xb6);
+        self.modrm_sib(reg, base, index, scale);
+    }
+
     pub fn vmuldd_label(&mut self, reg: u8, vreg: u8, label: &str) {
         self.vex_dd(reg, vreg, 0, 0);
         self.append_byte(0x59);

@@ -81,8 +81,34 @@ impl Block {
     }
 
     pub fn add_assign(&mut self, lhs: Node, rhs: Node) {
-        let rhs = self.process(rhs);
+        // trimmed by `trim_statements`, after the common-subexpression elimination: the
+        // temporaries `trim` introduces would hide shared subexpressions from it
         self.stmts.push(Statement::assign(lhs, rhs));
+    }
+
+    /*
+     * trim_statements breaks up the right-hand sides of the assignments (`trim`: register
+     * pressure, and function calls into Call statements). It runs after `eliminate`. The
+     * call cache is cleared at labels and branches, as it is when they are added, so that
+     * calls in different branches are not merged.
+     */
+    pub fn trim_statements(&mut self) {
+        let stmts = std::mem::take(&mut self.stmts);
+        self.calls.clear();
+
+        for s in stmts {
+            match s {
+                Statement::Assign { lhs, rhs, .. } => {
+                    let rhs = self.process(rhs);
+                    self.stmts.push(Statement::assign(lhs, rhs));
+                }
+                Statement::Label { .. } | Statement::Branch { .. } | Statement::BranchIf { .. } => {
+                    self.stmts.push(s);
+                    self.calls.clear();
+                }
+                s => self.stmts.push(s),
+            }
+        }
     }
 
     pub fn load_args(&mut self, args: Vec<Node>) {
@@ -457,13 +483,46 @@ impl Block {
             let k = &lhs.hashof();
 
             if !ls.contains(k) {
-                self.stmts.push(Statement::assign(lhs.clone(), rhs.clone()));
                 ls.insert(*k);
+                // the common subexpressions nested in rhs are replaced as well (their
+                // assignments are pushed first); otherwise each pass of `eliminate`
+                // would share only one more level of a deeply nested expression
+                let rhs = self.rewrite_children(cs, ls, rhs.clone());
+                self.stmts.push(Statement::assign(lhs.clone(), rhs));
             }
 
             return Some(lhs.clone());
         }
 
         None
+    }
+
+    /// rewrite_cse applied to the children of `node`, but not to `node` itself (the
+    /// right-hand side of a common subexpression, which would otherwise match itself).
+    fn rewrite_children(
+        &mut self,
+        cs: &HashMap<u64, (Node, Node)>,
+        ls: &mut HashSet<u64>,
+        node: Node,
+    ) -> Node {
+        match node {
+            Node::Unary { op, arg, power, .. } => {
+                let arg = self.rewrite_cse(cs, ls, *arg);
+                Node::create_unary(op, arg, power)
+            }
+            Node::Binary {
+                op,
+                left,
+                right,
+                power,
+                cond,
+                ..
+            } => {
+                let left = self.rewrite_cse(cs, ls, *left);
+                let right = self.rewrite_cse(cs, ls, *right);
+                Node::create_binary(op, left, right, power, cond)
+            }
+            node => node,
+        }
     }
 }

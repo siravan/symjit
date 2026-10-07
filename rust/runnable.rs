@@ -759,6 +759,9 @@ impl Application {
             }
             "mir-size" => self.bytecode.mir.code.ip,
             "stack-size" => self.prog.builder.stack_size(),
+            // 1 in a build with the `experimental` feature (unknown keys give 0)
+            #[cfg(feature = "experimental")]
+            "experimental" => 1,
             "version" => {
                 let major: usize = env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap_or(99);
                 let minor: usize = env!("CARGO_PKG_VERSION_MINOR").parse().unwrap_or(99);

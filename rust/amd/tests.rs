@@ -10865,3 +10865,272 @@ fn f32_vmovpd_load() {
         a.vmovpd_ymm_mem(1, 3, 8);
     });
 }
+
+// Encodings used only with the `experimental` feature.
+#[cfg(feature = "experimental")]
+mod experimental_encodings {
+    use super::*;
+
+    // 128-bit memory-operand forms used by the fast-complex generator (`op_loc`).
+
+    #[test]
+    fn vadddd_mem_rbx_disp8() {
+        // vaddpd xmm4, xmm2, xmmword ptr [rbx+0x10]
+        check(DataType::F64, &[0xc5, 0xe9, 0x58, 0x63, 0x10], |a| {
+            a.vadddd_mem(4, 2, 3, 0x10);
+        });
+    }
+
+    #[test]
+    fn vadddd_mem_r15_disp32_high() {
+        // vaddpd xmm12, xmm9, xmmword ptr [r15+0x1240]
+        check(DataType::F64, &[0xc4, 0x41, 0x31, 0x58, 0xa7, 0x40, 0x12, 0x00, 0x00], |a| {
+            a.vadddd_mem(12, 9, 15, 0x1240);
+        });
+    }
+
+    #[test]
+    fn vadddd_mem_r12_sib() {
+        // vaddpd xmm4, xmm2, xmmword ptr [r12+0x20]
+        check(DataType::F64, &[0xc4, 0xc1, 0x69, 0x58, 0x64, 0x24, 0x20], |a| {
+            a.vadddd_mem(4, 2, 12, 0x20);
+        });
+    }
+
+    #[test]
+    fn vsubdd_mem_rbx_disp32() {
+        // vsubpd xmm5, xmm4, xmmword ptr [rbx+0x1250]
+        check(DataType::F64, &[0xc5, 0xd9, 0x5c, 0xab, 0x50, 0x12, 0x00, 0x00], |a| {
+            a.vsubdd_mem(5, 4, 3, 0x1250);
+        });
+    }
+
+    #[test]
+    fn vsubdd_mem_r13_high() {
+        // vsubpd xmm13, xmm2, xmmword ptr [r13+0x10]
+        check(DataType::F64, &[0xc4, 0x41, 0x69, 0x5c, 0x6d, 0x10], |a| {
+            a.vsubdd_mem(13, 2, 13, 0x10);
+        });
+    }
+
+    #[test]
+    fn vmuldd_mem_rbx_disp8() {
+        // vmulpd xmm2, xmm2, xmmword ptr [rbx+0x30]
+        check(DataType::F64, &[0xc5, 0xe9, 0x59, 0x53, 0x30], |a| {
+            a.vmuldd_mem(2, 2, 3, 0x30);
+        });
+    }
+
+    #[test]
+    fn vmuldd_mem_r15_disp32_high() {
+        // vmulpd xmm3, xmm11, xmmword ptr [r15+0x2000]
+        check(DataType::F64, &[0xc4, 0xc1, 0x21, 0x59, 0x9f, 0x00, 0x20, 0x00, 0x00], |a| {
+            a.vmuldd_mem(3, 11, 15, 0x2000);
+        });
+    }
+
+    #[test]
+    fn vpermilpd_dd_mem_rbx() {
+        // vpermilpd xmm1, xmmword ptr [rbx+0x40], 1
+        check(DataType::F64, &[0xc4, 0xe3, 0x79, 0x05, 0x4b, 0x40, 0x01], |a| {
+            a.vpermilpd_dd_mem(1, 3, 0x40, 1);
+        });
+    }
+
+    #[test]
+    fn vpermilpd_dd_mem_r15_disp32_high() {
+        // vpermilpd xmm9, xmmword ptr [r15+0x1240], 1
+        check(DataType::F64, &[0xc4, 0x43, 0x79, 0x05, 0x8f, 0x40, 0x12, 0x00, 0x00, 0x01], |a| {
+            a.vpermilpd_dd_mem(9, 15, 0x1240, 1);
+        });
+    }
+
+    #[test]
+    fn vpermilpd_dd_mem_r12_sib() {
+        // vpermilpd xmm1, xmmword ptr [r12+0x8], 1
+        check(DataType::F64, &[0xc4, 0xc3, 0x79, 0x05, 0x4c, 0x24, 0x08, 0x01], |a| {
+            a.vpermilpd_dd_mem(1, 12, 0x8, 1);
+        });
+    }
+
+    #[test]
+    fn vfmaddsub231dd_mem_rbx() {
+        // vfmaddsub231pd xmm4, xmm2, xmmword ptr [rbx+0x50]
+        check(DataType::F64, &[0xc4, 0xe2, 0xe9, 0xb6, 0x63, 0x50], |a| {
+            a.vfmaddsub231dd_mem(4, 2, 3, 0x50);
+        });
+    }
+
+    #[test]
+    fn vfmaddsub231dd_mem_r15_disp32_high() {
+        // vfmaddsub231pd xmm12, xmm10, xmmword ptr [r15+0x1240]
+        check(DataType::F64, &[0xc4, 0x42, 0xa9, 0xb6, 0xa7, 0x40, 0x12, 0x00, 0x00], |a| {
+            a.vfmaddsub231dd_mem(12, 10, 15, 0x1240);
+        });
+    }
+
+    #[test]
+    fn vfmaddsub231dd_mem_r13_zero() {
+        // vfmaddsub231pd xmm4, xmm2, xmmword ptr [r13+0x0]
+        check(DataType::F64, &[0xc4, 0xc2, 0xe9, 0xb6, 0x65, 0x00], |a| {
+            a.vfmaddsub231dd_mem(4, 2, 13, 0);
+        });
+    }
+
+    // [base + index*8] forms (compression-mode funclet arguments read in place)
+
+    #[test]
+    fn vadddd_indexed_rbx_rax() {
+        // vaddpd xmm5, xmm4, xmmword ptr [rbx+rax*8]
+        check(DataType::F64, &[0xc5, 0xd9, 0x58, 0x2c, 0xc3], |a| {
+            a.vadddd_indexed(5, 4, 3, 0, 8);
+        });
+    }
+
+    #[test]
+    fn vadddd_indexed_high() {
+        // vaddpd xmm12, xmm9, xmmword ptr [rbx+rax*8]
+        check(DataType::F64, &[0xc5, 0x31, 0x58, 0x24, 0xc3], |a| {
+            a.vadddd_indexed(12, 9, 3, 0, 8);
+        });
+    }
+
+    #[test]
+    fn vsubdd_indexed_rbx_rax() {
+        // vsubpd xmm5, xmm4, xmmword ptr [rbx+rax*8]
+        check(DataType::F64, &[0xc5, 0xd9, 0x5c, 0x2c, 0xc3], |a| {
+            a.vsubdd_indexed(5, 4, 3, 0, 8);
+        });
+    }
+
+    #[test]
+    fn vmuldd_indexed_rbx_rax() {
+        // vmulpd xmm2, xmm2, xmmword ptr [rbx+rax*8]
+        check(DataType::F64, &[0xc5, 0xe9, 0x59, 0x14, 0xc3], |a| {
+            a.vmuldd_indexed(2, 2, 3, 0, 8);
+        });
+    }
+
+    #[test]
+    fn vmuldd_indexed_r13_base() {
+        // vmulpd xmm3, xmm11, xmmword ptr [r13+rax*8+0x0]
+        check(DataType::F64, &[0xc4, 0xc1, 0x21, 0x59, 0x5c, 0xc5, 0x00], |a| {
+            a.vmuldd_indexed(3, 11, 13, 0, 8);
+        });
+    }
+
+    #[test]
+    fn vpermilpd_dd_indexed_rbx_rax() {
+        // vpermilpd xmm1, xmmword ptr [rbx+rax*8], 1
+        check(DataType::F64, &[0xc4, 0xe3, 0x79, 0x05, 0x0c, 0xc3, 0x01], |a| {
+            a.vpermilpd_dd_indexed(1, 3, 0, 8, 1);
+        });
+    }
+
+    #[test]
+    fn vpermilpd_dd_indexed_r10_index() {
+        // vpermilpd xmm9, xmmword ptr [rbx+r10*8], 1
+        check(DataType::F64, &[0xc4, 0x23, 0x79, 0x05, 0x0c, 0xd3, 0x01], |a| {
+            a.vpermilpd_dd_indexed(9, 3, 10, 8, 1);
+        });
+    }
+
+    #[test]
+    fn vfmaddsub231dd_indexed_rbx_rax() {
+        // vfmaddsub231pd xmm4, xmm2, xmmword ptr [rbx+rax*8]
+        check(DataType::F64, &[0xc4, 0xe2, 0xe9, 0xb6, 0x24, 0xc3], |a| {
+            a.vfmaddsub231dd_indexed(4, 2, 3, 0, 8);
+        });
+    }
+
+    #[test]
+    fn vfmaddsub231dd_indexed_high() {
+        // vfmaddsub231pd xmm12, xmm10, xmmword ptr [rbx+rax*8]
+        check(DataType::F64, &[0xc4, 0x62, 0xa9, 0xb6, 0x24, 0xc3], |a| {
+            a.vfmaddsub231dd_indexed(12, 10, 3, 0, 8);
+        });
+    }
+
+    // zmm memory-operand forms of the AVX-512 generator (`op_loc`, `complex_op_loc`);
+    // disp8 is scaled by 64 (EVEX compressed displacement) when the offset allows it.
+
+    #[test]
+    fn vaddqd_mem_disp8x64() {
+        // vaddpd zmm4, zmm5, zmmword ptr [rbx+0x40]
+        check(DataType::F64, &[0x62, 0xf1, 0xd5, 0x48, 0x58, 0x63, 0x01], |a| {
+            a.vaddqd_mem(4, 5, 3, 0x40);
+        });
+    }
+
+    #[test]
+    fn vaddqd_mem_disp8x64_max_high_reg() {
+        // vaddpd zmm20, zmm5, zmmword ptr [rbx+0x1fc0]
+        check(DataType::F64, &[0x62, 0xe1, 0xd5, 0x48, 0x58, 0x63, 0x7f], |a| {
+            a.vaddqd_mem(20, 5, 3, 0x1fc0);
+        });
+    }
+
+    #[test]
+    fn vaddqd_mem_disp32_high_vreg() {
+        // vaddpd zmm4, zmm21, zmmword ptr [rbx+0x2000]
+        check(DataType::F64, &[0x62, 0xf1, 0xd5, 0x40, 0x58, 0xa3, 0x00, 0x20, 0x00, 0x00], |a| {
+            a.vaddqd_mem(4, 21, 3, 0x2000);
+        });
+    }
+
+    #[test]
+    fn vsubqd_mem_r15() {
+        // vsubpd zmm6, zmm7, zmmword ptr [r15+0x80]
+        check(DataType::F64, &[0x62, 0xd1, 0xc5, 0x48, 0x5c, 0x77, 0x02], |a| {
+            a.vsubqd_mem(6, 7, 15, 0x80);
+        });
+    }
+
+    #[test]
+    fn vsubqd_mem_r13_disp32_high() {
+        // vsubpd zmm28, zmm7, zmmword ptr [r13+0x123440]
+        check(DataType::F64, &[0x62, 0x41, 0xc5, 0x48, 0x5c, 0xa5, 0x40, 0x34, 0x12, 0x00], |a| {
+            a.vsubqd_mem(28, 7, 13, 0x123440);
+        });
+    }
+
+    #[test]
+    fn vmulqd_mem_unaligned_disp32() {
+        // vmulpd zmm6, zmm7, zmmword ptr [rbx+0x48] (not a multiple of 64: disp32)
+        check(DataType::F64, &[0x62, 0xf1, 0xc5, 0x48, 0x59, 0xb3, 0x48, 0x00, 0x00, 0x00], |a| {
+            a.vmulqd_mem(6, 7, 3, 0x48);
+        });
+    }
+
+    #[test]
+    fn vfmadd231qd_mem_disp8x64() {
+        // vfmadd231pd zmm4, zmm5, zmmword ptr [rbx+0x40]
+        check(DataType::F64, &[0x62, 0xf2, 0xd5, 0x48, 0xb8, 0x63, 0x01], |a| {
+            a.vfmadd231qd_mem(4, 5, 3, 0x40);
+        });
+    }
+
+    #[test]
+    fn vfmadd231qd_mem_high_disp32() {
+        // vfmadd231pd zmm20, zmm25, zmmword ptr [r15+0x4000]
+        check(DataType::F64, &[0x62, 0xc2, 0xb5, 0x40, 0xb8, 0xa7, 0x00, 0x40, 0x00, 0x00], |a| {
+            a.vfmadd231qd_mem(20, 25, 15, 0x4000);
+        });
+    }
+
+    #[test]
+    fn vfmsub231qd_mem_disp8x64() {
+        // vfmsub231pd zmm4, zmm5, zmmword ptr [rbx+0x40]
+        check(DataType::F64, &[0x62, 0xf2, 0xd5, 0x48, 0xba, 0x63, 0x01], |a| {
+            a.vfmsub231qd_mem(4, 5, 3, 0x40);
+        });
+    }
+
+    #[test]
+    fn vfmsub231qd_mem_r13_high() {
+        // vfmsub231pd zmm30, zmm2, zmmword ptr [r13+0x80]
+        check(DataType::F64, &[0x62, 0x42, 0xed, 0x48, 0xba, 0x75, 0x02], |a| {
+            a.vfmsub231qd_mem(30, 2, 13, 0x80);
+        });
+    }
+}

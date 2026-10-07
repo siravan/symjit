@@ -2,6 +2,8 @@ use anyhow::{anyhow, Result};
 
 use super::code::{Func, VirtualTable};
 use super::config::Config;
+#[cfg(feature = "experimental")]
+use super::mir::ArithOp;
 use super::symbol::Loc;
 use super::utils::Reg;
 
@@ -137,6 +139,40 @@ pub trait Generator {
     fn divide_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool;
 
     fn fuse_load_math(&mut self);
+
+    /// `dst := s1 op [loc]` with the operand read from memory (a `LoadMath` MIR
+    /// instruction). Returns false if the generator has no such form; the caller then
+    /// loads the operand into a scratch register and emits the register operation.
+    #[cfg(feature = "experimental")]
+    fn op_loc(&mut self, _op: ArithOp, _dst: Reg, _s1: Reg, _loc: Loc) -> bool {
+        false
+    }
+
+    /// Whether `Mir::rerun` should fold a load followed by an arithmetic instruction into
+    /// `op_loc`/`complex_op_loc` when the loaded register is dead afterwards (the loads
+    /// the complexifier and the tree compiler emit into scratch registers).
+    #[cfg(feature = "experimental")]
+    fn fold_loads(&self) -> bool {
+        false
+    }
+
+    /// `(xd, yd) := (ox, oy) op [loc]`, or `[loc] op (ox, oy)` if `mem_first`, with the
+    /// complex operand (real part at `loc`, imaginary part at the next slot) read from
+    /// memory; false if not supported.
+    #[cfg(feature = "experimental")]
+    #[allow(clippy::too_many_arguments)]
+    fn complex_op_loc(
+        &mut self,
+        _op: ArithOp,
+        _xd: Reg,
+        _yd: Reg,
+        _ox: Reg,
+        _oy: Reg,
+        _loc: Loc,
+        _mem_first: bool,
+    ) -> bool {
+        false
+    }
     fn support_times2(&self) -> bool;
     fn times2_loc(&mut self, d1: Reg, s1: Reg, l1: Loc, d2: Reg, s2: Reg, l2: Loc);
 

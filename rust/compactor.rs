@@ -152,7 +152,24 @@ impl Compactor {
                     complex,
                     ultra,
                 } => {
+                    #[cfg(not(feature = "experimental"))]
                     let l: Vec<Loc> = locs.iter().map(|x| self.load(*x, ip)).collect();
+
+                    // The arguments are read by the Call that follows, which is where
+                    // collect_last records their last use (ip + 1); they used to be released
+                    // with `ip`, i.e. never, so the slots of every compression-mode call
+                    // stayed reserved. A slot passed twice (x * x) is released only once.
+                    #[cfg(feature = "experimental")]
+                    let l: Vec<Loc> = {
+                        let l: Vec<Loc> = locs.iter().map(|x| self.load(*x, usize::MAX)).collect();
+                        let mut released: HashSet<Loc> = HashSet::new();
+                        for x in locs.iter() {
+                            if released.insert(*x) {
+                                self.load(*x, ip + 1);
+                            }
+                        }
+                        l
+                    };
                     self.push(Instruction::LoadArgs {
                         locs: l,
                         complex: *complex,

@@ -56,6 +56,7 @@ OPTIONS = [
     dict(opt_level=2, use_simd=False),
     dict(opt_level=3, enable_simd512=True),
     dict(opt_level=2, compress=True),
+    dict(opt_level=3, compress=True),  # funclets called through the packed ("ultra") entry
     dict(opt_level=2, compact=False),
     dict(opt_level=2, use_threads=False),
 ]
@@ -69,6 +70,7 @@ COMPLEX_OPTIONS = [
     dict(opt_level=3, enable_simd512=True, fast_complex=False),
     dict(opt_level=2, parallel_mul=False),
     dict(opt_level=1, compress=True),
+    dict(opt_level=3, compress=True),
 ]
 
 

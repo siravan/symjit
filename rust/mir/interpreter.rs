@@ -6,10 +6,10 @@ use num_complex::Complex;
 use num_traits::identities::Zero;
 
 use super::{ArithOp, BinOp, FusedOp, Instruction, Mir, UniOp};
-use crate::code::Func;
-use crate::config::SPILL_AREA;
-use crate::symbol::Loc;
-use crate::utils::{bool_to_f64, Reg};
+use super::super::code::Func;
+use super::super::config::SPILL_AREA;
+use super::super::symbol::Loc;
+use super::super::utils::{bool_to_f64, Reg};
 
 impl Mir {
     fn get(regs: &[f64], r: Reg) -> f64 {

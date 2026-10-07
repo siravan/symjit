@@ -335,6 +335,7 @@ impl Builder {
 
     pub fn compile_mir(&mut self, mir: &mut Mir) -> Result<()> {
         self.block().eliminate();
+        self.block().trim_statements();
         let salt = self.salt.clone();
         self.block().compile(mir, salt)?;
         self.block().compile_subroutines(mir)

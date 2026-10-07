@@ -1,6 +1,8 @@
 use super::super::code::Func;
 use super::super::config::{Config, KernelType, ABI_AREA};
 use super::super::generator::{Generator, GeneratorType, StackRegions};
+#[cfg(feature = "experimental")]
+use super::super::mir::ArithOp;
 use super::super::symbol::Loc;
 use super::super::utils::align_stack;
 use super::super::utils::{DataType, Reg};
@@ -246,6 +248,23 @@ impl AmdVectorF64x8Generator {
     fn predefined_consts(&mut self) {
         self.align();
         predefined_consts(&mut self.amd, 8);
+    }
+}
+
+#[cfg(feature = "experimental")]
+impl AmdVectorF64x8Generator {
+    /// [base + offset] of a full vector at `loc` (`part` 1: the next slot, an imaginary
+    /// part), or None if the operand is not a plain vector in memory (a broadcast
+    /// parameter outside RowFirst kernels).
+    fn vector_operand(&self, loc: Loc, part: u32) -> Option<(u8, i32)> {
+        match loc {
+            Loc::Stack(idx) => Some((STACK, (idx + part) as i32 * REG_SIZE)),
+            Loc::Mem(idx) => Some((MEM, (idx + part) as i32 * REG_SIZE)),
+            Loc::Param(idx) if matches!(self.config.kernel_type(), KernelType::RowFirst) => {
+                Some((PARAMS, (idx + part) as i32 * REG_SIZE))
+            }
+            Loc::Param(_) => None,
+        }
     }
 }
 
@@ -550,6 +569,104 @@ impl Generator for AmdVectorF64x8Generator {
 
     fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, vdivqd, dst, s1, s2);
+    }
+
+    #[cfg(feature = "experimental")]
+    fn fold_loads(&self) -> bool {
+        true
+    }
+
+    /// dst := s1 op [loc] with a full zmm memory operand
+    #[cfg(feature = "experimental")]
+    fn op_loc(&mut self, op: ArithOp, dst: Reg, s1: Reg, loc: Loc) -> bool {
+        let Some((base, offset)) = self.vector_operand(loc, 0) else {
+            return false;
+        };
+        match op {
+            ArithOp::Plus => self.amd.vaddqd_mem(ϕ(dst), ϕ(s1), base, offset),
+            ArithOp::Minus => self.amd.vsubqd_mem(ϕ(dst), ϕ(s1), base, offset),
+            ArithOp::Times => self.amd.vmulqd_mem(ϕ(dst), ϕ(s1), base, offset),
+            ArithOp::Divide => return false,
+        }
+        true
+    }
+
+    /*
+     * (xd, yd) := (ox, oy) op [loc] (or [loc] op (ox, oy) if `mem_first`), the real part
+     * at loc and the imaginary part at the next slot. The operations and their order are
+     * those of plus/minus and times_complex with the same operand roles, so the results
+     * are bit-identical (the rounding of a complex product depends on the operand order).
+     */
+    #[cfg(feature = "experimental")]
+    #[allow(clippy::too_many_arguments)]
+    fn complex_op_loc(
+        &mut self,
+        op: ArithOp,
+        xd: Reg,
+        yd: Reg,
+        ox: Reg,
+        oy: Reg,
+        loc: Loc,
+        mem_first: bool,
+    ) -> bool {
+        let (Some((base, re)), Some((_, im))) =
+            (self.vector_operand(loc, 0), self.vector_operand(loc, 1))
+        else {
+            return false;
+        };
+        if xd == yd || ox == oy || xd == oy || yd == ox {
+            return false;
+        }
+
+        match op {
+            // exact: + is commutative bit for bit
+            ArithOp::Plus => {
+                self.amd.vaddqd_mem(ϕ(xd), ϕ(ox), base, re);
+                self.amd.vaddqd_mem(ϕ(yd), ϕ(oy), base, im);
+            }
+            ArithOp::Minus => {
+                if mem_first {
+                    return false;
+                }
+                self.amd.vsubqd_mem(ϕ(xd), ϕ(ox), base, re);
+                self.amd.vsubqd_mem(ϕ(yd), ϕ(oy), base, im);
+            }
+            ArithOp::Times if !mem_first => {
+                // times_complex(xd, yd, x1 = ox, y1 = oy, x2 = [re], y2 = [im])
+                if xd != ox {
+                    self.amd.vmulqd_mem(ϕ(xd), ϕ(oy), base, im); // y1 y2
+                    self.amd.vfmsub231qd_mem(ϕ(xd), ϕ(ox), base, re); // x1 x2 - y1 y2
+                    self.amd.vmulqd_mem(ϕ(yd), ϕ(ox), base, im); // x1 y2
+                    self.amd.vfmadd231qd_mem(ϕ(yd), ϕ(oy), base, re); // x2 y1 + x1 y2
+                } else {
+                    let xt = Reg::Gen(2);
+                    self.amd.vmulqd_mem(ϕ(xt), ϕ(oy), base, im); // y1 y2
+                    self.amd.vfmsub231qd_mem(ϕ(xt), ϕ(ox), base, re); // x1 x2 - y1 y2
+                    self.amd.vmulqd_mem(ϕ(yd), ϕ(oy), base, re); // x2 y1
+                    self.amd.vfmadd231qd_mem(ϕ(yd), ϕ(ox), base, im); // x1 y2 + x2 y1
+                    self.fmov(xd, xt);
+                }
+            }
+            ArithOp::Times => {
+                // times_complex(xd, yd, x1 = [re], y1 = [im], x2 = ox, y2 = oy)
+                if xd != ox {
+                    self.amd.vmulqd_mem(ϕ(xd), ϕ(oy), base, im); // y1 y2
+                    self.amd.vfmsub231qd_mem(ϕ(xd), ϕ(ox), base, re); // x1 x2 - y1 y2
+                    self.amd.vmulqd_mem(ϕ(yd), ϕ(oy), base, re); // x1 y2
+                    self.amd.vfmadd231qd_mem(ϕ(yd), ϕ(ox), base, im); // x2 y1 + x1 y2
+                } else {
+                    // (xd, yd) == (x2, y2): xd is written last, yd = y2 after its last use
+                    let xt = Reg::Gen(2);
+                    self.amd.vmulqd_mem(ϕ(xt), ϕ(oy), base, im); // y1 y2
+                    self.amd.vfmsub231qd_mem(ϕ(xt), ϕ(ox), base, re); // x1 x2 - y1 y2
+                    self.amd.vmulqd_mem(ϕ(yd), ϕ(oy), base, re); // x1 y2
+                    self.amd.vfmadd231qd_mem(ϕ(yd), ϕ(ox), base, im); // x2 y1 + x1 y2
+                    self.fmov(xd, xt);
+                }
+            }
+            ArithOp::Divide => return false,
+        }
+        true
     }
 
     fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {

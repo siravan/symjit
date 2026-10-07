@@ -4,9 +4,9 @@
 //! paired multiplications, gotos).
 
 use super::{ArithOp, BinOp, FusedOp, Instruction, Mir, UniOp};
-use crate::serializer::MirWriter;
-use crate::symbol::Loc;
-use crate::utils::Reg;
+use super::super::serializer::MirWriter;
+use super::super::symbol::Loc;
+use super::super::utils::Reg;
 
 impl Instruction {
     fn dst(&self) -> Reg {
