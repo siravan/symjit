@@ -59,7 +59,7 @@ pub trait Compiled<T: Sized + Copy + Default> {
 
 pub trait Storage: Sized {
     fn save(&self, stream: &mut impl Write) -> Result<()>;
-    fn load(stream: &mut impl Read, config: &Config) -> Result<Self>;
+    fn load_with_version(stream: &mut impl Read, config: &Config, version: usize) -> Result<Self>;
 }
 
 pub fn bool_to_f64(b: bool) -> f64 {

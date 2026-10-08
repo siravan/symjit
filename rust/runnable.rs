@@ -758,6 +758,7 @@ impl Application {
                 }
             }
             "mir-size" => self.bytecode.mir.code.ip,
+            "mir-bytes" => self.bytecode.mir.code.buf.len(),
             "stack-size" => self.prog.builder.stack_size(),
             "version" => {
                 let major: usize = env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap_or(99);
@@ -772,6 +773,10 @@ impl Application {
     /************************** save/load ******************************/
 
     const MAGIC: usize = 0x40568795410d08e9;
+
+    pub fn load(stream: &mut impl Read, config: &Config) -> Result<Self> {
+        Self::load_with_version(stream, config, 0)
+    }
 }
 
 fn save_reals(stream: &mut impl Write, reals: &HashSet<Loc>) -> Result<()> {
@@ -1049,7 +1054,7 @@ impl Storage for Application {
         Ok(())
     }
 
-    fn load(stream: &mut impl Read, config: &Config) -> Result<Self> {
+    fn load_with_version(stream: &mut impl Read, config: &Config, _version: usize) -> Result<Self> {
         let mut bytes: [u8; 8] = [0; 8];
 
         stream.read_exact(&mut bytes)?;
@@ -1060,16 +1065,18 @@ impl Storage for Application {
 
         stream.read_exact(&mut bytes)?;
 
-        if usize::from_le_bytes(bytes) != 4 {
+        let version = usize::from_le_bytes(bytes);
+
+        if version < 3 {
             return Err(anyhow!("invalid sjb version"));
         }
 
-        let prog = Program::load(stream, config)?;
+        let prog = Program::load_with_version(stream, config, version)?;
 
         stream.read_exact(&mut bytes)?;
         let mask = usize::from_le_bytes(bytes);
 
-        let mir = Mir::load(stream, prog.config())?;
+        let mir = Mir::load_with_version(stream, prog.config(), version)?;
 
         let reals = load_reals(stream)?;
 

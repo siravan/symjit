@@ -1122,7 +1122,7 @@ impl Storage for Config {
         Ok(())
     }
 
-    fn load(stream: &mut impl Read, config: &Self) -> Result<Self> {
+    fn load_with_version(stream: &mut impl Read, config: &Self, version: usize) -> Result<Self> {
         let mut bytes: [u8; 8] = [0; 8];
 
         stream.read_exact(&mut bytes)?;
@@ -1139,8 +1139,12 @@ impl Storage for Config {
         stream.read_exact(&mut bytes)?;
         let stack: usize = usize::from_le_bytes(bytes);
 
-        stream.read_exact(&mut bytes)?;
-        let args: u32 = usize::from_le_bytes(bytes) as u32;
+        let args: u32 = if version == 3 {
+            Config::default().num_args()
+        } else {
+            stream.read_exact(&mut bytes)?;
+            usize::from_le_bytes(bytes) as u32
+        };
 
         let ty: CompilerType = match ty {
             0 => CompilerType::Native,
