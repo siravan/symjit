@@ -138,7 +138,7 @@ impl Storage for Program {
         Ok(())
     }
 
-    fn load(stream: &mut impl Read, config: &Config, version: usize) -> Result<Self> {
+    fn load_with_version(stream: &mut impl Read, config: &Config, version: usize) -> Result<Self> {
         let mut bytes: [u8; 8] = [0; 8];
 
         stream.read_exact(&mut bytes)?;
@@ -147,7 +147,7 @@ impl Storage for Program {
             return Err(anyhow!("invalid magic number (Program)"));
         }
 
-        let config = Config::load(stream, config, version)?;
+        let config = Config::load_with_version(stream, config, version)?;
 
         stream.read_exact(&mut bytes)?;
         let count_states = usize::from_le_bytes(bytes);
@@ -164,7 +164,7 @@ impl Storage for Program {
         stream.read_exact(&mut bytes)?;
         let count_loops = usize::from_le_bytes(bytes);
 
-        let builder = Builder::load(stream, &config, version)?;
+        let builder = Builder::load_with_version(stream, &config, version)?;
 
         Ok(Program {
             builder,

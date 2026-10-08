@@ -9973,48 +9973,6 @@ fn vmovqd_zmm_indexed_mem_rbx_rdx_80() {
     );
 }
 
-#[ignore]
-fn vmovqd_zmm_indexed_mem_rbx_rdx_1234() {
-    // vmovupd zmm1, zmmword ptr [rbx+rdx*4+0x1234]
-    check(
-        DataType::F64,
-        &[
-            0x62, 0xf1, 0xfd, 0x48, 0x10, 0x8c, 0x93, 0x34, 0x12, 0x00, 0x00,
-        ],
-        |a| {
-            a.vmovqd_zmm_indexed_mem(1, 3, 2, 4, 4660);
-        },
-    );
-}
-
-#[ignore]
-fn vmovqd_zmm_indexed_mem_rbx_rdx_m8() {
-    // vmovupd zmm1, zmmword ptr [rbx+rdx*4-0x8]
-    check(
-        DataType::F64,
-        &[
-            0x62, 0xf1, 0xfd, 0x48, 0x10, 0x8c, 0x93, 0xf8, 0xff, 0xff, 0xff,
-        ],
-        |a| {
-            a.vmovqd_zmm_indexed_mem(1, 3, 2, 4, -8);
-        },
-    );
-}
-
-#[ignore]
-fn vmovqd_zmm_indexed_mem_r13_r9_8() {
-    // vmovupd zmm1, zmmword ptr [r13+r9*4+0x8]
-    check(
-        DataType::F64,
-        &[
-            0x62, 0x91, 0xfd, 0x48, 0x10, 0x8c, 0x8d, 0x08, 0x00, 0x00, 0x00,
-        ],
-        |a| {
-            a.vmovqd_zmm_indexed_mem(1, 13, 9, 4, 8);
-        },
-    );
-}
-
 #[test]
 fn vmovqd_zmm_indexed_mem_r13_r9_80() {
     // vmovupd zmm1, zmmword ptr [r13+r9*4+0x80]
@@ -10027,48 +9985,6 @@ fn vmovqd_zmm_indexed_mem_r13_r9_80() {
     );
 }
 
-#[ignore]
-fn vmovqd_zmm_indexed_mem_r13_r9_1234() {
-    // vmovupd zmm1, zmmword ptr [r13+r9*4+0x1234]
-    check(
-        DataType::F64,
-        &[
-            0x62, 0x91, 0xfd, 0x48, 0x10, 0x8c, 0x8d, 0x34, 0x12, 0x00, 0x00,
-        ],
-        |a| {
-            a.vmovqd_zmm_indexed_mem(1, 13, 9, 4, 4660);
-        },
-    );
-}
-
-#[ignore]
-fn vmovqd_zmm_indexed_mem_r13_r9_m8() {
-    // vmovupd zmm1, zmmword ptr [r13+r9*4-0x8]
-    check(
-        DataType::F64,
-        &[
-            0x62, 0x91, 0xfd, 0x48, 0x10, 0x8c, 0x8d, 0xf8, 0xff, 0xff, 0xff,
-        ],
-        |a| {
-            a.vmovqd_zmm_indexed_mem(1, 13, 9, 4, -8);
-        },
-    );
-}
-
-#[ignore]
-fn vmovqd_zmm_indexed_mem_r12_r12_8() {
-    // vmovupd zmm1, zmmword ptr [r12+r12*4+0x8]
-    check(
-        DataType::F64,
-        &[
-            0x62, 0x91, 0xfd, 0x48, 0x10, 0x8c, 0xa4, 0x08, 0x00, 0x00, 0x00,
-        ],
-        |a| {
-            a.vmovqd_zmm_indexed_mem(1, 12, 12, 4, 8);
-        },
-    );
-}
-
 #[test]
 fn vmovqd_zmm_indexed_mem_r12_r12_80() {
     // vmovupd zmm1, zmmword ptr [r12+r12*4+0x80]
@@ -10077,34 +9993,6 @@ fn vmovqd_zmm_indexed_mem_r12_r12_80() {
         &[0x62, 0x91, 0xfd, 0x48, 0x10, 0x4c, 0xa4, 0x02],
         |a| {
             a.vmovqd_zmm_indexed_mem(1, 12, 12, 4, 128);
-        },
-    );
-}
-
-#[ignore]
-fn vmovqd_zmm_indexed_mem_r12_r12_1234() {
-    // vmovupd zmm1, zmmword ptr [r12+r12*4+0x1234]
-    check(
-        DataType::F64,
-        &[
-            0x62, 0x91, 0xfd, 0x48, 0x10, 0x8c, 0xa4, 0x34, 0x12, 0x00, 0x00,
-        ],
-        |a| {
-            a.vmovqd_zmm_indexed_mem(1, 12, 12, 4, 4660);
-        },
-    );
-}
-
-#[ignore]
-fn vmovqd_zmm_indexed_mem_r12_r12_m8() {
-    // vmovupd zmm1, zmmword ptr [r12+r12*4-0x8]
-    check(
-        DataType::F64,
-        &[
-            0x62, 0x91, 0xfd, 0x48, 0x10, 0x8c, 0xa4, 0xf8, 0xff, 0xff, 0xff,
-        ],
-        |a| {
-            a.vmovqd_zmm_indexed_mem(1, 12, 12, 4, -8);
         },
     );
 }

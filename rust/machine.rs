@@ -91,7 +91,11 @@ impl<T: Clone + Default> MachineCode<T> {
 }
 
 impl<T: Clone + Default> Storage for MachineCode<T> {
-    fn load(stream: &mut impl Read, config: &Config, _version: usize) -> Result<MachineCode<T>> {
+    fn load_with_version(
+        stream: &mut impl Read,
+        config: &Config,
+        _version: usize,
+    ) -> Result<MachineCode<T>> {
         let mut bytes: [u8; 8] = [0; 8];
 
         stream.read_exact(&mut bytes)?;

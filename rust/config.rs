@@ -1,7 +1,6 @@
 use super::runnable::CompilerType;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use std::env::args;
 use std::io::{Read, Write};
 use std::sync::Arc;
 
@@ -1085,7 +1084,7 @@ impl Storage for Config {
         Ok(())
     }
 
-    fn load(stream: &mut impl Read, config: &Self, version: usize) -> Result<Self> {
+    fn load_with_version(stream: &mut impl Read, config: &Self, version: usize) -> Result<Self> {
         let mut bytes: [u8; 8] = [0; 8];
 
         stream.read_exact(&mut bytes)?;

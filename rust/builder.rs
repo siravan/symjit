@@ -483,7 +483,7 @@ impl Storage for Builder {
         Ok(())
     }
 
-    fn load(stream: &mut impl Read, config: &Config, _version: usize) -> Result<Self> {
+    fn load_with_version(stream: &mut impl Read, config: &Config, _version: usize) -> Result<Self> {
         let mut bytes: [u8; 8] = [0; 8];
 
         stream.read_exact(&mut bytes)?;
