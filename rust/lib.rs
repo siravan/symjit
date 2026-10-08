@@ -320,7 +320,7 @@ pub unsafe extern "C" fn load(file: *const c_char, df: *mut Defuns) -> *const Co
     let fs = std::fs::File::open(file);
 
     match fs {
-        Ok(mut fs) => match Application::load(&mut fs, &Config::from_defuns(df).unwrap()) {
+        Ok(mut fs) => match Application::load(&mut fs, &Config::from_defuns(df).unwrap(), 0) {
             Ok(app) => {
                 res.app = Some(app);
                 res.status = CompilerStatus::Ok;

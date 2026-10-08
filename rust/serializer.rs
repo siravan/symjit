@@ -374,7 +374,7 @@ impl Storage for Mir {
         Ok(())
     }
 
-    fn load(stream: &mut impl Read, config: &Config) -> Result<Self> {
+    fn load(stream: &mut impl Read, config: &Config, _version: usize) -> Result<Self> {
         let mut bytes: [u8; 8] = [0; 8];
 
         stream.read_exact(&mut bytes)?;

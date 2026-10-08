@@ -804,7 +804,7 @@ impl Storage for Application {
         Ok(())
     }
 
-    fn load(stream: &mut impl Read, config: &Config) -> Result<Self> {
+    fn load(stream: &mut impl Read, config: &Config, _version: usize) -> Result<Self> {
         let mut bytes: [u8; 8] = [0; 8];
 
         stream.read_exact(&mut bytes)?;
@@ -815,16 +815,18 @@ impl Storage for Application {
 
         stream.read_exact(&mut bytes)?;
 
-        if usize::from_le_bytes(bytes) != 4 {
+        let version = usize::from_le_bytes(bytes);
+
+        if version < 3 {
             return Err(anyhow!("invalid sjb version"));
         }
 
-        let prog = Program::load(stream, config)?;
+        let prog = Program::load(stream, config, version)?;
 
         stream.read_exact(&mut bytes)?;
         let mask = usize::from_le_bytes(bytes);
 
-        let mir = Mir::load(stream, prog.config())?;
+        let mir = Mir::load(stream, prog.config(), version)?;
 
         let reals = load_reals(stream)?;
 
