@@ -708,6 +708,7 @@ impl Application {
                 }
             }
             "mir-size" => self.bytecode.mir.code.ip,
+            "mir-bytes" => self.bytecode.mir.code.buf.len(),
             "stack-size" => self.prog.builder.stack_size(),
             "version" => {
                 let major: usize = env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap_or(99);

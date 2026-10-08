@@ -106,7 +106,7 @@ const BINOP_COMPLEX: u8 = BinOp::Complex as u8;
 
 #[derive(Clone)]
 pub struct MirWriter {
-    buf: Vec<u8>,
+    pub buf: Vec<u8>,
     pub ip: usize,
 }
 
