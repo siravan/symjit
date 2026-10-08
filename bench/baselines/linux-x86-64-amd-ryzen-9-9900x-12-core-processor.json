@@ -11,147 +11,147 @@
  "date": "2026-10-08",
  "results": {
   "eos": {
-   "compile_ms": 15.486527991015464,
+   "compile_ms": 13.902503997087479,
    "work": 1082016,
    "unit": "point",
    "ref_name": "numpy",
-   "ref_s": 0.11875938100274652,
-   "symjit_s": 0.0037310172823102525,
-   "code_bytes": 20432
+   "ref_s": 0.1174935529998038,
+   "symjit_s": 0.0056559290387667716,
+   "code_bytes": 47776
   },
   "isoneutral": {
-   "compile_ms": 1.523274026112631,
+   "compile_ms": 1.445767964469269,
    "work": 262144,
    "unit": "point",
    "ref_name": "numpy",
-   "ref_s": 0.05216082533782659,
-   "symjit_s": 0.036321253998903555,
-   "code_bytes": 7184
+   "ref_s": 0.052623114665038884,
+   "symjit_s": 0.036147204402368516,
+   "code_bytes": 7088
   },
   "tke": {
-   "compile_ms": 1.361175993224606,
+   "compile_ms": 1.4500060060527176,
    "work": 786432,
    "unit": "point",
    "ref_name": "numpy",
-   "ref_s": 0.03530870900140144,
-   "symjit_s": 0.026539204430134435,
-   "code_bytes": 7504
+   "ref_s": 0.036110342404572296,
+   "symjit_s": 0.028169667163941387,
+   "code_bytes": 10336
   },
   "transcendental": {
-   "compile_ms": 0.4268480115570128,
+   "compile_ms": 0.41229999624192715,
    "work": 1048576,
    "unit": "point",
    "ref_name": "numpy",
-   "ref_s": 0.014582564668671694,
-   "symjit_s": 0.0027897512443208444,
+   "ref_s": 0.013580486641980574,
+   "symjit_s": 0.0027927844617247153,
    "code_bytes": 2080
   },
   "transcendental-1thread": {
-   "compile_ms": 0.44110501767136157,
+   "compile_ms": 0.4064599925186485,
    "work": 1048576,
    "unit": "point",
    "ref_name": "numpy",
-   "ref_s": 0.014614813248044811,
-   "symjit_s": 0.035561000602319835,
+   "ref_s": 0.013591241286901225,
+   "symjit_s": 0.03544369019800797,
    "code_bytes": 2080
   },
   "horner": {
-   "compile_ms": 0.5010679888073355,
+   "compile_ms": 0.4686470201704651,
    "work": 1048576,
    "unit": "point",
    "ref_name": "numpy",
-   "ref_s": 0.006598283153904889,
-   "symjit_s": 0.00046535226593210185,
+   "ref_s": 0.00627031876007095,
+   "symjit_s": 0.00046835468063119234,
    "code_bytes": 2832
   },
   "piecewise": {
-   "compile_ms": 0.3794590011239052,
+   "compile_ms": 0.4196649824734777,
    "work": 1048576,
    "unit": "point",
    "ref_name": "numpy",
-   "ref_s": 0.014679446416266728,
-   "symjit_s": 0.000881571562482956,
+   "ref_s": 0.014738382305949926,
+   "symjit_s": 0.0008779028331363489,
    "code_bytes": 1696
   },
   "complex": {
-   "compile_ms": 0.40379399433732033,
+   "compile_ms": 0.44600400724448264,
    "work": 262144,
    "unit": "point",
    "ref_name": "numpy",
-   "ref_s": 0.010011696895449668,
-   "symjit_s": 0.001082816132884143,
+   "ref_s": 0.009993495890133394,
+   "symjit_s": 0.0010771195086598363,
    "code_bytes": 1760
   },
   "mandelbrot": {
-   "compile_ms": 0.44074401375837624,
+   "compile_ms": 0.3203770029358566,
    "work": 45000000,
    "unit": "point-iteration",
    "ref_name": "numpy",
-   "ref_s": 0.09214498050278053,
-   "symjit_s": 0.08811319249798544,
+   "ref_s": 0.09217395550513174,
+   "symjit_s": 0.08667792400228791,
    "code_bytes": 912
   },
   "nbody": {
-   "compile_ms": 7.999174005817622,
+   "compile_ms": 7.365957018919289,
    "work": 560000.0,
    "unit": "pair",
    "ref_name": "numpy",
-   "ref_s": 0.03244687050270537,
-   "symjit_s": 0.0007097969306540667,
-   "code_bytes": 24768
+   "ref_s": 0.030242365168912027,
+   "symjit_s": 0.0006898552248824763,
+   "code_bytes": 24384
   },
   "fast-call": {
-   "compile_ms": 0.2547119802329689,
+   "compile_ms": 0.2574179961811751,
    "work": 200000,
    "unit": "call",
    "ref_name": "Python math",
-   "ref_s": 0.00864095599999101,
-   "symjit_s": 0.043133002749527805,
+   "ref_s": 0.008879183500539511,
+   "symjit_s": 0.0437559487472754,
    "code_bytes": 544
   },
   "quad": {
-   "compile_ms": 0.37859700387343764,
+   "compile_ms": 0.4557630163617432,
    "work": 500,
    "unit": "integral",
    "ref_name": "scipy + Python",
-   "ref_s": 0.0016825280933625113,
-   "symjit_s": 0.0006042899753263128,
+   "ref_s": 0.001669959193281438,
+   "symjit_s": 0.0006014830060949963,
    "code_bytes": 784
   },
   "ode-lorenz": {
-   "compile_ms": 0.3164089866913855,
+   "compile_ms": 0.3068810037802905,
    "work": 1,
    "unit": "solve",
    "ref_name": "lambdify",
-   "ref_s": 0.07844809000380337,
-   "symjit_s": 0.0726303609990282,
+   "ref_s": 0.07705884000461083,
+   "symjit_s": 0.07146123600250576,
    "code_bytes": 0
   },
   "cellml-ohara": {
-   "compile_ms": 6.445762992370874,
+   "compile_ms": 26.37837699148804,
    "work": 20000,
    "unit": "call",
    "ref_name": "bytecode",
-   "ref_s": 1.934777385002235,
-   "symjit_s": 0.09666181649663486,
-   "code_bytes": 43264
+   "ref_s": 1.9643264780170284,
+   "symjit_s": 0.09779546449135523,
+   "code_bytes": 43008
   },
   "compile-large": {
-   "compile_ms": 32.43827099504415,
+   "compile_ms": 31.264964745787438,
    "work": 1,
    "unit": "compile",
    "ref_name": "",
-   "symjit_s": 0.03243827099504415,
-   "code_bytes": 45504
+   "symjit_s": 0.03126496474578744,
+   "code_bytes": 44752
   },
   "symbolica-poly": {
-   "compile_ms": 39.88039999967441,
+   "compile_ms": 40.44232700834982,
    "work": 10000,
    "unit": "point",
    "ref_name": "Symbolica",
-   "ref_s": 0.15231287298956886,
-   "symjit_s": 0.002172380457415198,
-   "code_bytes": 1598688
+   "ref_s": 0.15994233899982646,
+   "symjit_s": 0.0018444424263982322,
+   "code_bytes": 1614928
   }
  }
 }
