@@ -174,7 +174,8 @@ impl Defuns {
     }
 
     /// # Safety
-    ///     p should points to a valid function
+    /// p should points to a valid function
+    ///
     pub unsafe fn add_func(&mut self, name: &str, p: *const usize, num_args: usize) {
         match num_args {
             1 => {
