@@ -359,6 +359,7 @@ class RustyCompiler:
         direct: bool=False,
         compact: bool=True,
         compress: bool=False,
+        coroutines: bool=False,
         huge: bool=False,
         parallel_mul: bool=True,
     ):
@@ -395,6 +396,7 @@ class RustyCompiler:
             | (0x00008000 if fast_complex else 0)
             | (0x00100000 if huge else 0)
             | (0x00200000 if parallel_mul else 0)
+            | (0x40000000 if coroutines else 0)
             | ((opt_level & 0x0F) << 8)
         )
 

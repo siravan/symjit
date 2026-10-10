@@ -16,6 +16,7 @@ fast_complex = true
 huge = false
 parallel_mul = true
 opt_level = 3
+coroutines = true
 
 [debug]
 bytecode = false

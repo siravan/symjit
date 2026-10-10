@@ -20,6 +20,9 @@ pub const COMPLEX: u32 = 0x0000_0020;
 pub const SYMBOLICA: u32 = 0x0000_0040;
 pub const SIMD_BRANCH: u32 = 0x0000_0080;
 
+pub const OPT_LEVEL_MASK: u32 = 0x0000_0f00;
+pub const OPT_LEVEL_SHIFT: usize = 8;
+
 pub const COMPACT: u32 = 0x0000_1000;
 pub const COMPRESS: u32 = 0x0000_2000;
 pub const DIRECT: u32 = 0x0000_4000;
@@ -29,20 +32,23 @@ pub const DEBUG_BYTECODE: u32 = 0x0001_0000;
 pub const DEBUG_SCALAR: u32 = 0x0002_0000;
 pub const DEBUG_SIMD: u32 = 0x0004_0000;
 pub const DEBUG_STATS: u32 = 0x0008_0000;
-pub const DEBUG_LOCK: u32 = 0x0100_0000;
-pub const DEBUG_TOPOLOGY: u32 = 0x1000_0000;
-pub const DEBUG_INSTRUCTIONS: u32 = 0x2000_0000;
 
 pub const HUGE: u32 = 0x0010_0000;
 pub const PARALLEL_MUL: u32 = 0x0020_0000;
-
 pub const DIRECT_ARENA: u32 = 0x0040_0000;
 pub const DIRECT_ARENA_IDENTITY_OUTPUT: u32 = 0x0080_0000;
+
+pub const DEBUG_LOCK: u32 = 0x0100_0000;
 pub const DIRECT_ARENA_OPERATION_MASK: u32 = 0x0600_0000;
 pub const DIRECT_ARENA_OPERATION_SHIFT: usize = 25;
 
-pub const OPT_LEVEL_MASK: u32 = 0x0000_0f00;
-pub const OPT_LEVEL_SHIFT: usize = 8;
+pub const DEBUG_TOPOLOGY: u32 = 0x1000_0000;
+pub const DEBUG_INSTRUCTIONS: u32 = 0x2000_0000;
+pub const COROUTINES: u32 = 0x4000_0000;
+
+// remaining bits:
+// 0x0800_0000
+// 0x8000_0000
 
 pub const SPILL_AREA: usize = 16;
 pub const ABI_AREA: usize = 16;
@@ -93,6 +99,7 @@ struct Options {
     opt_level: u8,
     stack_limit: usize,
     num_args: u32,
+    coroutines: bool,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -158,6 +165,9 @@ impl std::fmt::Debug for Config {
         }
         if self.parallel_mul() {
             write!(f, "parallel_mul, ")?;
+        }
+        if self.coroutines() {
+            write!(f, "coroutines, ")?;
         }
         if self.debug_bytecode() {
             write!(f, "debug_bytecode, ")?;
@@ -264,6 +274,7 @@ impl Config {
         config.set_opt_level(c.options.opt_level);
         config.set_stack_limit(c.options.stack_limit);
         config.set_num_args(c.options.num_args);
+        config.set_coroutines(c.options.coroutines);
 
         config.set_debug_bytecode(c.debug.bytecode);
         config.set_debug_scalar(c.debug.scalar);
@@ -309,6 +320,7 @@ impl Config {
             parallel_mul: self.parallel_mul(),
             direct_arena: self.direct_arena(),
             direct_arena_identity_output: self.direct_arena_identity_output(),
+            coroutines: self.coroutines(),
         };
 
         let debug: DebugOptions = DebugOptions {
@@ -440,6 +452,10 @@ impl Config {
         self.test(COMPRESS)
     }
 
+    pub fn coroutines(&self) -> bool {
+        self.test(COROUTINES)
+    }
+
     pub fn direct(&self) -> bool {
         self.test(DIRECT)
     }
@@ -511,11 +527,19 @@ impl Config {
     }
 
     pub fn yield_every(&self) -> usize {
-        10000
+        if self.coroutines() {
+            5000
+        } else {
+            0
+        }
     }
 
     pub fn lockstep(&self) -> usize {
-        256
+        if self.coroutines() {
+            256
+        } else {
+            0
+        }
     }
 
     pub fn num_args(&self) -> u32 {
@@ -697,6 +721,13 @@ impl Config {
         }
     }
 
+    /// Use co-routines for single-threaded vectorized code.
+    pub fn set_coroutines(&mut self, enabled: bool) {
+        if !self.debug_lock() {
+            self.opt = (self.opt & !COROUTINES) | if enabled { COROUTINES } else { 0 };
+        }
+    }
+
     /// Direct translation from Symbolica IR to Symjit IR.
     /// This is a typo but is kept for compatibility.
     pub fn set_dicect(&mut self, enabled: bool) {
@@ -865,6 +896,9 @@ impl Config {
             }
             "parallel_mul" => {
                 self.set_parallel_mul(val.parse::<bool>()?);
+            }
+            "coroutines" => {
+                self.set_coroutines(val.parse::<bool>()?);
             }
             "opt_level" => {
                 self.set_opt_level(val.parse::<u8>()?);
