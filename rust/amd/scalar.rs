@@ -1,10 +1,10 @@
-use super::super::code::Func;
-use super::super::config::KernelType;
-use super::super::config::{Config, ABI_AREA};
-use super::super::generator::{Generator, GeneratorType, StackRegions};
-use super::super::symbol::Loc;
-use super::super::utils::align_stack;
-use super::super::utils::{DataType, Reg};
+use crate::code::Func;
+use crate::config::KernelType;
+use crate::config::{Config, ABI_AREA};
+use crate::generator::{Generator, GeneratorType, StackRegions};
+use crate::symbol::Loc;
+use crate::utils::align_stack;
+use crate::utils::{DataType, Reg};
 use anyhow::Result;
 
 use super::asm::{Amd, RoundingMode};

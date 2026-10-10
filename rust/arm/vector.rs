@@ -1,11 +1,11 @@
 use anyhow::{anyhow, Result};
 
-use super::super::assembler::{Assembler, Jumper};
-use super::super::code::Func;
-use super::super::config::{Config, KernelType, ABI_AREA};
-use super::super::generator::{Generator, GeneratorType, StackRegions};
-use super::super::symbol::Loc;
-use super::super::utils::{align_stack, Reg};
+use crate::assembler::{Assembler, Jumper};
+use crate::code::Func;
+use crate::config::{Config, KernelType, ABI_AREA};
+use crate::generator::{Generator, GeneratorType, StackRegions};
+use crate::symbol::Loc;
+use crate::utils::{align_stack, Reg};
 
 use super::*;
 

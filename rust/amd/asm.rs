@@ -1,5 +1,5 @@
-use super::super::assembler::Assembler;
-use super::super::utils::DataType;
+use crate::assembler::Assembler;
+use crate::utils::DataType;
 
 pub enum RoundingMode {
     Round,
