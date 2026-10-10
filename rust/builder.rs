@@ -335,6 +335,20 @@ impl Builder {
 
     pub fn compile_mir(&mut self, mir: &mut Mir) -> Result<()> {
         self.block().eliminate();
+        self.block().trim_statements();
+
+        #[cfg(feature = "async")]
+        {
+            let every = self.config.yield_every();
+            if every > 0 && !self.config.compress() {
+                let zero = self.create_const(0.0)?;
+                let count = self.block().insert_yields(every, zero);
+                if count > 0 {
+                    self.ft.insert("_yield_".to_string());
+                }
+            }
+        }
+
         let salt = self.salt.clone();
         self.block().compile(mir, salt)?;
         self.block().compile_subroutines(mir)

@@ -710,6 +710,10 @@ impl Application {
             "mir-size" => self.bytecode.mir.code.ip,
             "mir-bytes" => self.bytecode.mir.code.buf.len(),
             "stack-size" => self.prog.builder.stack_size(),
+            #[cfg(feature = "async")]
+            "async" => 1,
+            #[cfg(not(feature = "async"))]
+            "async" => 0,
             "version" => {
                 let major: usize = env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap_or(99);
                 let minor: usize = env!("CARGO_PKG_VERSION_MINOR").parse().unwrap_or(99);

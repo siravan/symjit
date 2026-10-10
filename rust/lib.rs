@@ -39,6 +39,10 @@ mod topology;
 mod types;
 mod utils;
 
+// lockstep evaluation of batches with yield points (a prototype)
+#[cfg(feature = "async")]
+mod lockstep;
+
 #[allow(non_upper_case_globals)]
 mod riscv64;
 

@@ -133,6 +133,90 @@ impl Applet {
         }
     }
 
+    /// Evaluates the scalar kernel for the n points of `args`, `block` points at a time in
+    /// lockstep (`lockstep.rs`): the points switch at the yield points of the kernel, so
+    /// each segment of code between two yield points is fetched once per block.
+    #[cfg(feature = "async")]
+    fn evaluate_matrix_async(&self, args: &[f64], outs: &mut [f64], n: usize, block: usize) {
+        if let Some(f) = &self.compiled {
+            let count_params = self.count_params;
+            let count_obs = self.count_obs;
+            let f_scalar = f.func();
+            // the kernel's frame (at most `stack_limit` 16-byte slots) plus room for calls
+            let stack_size = self.config.stack_limit() * 16 + (1 << 20);
+            let outs: &[f64] = outs;
+
+            super::lockstep::run_lockstep(n, block, stack_size, |t| {
+                Self::evaluate_row(args, t * count_params, outs, t * count_obs, f_scalar, false);
+            });
+        }
+    }
+
+    /// The SIMD counterpart of `evaluate_matrix_async`: each SIMD row (`lanes` points) runs
+    /// as one coroutine, `block` points (`block / lanes` rows) at a time in lockstep. A row
+    /// the SIMD kernel rejects runs on the scalar kernel in the same coroutine; the points
+    /// left over after the last full row run on the scalar kernel afterwards.
+    #[cfg(feature = "async")]
+    fn evaluate_matrix_async_simd(
+        &self,
+        args: &[f64],
+        outs: &mut [f64],
+        n: usize,
+        transpose: bool,
+        block: usize,
+    ) {
+        if let Some(f) = &self.compiled {
+            if let Some(compiled) = &self.compiled_simd {
+                let count_params = self.count_params;
+                let count_obs = self.count_obs;
+                let f_simd = compiled.func();
+                let f_scalar = f.func();
+                let lanes = compiled.count_lanes();
+                let step = if transpose { lanes } else { 1 };
+                // a SIMD kernel is compiled only if its frame fits in `stack_limit` bytes
+                // (`Application::compile_avx_simd`); the scalar fallback needs at most
+                // `stack_limit` 16-byte slots
+                let stack_size = self.config.stack_limit() * 16 + (1 << 20);
+                let outs: &[f64] = outs;
+
+                super::lockstep::run_lockstep(n / step, (block / step).max(1), stack_size, |k| {
+                    let top = k * lanes;
+                    if Self::evaluate_row(
+                        args,
+                        top * count_params,
+                        outs,
+                        top * count_obs,
+                        f_simd,
+                        transpose,
+                    ) != 0
+                    {
+                        for i in 0..lanes {
+                            Self::evaluate_row(
+                                args,
+                                (top + i) * count_params,
+                                outs,
+                                (top + i) * count_obs,
+                                f_scalar,
+                                false,
+                            );
+                        }
+                    }
+                });
+
+                for t in step * (n / step)..n {
+                    Self::evaluate_row(
+                        args,
+                        t * count_params,
+                        outs,
+                        t * count_obs,
+                        f_scalar,
+                        false,
+                    );
+                }
+            }
+        }
+    }
+
     fn evaluate_matrix_with_threads_simd(
         &self,
         args: &[f64],
@@ -261,6 +345,19 @@ impl Applet {
                 | ElemType::ComplexF64x2(_)
                 | ElemType::ComplexF64x4(_)
         );
+
+        #[cfg(feature = "async")]
+        {
+            let block = self.config.lockstep();
+            if block > 0 && n > 1 {
+                if self.compiled_simd.is_some() {
+                    self.evaluate_matrix_async_simd(args, outs, n, transpose, block);
+                } else {
+                    self.evaluate_matrix_async(args, outs, n, block);
+                }
+                return;
+            }
+        }
 
         if self.use_threads && n > 1 {
             if self.compiled_simd.is_some() {

@@ -255,6 +255,11 @@ impl VirtualTable {
             "cplx_power" => Func::BinaryCplx(Self::cplx_power),
             "cplx_random" => Func::UnaryCplx(Self::cplx_random),
             "cplx_arg" => Func::UnaryCplx(Self::cplx_arg),
+            // yield points of lockstep evaluation (`lockstep.rs`)
+            #[cfg(feature = "async")]
+            "_yield_" => Func::Unary(super::lockstep::yield_point),
+            #[cfg(feature = "async")]
+            "cplx__yield_" => Func::UnaryCplx(super::lockstep::cplx_yield_point),
             _ => {
                 return Err(anyhow!("op_code {} is not found or is not supported", op));
             }

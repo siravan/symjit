@@ -81,8 +81,71 @@ impl Block {
     }
 
     pub fn add_assign(&mut self, lhs: Node, rhs: Node) {
-        let rhs = self.process(rhs);
+        // trimmed by `trim_statements`, after the common-subexpression elimination: the
+        // temporaries `trim` introduces would hide shared subexpressions from it
         self.stmts.push(Statement::assign(lhs, rhs));
+    }
+
+    /*
+     * trim_statements breaks up the right-hand sides of the assignments (`trim`: register
+     * pressure, and function calls into Call statements). It runs after `eliminate`. The
+     * call cache is cleared at labels and branches, as it is when they are added, so that
+     * calls in different branches are not merged.
+     */
+    pub fn trim_statements(&mut self) {
+        let stmts = std::mem::take(&mut self.stmts);
+        self.calls.clear();
+
+        for s in stmts {
+            match s {
+                Statement::Assign { lhs, rhs, .. } => {
+                    let rhs = self.process(rhs);
+                    self.stmts.push(Statement::assign(lhs, rhs));
+                }
+                Statement::Label { .. } | Statement::Branch { .. } | Statement::BranchIf { .. } => {
+                    self.stmts.push(s);
+                    self.calls.clear();
+                }
+                s => self.stmts.push(s),
+            }
+        }
+    }
+
+    /*
+     * insert_yields adds a call to `_yield_` (lockstep evaluation, `lockstep.rs`) after the
+     * statements that complete `every` expression nodes, outside labels and branches. The
+     * call is an ordinary function call, so no values stay in registers across it. Returns
+     * the number of yield points.
+     */
+    #[cfg(feature = "async")]
+    pub fn insert_yields(&mut self, every: usize, zero: Node) -> usize {
+        let stmts = std::mem::take(&mut self.stmts);
+        let mut weight = 0;
+        let mut depth = 0;
+        let mut count = 0;
+
+        for s in stmts {
+            match &s {
+                Statement::Assign { rhs, .. } => weight += rhs.weightof() as usize,
+                Statement::Call { arg, .. } => weight += arg.weightof() as usize,
+                Statement::Label { .. } => depth += 1,
+                Statement::Branch { .. } | Statement::BranchIf { .. } => depth -= 1,
+                Statement::LoadArgs { .. } => {}
+            }
+
+            self.stmts.push(s);
+
+            if depth == 0 && weight >= every {
+                let arg = self.create_unary(Operation::new("_call_"), zero.clone());
+                let lhs = self.create_tmp();
+                self.stmts
+                    .push(Statement::call(Operation::new("_yield_"), lhs, arg, 1));
+                weight = 0;
+                count += 1;
+            }
+        }
+
+        count
     }
 
     pub fn load_args(&mut self, args: Vec<Node>) {
@@ -457,13 +520,46 @@ impl Block {
             let k = &lhs.hashof();
 
             if !ls.contains(k) {
-                self.stmts.push(Statement::assign(lhs.clone(), rhs.clone()));
                 ls.insert(*k);
+                // the common subexpressions nested in rhs are replaced as well (their
+                // assignments are pushed first); otherwise each pass of `eliminate`
+                // would share only one more level of a deeply nested expression
+                let rhs = self.rewrite_children(cs, ls, rhs.clone());
+                self.stmts.push(Statement::assign(lhs.clone(), rhs));
             }
 
             return Some(lhs.clone());
         }
 
         None
+    }
+
+    /// rewrite_cse applied to the children of `node`, but not to `node` itself (the
+    /// right-hand side of a common subexpression, which would otherwise match itself).
+    fn rewrite_children(
+        &mut self,
+        cs: &HashMap<u64, (Node, Node)>,
+        ls: &mut HashSet<u64>,
+        node: Node,
+    ) -> Node {
+        match node {
+            Node::Unary { op, arg, power, .. } => {
+                let arg = self.rewrite_cse(cs, ls, *arg);
+                Node::create_unary(op, arg, power)
+            }
+            Node::Binary {
+                op,
+                left,
+                right,
+                power,
+                cond,
+                ..
+            } => {
+                let left = self.rewrite_cse(cs, ls, *left);
+                let right = self.rewrite_cse(cs, ls, *right);
+                Node::create_binary(op, left, right, power, cond)
+            }
+            node => node,
+        }
     }
 }

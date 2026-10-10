@@ -205,6 +205,18 @@ impl Config {
     }
 
     pub fn from_name(ty: &str, opt: u32) -> Result<Config> {
+        // `ty` may carry numeric options after the type, applied with `set_option`
+        if let Some((ty, options)) = ty.split_once(';') {
+            let mut config = Self::from_name(ty, opt)?;
+            for item in options.split(';').filter(|s| !s.trim().is_empty()) {
+                let (key, val) = item
+                    .split_once('=')
+                    .ok_or_else(|| anyhow!("invalid option `{}` (expected key=value)", item))?;
+                config.set_option(key.trim(), val.trim())?;
+            }
+            return Ok(config);
+        }
+
         let ty = match ty {
             "bytecode" => CompilerType::ByteCode,
             "arm" => CompilerType::Arm,
@@ -496,6 +508,14 @@ impl Config {
 
     pub fn stack_limit(&self) -> usize {
         self.stack
+    }
+
+    pub fn yield_every(&self) -> usize {
+        10000
+    }
+
+    pub fn lockstep(&self) -> usize {
+        256
     }
 
     pub fn num_args(&self) -> u32 {
