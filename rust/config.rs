@@ -528,7 +528,7 @@ impl Config {
 
     pub fn yield_every(&self) -> usize {
         if self.coroutines() {
-            5000
+            10000
         } else {
             0
         }
