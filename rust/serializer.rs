@@ -347,14 +347,7 @@ impl MirWriter {
     }
 
     fn string(&mut self, s: &str) {
-        let bytes = s.as_bytes();
-        let len = bytes.len();
-        assert!(len < 256);
-
-        self.append_byte(len as u8);
-        for b in bytes {
-            self.append_byte(*b);
-        }
+        super::strings::write(&mut self.buf, s).expect("writing a label to a Vec cannot fail");
     }
 }
 
@@ -1049,12 +1042,9 @@ impl MirIterator {
     }
 
     fn string(&mut self) -> Result<String> {
-        let len = self.pop()? as usize;
-        let mut b: Vec<u8> = Vec::with_capacity(len);
-        for _ in 0..len {
-            b.push(self.pop()?)
-        }
-
-        Ok(String::from_utf8(b)?)
+        let mut remaining = &self.buf[self.pos..];
+        let value = super::strings::read_slice(&mut remaining)?;
+        self.pos = self.buf.len() - remaining.len();
+        Ok(value)
     }
 }

@@ -472,12 +472,7 @@ impl Storage for Builder {
         stream.write_all(&self.ft.len().to_le_bytes())?;
 
         for s in self.ft.iter() {
-            let bytes = s.as_bytes();
-            let len = bytes.len();
-            assert!(len < 256);
-
-            stream.write_all(&[len as u8])?;
-            stream.write_all(bytes)?;
+            super::strings::write(stream, s)?;
         }
 
         Ok(())
@@ -512,11 +507,7 @@ impl Storage for Builder {
         let num_ft = usize::from_le_bytes(bytes);
 
         for _ in 0..num_ft {
-            stream.read_exact(&mut bytes[0..1])?;
-            let n = bytes[0] as usize;
-            let mut buf: Vec<u8> = vec![0; n];
-            stream.read_exact(&mut buf)?;
-            builder.ft.insert(String::from_utf8(buf)?);
+            builder.ft.insert(super::strings::read(stream)?);
         }
 
         Ok(builder)
