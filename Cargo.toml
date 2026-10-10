@@ -43,6 +43,9 @@ symbolica = []
 libm = []
 
 [lib]
-# name = "_lib"
 path = "rust/lib.rs"
 crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "prifiler"
+path = "profile/profiler.rs"

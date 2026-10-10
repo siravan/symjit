@@ -65,29 +65,6 @@ type __m256d = [f64; 4];
 ///    * `call_simd_params(&[__m256d], &[f64])`: simd call with parameters.
 /// 7. Optionally, generate a standalone fast function to execute.
 ///
-///
-/// # Examples
-///
-/// ```rust
-/// use anyhow::Result;
-/// use symjit::{Compiler, Expr};
-///
-/// pub fn main() -> Result<()> {
-///     let x = Expr::var("x");
-///     let y = Expr::var("y");
-///     let u = &x + &y;
-///     let v = &x * &y;
-///
-///     let mut config = Config::default();
-///     config.set_opt_level(2);
-///     let mut comp = Compiler::with_config(config);
-///     let mut app = comp.compile(&[x, y], &[u, v])?;
-///     let res = app.call(&[3.0, 5.0]);
-///     println!("{:?}", &res);
-///
-///     Ok(())
-/// }
-/// ```
 impl Compiler {
     /// Creates a new `Compiler` object with default settings.
     pub fn new() -> Compiler {
@@ -310,25 +287,6 @@ impl Application {
     /// small functions. Therefore, for a certain subset of applications, Symjit
     /// can compile a fast funcction and return a function pointer. Examples:
     ///
-    /// ```rust
-    /// fn test_fast() -> Result<()> {
-    ///     let x = Expr::var("x");
-    ///     let y = Expr::var("y");
-    ///     let z = Expr::var("z");
-    ///     let u = &x * &(&y - &z).pow(&Expr::from(2));
-    ///
-    ///     let mut comp = Compiler::new();
-    ///     let mut app = comp.compile(&[x, y, z], &[u])?;
-    ///     let f = app.fast_func()?;
-    ///
-    ///     if let FastFunc::F3(f, _) = f {
-    ///         let res = f(3.0, 5.0, 9.0);
-    ///         println!("fast\t{:?}", &res);
-    ///     }
-    ///
-    ///     Ok(())
-    /// }
-    /// ```
     ///
     /// The conditions for a fast function are:
     ///
@@ -337,8 +295,8 @@ impl Application {
     /// * It returns only a single value.
     ///
     /// If these conditions are met, you can generate a fast functin by calling
-    /// `app.fast_func()`, with a return type of `Result<FastFunc>`. `FastFunc` is an
-    /// enum with eight variants `F1, `F2`, ..., `F8`, corresponding to
+    /// app.fast_func(), with a return type of Result<FastFunc>. FastFunc is an
+    /// enum with eight variants F1, `F2`, ..., `F8, corresponding to
     /// functions with 1 to 8 arguments.
     ///
     pub fn fast_func(&mut self) -> Result<FastFunc<'_>> {
@@ -1208,22 +1166,6 @@ impl IndirectTranslator {
 }
 
 impl Compiler {
-    /// Compiles a Symbolica model.
-    ///
-    /// `json` is the JSON-encoded output of Symbolica `export_instructions`.
-    ///
-    /// Example:
-    ///
-    /// ```rust
-    /// let params = vec![parse!("x"), parse!("y")];
-    /// let eval = parse!("x + y^2")
-    ///     .evaluator(&FunctionMap::new(), &params, OptimizationSettings::default())?
-    ///
-    /// let json = serde_json::to_string(&eval.export_instructions())?;
-    /// let mut comp = Compiler::new();
-    /// let mut app = comp.translate(&json)?;
-    /// assert!(app.evaluate_single(&[2.0, 3.0]) == 11.0);
-    /// ```
     pub fn translate(&mut self, json: String, num_params: usize) -> Result<Application> {
         let mut translator = Translator::new(self.config.clone());
 

@@ -57,6 +57,32 @@ pub use serializer::MirWriter;
 pub use types::{ElemType, Element};
 pub use utils::{Compiled, CompiledPlaneFunc, PlaneDescriptor, Storage};
 
+pub fn var(name: &str) -> Expr {
+    Expr::var(name)
+}
+
+pub fn double(val: f64) -> Expr {
+    Expr::from(val)
+}
+
+pub fn int(val: i32) -> Expr {
+    Expr::from(val)
+}
+
+fn bool_to_f64(b: bool) -> f64 {
+    const T: f64 = f64::from_bits(!0);
+    const F: f64 = f64::from_bits(0);
+    if b {
+        T
+    } else {
+        F
+    }
+}
+
+pub fn boolean(val: bool) -> Expr {
+    Expr::from(bool_to_f64(val))
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum CompilerStatus {
     Ok,
@@ -80,10 +106,10 @@ fn error_message<E: Debug>(msg: &str, err: E) -> CString {
 
 /// Compiles a model.
 ///
-/// * `model` is a json string encoding the model.
-/// * `ty` is the requested arch (amd, arm, native, or bytecode).
-/// * `opt`: compilation options.
-/// * `df`: user-defined functions.
+/// * model is a json string encoding the model.
+/// * ty is the requested arch (amd, arm, native, or bytecode).
+/// * opt: compilation options.
+/// * df: user-defined functions.
 ///
 /// # Safety
 ///     * both model and ty are pointers to null-terminated strings.
@@ -175,10 +201,10 @@ pub unsafe extern "C" fn compile(
 
 /// Translates a Symbolica model.
 ///
-/// * `json` is a json string encoding the output of `export_instructions`.
-/// * `ty` is the requested arch (amd, arm, native, or bytecode).
-/// * `opt`: compilation options.
-/// * `df`: user-defined functions (currently ignored).
+/// * json is a json string encoding the output of export_instructions.
+/// * ty is the requested arch (amd, arm, native, or bytecode).
+/// * opt: compilation options.
+/// * df: user-defined functions (currently ignored).
 ///
 /// # Safety
 ///     * both model and ty are pointers to null-terminated strings.
@@ -251,7 +277,7 @@ pub unsafe extern "C" fn translate(
     Box::into_raw(Box::new(res)) as *const _
 }
 
-/// Checks the status of a `CompilerResult`.
+/// Checks the status of a CompilerResult.
 ///
 /// Returns a null-terminated string representing the status message.
 ///
@@ -265,7 +291,7 @@ pub unsafe extern "C" fn check_status(q: *const CompilerResult) -> *const c_char
     q.msg.as_ptr() as *const _
 }
 
-/// Checks the status of a `CompilerResult`.
+/// Checks the status of a CompilerResult.
 ///
 /// Returns a null-terminated string representing the status message.
 ///
@@ -294,7 +320,7 @@ pub unsafe extern "C" fn save(q: *const CompilerResult, file: *const c_char) -> 
     }
 }
 
-/// Checks the status of a `CompilerResult`.
+/// Checks the status of a CompilerResult.
 ///
 /// Returns a null-terminated string representing the status message.
 ///
@@ -346,7 +372,7 @@ pub unsafe extern "C" fn load(file: *const c_char, df: *mut Defuns) -> *const Co
     Box::into_raw(Box::new(res)) as *const _
 }
 
-/// Checks the status of a `CompilerResult`.
+/// Checks the status of a CompilerResult.
 ///
 /// Returns a null-terminated string representing the status message.
 ///
@@ -482,8 +508,8 @@ pub unsafe extern "C" fn run(
 /// Executes the compiled function.
 ///
 /// The calling routine should fill the states and parameters before
-/// calling `execute`. The result populates obs or diffs (as defined in
-/// model passed to `compile`).
+/// calling execute. The result populates obs or diffs (as defined in
+/// model passed to compile).
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
@@ -501,11 +527,11 @@ pub unsafe extern "C" fn execute(q: *mut CompilerResult) -> bool {
     }
 }
 
-/// Executes the compiled function `n` times (vectorized).
+/// Executes the compiled function n times (vectorized).
 ///
-/// The calling function provides `buf`, which is a k x n matrix of doubles,
-/// where k is equal to the `maximum(count_states, count_obs)`. The calling
-/// funciton fills the first `count_states` rows of buf. The result is returned
+/// The calling function provides buf, which is a k x n matrix of doubles,
+/// where k is equal to the maximum(count_states, count_obs). The calling
+/// funciton fills the first count_states rows of buf. The result is returned
 /// in the first count_obs rows of buf.
 ///
 /// # Safety
@@ -592,9 +618,9 @@ pub unsafe extern "C" fn evaluate_matrix(
     }
 }
 
-/// Returns a pointer to the state variables (`count_states` doubles).
+/// Returns a pointer to the state variables (count_states doubles).
 ///
-/// The function calling `execute` should write the state variables in this area.
+/// The function calling execute should write the state variables in this area.
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
@@ -614,9 +640,9 @@ pub unsafe extern "C" fn ptr_states(q: *mut CompilerResult) -> *mut f64 {
     }
 }
 
-/// Returns a pointer to the parameters (`count_params` doubles).
+/// Returns a pointer to the parameters (count_params doubles).
 ///
-/// The function calling `execute` should write the parameters in this area.
+/// The function calling execute should write the parameters in this area.
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
@@ -633,9 +659,9 @@ pub unsafe extern "C" fn ptr_params(q: *mut CompilerResult) -> *mut f64 {
     }
 }
 
-/// Returns a pointer to the observables (`count_obs` doubles).
+/// Returns a pointer to the observables (count_obs doubles).
 ///
-/// The function calling `execute` reads the observables from this area.
+/// The function calling execute reads the observables from this area.
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
@@ -655,9 +681,9 @@ pub unsafe extern "C" fn ptr_obs(q: *mut CompilerResult) -> *const f64 {
     }
 }
 
-/// Returns a pointer to the differentials (`count_diffs` doubles).
+/// Returns a pointer to the differentials (count_diffs doubles).
 ///
-/// The function calling `execute` reads the differentials from this area.
+/// The function calling execute reads the differentials from this area.
 ///
 /// Note: whether the output is returned as observables or differentials is
 /// defined in the model.
@@ -680,7 +706,7 @@ pub unsafe extern "C" fn ptr_diffs(q: *mut CompilerResult) -> *const f64 {
     }
 }
 
-/// Dumps the compiled binary code to a file (`name`).
+/// Dumps the compiled binary code to a file (name).
 ///
 /// This function is useful for debugging but is not necessary for
 /// normal operations.
@@ -722,7 +748,7 @@ pub unsafe extern "C" fn measure(q: *mut CompilerResult, what: *const c_char) ->
     }
 }
 
-/// Deallocates the CompilerResult pointed by `q`.
+/// Deallocates the CompilerResult pointed by q.
 ///
 /// # Safety
 ///     it is the responsibility of the calling function to ensure
@@ -906,10 +932,10 @@ pub unsafe extern "C" fn add_row(mat: *mut Matrix, v: *mut f64, n: usize) {
     mat.add_row(v, n);
 }
 
-/// Executes (runs) the matrix model encoded by `q`.
+/// Executes (runs) the matrix model encoded by q.
 ///
 /// # Safety
-///     1, q should point to a valid CompilerResult object.
+///     1. q should point to a valid CompilerResult object.
 ///     2. states should point to a valid Matrix of at least count_states rows.
 ///     3. obs should point to a valid Matrix of at least count_obs rows.
 ///
@@ -933,9 +959,9 @@ pub unsafe extern "C" fn execute_matrix(
 
 /************************************************/
 
-/// Creates an empty `Defun` (a list of user-defined functions).
+/// Creates an empty Defun (a list of user-defined functions).
 ///
-/// `Defuns` are used to pass user-defined functions (either Python
+/// Defuns are used to pass user-defined functions (either Python
 /// functions or symjit-compiled functions).
 ///
 /// # Safety
@@ -948,7 +974,7 @@ pub unsafe extern "C" fn create_defuns() -> *const Defuns {
     Box::into_raw(Box::new(df)) as *const Defuns
 }
 
-/// Finalizes (deallocates) a `Defun`.
+/// Finalizes (deallocates) a Defun.
 ///
 /// # Safety
 ///     1, df should point to a valid Defun object created by create_defuns.
@@ -961,7 +987,7 @@ pub unsafe extern "C" fn finalize_defuns(_df: *mut Defuns) {
     // }
 }
 
-/// Adds a new function to a `Defun`.
+/// Adds a new function to a Defun.
 ///
 /// # Safety
 ///     1, df should point to a valid Defun object created by create_defun.
@@ -981,7 +1007,7 @@ pub unsafe extern "C" fn add_func(
     df.add_func(name, p, num_args);
 }
 
-/// Adds self (recursive) to a `Defun`.
+/// Adds self (recursive) to a Defun.
 ///
 /// # Safety
 ///     1, df should point to a valid Defun object created by create_defun.

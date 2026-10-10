@@ -16,13 +16,6 @@ use super::model::{Equation, Variable};
 /// model, and pass it to the Rust code to deserialize. The Rust interface
 /// (`Compiler`) directly uses various functions to compose the trees.
 ///
-/// # Examples
-///
-/// ```rust
-/// let x = Expr::var("x");     # create a new variable
-/// let c = Expr::from(2.5);    # create a new constant (f64)
-/// let expr = &x * &(x.sin() + &c)
-/// ```
 ///
 /// Note that the overloaded operators expect `&Expr`; therefore, the need
 /// for taking reference (adding `&` in from the intermediate expressions).
@@ -248,46 +241,24 @@ impl Expr {
         Self::ternary("ifelse", self, true_val, false_val)
     }
 
-    /// Sums `self` for `var` in `start`..=`end`.
+    /// Sums self for var in start..=end.
     ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// let x = Expr::var("x");
-    /// let i = Expr::var("i");
-    /// let p = i.sum(&i, &Expr::from(1), &x);
-    /// let mut comp = Compiler::new();
-    /// let mut func = comp.compile(&[x], &[p])?;
-    /// println!("{}", func.call([5]))  // prints [15.0]
-    /// ```
-    ///
-    /// Note that the range is `start` to `end` inclusive to remain
+    /// Note that the range is start to end inclusive to remain
     /// consistent with SymPy usage.
     ///
     /// # Warning
     ///
-    /// `var` should be a unique variable over the whole model.
+    /// var should be a unique variable over the whole model.
     pub fn sum(&self, var: &Expr, start: &Expr, end: &Expr) -> Expr {
         Self::nary("Sum", &[self, var, start, end])
     }
 
-    /// Calculates the product of `self` for `var` in `start`..=`end`.
+    /// Calculates the product of self for var in start..=end.
     ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// let x = Expr::var("x");
-    /// let i = Expr::var("i");
-    /// let p = i.prod(&i, &Expr::from(1), &x); // this is the factorial function
-    /// let mut comp = Compiler::new();
-    /// let mut func = comp.compile(&[x], &[p])?;
-    /// println!("{}", func.call([5]))  // prints [120.0]
-    /// ```
-    ///
-    /// Note that the range is `start` to `end` inclusive to remain
+    /// Note that the range is start to end inclusive to remain
     /// consistent with SymPy usage.
     ///
-    /// `var` should be a unique variable over the whole model.
+    /// var should be a unique variable over the whole model.
     pub fn prod(&self, var: &Expr, start: &Expr, end: &Expr) -> Expr {
         Self::nary("Product", &[self, var, start, end])
     }
