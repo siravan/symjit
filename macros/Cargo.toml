@@ -1,0 +1,17 @@
+[package]
+name = "symjit-macros"
+version = "2.28.0"
+edition = "2021"
+authors = ["Shahriar Iravanian <siravan@svtsim.com>"]
+license = "MIT"
+description = "the #[kernel] attribute macro of symjit (cargo feature `composer`)"
+repository = "https://github.com/siravan/symjit"
+
+[lib]
+proc-macro = true
+path = "src/lib.rs"
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "3", features = ["full", "visit", "visit-mut"] }

@@ -276,7 +276,16 @@ class SymbolicaFunc:
         compiler = engine.RustyCompiler(self.model, dtype="complex128", **self.args)
         self.complex_compiler = compiler
 
+    def check_callable(self):
+        # the Symbolica bridge runs native kernels only; a wasm module has none
+        if self.args.get("ty") == "wasm":
+            raise ValueError(
+                '`ty="wasm"` functions of the Symbolica bridge cannot be called from Python; '
+                'export the module with `dump(path, "wasm")`'
+            )
+
     def evaluate(self, inputs):
+        self.check_callable()
         if self.compiler is None:
             self.compile_real()
 
@@ -292,6 +301,7 @@ class SymbolicaFunc:
         return outs
 
     def evaluate_complex(self, inputs):
+        self.check_callable()
         if self.complex_compiler is None:
             self.compile_complex()
 

@@ -463,6 +463,8 @@ class RustyCompiler:
             self.ty = "bytecode"
         elif t == 7:
             self.ty = "debug"
+        elif t == 8:
+            self.ty = "wasm"
 
     def get_u0(self):
         if self.json_model is None:

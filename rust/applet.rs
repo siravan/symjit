@@ -30,6 +30,10 @@ impl Applet {
             return Err(anyhow!("Bytecode Application cannot be sealed."));
         }
 
+        if app.config.is_wasm() {
+            return Err(anyhow!("WebAssembly Application cannot be sealed."));
+        }
+
         Ok(Applet {
             compiled: app.compiled,
             compiled_simd: app.compiled_simd,

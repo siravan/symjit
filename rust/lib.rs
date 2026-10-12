@@ -45,6 +45,9 @@ mod lockstep;
 
 #[allow(non_upper_case_globals)]
 mod riscv64;
+// the WebAssembly backend (`ty = "wasm"`)
+#[cfg(feature = "wasm")]
+mod wasm;
 
 // a typed builder for Composer kernels
 #[cfg(feature = "composer")]
@@ -409,6 +412,7 @@ pub unsafe extern "C" fn get_config(q: *const CompilerResult) -> usize {
                 CompilerType::RiscV => 5,
                 CompilerType::ByteCode => 6,
                 CompilerType::Debug => 7,
+                CompilerType::Wasm => 8,
             };
 
             (config.opt as usize) | (ty << 32)

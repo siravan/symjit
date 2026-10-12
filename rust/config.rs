@@ -231,6 +231,7 @@ impl Config {
             "bytecode" => CompilerType::ByteCode,
             "arm" => CompilerType::Arm,
             "riscv" => CompilerType::RiscV,
+            "wasm" => CompilerType::Wasm,
             "amd" => CompilerType::Amd,
             "amd-avx" => CompilerType::AmdAVX,
             "amd-sse" => CompilerType::AmdSSE,
@@ -292,6 +293,7 @@ impl Config {
             CompilerType::ByteCode => "bytecode",
             CompilerType::Arm => "arm",
             CompilerType::RiscV => "riscv",
+            CompilerType::Wasm => "wasm",
             CompilerType::Amd => "amd",
             CompilerType::AmdAVX => "amd-avx",
             CompilerType::AmdSSE => "amd-sse",
@@ -404,6 +406,10 @@ impl Config {
         self.is_amd64() && cfg!(target_family = "windows")
     }
 
+    pub fn is_wasm(&self) -> bool {
+        matches!(self.ty, CompilerType::Wasm)
+    }
+
     pub fn is_bytecode(&self) -> bool {
         matches!(self.ty, CompilerType::ByteCode)
     }
@@ -449,7 +455,8 @@ impl Config {
     }
 
     pub fn compress(&self) -> bool {
-        self.test(COMPRESS)
+        // compression mode relies on subroutines, which the wasm backend lacks
+        self.test(COMPRESS) && !self.is_wasm()
     }
 
     pub fn coroutines(&self) -> bool {
@@ -557,6 +564,8 @@ impl Config {
             CompilerType::Arm
         } else if self.is_riscv64() {
             CompilerType::RiscV
+        } else if self.is_wasm() {
+            CompilerType::Wasm
         } else if self.is_bytecode() {
             CompilerType::ByteCode
         } else if self.is_debug() {
@@ -1127,6 +1136,7 @@ impl Storage for Config {
             CompilerType::RiscV => 5,
             CompilerType::ByteCode => 6,
             CompilerType::Debug => 7,
+            CompilerType::Wasm => 8,
         };
 
         let val: usize = (self.opt as usize) | (ty << 32);
@@ -1174,6 +1184,7 @@ impl Storage for Config {
             5 => CompilerType::RiscV,
             6 => CompilerType::ByteCode,
             7 => CompilerType::Debug,
+            8 => CompilerType::Wasm,
             _ => return Err(anyhow!("invalid compiler type value.")),
         };
 

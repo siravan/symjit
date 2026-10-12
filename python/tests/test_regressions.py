@@ -47,6 +47,22 @@ def reference(exprs, X):
 OPTS = [dict(opt_level=0), dict(opt_level=1), dict(opt_level=2), dict(opt_level=3), dict(opt_level=2, compact=False)]
 
 
+def recursive_composer(kind):
+    """factorial or fibonacci with a recursive call (`call(None, ...)`) in a block"""
+    cp = Composer(1, 1)
+    n, one, two = cp.arg(0), cp.constant(1.0), cp.constant(2.0)
+    cond = cp.leq(n, one) if kind == "factorial" else cp.lt(n, two)
+    base, rec = cp.new_block(), cp.new_block()
+    r1 = base.fadd(one, cp.constant(0.0)) if kind == "factorial" else base.fadd(n, cp.constant(0.0))
+    if kind == "factorial":
+        r2 = rec.fmul(n, rec.call(None, rec.fsub(n, one)))
+    else:
+        r2 = rec.fadd(rec.call(None, rec.fsub(n, one)), rec.call(None, rec.fsub(n, two)))
+    cp.append_if_else(cond, base, rec)
+    cp.assign(cp.out(0), cp.join(cond, r1, r2))
+    return cp
+
+
 class Regressions(unittest.TestCase):
     def check(self, exprs, X, options=None, complex_=False, tol=1e-9):
         exprs = list(exprs)
