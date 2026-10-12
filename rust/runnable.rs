@@ -9,6 +9,7 @@ use super::amd::{
 };
 use super::applet::Applet;
 use super::arm::{ArmComplexGenerator, ArmGenerator, ArmSimdGenerator};
+use super::code::Func;
 use super::complexify::Complexifier;
 use super::config::Config;
 use super::generator::{Generator, GeneratorType};
@@ -505,7 +506,15 @@ impl Application {
 
     pub fn prepare_simd(&mut self) {
         // SIMD compilation is lazy!
-        if self.compiled_simd.is_none() && self.use_simd {
+        // A SIMD kernel calls the SIMD kernels of the applets it calls (`_simd_<name>_`):
+        // without one (e.g. an applet sealed from `Compiler::compile`, which does not
+        // prepare SIMD), it stays scalar, as when its compilation fails.
+        let applets_have_simd = self.config.df.as_ref().is_none_or(|df| {
+            df.funcs
+                .values()
+                .all(|f| !matches!(f, Func::App(app) if app.simd_kernel().is_none()))
+        });
+        if self.compiled_simd.is_none() && self.use_simd && applets_have_simd {
             if self.config.has_avx() {
                 self.compiled_simd =
                     Self::compile_avx_simd(&self.bytecode.mir, &mut self.prog).ok();

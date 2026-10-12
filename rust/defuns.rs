@@ -156,6 +156,10 @@ where
 pub struct Defuns {
     pub funcs: HashMap<String, Func>,
     pub boxes: Vec<RawBox>,
+    /// the `Defuns` whose functions were copied into these by `kernel::add_defuns`, kept
+    /// alive for the closures their `boxes` own
+    #[cfg(feature = "composer")]
+    pub(crate) parents: Vec<std::sync::Arc<Defuns>>,
 }
 
 impl fmt::Debug for Defuns {
@@ -170,6 +174,8 @@ impl Defuns {
         Defuns {
             funcs: HashMap::new(),
             boxes: Vec::new(),
+            #[cfg(feature = "composer")]
+            parents: Vec::new(),
         }
     }
 

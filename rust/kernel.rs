@@ -8,7 +8,9 @@
 //! - comparisons return a [`Mask`], which selects values ([`Mask::select`]), branches
 //!   ([`KernelBuilder::if_else`]) or converts to 1.0/0.0 ([`Mask::to_real`]);
 //! - Rust loops and helper functions are unrolled and inlined into the kernel;
-//! - [`KernelBuilder::recurse`] calls the kernel itself (`@self`).
+//! - [`KernelBuilder::recurse`] calls the kernel itself (`@self`), [`KernelBuilder::call`]
+//!   another kernel (an [`Applet`](crate::Applet) of the configuration's `Defuns`), and
+//!   [`KernelBuilder::callback`] a Rust function ([`add_callback`], [`add_callback2`]).
 //!
 //! ```
 //! use symjit::kernel::{KernelBuilder, Real};
@@ -44,6 +46,42 @@
 //! # Ok::<(), anyhow::Error>(())
 //! ```
 //!
+//! A kernel can call other kernels and Rust functions (`#[kernel(callback)]`); `compile`
+//! compiles the kernels it calls and adds them to its configuration:
+//!
+//! ```
+//! use symjit::kernel::kernel;
+//!
+//! #[kernel(callback)]
+//! fn weight(x: f64) -> f64 {
+//!     1.0 / (1.0 + x * x)
+//! }
+//!
+//! #[kernel]
+//! fn integrand(x: f64) -> f64 {
+//!     x.cos() * weight(x)
+//! }
+//!
+//! /// The midpoint rule with `n` points: a kernel loop that calls a kernel.
+//! #[kernel]
+//! fn integrate(a: f64, b: f64, n: f64) -> f64 {
+//!     let h = (b - a) / n;
+//!     let mut sum = 0.0;
+//!     let mut i = 0.0;
+//!     while i < n {
+//!         sum += integrand(a + (i + 0.5) * h);
+//!         i += 1.0;
+//!     }
+//!     sum * h
+//! }
+//!
+//! # fn main() -> anyhow::Result<()> {
+//! let app = integrate::compile(symjit::Config::default())?.seal()?;
+//! assert_eq!(app.evaluate_single(&[0.0, 2.0, 50.0]), integrate(0.0, 2.0, 50.0));
+//! # Ok(())
+//! # }
+//! ```
+//!
 //! Complex kernels (`Config::set_complex(true)`) hold every value as a complex number; a
 //! [`Real`] is one whose imaginary part is zero. Real parameters take the real part of the
 //! argument. Real functions are the complex functions applied to real arguments, and the
@@ -61,7 +99,8 @@ use std::ops::{
 use anyhow::anyhow;
 use num_complex::Complex;
 
-use crate::{Application, Composer, Config, Slot, Translator};
+use crate::code::{BinaryFunc, Func, UnaryFunc};
+use crate::{Application, Composer, Config, Defuns, Slot, Translator};
 
 /// The result type of [`KernelBuilder::compile`] (`anyhow::Result`).
 pub type Result<T> = anyhow::Result<T>;
@@ -78,7 +117,82 @@ struct Inner {
     next_label: usize,
     num_params: usize,
     consts: HashMap<(u64, u64), usize>,
+    /// the kernels of the configuration's `Defuns`
+    kernels: HashMap<String, Callee>,
+    /// the callbacks of the configuration's `Defuns`: number of parameters
+    callbacks: HashMap<String, usize>,
     error: Option<anyhow::Error>,
+}
+
+/// The prefix of the names of callbacks in `Defuns`: the translators pass the arguments of
+/// `composer_*` functions in registers, as callbacks expect them (other names get them in the
+/// `__Arg` slots of kernel calls).
+const CALLBACK_PREFIX: &str = "composer_";
+
+/// Registers the Rust function `f` as the callback `name` of [`KernelBuilder::callback`].
+pub fn add_callback(df: &mut Defuns, name: &str, f: UnaryFunc) {
+    df.add_unary(&format!("{CALLBACK_PREFIX}{name}"), f);
+}
+
+/// Registers the Rust function `f` of two arguments as the callback `name` of
+/// [`KernelBuilder::callback`].
+pub fn add_callback2(df: &mut Defuns, name: &str, f: BinaryFunc) {
+    df.add_binary(&format!("{CALLBACK_PREFIX}{name}"), f);
+}
+
+/// Adds the functions of `df` to those of `config` (`Config::set_defuns` can only be called
+/// once); a function of `df` replaces one of the same name.
+pub fn add_defuns(config: &mut Config, mut df: Defuns) {
+    if df.is_empty() {
+        return;
+    }
+    if let Some(old) = config.df.take() {
+        for (name, f) in old.funcs.iter() {
+            df.funcs.entry(name.clone()).or_insert_with(|| f.clone());
+        }
+        // the closures of `add_sliced_func` belong to `old`
+        df.parents.push(old);
+    }
+    config.set_defuns(df);
+}
+
+/// A kernel of the configuration's `Defuns`.
+#[derive(Clone, Copy)]
+struct Callee {
+    num_params: usize,
+    complex: bool,
+    /// made by `Compiler::compile`: its inputs are states, which a call does not set
+    has_states: bool,
+}
+
+/// The kernels and callbacks of the configuration's `Defuns`.
+fn callables(config: &Config) -> (HashMap<String, Callee>, HashMap<String, usize>) {
+    let mut kernels = HashMap::new();
+    let mut callbacks = HashMap::new();
+    if let Some(df) = &config.df {
+        for (name, f) in df.funcs.iter() {
+            match (f, name.strip_prefix(CALLBACK_PREFIX)) {
+                (Func::App(app), _) => {
+                    // the count is of f64s, two per complex number
+                    let complex = app.config.is_complex();
+                    let callee = Callee {
+                        num_params: app.count_params / if complex { 2 } else { 1 },
+                        complex,
+                        has_states: app.count_states > 0,
+                    };
+                    kernels.insert(name.clone(), callee);
+                }
+                (Func::Unary(_), Some(short)) => {
+                    callbacks.insert(short.to_string(), 1);
+                }
+                (Func::Binary(_), Some(short)) => {
+                    callbacks.insert(short.to_string(), 2);
+                }
+                _ => {}
+            }
+        }
+    }
+    (kernels, callbacks)
 }
 
 /// Builds one kernel; see the module documentation.
@@ -113,6 +227,7 @@ impl KernelBuilder {
     pub fn new(config: Config) -> KernelBuilder {
         let complex = config.is_complex();
         let direct = config.direct();
+        let (kernels, callbacks) = callables(&config);
         KernelBuilder {
             inner: RefCell::new(Inner {
                 translator: Translator::new(config),
@@ -122,6 +237,8 @@ impl KernelBuilder {
                 next_label: 0,
                 num_params: 0,
                 consts: HashMap::new(),
+                kernels,
+                callbacks,
                 error: None,
             }),
         }
@@ -267,6 +384,78 @@ impl KernelBuilder {
         let mut slots = Vec::new();
         args.slots(&mut slots);
         R::from_slot(self, self.fun("@self", &slots))
+    }
+
+    /// Calls the kernel `name`, an [`Applet`](crate::Applet) of the configuration's `Defuns`
+    /// (`Defuns::add_applet`), with `args`, which must match its parameters, and returns its
+    /// (first) output. Both kernels must be real or both complex. The SIMD kernel calls the
+    /// SIMD kernel of the callee; if the callee has none (e.g. compiled without SIMD), the
+    /// caller is compiled without SIMD too.
+    pub fn call<'k, A: Value<'k>, R: Value<'k>>(&'k self, name: &str, args: A) -> R {
+        let mut slots = Vec::new();
+        args.slots(&mut slots);
+        let found = self.inner.borrow().kernels.get(name).copied();
+        match found {
+            None => self.fail(format!(
+                "`{name}` is not a kernel of the configuration (`Defuns::add_applet`)"
+            )),
+            Some(c) if c.has_states => self.fail(format!(
+                "`{name}` is an applet of `Compiler::compile`, whose inputs are states; only \
+                 kernels with parameters (`Translator`, `KernelBuilder`) can be called"
+            )),
+            Some(c) if c.complex != self.is_complex() => self.fail(format!(
+                "the {} kernel `{name}` is called from a {} kernel; both must be real or both \
+                 complex",
+                if c.complex { "complex" } else { "real" },
+                if c.complex { "real" } else { "complex" },
+            )),
+            Some(c) if c.num_params != slots.len() => self.fail(format!(
+                "the kernel `{name}` takes {} arguments, not {}",
+                c.num_params,
+                slots.len()
+            )),
+            _ => {}
+        }
+        let dst = self.fun(name, &slots);
+        self.one_value(name, dst)
+    }
+
+    /// Calls the Rust function registered as `name` by [`add_callback`] or [`add_callback2`]
+    /// with one or two real arguments (`x` or `(x, y)`). In complex kernels it receives the
+    /// real parts.
+    pub fn callback<'k, A: RealArgs<'k>>(&'k self, name: &str, args: A) -> Real<'k> {
+        let mut slots = Vec::new();
+        args.slots(&mut slots);
+        let found = self.inner.borrow().callbacks.get(name).copied();
+        match found {
+            None => self.fail(format!(
+                "`{name}` is not a callback of the configuration (`kernel::add_callback`)"
+            )),
+            Some(n) if n != slots.len() => self.fail(format!(
+                "the callback `{name}` takes {n} arguments, not {}",
+                slots.len()
+            )),
+            _ => {}
+        }
+        let dst = self.new_temp();
+        let name = format!("{CALLBACK_PREFIX}{name}");
+        self.emit(|c| c.append_fun(&dst, &name, &slots, false));
+        Real { k: self, slot: dst }
+    }
+
+    /// The result of the call of `name` in `dst` as an `R`, which must be a single value
+    /// (a call returns the first output of the kernel).
+    fn one_value<'k, R: Value<'k>>(&'k self, name: &str, dst: Slot) -> R {
+        let r = R::from_slots(self, &mut std::iter::repeat(dst));
+        let mut slots = Vec::new();
+        r.slots(&mut slots);
+        if slots.len() != 1 {
+            self.fail(format!(
+                "a call of the kernel `{name}` returns one value, not {}",
+                slots.len()
+            ));
+        }
+        r
     }
 
     /// Writes `outs` (a value, tuple or array) to the outputs of the kernel and compiles it.
@@ -567,6 +756,30 @@ impl_value_tuple!(A, B, C, D, E);
 impl_value_tuple!(A, B, C, D, E, F);
 impl_value_tuple!(A, B, C, D, E, F, G);
 impl_value_tuple!(A, B, C, D, E, F, G, H);
+
+/// The arguments of a callback: one or two `Real`s (`x`, `(x,)` or `(x, y)`).
+pub trait RealArgs<'k> {
+    fn slots(&self, out: &mut Vec<Slot>);
+}
+
+impl<'k> RealArgs<'k> for Real<'k> {
+    fn slots(&self, out: &mut Vec<Slot>) {
+        out.push(self.slot);
+    }
+}
+
+impl<'k> RealArgs<'k> for (Real<'k>,) {
+    fn slots(&self, out: &mut Vec<Slot>) {
+        out.push(self.0.slot);
+    }
+}
+
+impl<'k> RealArgs<'k> for (Real<'k>, Real<'k>) {
+    fn slots(&self, out: &mut Vec<Slot>) {
+        out.push(self.0.slot);
+        out.push(self.1.slot);
+    }
+}
 
 /// A real operand: a `Real` or a number (a constant of the kernel).
 pub trait IntoReal<'k> {
@@ -1064,6 +1277,73 @@ impl<'k> Not for Mask<'k> {
 /// and conditions on loop counters still run while the kernel is built.
 pub mod ops {
     use super::*;
+
+    thread_local! {
+        /// The kernels being built on this thread, outermost first.
+        static BUILDING: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    }
+
+    /// Marks the kernel `name` as being built until it is dropped.
+    pub struct Building(());
+
+    impl Drop for Building {
+        fn drop(&mut self) {
+            BUILDING.with(|b| b.borrow_mut().pop());
+        }
+    }
+
+    /// Starts building the kernel `name`; an error if it is being built already, i.e. if
+    /// kernels call each other in a cycle (a kernel calling itself is a recursion instead).
+    pub fn building(name: &str) -> Result<Building> {
+        BUILDING.with(|b| {
+            let mut b = b.borrow_mut();
+            if let Some(i) = b.iter().position(|n| n == name) {
+                let mut cycle: Vec<&str> = b[i..].iter().map(|n| n.as_str()).collect();
+                cycle.push(name);
+                return Err(anyhow!(
+                    "the kernels call each other in a cycle ({}); a kernel can only call \
+                     itself",
+                    cycle.join(" -> ")
+                ));
+            }
+            b.push(name.to_string());
+            Ok(Building(()))
+        })
+    }
+
+    /// Compiles the kernel `name` (`build(config, complex)`, the `__build` of its
+    /// `#[kernel]` module) for a caller compiled with `config`, and adds it to `df` (once).
+    /// A real kernel is compiled as a complex one when its caller is complex.
+    pub fn add_kernel(
+        config: &Config,
+        df: &mut Defuns,
+        name: &str,
+        complex: bool,
+        build: fn(Config, bool) -> Result<Application>,
+    ) -> Result<()> {
+        if df.funcs.contains_key(name) {
+            return Ok(());
+        }
+        if complex && !config.is_complex() {
+            return Err(anyhow!(
+                "the complex kernel `{name}` is called from a real kernel; make the caller \
+                 complex (`#[kernel(complex)]`)"
+            ));
+        }
+        let app = build(config.clone(), config.is_complex())?.seal()?;
+        df.add_applet(name, app);
+        Ok(())
+    }
+
+    /// Adds the Rust function `f` (the `extern "C"` shim of a `#[kernel(callback)]`) to `df`.
+    pub fn add_callback(df: &mut Defuns, name: &str, f: UnaryFunc) {
+        super::add_callback(df, name, f)
+    }
+
+    /// Adds the Rust function `f` of two arguments to `df`.
+    pub fn add_callback2(df: &mut Defuns, name: &str, f: BinaryFunc) {
+        super::add_callback2(df, name, f)
+    }
 
     /// Converts a value into the handle type `T`: numbers become constants of the kernel.
     pub trait Lift<'k, T> {

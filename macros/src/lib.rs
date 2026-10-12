@@ -39,9 +39,18 @@
 //!   accumulate kernel values;
 //! - `z.re`, `z.im` and `Complex::new(re, im)`;
 //! - calls of the function itself: recursion (`@self`);
-//! - calls of other functions named by a single identifier, which must be
-//!   `#[kernel(inline)]` helpers and are inlined (call other functions with a path, e.g.
-//!   `f64::max(a, b)`, or bind them to a local variable);
+//! - calls of other functions named by a single identifier, which must have the attribute
+//!   too (call other functions with a path, e.g. `f64::max(a, b)`, or bind them to a local
+//!   variable):
+//!   - `#[kernel(inline)]` helpers are inlined;
+//!   - `#[kernel]` kernels are called (`KernelBuilder::call`): `compile` compiles each kernel
+//!     the kernel calls, also those of its inline helpers, and adds them to the `Defuns` of
+//!     its configuration. A called kernel returns one value. A real kernel called from a
+//!     complex one is compiled as a complex kernel; a real kernel cannot call a complex one.
+//!     Kernels cannot call each other in a cycle (only a kernel itself can recurse);
+//!   - `#[kernel(callback)]` functions, ordinary Rust functions of one or two `f64`
+//!     returning `f64`, are called at run time (`KernelBuilder::callback`; in complex kernels
+//!     with the real parts). A panic in one aborts the process;
 //! - typed `let` statements and closure parameters: `f64` and `Complex<f64>` become handles.
 //!
 //! Everything else is ordinary Rust that runs while the kernel is built: `for` loops are
@@ -85,6 +94,8 @@ struct Options {
     inline: bool,
     /// `#[kernel(complex)]`: a complex kernel even if no parameter or result is complex
     complex: bool,
+    /// `#[kernel(callback)]`: a Rust function called by the kernels at run time
+    callback: bool,
 }
 
 impl Options {
@@ -95,13 +106,20 @@ impl Options {
             match ident.to_string().as_str() {
                 "inline" => opts.inline = true,
                 "complex" => opts.complex = true,
+                "callback" => opts.callback = true,
                 _ => {
                     return Err(syn::Error::new(
                         ident.span(),
-                        "expected `inline` or `complex`",
+                        "expected `inline`, `complex` or `callback`",
                     ))
                 }
             }
+        }
+        if opts.callback && (opts.inline || opts.complex) {
+            return Err(syn::Error::new(
+                Span::call_site(),
+                "`callback` cannot be combined with `inline` or `complex`",
+            ));
         }
         Ok(opts)
     }
@@ -195,6 +213,10 @@ fn expand(opts: Options, func: ItemFn) -> syn::Result<TokenStream2> {
         return Err(syn::Error::new_spanned(v, "a kernel cannot be variadic"));
     }
 
+    if opts.callback {
+        return expand_callback(&func);
+    }
+
     let mut params = Vec::new();
     for arg in sig.inputs.iter() {
         match arg {
@@ -267,10 +289,12 @@ fn expand(opts: Options, func: ItemFn) -> syn::Result<TokenStream2> {
         ret: ret.clone(),
         lt: lt.clone(),
         closures: 0,
+        callees: Vec::new(),
         errors: Vec::new(),
     };
     let mut body: Block = (*func.block).clone();
     rewriter.visit_block_mut(&mut body);
+    let callees = rewriter.callees;
     if let Some(err) = rewriter.errors.into_iter().reduce(|mut a, b| {
         a.combine(b);
         a
@@ -329,12 +353,21 @@ fn expand(opts: Options, func: ItemFn) -> syn::Result<TokenStream2> {
                 use super::*;
 
                 /// Inlines the helper into the kernel being built.
-                pub fn __inline<#lt>(
+                pub fn __call<#lt>(
                     __k: &#lt ::symjit::kernel::KernelBuilder,
                     #(#arg_decls),*
                 ) #ret_tokens {
                     #(#lets)*
                     #body
+                }
+
+                /// Adds the kernels and callbacks the helper calls to `df`.
+                pub fn __register(
+                    config: &::symjit::Config,
+                    df: &mut ::symjit::Defuns,
+                ) -> ::symjit::kernel::Result<()> {
+                    #(#callees::__register(config, df)?;)*
+                    Ok(())
                 }
             }
         }
@@ -353,6 +386,15 @@ fn expand(opts: Options, func: ItemFn) -> syn::Result<TokenStream2> {
             let (pat, ty) = (&p.pat, &p.ty);
             quote!(#pat: #ty)
         });
+        let args = (0..params.len()).map(|i| format_ident!("__a{}", i));
+        let arg_decls = params.iter().zip(args.clone()).map(|(p, a)| {
+            let ty = &p.ty;
+            quote!(#a: impl ::symjit::kernel::ops::Lift<#lt, #ty>)
+        });
+        let lifted = params.iter().zip(args).map(|(p, a)| {
+            let ty = &p.ty;
+            quote!(::symjit::kernel::ops::lift::<#ty, _>(__k, #a))
+        });
 
         quote! {
             #[doc = #doc_fn]
@@ -362,17 +404,48 @@ fn expand(opts: Options, func: ItemFn) -> syn::Result<TokenStream2> {
 
                 /// Compiles the kernel; `config` is made complex if the kernel is.
                 pub fn compile(
-                    mut config: ::symjit::Config,
+                    config: ::symjit::Config,
                 ) -> ::symjit::kernel::Result<::symjit::Application> {
-                    config.set_complex(#complex);
+                    __build(config, #complex)
+                }
+
+                /// Compiles the kernel, as a complex kernel if `complex`.
+                pub fn __build(
+                    mut config: ::symjit::Config,
+                    complex: bool,
+                ) -> ::symjit::kernel::Result<::symjit::Application> {
+                    let __building = ::symjit::kernel::ops::building(module_path!())?;
+                    config.set_complex(complex);
                     if #has_while {
                         // kernel loops need the direct translator
                         config.set_direct(true);
                     }
+                    // the kernels and callbacks it calls
+                    let mut __df = ::symjit::Defuns::new();
+                    #(#callees::__register(&config, &mut __df)?;)*
+                    ::symjit::kernel::add_defuns(&mut config, __df);
+
                     let __k = ::symjit::kernel::KernelBuilder::new(config);
                     let __p: (#(#param_types,)*) = __k.params();
                     let __out = __stage(&__k, #(__p.#indices),*);
                     __k.compile(__out)
+                }
+
+                /// Compiles the kernel for a caller compiled with `config`, and adds it to
+                /// `df`.
+                pub fn __register(
+                    config: &::symjit::Config,
+                    df: &mut ::symjit::Defuns,
+                ) -> ::symjit::kernel::Result<()> {
+                    ::symjit::kernel::ops::add_kernel(config, df, module_path!(), #complex, __build)
+                }
+
+                /// Calls the kernel from the kernel being built.
+                pub fn __call<#lt>(
+                    __k: &#lt ::symjit::kernel::KernelBuilder,
+                    #(#arg_decls),*
+                ) #ret_tokens {
+                    __k.call(module_path!(), (#(#lifted,)*))
                 }
 
                 fn __stage<#lt>(
@@ -388,6 +461,69 @@ fn expand(opts: Options, func: ItemFn) -> syn::Result<TokenStream2> {
     Ok(quote! {
         #func
         #module
+    })
+}
+
+/// `#[kernel(callback)]`: the function stays as it is, and its module registers it (through
+/// an `extern "C"` shim) and calls it from kernels.
+fn expand_callback(func: &ItemFn) -> syn::Result<TokenStream2> {
+    let sig = &func.sig;
+    let (name, vis) = (&sig.ident, &func.vis);
+    let lt = Lifetime::new("'k", Span::call_site());
+    let is_f64 =
+        |ty: &Type| matches!(ty, Type::Path(p) if p.qself.is_none() && p.path.is_ident("f64"));
+
+    let n = sig.inputs.len();
+    let params_ok = (n == 1 || n == 2)
+        && sig
+            .inputs
+            .iter()
+            .all(|a| matches!(a, FnArg::Typed(pt) if is_f64(&pt.ty)));
+    let ret_ok = matches!(&sig.output, ReturnType::Type(_, ty) if is_f64(ty));
+    if !params_ok || !ret_ok || !sig.generics.params.is_empty() || sig.asyncness.is_some() {
+        return Err(syn::Error::new_spanned(
+            sig,
+            "a callback takes one or two `f64` and returns `f64`",
+        ));
+    }
+
+    let args: Vec<Ident> = (0..n).map(|i| format_ident!("__a{}", i)).collect();
+    let add = if n == 1 {
+        quote!(add_callback)
+    } else {
+        quote!(add_callback2)
+    };
+    let doc_fn =
+        format!("[`{name}`] as a callback of symjit kernels (`#[symjit::kernel(callback)]`).");
+
+    Ok(quote! {
+        #func
+
+        #[doc = #doc_fn]
+        #[allow(non_snake_case, dead_code, clippy::all)]
+        #vis mod #name {
+            /// The callback with the C ABI of `Defuns`.
+            extern "C" fn __shim(#(#args: f64),*) -> f64 {
+                super::#name(#(#args),*)
+            }
+
+            /// Adds the callback to `df`.
+            pub fn __register(
+                _config: &::symjit::Config,
+                df: &mut ::symjit::Defuns,
+            ) -> ::symjit::kernel::Result<()> {
+                ::symjit::kernel::ops::#add(df, module_path!(), __shim);
+                Ok(())
+            }
+
+            /// Calls the callback from the kernel being built.
+            pub fn __call<#lt>(
+                __k: &#lt ::symjit::kernel::KernelBuilder,
+                #(#args: impl ::symjit::kernel::ops::Lift<#lt, ::symjit::kernel::Real<#lt>>),*
+            ) -> ::symjit::kernel::Real<#lt> {
+                __k.callback(module_path!(), (#(::symjit::kernel::ops::lift(__k, #args),)*))
+            }
+        }
     })
 }
 
@@ -541,6 +677,8 @@ struct Rewriter {
     ret: Option<Type>,
     lt: Lifetime,
     closures: usize,
+    /// the functions called by a single identifier (kernels, inline helpers, callbacks)
+    callees: Vec<Ident>,
     errors: Vec<syn::Error>,
 }
 
@@ -683,7 +821,10 @@ impl Rewriter {
                     {
                         None
                     } else {
-                        Some(parse_quote_spanned!(span=> #id::__inline(__k, #args)))
+                        if !self.callees.iter().any(|c| c == id) {
+                            self.callees.push(id.clone());
+                        }
+                        Some(parse_quote_spanned!(span=> #id::__call(__k, #args)))
                     }
                 } else if segs.len() >= 2
                     && segs[segs.len() - 1] == "new"
