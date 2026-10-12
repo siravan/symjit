@@ -1,0 +1,5 @@
+error[E0433]: cannot find module or crate `helper` in this scope
+ --> tests/ui/not_a_kernel.rs:9:5
+  |
+9 |     helper(x) + 1.0
+  |     ^^^^^^ function `helper` is not a crate or module

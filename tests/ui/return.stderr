@@ -1,0 +1,5 @@
+error: a kernel cannot `return`; its value is the last expression of the body
+ --> tests/ui/return.rs:6:9
+  |
+6 |         return 0.0;
+  |         ^^^^^^^^^^

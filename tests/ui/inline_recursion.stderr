@@ -1,0 +1,5 @@
+error: an inline helper cannot call itself (only a kernel can recurse)
+ --> tests/ui/inline_recursion.rs:6:9
+  |
+6 |         down(x - 1.0)
+  |         ^^^^^^^^^^^^^

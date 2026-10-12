@@ -244,6 +244,7 @@ fn test_output_reuse() -> Result<()> {
 
 // AI-generated test unused-trailing-inputs bug
 #[test]
+#[cfg_attr(target_arch = "riscv64", ignore = "RISC-V has only the scalar kernel")]
 fn declared_unused_inputs_do_not_shift_outputs() -> Result<()> {
     for complex in [false, true] {
         for opt in [0, 2] {

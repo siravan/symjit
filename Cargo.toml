@@ -39,6 +39,10 @@ corosensei = { version = "0.3.4", optional = true }
 # the #[kernel] attribute macro (feature `composer`)
 symjit-macros = { path = "macros", version = "2.28.0", optional = true }
 
+[dev-dependencies]
+# compile-fail tests of the #[kernel] macro (tests/kernel_ui.rs, feature `composer`)
+trybuild = "1"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_System_Memory"] }
 
@@ -66,3 +70,8 @@ crate-type = ["cdylib", "rlib"]
 [[bin]]
 name = "profiler"
 path = "profile/profiler.rs"
+
+[[example]]
+name = "rk4_bessel"
+path = "examples/claude/rk4_bessel.rs"
+required-features = ["composer"]

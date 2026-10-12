@@ -11,8 +11,11 @@ use symjit::{Applet, Application, Config};
 
 const MIN_SIDE: f64 = 1.0 / 1024.0;
 
+/// Without `fastmath`, which fuses multiplications and additions (e.g. on ARM64): the
+/// kernels are compared with Rust bit for bit.
 fn config(direct: bool) -> Config {
     let mut config = base_config();
+    config.set_option("fastmath", "false").unwrap();
     config.set_direct(direct);
     config
 }
@@ -132,7 +135,9 @@ fn horner(x: f64, coefs: [f64; 4]) -> f64 {
     acc
 }
 
-/// `x^n` by repeated multiplication, `n` known when the kernel is built.
+/// `x^n` by repeated multiplication, `n` known when the kernel is built (with `*=` and
+/// `p = p * x`, both forms of assignment).
+#[allow(clippy::assign_op_pattern)]
 #[kernel(inline)]
 fn power(x: f64, n: i32) -> f64 {
     let mut p: f64 = 1.0;
@@ -157,8 +162,9 @@ fn several(x: f64, y: f64) -> (f64, f64, f64, f64) {
     } else {
         0.0
     };
-    // (an array literal cannot mix numbers and kernel values: `[1.0, y]` is not Rust)
-    let p = horner(x, [1.0, -2.0, 0.5, 0.75]) + y;
+    // arrays mixing numbers with kernel values, and with numbers known while building
+    let half = 0.5;
+    let p = horner(x, [1.0, -2.0, half, 0.75]) + horner(y, [x, 1.5, -0.25, y]);
     let scale = |v: f64| v * 0.25 + y;
     (largest, sign, p, scale(power(x, 5)))
 }
@@ -274,6 +280,19 @@ fn mandelbrot(c: Complex<f64>) -> f64 {
     n
 }
 
+/// The escape time again, with an accumulator that needs no type: `Complex::new` of float
+/// literals in a `let mut` makes a kernel value.
+#[kernel]
+fn mandelbrot_untyped(c: Complex<f64>) -> f64 {
+    let mut z = Complex::new(0.0, 0.0);
+    let mut n = 0.0;
+    while n < 100.0 && z.norm_sqr() <= 4.0 {
+        z = z * z + c;
+        n += 1.0;
+    }
+    n
+}
+
 /// Fibonacci numbers by iteration: the loop state is updated by a tuple assignment.
 #[kernel]
 fn fib_iter(n: f64) -> f64 {
@@ -330,6 +349,20 @@ fn kernel_loops() -> Result<()> {
                 n,
                 Complex::new(mandelbrot(c), 0.0),
                 "mandelbrot({c}), direct = {direct}"
+            );
+        }
+    }
+
+    for (direct, app) in compile(mandelbrot_untyped::compile)? {
+        for c in [
+            Complex::new(-1.0, 0.0),
+            Complex::new(0.3, 0.5),
+            Complex::new(1.0, 1.0),
+        ] {
+            assert_eq!(
+                app.evaluate_single(&[c]),
+                Complex::new(mandelbrot_untyped(c), 0.0),
+                "mandelbrot_untyped({c}), direct = {direct}"
             );
         }
     }

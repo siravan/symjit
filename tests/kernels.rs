@@ -120,6 +120,7 @@ fn kernel_p2_scalar_complex() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(target_arch = "riscv64", ignore = "RISC-V has only the scalar kernel")]
 fn kernel_p2_simd_real() -> Result<()> {
     let mut config = base_config();
     config.set_direct_arena(true);
@@ -164,6 +165,7 @@ fn kernel_p2_simd_real_coef() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(target_arch = "riscv64", ignore = "RISC-V has only the scalar kernel")]
 fn kernel_p2_simd_complex() -> Result<()> {
     let mut config = base_config();
     config.set_complex(true);
@@ -196,6 +198,7 @@ fn kernel_p2_simd_complex() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(target_arch = "riscv64", ignore = "RISC-V has only the scalar kernel")]
 fn kernel_p2_simd_complex_trailing_inputs() -> Result<()> {
     let mut config = base_config();
     config.set_complex(true);
@@ -271,6 +274,7 @@ fn kernel_p2_simd_complex_coef() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(target_arch = "riscv64", ignore = "RISC-V has only the scalar kernel")]
 fn kernel_p2_raw_duplicate_and_alias() -> Result<()> {
     let mut config = Config::new(symjit::CompilerType::Native, 0)?;
     config.set_symbolica(true);
@@ -517,6 +521,7 @@ fn kernel_b1_simd_complex() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(target_arch = "riscv64", ignore = "RISC-V has only the scalar kernel")]
 fn kernel_b2_simd_real() -> Result<()> {
     let mut config = base_config();
     config.enable_simd512(false);
@@ -537,6 +542,7 @@ fn kernel_b2_simd_real() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(target_arch = "riscv64", ignore = "RISC-V has only the scalar kernel")]
 fn kernel_b2_simd_complex() -> Result<()> {
     let mut config = base_config();
     config.set_complex(true);

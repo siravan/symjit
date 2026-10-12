@@ -1,0 +1,5 @@
+error: a kernel must return `f64`, `Complex<f64>` or `bool` (or tuples or arrays of them)
+ --> tests/ui/non_float_result.rs:4:4
+  |
+4 | fn rounded(x: f64) -> i64 {
+  |    ^^^^^^^

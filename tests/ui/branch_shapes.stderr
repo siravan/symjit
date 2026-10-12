@@ -1,0 +1,19 @@
+error[E0308]: `if` and `else` have incompatible types
+ --> tests/ui/branch_shapes.rs:5:48
+  |
+5 |     let (a, b) = if x < 0.0 { (x, -x) } else { x };
+  |                               -------          ^ expected `(f64, f64)`, found `f64`
+  |                               |
+  |                               expected because of this
+  |
+  = note: expected tuple `(f64, f64)`
+              found type `f64`
+
+error[E0308]: mismatched types
+ --> tests/ui/branch_shapes.rs:5:48
+  |
+5 |     let (a, b) = if x < 0.0 { (x, -x) } else { x };
+  |                                                ^ expected `(_, _)`, found `Real<'_>`
+  |
+  = note: expected tuple `(_, _)`
+            found struct `Real<'k>`

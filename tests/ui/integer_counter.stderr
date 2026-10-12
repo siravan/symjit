@@ -1,0 +1,42 @@
+error[E0277]: `{integer}` is not a kernel value
+ --> tests/ui/integer_counter.rs:7:5
+  |
+7 |     while y > 1.0 {
+  |     ^^^^^ the trait `Value<'_>` is not implemented for `{integer}`
+  |
+  = note: kernel loops, kernel branches and outputs hold `Real`, `Cplx` and `Mask` values (`f64`, `Complex<f64>`, `bool` in a `#[kernel]` function), or tuples or arrays of them; a counter updated in a kernel loop must be a float (`let mut i = 0.0`)
+  = help: the following other types implement trait `Value<'k>`:
+            ()
+            (A,)
+            (A, B)
+            (A, B, C)
+            (A, B, C, D)
+            (A, B, C, D, E)
+            (A, B, C, D, E, F)
+            (A, B, C, D, E, F, G)
+          and $N others
+  = note: required for `(Real<'_>, {integer})` to implement `Value<'_>`
+  = note: required for `symjit::kernel::Mask<'_>` to implement `LoopCond<'_, (Real<'_>, {integer})>`
+note: required by a bound in `while_loop`
+ --> rust/kernel.rs
+  |
+  |     pub fn while_loop<'k, V, C: LoopCond<'k, V>>(
+  |                                 ^^^^^^^^^^^^^^^ required by this bound in `while_loop`
+
+warning: variable `n` is assigned to, but never used
+ --> tests/ui/integer_counter.rs:6:9
+  |
+6 |     let mut n = 0;
+  |         ^^^^^
+  |
+  = note: consider using `_n` instead
+  = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `n` is never read
+ --> tests/ui/integer_counter.rs:9:9
+  |
+9 |         n += 1;
+  |         ^^^^^^
+  |
+  = help: maybe it is overwritten before being read?
+  = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default

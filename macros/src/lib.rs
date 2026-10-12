@@ -35,9 +35,10 @@
 //!   an ordinary loop while the kernel is built if it is a `bool`. A kernel with a `while`
 //!   is compiled with the direct translator (`compile` sets it), the only one with loops;
 //! - `x = value`: a number assigned to a kernel value becomes a constant, and
-//!   `let mut x = 1.5` (a float literal) makes `x` a kernel value, so that it can
-//!   accumulate kernel values;
+//!   `let mut x = 1.5` (a float literal) or `let mut z = Complex::new(0.0, 1.0)` (of float
+//!   literals) makes `x` a kernel value, so that it can accumulate kernel values;
 //! - `z.re`, `z.im` and `Complex::new(re, im)`;
+//! - float literals in array literals with other elements (`[1.0, x]`) take their type;
 //! - calls of the function itself: recursion (`@self`);
 //! - calls of other functions named by a single identifier, which must have the attribute
 //!   too (call other functions with a path, e.g. `f64::max(a, b)`, or bind them to a local
@@ -56,9 +57,8 @@
 //! Everything else is ordinary Rust that runs while the kernel is built: `for` loops are
 //! unrolled, and integer and `bool` arithmetic is done once. Not supported: `return`;
 //! `break`/`continue` out of a kernel branch (a `while` with them stays a Rust loop);
-//! assignments in closures and by methods (`v.push(x)`) inside kernel branches and loops,
-//! which are not passed through; array literals mixing numbers and kernel values
-//! (`[1.0, x]`). Kernels must be items of a module (not of a function body), since the
+//! assignments in closures inside kernel branches and loops (an error) and by methods
+//! (`v.push(x)`, not passed through). Kernels must be items of a module (not of a function body), since the
 //! generated module imports its parent.
 use std::collections::HashSet;
 
@@ -626,6 +626,27 @@ fn is_float_literal(e: &Expr) -> bool {
     }
 }
 
+/// `Complex::new(re, im)` (or `Complex64::new`) of float literals.
+fn is_complex_literal(e: &Expr) -> bool {
+    let Expr::Call(call) = e else {
+        return false;
+    };
+    let Expr::Path(p) = &*call.func else {
+        return false;
+    };
+    let segs: Vec<String> = p
+        .path
+        .segments
+        .iter()
+        .map(|s| s.ident.to_string())
+        .collect();
+    segs.len() >= 2
+        && segs[segs.len() - 1] == "new"
+        && (segs[segs.len() - 2] == "Complex" || segs[segs.len() - 2] == "Complex64")
+        && call.args.len() == 2
+        && call.args.iter().all(is_float_literal)
+}
+
 /// Whether the body has a `while` loop: kernel loops need the direct translator.
 #[derive(Default)]
 struct HasWhile(bool);
@@ -663,6 +684,39 @@ impl<'ast> Visit<'ast> for Escapes {
                 ));
             }
             _ => visit::visit_expr(self, e),
+        }
+    }
+
+    fn visit_item(&mut self, _: &'ast syn::Item) {}
+}
+
+/// Finds closures in a kernel branch or loop that assign variables declared outside them:
+/// the assignments would not be passed through the branch or loop (a kernel branch builds
+/// both of its sides, so they would happen whatever the condition). Runs on the code as
+/// written, before the closures of nested branches are made.
+#[derive(Default)]
+struct ClosureAssigns {
+    errors: Vec<syn::Error>,
+}
+
+impl<'ast> Visit<'ast> for ClosureAssigns {
+    fn visit_expr_closure(&mut self, c: &'ast syn::ExprClosure) {
+        let mut assigned = Assigned::default();
+        for input in c.inputs.iter() {
+            assigned.visit_pat(input);
+        }
+        assigned.visit_expr(&c.body);
+        let vars = assigned.outer();
+        if !vars.is_empty() {
+            let names: Vec<String> = vars.iter().map(|v| format!("`{v}`")).collect();
+            self.errors.push(syn::Error::new_spanned(
+                c,
+                format!(
+                    "a closure in a kernel `if` or `while` cannot assign {}, declared outside \
+                     it; return the new value from the closure instead",
+                    names.join(", ")
+                ),
+            ));
         }
     }
 
@@ -791,6 +845,20 @@ impl Rewriter {
                     #left = ::symjit::kernel::ops::coerce(__k, &#left, #right)
                 ))
             }
+            Expr::Array(a)
+                if a.elems.iter().any(is_float_literal)
+                    && !a.elems.iter().all(is_float_literal) =>
+            {
+                // `[1.0, x]`: the literals take the type of the other elements
+                let elems = a.elems.iter().map(|e| {
+                    if is_float_literal(e) {
+                        quote!(::symjit::kernel::ops::lift(__k, #e))
+                    } else {
+                        quote!(#e)
+                    }
+                });
+                Some(parse_quote_spanned!(span=> [#(#elems),*]))
+            }
             Expr::Field(f) => match &f.member {
                 Member::Named(id) if id == "re" || id == "im" => {
                     let base = &f.base;
@@ -890,11 +958,20 @@ impl VisitMut for Rewriter {
             }
             Expr::If(eif) if !matches!(*eif.cond, Expr::Let(_)) => {
                 let mut escapes = Escapes::default();
+                let mut closures = ClosureAssigns::default();
                 escapes.visit_block(&eif.then_branch);
+                closures.visit_block(&eif.then_branch);
                 if let Some((_, otherwise)) = &eif.else_branch {
                     escapes.visit_expr(otherwise);
+                    closures.visit_expr(otherwise);
                 }
                 self.errors.extend(escapes.errors);
+                self.errors.extend(closures.errors);
+            }
+            Expr::While(w) => {
+                let mut closures = ClosureAssigns::default();
+                closures.visit_block(&w.body);
+                self.errors.extend(closures.errors);
             }
             _ => {}
         }
@@ -904,18 +981,29 @@ impl VisitMut for Rewriter {
     }
 
     fn visit_local_mut(&mut self, local: &mut syn::Local) {
+        // `let mut s = 0.0` and `let mut z = Complex::new(0.0, 0.0)`: accumulators, made
+        // kernel values so that they can take kernel values (`s += x`)
+        let accumulator = match (&local.pat, &local.init) {
+            (Pat::Ident(p), Some(init)) if p.mutability.is_some() => {
+                if is_float_literal(&init.expr) {
+                    Some(quote!(Real))
+                } else if is_complex_literal(&init.expr) {
+                    Some(quote!(Cplx))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+
         visit_mut::visit_local_mut(self, local);
 
-        // `let mut s = 0.0`: an accumulator, made a kernel value so that it can take kernel
-        // values (`s += x`)
-        if let (Pat::Ident(p), Some(init)) = (&local.pat, &mut local.init) {
-            if p.mutability.is_some() && is_float_literal(&init.expr) {
-                let e = &init.expr;
-                let lt = &self.lt;
-                *init.expr = parse_quote!(
-                    ::symjit::kernel::ops::lift::<::symjit::kernel::Real<#lt>, _>(__k, #e)
-                );
-            }
+        if let (Some(handle), Some(init)) = (accumulator, &mut local.init) {
+            let e = &init.expr;
+            let lt = &self.lt;
+            *init.expr = parse_quote!(
+                ::symjit::kernel::ops::lift::<::symjit::kernel::#handle<#lt>, _>(__k, #e)
+            );
         }
 
         if let Pat::Type(pt) = &mut local.pat {

@@ -1378,6 +1378,14 @@ pub mod ops {
         bool => Mask by |k, a| k.mask(a);
     }
 
+    /// A number among numbers: the literals of an array of numbers that is not a kernel
+    /// value (the macro lifts the literals of arrays that mix them with other values).
+    impl<'k> Lift<'k, f64> for f64 {
+        fn lift(self, _: &'k KernelBuilder) -> f64 {
+            self
+        }
+    }
+
     impl<'k, A: Lift<'k, T>, T, const N: usize> Lift<'k, [T; N]> for [A; N] {
         fn lift(self, k: &'k KernelBuilder) -> [T; N] {
             self.map(|a| a.lift(k))

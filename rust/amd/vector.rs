@@ -208,6 +208,14 @@ impl AmdVectorF64x4Generator {
             self.amd.call_indirect(&format!("_simd_{}_", op));
         }
 
+        if ker {
+            // a kernel returns nonzero when its lanes took different branches (without
+            // `simd_branch`): this kernel stops as well, and the rows are computed by the
+            // scalar kernel
+            self.amd.or(Amd::RAX, Amd::RAX);
+            self.amd.jnz("@epilogue");
+        }
+
         if self.config.is_complex() {
             let l1 = format!(".P{}", self.amd.a.ip());
             let l2 = format!(".Q{}", self.amd.a.ip());

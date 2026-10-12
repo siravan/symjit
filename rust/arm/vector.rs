@@ -68,6 +68,17 @@ impl ArmSimdGenerator {
             self.emit(arm! {blr x(CALL)});
         }
 
+        if ker {
+            // a kernel returns nonzero when its lanes took different branches (without
+            // `simd_branch`): this kernel stops as well, and the rows are computed by the
+            // scalar kernel
+            self.emit(arm! {tst x(0), x(0)});
+            let l = self.a.create_label();
+            self.jump(&l, 0, |offset, _| arm! {b.eq label(offset)});
+            self.branch("@epilogue");
+            self.set_label(&l);
+        }
+
         if self.config.is_complex() {
             let l2 = self.a.create_label();
 

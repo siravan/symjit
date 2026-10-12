@@ -836,7 +836,26 @@ impl Generator for Complexifier {
         // Important! We need to mark Reg::Ret as complex because
         // of a bug discovered while testing complex applet calls.
         self.ensure_complex(Reg::Ret);
-        self.mir.call(op, num_args)
+
+        // Kernels and external functions take their arguments in memory and return complex
+        // values; the other functions are real, with their arguments in registers.
+        let real = !self.mir.config.is_external_func(op);
+
+        if real && num_args == 2 {
+            // the second argument is the real part of `Right`, but a real call reads
+            // `Right` itself, which is the imaginary part of `Ret` (zeroed above)
+            self.mir.fmov(Reg::Right, re(Reg::Right));
+        }
+
+        self.mir.call(op, num_args)?;
+
+        // A real function (e.g. a callback) returns a real value, and the call can clobber
+        // the imaginary part of `Ret` (on ARM64, the C function's scalar result zeroes only
+        // the upper lane of the vector register): it is zeroed when it is used.
+        if real {
+            self.set_reg_real(Reg::Ret);
+        }
+        Ok(())
     }
 
     fn call_complex(&mut self, op: &str, num_args: usize) -> Result<()> {
