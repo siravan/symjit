@@ -114,6 +114,22 @@ class Regressions(unittest.TestCase):
         X = np.array([[-1.0, 0.5, 5.0]] * 3)
         self.check([Piecewise((1, x < 0), (2, x < 1))], X, options=[dict(opt_level=2)])
 
+    def test_composer_complex_divide_by_constant(self):
+        # x86 fast complex: a constant divisor is loaded into Reg::Temp, which `divide` used as
+        # scratch, so z / 4 gave (0.5-0.5j) for z = 0.5 with the indirect translator (which
+        # turns `fdiv`, z * recip(4), into a division; found by the Rust kernel builder)
+        cp = Composer(1, 2)
+        z = cp.arg(0)
+        cp.assign(cp.out(0), cp.fdiv(z, cp.constant(4.0)))
+        cp.assign(cp.out(1), cp.fdiv(z, cp.constant(4.0 + 1.0j)))
+        for options in (dict(), dict(direct=False), dict(direct=False, fast_complex=False)):
+            with self.subTest(options=options):
+                f = compile_composer(cp, dtype="complex128", **options)
+                for v in (0.5, 0.5 - 1.5j):
+                    got = f.evaluate_complex([[v]])[0]
+                    self.assertAlmostEqual(complex(got[0]), v / 4, delta=1e-15)
+                    self.assertAlmostEqual(complex(got[1]), v / (4 + 1j), delta=1e-15)
+
     def test_composer_complex_recursion(self):
         # `Composer.call` marked every call `is_real`, so with the indirect translator a
         # recursive call took the real parts of its arguments: f(a, b) below, which recurses

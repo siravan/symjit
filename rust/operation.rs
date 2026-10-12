@@ -15,6 +15,20 @@ impl Operation {
         }
     }
 
+    /// The operation `op` of a `Composer::append_fun` call. With the `composer` feature, the
+    /// arithmetic operations ("minus", "divide", ...) are accepted, for the `-` and `/` of the
+    /// kernel builder (`rust/kernel.rs`); without it, they panic, as `new` does.
+    pub fn composer_op(op: &str) -> Operation {
+        #[cfg(feature = "composer")]
+        {
+            Operation::new_checked(op)
+        }
+        #[cfg(not(feature = "composer"))]
+        {
+            Operation::new(op)
+        }
+    }
+
     pub fn new_checked(op: &str) -> Operation {
         match op {
             "plus" => Operation::Plus,

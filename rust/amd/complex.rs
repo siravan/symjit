@@ -421,13 +421,16 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        self.amd.vmuldd(T0, ϕ(s2), ϕ(s2));
-        self.amd.vhadddd(T0, T0, T0);
-
+        // `s2` is `Reg::Temp` (T0) for a constant divisor (`LoadConstMath` in `Mir::rerun`),
+        // so both operands are read before T0 is written
         self.amd.vunpckldd(T1, ϕ(s1), ϕ(s1)); // duplicate real
         self.amd.vunpckhdd(T2, ϕ(s1), ϕ(s1)); // duplicate imag
         self.amd.vmuldd(T1, T1, ϕ(s2));
         self.amd.vmuldd(T2, T2, ϕ(s2));
+
+        self.amd.vmuldd(T0, ϕ(s2), ϕ(s2));
+        self.amd.vhadddd(T0, T0, T0);
+
         self.amd.vshufdd(T1, T1, T1, 1); // exchange real/imag
         self.amd.vaddsubdd(ϕ(dst), T2, T1);
         self.amd.vshufdd(ϕ(dst), ϕ(dst), ϕ(dst), 1);

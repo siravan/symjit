@@ -1098,10 +1098,10 @@ impl IndirectTranslator {
             } else {
                 return Err(anyhow!("wrong number of arguments to {:?}", op));
             }
-        } else if self.config.is_intrinsic_unary(&Operation::new(op)) && n == 1 {
+        } else if self.config.is_intrinsic_unary(&Operation::composer_op(op)) && n == 1 {
             let rhs = self.unary_node(op, args.remove(0))?;
             self.assign(lhs, rhs)?;
-        } else if self.config.is_intrinsic_binary(&Operation::new(op)) && n == 2 {
+        } else if self.config.is_intrinsic_binary(&Operation::composer_op(op)) && n == 2 {
             let rhs = self.binary_node(op, args.remove(0), args.remove(0))?;
             self.assign(lhs, rhs)?;
         } else {

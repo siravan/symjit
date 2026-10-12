@@ -46,6 +46,10 @@ mod lockstep;
 #[allow(non_upper_case_globals)]
 mod riscv64;
 
+// a typed builder for Composer kernels
+#[cfg(feature = "composer")]
+pub mod kernel;
+
 pub use applet::Applet;
 pub use compiler::{Compiler, FastFunc, Translator};
 pub use composer::Composer;
