@@ -559,12 +559,26 @@ impl Generator for AmdScalarGenerator {
     }
 
     fn add_func(&mut self, op: &str, f: Func) {
-        add_func(&mut self.amd, op, f);
+        if !self.config.is_relocatable() {
+            add_func(&mut self.amd, op, f);
+        }
+    }
+
+    fn relocations(&self) -> Vec<(usize, String)> {
+        self.amd.a.relocations.clone()
     }
 
     fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
         if self.config.is_external_func(op) {
+            if self.config.is_relocatable() && op != "@self" {
+                return Err(object_external_error(op));
+            }
             return self.call_external(op, num_args);
+        }
+
+        if self.config.is_relocatable() {
+            self.vzeroupper();
+            return object_call(&mut self.amd, &self.config, op);
         }
 
         let label = format!("_func_{}_", op);
@@ -575,6 +589,10 @@ impl Generator for AmdScalarGenerator {
     }
 
     fn call_complex(&mut self, op: &str, num_args: usize) -> Result<()> {
+        if self.config.is_relocatable() {
+            return Err(object_complex_error(op));
+        }
+
         let label = format!("_func_{}_", op);
 
         if num_args == 2 {

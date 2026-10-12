@@ -7,6 +7,8 @@ pub struct Assembler {
     pub buf: Vec<u8>,
     labels: HashMap<String, usize>,
     jumps: Vec<(String, usize, u32, Jumper, bool)>,
+    /// (offset, symbol) of direct calls to external functions in object mode
+    pub relocations: Vec<(usize, String)>,
 }
 
 impl Assembler {
@@ -15,6 +17,7 @@ impl Assembler {
             buf: Vec::new(),
             labels: HashMap::new(),
             jumps: Vec::new(),
+            relocations: Vec::new(),
         }
     }
 

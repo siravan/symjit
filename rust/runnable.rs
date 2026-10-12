@@ -12,6 +12,8 @@ use super::arm::{ArmComplexGenerator, ArmGenerator, ArmSimdGenerator};
 use super::complexify::Complexifier;
 use super::config::Config;
 use super::generator::{Generator, GeneratorType};
+#[cfg(feature = "obj")]
+use super::linker::{header, Arch, Format, HeaderInfo, ObjectBuilder, Relocation, Target};
 use super::machine::MachineCode;
 use super::matrix::{combine_matrixes, Matrix};
 use super::mir::{CompiledMir, Mir};
@@ -819,6 +821,213 @@ fn load_reals(stream: &mut impl Read) -> Result<HashSet<Loc>> {
     }
 
     Ok(reals)
+}
+
+#[cfg(feature = "obj")]
+impl Application {
+    /// Writes the relocatable object file `<name>.o` in the host's format (ELF on Linux,
+    /// Mach-O on macOS) and its C header `<name>.h`. The kernels are named after the last
+    /// component of `name`, which must be a C identifier (see `object`).
+    pub fn write_obj(&mut self, name: &str) -> Result<()> {
+        let target = self.object_target("")?;
+        self.write_obj_for(name, target)
+    }
+
+    /// `write_obj` for another object format.
+    pub fn write_obj_for(&mut self, name: &str, target: Target) -> Result<()> {
+        let symbol = std::path::Path::new(name)
+            .file_name()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| anyhow!("`{}` does not end in a file name", name))?;
+
+        let obj = self.object(symbol, target)?;
+        let fast = obj.functions.len() > 1;
+        let imports = obj.undefined_symbols();
+        let bytes = obj.build()?;
+
+        let cpu = match target.arch {
+            Arch::X86_64 if self.config.has_avx() => "AVX and FMA (x86-64-v3)",
+            Arch::X86_64 => "SSE2",
+            // packed complex products use fcmla where the compiling CPU has FCMA
+            Arch::Aarch64
+                if self.config.is_complex() && self.config.fast_complex() && host_has_fcma() =>
+            {
+                "ARMv8.3-A (with FCMA)"
+            }
+            Arch::Aarch64 => "ARMv8-A",
+        };
+        let text = header(&HeaderInfo {
+            name: symbol,
+            target,
+            count_states: self.count_states,
+            count_obs: self.count_obs,
+            count_params: self.count_params,
+            count_diffs: self.count_diffs,
+            mem_size: self.prog.mem_size(),
+            complex: self.config.is_complex(),
+            fast,
+            symbolica: self.config.symbolica(),
+            cpu,
+            imports: &imports,
+            version: env!("CARGO_PKG_VERSION"),
+        });
+
+        std::fs::write(format!("{}.o", name), bytes)?;
+        std::fs::write(format!("{}.h", name), text)?;
+        Ok(())
+    }
+
+    /// The target of the model's object file: the format named `format` ("" for the
+    /// host's, "elf" or "macho") and the architecture the model is compiled for
+    /// (x86-64, or AArch64, e.g. with `ty = "arm"`).
+    pub fn object_target(&self, format: &str) -> Result<Target> {
+        let format = match format {
+            "" if cfg!(target_os = "macos") => Format::MachO,
+            "" if cfg!(target_os = "linux") => Format::Elf,
+            "" => {
+                return Err(anyhow!(
+                    "name the object format (\"elf\" or \"macho\") on this system"
+                ))
+            }
+            "elf" => Format::Elf,
+            "macho" => Format::MachO,
+            _ => {
+                return Err(anyhow!(
+                    "unknown object format `{}` (use \"elf\" or \"macho\")",
+                    format
+                ))
+            }
+        };
+        let arch = if self.config.is_amd64() {
+            Arch::X86_64
+        } else if self.config.is_arm64() {
+            Arch::Aarch64
+        } else {
+            return Err(anyhow!(
+                "object files hold x86-64 or AArch64 kernels (the model is compiled for {:?})",
+                self.config.ty
+            ));
+        };
+        Ok(Target::new(format, arch))
+    }
+
+    /// The kernels of the model as functions of a relocatable object file: `name`, the
+    /// scalar kernel (with the native kernels' calling convention,
+    /// `int name(double *mem, const void *states, size_t idx, const double *params)`),
+    /// and `<name>_fast` (`double name_fast(double x0, ...)`) for models that have a
+    /// fast kernel. Calls to math functions become relocations against the C math
+    /// library; models calling other functions are rejected. The target architecture
+    /// must be the one the model is compiled for (x86-64 or AArch64).
+    pub fn object(&mut self, name: &str, target: Target) -> Result<ObjectBuilder> {
+        let mut config = self.config.clone();
+        config.set_relocatable(true);
+        let complex_fast = config.is_complex() && config.fast_complex();
+        let idx_ret = self.can_fast.then_some(self.first_obs as u32);
+        let mut obj = ObjectBuilder::new(target);
+
+        // the kernels, compiled as `compile_ty` and `compile_*_fast` do
+        let (scalar, fast) = match target.arch {
+            Arch::X86_64 if self.config.is_amd64() => {
+                let scalar = if complex_fast {
+                    let mir = self.original.as_ref().unwrap_or(&self.bytecode.mir);
+                    Self::object_code(mir, &mut self.prog, AmdComplexGenerator::new(config.clone()), None)?
+                } else if config.has_avx() {
+                    Self::object_code(&self.bytecode.mir, &mut self.prog, AmdScalarGenerator::new(config.clone()), None)?
+                } else {
+                    Self::object_code(&self.bytecode.mir, &mut self.prog, AmdSSEGenerator::new(config.clone()), None)?
+                };
+                let fast = match idx_ret {
+                    Some(_) if config.has_avx() => {
+                        Some(Self::object_code(&self.bytecode.mir, &mut self.prog, AmdScalarGenerator::new(config), idx_ret)?)
+                    }
+                    Some(_) => Some(Self::object_code(&self.bytecode.mir, &mut self.prog, AmdSSEGenerator::new(config), idx_ret)?),
+                    None => None,
+                };
+                (scalar, fast)
+            }
+            Arch::Aarch64 if self.config.is_arm64() => {
+                // constants are loaded with PC-relative literal loads, which reach 1 MB (the
+                // JIT kernel is a little larger than the object's)
+                let size = self.compiled.as_ref().map_or(0, |c| c.size);
+                if size >= ARM_OBJECT_LIMIT {
+                    return Err(anyhow!(
+                        "AArch64 object files hold kernels up to {} bytes (this one is about {})",
+                        ARM_OBJECT_LIMIT,
+                        size
+                    ));
+                }
+                let scalar = if complex_fast {
+                    let mir = self.original.as_ref().unwrap_or(&self.bytecode.mir);
+                    Self::object_code(mir, &mut self.prog, ArmComplexGenerator::new(config.clone()), None)?
+                } else {
+                    Self::object_code(&self.bytecode.mir, &mut self.prog, ArmGenerator::new(config.clone()), None)?
+                };
+                let fast = match idx_ret {
+                    Some(_) => Some(Self::object_code(&self.bytecode.mir, &mut self.prog, ArmGenerator::new(config), idx_ret)?),
+                    None => None,
+                };
+                (scalar, fast)
+            }
+            arch => {
+                return Err(anyhow!(
+                    "cannot write {:?} object files for a model compiled for {:?} (use `ty` to choose the architecture)",
+                    arch,
+                    self.config.ty
+                ))
+            }
+        };
+
+        obj.add_function(name, &scalar.0, &scalar.1)?;
+        if let Some((code, relocs)) = fast {
+            obj.add_function(&format!("{}_fast", name), &code, &relocs)?;
+        }
+        Ok(obj)
+    }
+
+    // the machine code and relocations of a kernel (a fast kernel if `idx_ret` is given)
+    fn object_code<G: Generator>(
+        mir: &Mir,
+        prog: &mut Program,
+        mut generator: G,
+        idx_ret: Option<u32>,
+    ) -> Result<(Vec<u8>, Vec<Relocation>)> {
+        match idx_ret {
+            None => prog.builder.compile_from_mir(
+                mir,
+                &mut generator,
+                prog.count_states,
+                prog.count_obs,
+                prog.count_params,
+            )?,
+            Some(idx) => prog.builder.compile_fast_from_mir(
+                mir,
+                &mut generator,
+                prog.count_states,
+                prog.count_obs,
+                idx as i32,
+            )?,
+        }
+
+        let relocs = generator
+            .relocations()
+            .iter()
+            .map(|(at, symbol)| Relocation::call(*at, symbol))
+            .collect();
+        Ok((generator.bytes(), relocs))
+    }
+}
+
+// the reach of AArch64 PC-relative literal loads (`ldr d, label`, +-1 MB)
+#[cfg(feature = "obj")]
+const ARM_OBJECT_LIMIT: usize = 1 << 20;
+
+// whether the compiling CPU has FCMA (used by the packed-complex ARM generator)
+#[cfg(feature = "obj")]
+fn host_has_fcma() -> bool {
+    #[cfg(target_arch = "aarch64")]
+    return std::arch::is_aarch64_feature_detected!("fcma");
+    #[cfg(not(target_arch = "aarch64"))]
+    return false;
 }
 
 impl Storage for Application {

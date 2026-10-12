@@ -1,5 +1,6 @@
 use super::code::Func;
 use super::config::Config;
+use super::generator::{object_complex_error, object_external_error, object_symbol};
 use super::symbol::Loc;
 use super::utils::{align_stack, Reg};
 
@@ -200,6 +201,12 @@ fn fuse_load_math(amd: &mut Amd, last_load: usize) {
             }
         }
     }
+}
+
+// object mode: `call rel32` to the C library function, with a relocation
+fn object_call(amd: &mut Amd, config: &Config, op: &str) -> anyhow::Result<()> {
+    amd.call_symbol(object_symbol(config, op)?);
+    Ok(())
 }
 
 fn add_func(amd: &mut Amd, op: &str, f: Func) {

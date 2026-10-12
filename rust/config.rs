@@ -67,6 +67,8 @@ pub struct Config {
     pub df: Option<Arc<Defuns>>,
     pub stack: usize,
     pub args: u32,
+    /// kernels for relocatable object files (not saved; see `is_relocatable`)
+    pub reloc: bool,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -211,6 +213,7 @@ impl Config {
             df: None,
             stack: DEFAULT_STACK_LIMIT,
             args: COMPRESSED_ARGS_CAP as u32,
+            reloc: false,
         })
     }
 
@@ -553,6 +556,18 @@ impl Config {
         self.args
     }
 
+    /// Kernels for relocatable object files: calls to math functions are direct calls to
+    /// the C library, recorded as relocations, instead of going through a table of the
+    /// addresses of symjit's own functions (see `VirtualTable::c_name`).
+    pub fn is_relocatable(&self) -> bool {
+        self.reloc
+    }
+
+    #[cfg(feature = "obj")]
+    pub fn set_relocatable(&mut self, reloc: bool) {
+        self.reloc = reloc;
+    }
+
     pub fn compiler_type(&self) -> CompilerType {
         if self.has_avx() {
             CompilerType::AmdAVX
@@ -608,6 +623,14 @@ impl Config {
         */
         else {
             (self.available_registers() - 6) / 2
+        }
+    }
+
+    /// A function defined by the user (`defuns`), which may shadow a built-in one.
+    pub fn is_user_func(&self, op: &str) -> bool {
+        match &self.df {
+            Some(df) => df.funcs.contains_key(op),
+            None => false,
         }
     }
 
@@ -1194,6 +1217,7 @@ impl Storage for Config {
             df: config.df.clone(),
             stack,
             args,
+            reloc: false,
         })
     }
 }

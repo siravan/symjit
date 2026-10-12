@@ -23,6 +23,12 @@ class OdeFunc:
     def get_p(self):
         return self.compiler.get_p()
 
+    def write_obj(self, name: str, format: str|None=None):
+        """Writes a relocatable object file, `name`.o, and its C header, `name`.h, to link
+        the compiled function into C/C++ programs (with -lm). `format` is None (the host's),
+        "elf" or "macho". Needs a symjit library built with the `obj` feature."""
+        self.compiler.write_obj(name, format)
+
     def dump(self, name, what="scalar"):
         return self.compiler.dump(name, what=what)
 
@@ -65,6 +71,12 @@ class OdeFuncComplex:
     def get_p(self):
         return self.compiler.get_p()
 
+    def write_obj(self, name: str, format: str|None=None):
+        """Writes a relocatable object file, `name`.o, and its C header, `name`.h, to link
+        the compiled function into C/C++ programs (with -lm). `format` is None (the host's),
+        "elf" or "macho". Needs a symjit library built with the `obj` feature."""
+        self.compiler.write_obj(name, format)
+
     def dump(self, name, what="scalar"):
         return self.compiler.dump(name, what=what)
 
@@ -89,6 +101,12 @@ class JacFunc:
         self.compiler.execute()
         jac = self.compiler.obs.copy()
         return jac.reshape((self.count_states - 1, self.count_states - 1))
+
+    def write_obj(self, name: str, format: str|None=None):
+        """Writes a relocatable object file, `name`.o, and its C header, `name`.h, to link
+        the compiled function into C/C++ programs (with -lm). `format` is None (the host's),
+        "elf" or "macho". Needs a symjit library built with the `obj` feature."""
+        self.compiler.write_obj(name, format)
 
     def dump(self, name, what="scalar"):
         self.compiler.dump(name, what=what)
@@ -127,6 +145,12 @@ class JacFuncComplex:
         z.imag = self.compiler.obs[1::2]
 
         return z.reshape((self.count_states // 2 - 1, self.count_states // 2 - 1))
+
+    def write_obj(self, name: str, format: str|None=None):
+        """Writes a relocatable object file, `name`.o, and its C header, `name`.h, to link
+        the compiled function into C/C++ programs (with -lm). `format` is None (the host's),
+        "elf" or "macho". Needs a symjit library built with the `obj` feature."""
+        self.compiler.write_obj(name, format)
 
     def dump(self, name, what="scalar"):
         self.compiler.dump(name, what=what)

@@ -98,6 +98,12 @@ class Func:
 
         return self.vecfmt(res)
 
+    def write_obj(self, name: str, format: str|None=None):
+        """Writes a relocatable object file, `name`.o, and its C header, `name`.h, to link
+        the compiled function into C/C++ programs (with -lm). `format` is None (the host's),
+        "elf" or "macho". Needs a symjit library built with the `obj` feature."""
+        self.compiler.write_obj(name, format)
+
     def dump(self, name: str, what: str="scalar"):
         self.compiler.dump(name, what=what)
 
@@ -213,6 +219,12 @@ class FuncComplex:
 
         return self.vecfmt(res)
 
+    def write_obj(self, name: str, format: str|None=None):
+        """Writes a relocatable object file, `name`.o, and its C header, `name`.h, to link
+        the compiled function into C/C++ programs (with -lm). `format` is None (the host's),
+        "elf" or "macho". Needs a symjit library built with the `obj` feature."""
+        self.compiler.write_obj(name, format)
+
     def dump(self, name: str, what: str="scalar"):
         self.compiler.dump(name, what=what)
 
@@ -315,6 +327,18 @@ class SymbolicaFunc:
         args = np.ascontiguousarray(inputs, dtype=np.complex128)
         c.evaluate_matrix(args, outs, 2)
         return outs
+
+    def write_obj(self, name: str, format: str|None=None, dtype: str="float64"):
+        """Writes a relocatable object file, `name`.o, and its C header, `name`.h (see
+        Func.write_obj), for the real or the complex (`dtype="complex128"`) kernel."""
+        if dtype == "complex128":
+            if self.complex_compiler is None:
+                self.compile_complex()
+            self.complex_compiler.write_obj(name, format)
+        else:
+            if self.compiler is None:
+                self.compile_real()
+            self.compiler.write_obj(name, format)
 
     def dump(self, name, what="scalar", dtype="complex128"):
         if dtype == "complex128" and self.complex_compiler is not None:
