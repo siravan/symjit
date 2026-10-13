@@ -75,3 +75,8 @@ path = "profile/profiler.rs"
 name = "rk4_bessel"
 path = "examples/claude/rk4_bessel.rs"
 required-features = ["composer"]
+
+[[example]]
+name = "pi_hypersphere"
+path = "examples/claude/pi_hypersphere.rs"
+required-features = ["composer"]

@@ -129,7 +129,10 @@ fn main() -> Result<()> {
     config.set_fastmath(false);
     let t = Instant::now();
     let app = rk4::compile(config)?.seal()?;
-    println!("compiled rk4 and bessel in {:.1} ms", t.elapsed().as_secs_f64() * 1e3);
+    println!(
+        "compiled rk4 and bessel in {:.1} ms",
+        t.elapsed().as_secs_f64() * 1e3
+    );
 
     let steps = 2000.0;
     let rows = make_rows(steps);
@@ -178,12 +181,21 @@ fn main() -> Result<()> {
     println!("kernel against the Rust function: {kernel_vs_rust:.1e} (relative)");
     println!("evaluate_matrix against evaluate_single: {single_vs_matrix:.1e} (relative)");
     // RK4 with h <= 0.0145: about 1e-9 at x = 30
-    ensure!(ey < 1e-8 && edy < 1e-8, "the kernel does not solve Bessel's equation");
+    ensure!(
+        ey < 1e-8 && edy < 1e-8,
+        "the kernel does not solve Bessel's equation"
+    );
     // complex division in the kernel against real division in Rust
-    ensure!(kernel_vs_rust < 1e-12, "the kernel and the Rust function differ");
+    ensure!(
+        kernel_vs_rust < 1e-12,
+        "the kernel and the Rust function differ"
+    );
     // the scalar and SIMD kernels do complex arithmetic with different instructions, which
     // can round differently in the last bit
-    ensure!(single_vs_matrix < 1e-12, "the scalar and SIMD kernels differ");
+    ensure!(
+        single_vs_matrix < 1e-12,
+        "the scalar and SIMD kernels differ"
+    );
 
     // the order of the method: the error falls 2^4-fold per halving of the step
     println!("\n{:>6} {:>9} {:>6}", "steps", "err y", "ratio");

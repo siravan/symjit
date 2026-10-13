@@ -254,13 +254,21 @@ assert_eq!(app.evaluate_single(&[0.3, 0.4]), 0.5);
 - `k.compile(outs)` writes the outputs and compiles. Operators cannot return errors, so the
   first error is kept and returned here.
 
-## Example
+## Examples
 
 `examples/claude/rk4_bessel.rs` solves Bessel's equation with a Runge-Kutta kernel that calls
 the equation's kernel in a loop, and compares the solution with the Bessel functions:
 
 ```bash
 cargo run --release --features composer --example rk4_bessel
+```
+
+`examples/claude/pi_hypersphere.rs` computes pi from the volume of the four-dimensional unit
+ball with a recursive complex kernel (a port of the Python `Composer` example of the same
+name), and checks it bit for bit against plain Rust:
+
+```bash
+cargo run --release --features composer --example pi_hypersphere -- 7
 ```
 
 ## Tests
