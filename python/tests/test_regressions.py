@@ -168,8 +168,9 @@ class Regressions(unittest.TestCase):
         # register. The real AVX-512 SIMD kernel asked for 32 such arguments, but there were 4
         # registers (16 arguments): a funclet with more than 16 arguments aborted the process
         # (index out of bounds), at any opt_level. There are now 8 registers on Unix (6 on
-        # Windows), and the complex scalar kernel uses xmm16-xmm31 with AVX-512 for arguments
-        # 16-31. The results must equal the uncompressed ones.
+        # Windows). With AVX-512 at opt_level 3, the complex scalar kernel passes arguments 0-15
+        # in xmm16-xmm31 and 16-31 in xmm0-xmm15, and a funclet body without calls reads arguments 0-15 from
+        # xmm16-xmm31 instead of saving them. The results must equal the uncompressed ones.
         from symjit import compile_evaluator
 
         def funclets(n_terms, temps):

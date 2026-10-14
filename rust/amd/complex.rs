@@ -45,6 +45,21 @@ pub struct AmdComplexGenerator {
     amd: Amd,
     config: Config,
     last_load: usize,
+    // compression mode: the number of arguments of the current funclet kept in xmm16-xmm31
+    // (`kept_arg`), and whether its body calls a function (`begin_funclet`)
+    reg_args: u32,
+    body_calls: bool,
+}
+
+/// The vector register of funclet argument `arg`. With AVX-512 at opt level 3 (`wide`, see
+/// `wide_args`), the first 16 arguments are passed in xmm16-xmm31, which the kernels use for
+/// nothing else, and the next 16 in xmm0-xmm15; otherwise argument `arg` is in xmm`arg`.
+fn funclet_reg(arg: u8, wide: bool) -> u8 {
+    if wide {
+        (arg + 16) % 32
+    } else {
+        arg
+    }
 }
 
 impl AmdComplexGenerator {
@@ -53,6 +68,8 @@ impl AmdComplexGenerator {
             amd: Amd::new(DataType::F64),
             config,
             last_load: 0,
+            reg_args: 0,
+            body_calls: true,
         }
     }
 
@@ -103,12 +120,42 @@ impl AmdComplexGenerator {
     }
 
     /// The number of funclet arguments passed in registers (xmm0-xmm15, or xmm0-xmm31 with
-    /// AVX-512): the funclet bodies (compression mode) copy them to the stack on entry.
+    /// AVX-512, see `funclet_reg`): the funclet bodies (compression mode) copy them to the stack
+    /// on entry, except the ones kept in xmm16-xmm31 (`save_args`).
     fn arg_regs(&self) -> u8 {
         if self.config.use_xmm16_31() {
             32
         } else {
             16
+        }
+    }
+
+    /// Whether funclet arguments use the `wide` layout of `funclet_reg`, which lets call-free
+    /// funclet bodies keep their first 16 arguments in xmm16-xmm31. Only at opt level 3: below
+    /// it, every call site loads the arguments itself, and loading xmm16-xmm31 needs EVEX
+    /// moves, one byte longer than VEX, which made the kernels up to 12% larger.
+    fn wide_args(&self) -> bool {
+        self.config.use_xmm16_31() && self.config.opt_level() >= 3
+    }
+
+    /// The register holding the funclet argument whose spill slot is `Stack[idx]`, if the
+    /// current funclet keeps it in xmm16-xmm31 instead of saving it (`save_args`).
+    fn kept_arg(&self, idx: u32) -> Option<u8> {
+        if self.reg_args == 0 {
+            return None;
+        }
+
+        let (Loc::Stack(base), Loc::Stack(next)) =
+            (self.config.location(0), self.config.location(1))
+        else {
+            unreachable!()
+        };
+        let step = next - base;
+
+        if idx >= base && (idx - base) % step == 0 && (idx - base) / step < self.reg_args {
+            Some(funclet_reg(((idx - base) / step) as u8, true))
+        } else {
+            None
         }
     }
 
@@ -225,11 +272,19 @@ impl Generator for AmdComplexGenerator {
 
     fn load_stack(&mut self, dst: Reg, idx: u32) {
         self.last_load = self.amd.a.ip();
+        if let Some(r) = self.kept_arg(idx) {
+            self.amd.vmovapd(ϕ(dst), r);
+            return;
+        }
         self.amd
             .vmovdd_xmm_mem(ϕ(dst), STACK, (idx * REG_SIZE) as i32);
     }
 
     fn save_stack(&mut self, dst: Reg, idx: u32) {
+        if let Some(r) = self.kept_arg(idx) {
+            self.amd.vmovapd(r, ϕ(dst));
+            return;
+        }
         self.amd
             .vmovdd_mem_xmm(STACK, (idx * REG_SIZE) as i32, ϕ(dst));
     }
@@ -250,6 +305,7 @@ impl Generator for AmdComplexGenerator {
 
     fn load_args(&mut self, locs: Vec<Loc>, ultra: bool) {
         let n = self.arg_regs() as usize;
+        let wide = self.wide_args();
         load_args_helper(
             &mut self.amd,
             &self.config,
@@ -261,13 +317,22 @@ impl Generator for AmdComplexGenerator {
                 save_f64x2_to_loc(amd, 0, dst);
             },
             |amd, arg, src| {
-                load_f64x2_from_loc(amd, arg, src);
+                load_f64x2_from_loc(amd, funclet_reg(arg, wide), src);
             },
         );
     }
 
     fn save_args(&mut self, num_args: u8, ultra: bool) {
         let n = self.arg_regs();
+        let wide = self.wide_args();
+        // a funclet body without calls reads its first 16 arguments from xmm16-xmm31, which
+        // nothing else uses; a call may clobber them (they are volatile), so then all are saved
+        let kept = if wide && !ultra && !self.body_calls {
+            num_args.min(16)
+        } else {
+            0
+        };
+        self.reg_args = kept as u32;
         save_args_helper(
             &mut self.amd,
             &self.config,
@@ -275,16 +340,22 @@ impl Generator for AmdComplexGenerator {
             ultra,
             n,
             |amd, arg| {
-                amd.vmovdd_xmm_indexed(arg, STACK, Amd::RAX, 8);
+                amd.vmovdd_xmm_indexed(funclet_reg(arg, wide), STACK, Amd::RAX, 8);
             },
             |amd, arg, dst| {
-                save_f64x2_to_loc(amd, arg, dst);
+                if arg >= kept {
+                    save_f64x2_to_loc(amd, funclet_reg(arg, wide), dst);
+                }
             },
         );
     }
 
     fn load_args_complex(&mut self, _locs: Vec<Loc>, _ultra: bool) {}
     fn save_args_complex(&mut self, _num_args: u8, _ultra: bool) {}
+
+    fn begin_funclet(&mut self, has_calls: bool) {
+        self.body_calls = has_calls;
+    }
 
     fn neg(&mut self, dst: Reg, s1: Reg) {
         self.amd.vxordd_label(ϕ(dst), ϕ(s1), "_minus_zero_");
@@ -497,8 +568,12 @@ impl Generator for AmdComplexGenerator {
                 Loc::Mem(idx) => self.amd.vmovdd_xmm_mem(T0, MEM, (idx * REG_SIZE) as i32),
                 Loc::Param(idx) => self.amd.vmovdd_xmm_mem(T0, PARAMS, (idx * REG_SIZE) as i32),
                 Loc::Stack(idx) => {
-                    // Important! STACK instead of SP here because SP changes in the compression subroutines.
-                    self.amd.vmovdd_xmm_mem(T0, STACK, (idx * REG_SIZE) as i32);
+                    if let Some(r) = self.kept_arg(idx) {
+                        self.amd.vmovapd(T0, r);
+                    } else {
+                        // Important! STACK instead of SP here because SP changes in the compression subroutines.
+                        self.amd.vmovdd_xmm_mem(T0, STACK, (idx * REG_SIZE) as i32);
+                    }
                 }
             }
 
@@ -511,8 +586,14 @@ impl Generator for AmdComplexGenerator {
                         .vinsertf128_mem(T0, T0, PARAMS, (idx * REG_SIZE) as i32, 1)
                 }
                 Loc::Stack(idx) => {
-                    self.amd
-                        .vinsertf128_mem(T0, T0, STACK, (idx * REG_SIZE) as i32, 1)
+                    if let Some(r) = self.kept_arg(idx) {
+                        // the VEX vinsertf128 cannot read xmm16-xmm31; T1 is free here
+                        self.amd.vmovapd(T1, r);
+                        self.amd.vinsertf128(T0, T0, T1, 1);
+                    } else {
+                        self.amd
+                            .vinsertf128_mem(T0, T0, STACK, (idx * REG_SIZE) as i32, 1)
+                    }
                 }
             }
 
@@ -847,6 +928,7 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn load_used_registers(&mut self, used: &[Reg]) {
+        self.reg_args = 0; // past the funclets
         self.set_label("@success");
         self.amd.xor(Amd::RAX, Amd::RAX);
         self.set_label("@epilogue");

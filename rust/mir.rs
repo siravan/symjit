@@ -1301,9 +1301,35 @@ impl Mir {
         };
     }
 
+    /// For each funclet (compression mode), in the order of their plain entries: whether its
+    /// body calls a function. The funclets follow the main code, each starting with the
+    /// `SaveArgs` of its `_ultra` entry and then of its plain entry.
+    fn funclet_calls(&self) -> Vec<bool> {
+        let mut calls = Vec::new();
+
+        if !self.config.compress() {
+            return calls;
+        }
+
+        for ins in self.code.iter() {
+            match ins {
+                Instruction::SaveArgs { ultra: false, .. } => calls.push(false),
+                Instruction::Call { .. } => {
+                    if let Some(c) = calls.last_mut() {
+                        *c = true;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        calls
+    }
+
     pub fn rerun(&self, ir: &mut dyn Generator) -> Result<()> {
         // let mut funclets: HashSet<(FuncletOp, Vec<Reg>)> = HashSet::new();
 
+        let mut funclet_calls = self.funclet_calls().into_iter();
         let mut iter = self.code.iter().peekable();
 
         while let Some(ins) = iter.next() {
@@ -1377,6 +1403,10 @@ impl Mir {
                     ultra,
                     complex,
                 } => {
+                    if !*ultra {
+                        ir.begin_funclet(funclet_calls.next().unwrap_or(true));
+                    }
+
                     if *complex {
                         ir.save_args_complex(*num_args, *ultra);
                     } else {

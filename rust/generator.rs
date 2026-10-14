@@ -113,6 +113,9 @@ pub trait Generator {
     fn save_args(&mut self, num_args: u8, ultra: bool);
     fn load_args_complex(&mut self, locs: Vec<Loc>, ultra: bool);
     fn save_args_complex(&mut self, num_args: u8, ultra: bool);
+    /// Called before the `save_args` of a funclet's plain entry (compression mode): `has_calls`
+    /// is true if the funclet body calls a function, which may clobber every volatile register.
+    fn begin_funclet(&mut self, _has_calls: bool) {}
 
     fn save_mem_result(&mut self, idx: u32);
     fn save_stack_result(&mut self, idx: u32);

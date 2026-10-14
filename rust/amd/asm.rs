@@ -405,6 +405,13 @@ impl Amd {
 
     // AVX rules!
     pub fn vmovapd(&mut self, reg: u8, rm: u8) {
+        if reg >= 16 || rm >= 16 {
+            // xmm16-xmm31 (AVX512VL): EVEX.128 vmovapd
+            self.evex_dd(reg, rm).evex(self);
+            self.append_byte(0x28);
+            self.modrm_reg(reg, rm);
+            return;
+        }
         self.vex_pd(reg, 0, rm, 0);
         self.append_byte(0x28);
         self.modrm_reg(reg, rm);
