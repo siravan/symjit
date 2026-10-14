@@ -870,6 +870,13 @@ impl<'k> Real<'k> {
         round_ties_even => "round",
         trunc => "trunc",
         fract => "frac",
+        /// 2^self for an integer self in [-1022, 1023], built from the bits of a double
+        /// (`Expr::pow2i`).
+        pow2i => "pow2i",
+        /// The exponent of self: floor(log2(|self|)) for normal numbers (`Expr::getexp`).
+        getexp => "getexp",
+        /// The mantissa of self in [1, 2), with the sign of self (`Expr::getmant`).
+        getmant => "getmant",
         exp => "exp",
         exp2 => "exp2",
         exp_m1 => "expm1",
@@ -1857,5 +1864,45 @@ pub mod ops {
 
     pub fn complex<'k, A: MakeComplex<'k, B>, B>(k: &'k KernelBuilder, re: A, im: B) -> A::Output {
         re.complex(k, im)
+    }
+}
+
+// The functions of symjit's math library (`libm.rs`) build kernels too: `libm::exp(x)` with a
+// `Real` adds its operations to the kernel.
+#[cfg(feature = "math")]
+impl<'k> crate::libm::MathOps for Real<'k> {
+    type Mask = Mask<'k>;
+
+    fn lit(self, v: f64) -> Real<'k> {
+        self.k.constant(v)
+    }
+
+    // as `v < self`: `gt` is true for NaN on x86 (see `MathOps::gt`)
+    fn gt(self, v: f64) -> Mask<'k> {
+        self.k.constant(v).lt(self)
+    }
+
+    fn lt(self, v: f64) -> Mask<'k> {
+        Real::lt(self, v)
+    }
+
+    fn select(m: Mask<'k>, a: Real<'k>, b: Real<'k>) -> Real<'k> {
+        m.select(a, b)
+    }
+
+    fn abs(self) -> Real<'k> {
+        Real::abs(self)
+    }
+
+    fn pow2i(self) -> Real<'k> {
+        Real::pow2i(self)
+    }
+
+    fn getexp(self) -> Real<'k> {
+        Real::getexp(self)
+    }
+
+    fn getmant(self) -> Real<'k> {
+        Real::getmant(self)
     }
 }

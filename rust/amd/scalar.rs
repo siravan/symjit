@@ -391,6 +391,24 @@ impl Generator for AmdScalarGenerator {
         self.minus(dst, s1, Reg::Temp);
     }
 
+    // the exponent-field operations (`utils::pow2i`, `getexp`, `getmant`), in place in dst
+    fn pow2i(&mut self, dst: Reg, s1: Reg) {
+        self.amd.vaddsd_label(ϕ(dst), ϕ(s1), "_pow2i_magic_");
+        self.amd.vpsllq_dd(ϕ(dst), ϕ(dst), 52);
+    }
+
+    fn getexp(&mut self, dst: Reg, s1: Reg) {
+        self.amd.vanddd_label(ϕ(dst), ϕ(s1), "_not_minus_zero_");
+        self.amd.vpsrlq_dd(ϕ(dst), ϕ(dst), 52);
+        self.amd.vordd_label(ϕ(dst), ϕ(dst), "_two52_");
+        self.amd.vsubsd_label(ϕ(dst), ϕ(dst), "_two52_1023_");
+    }
+
+    fn getmant(&mut self, dst: Reg, s1: Reg) {
+        self.amd.vanddd_label(ϕ(dst), ϕ(s1), "_sign_mantissa_");
+        self.amd.vordd_label(ϕ(dst), ϕ(dst), "_one_");
+    }
+
     fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, vaddsd, dst, s1, s2);
     }

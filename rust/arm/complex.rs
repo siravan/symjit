@@ -385,6 +385,18 @@ impl Generator for ArmComplexGenerator {
         self.emit(arm! {fsub q(ϕ(dst)), q(ϕ(s1)), q(T2)});
     }
 
+    fn pow2i(&mut self, dst: Reg, s1: Reg) {
+        emit_pow2i(&mut self.a, ϕ(dst), ϕ(s1), false);
+    }
+
+    fn getexp(&mut self, dst: Reg, s1: Reg) {
+        emit_getexp(&mut self.a, ϕ(dst), ϕ(s1), false);
+    }
+
+    fn getmant(&mut self, dst: Reg, s1: Reg) {
+        emit_getmant(&mut self.a, ϕ(dst), ϕ(s1), false);
+    }
+
     fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.emit(arm! {fadd q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
     }

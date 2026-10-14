@@ -199,6 +199,20 @@ class Wasm(unittest.TestCase):
     def test_constant(self):
         self.check([x], [sp.Float(2.5), x], [(1.0,), (-3.0,)])
 
+    def test_exponent_ops(self):
+        # pow2i, getexp and getmant are defined bit for bit (test_exponent_ops.py, rust/utils.rs)
+        U = np.uint64
+        xs = np.array([0.0, -0.0, 5e-324, -7e-310, 2.5, -3.75, 1.0, -1022, 1023, 1024, -1023, 1e300,
+                       -1e300, np.inf, -np.inf, 4096.5])
+        ref = np.array([
+            ((xs + U(0x43380000000003FF).view(np.float64)).view(U) << U(52)).view(np.float64),
+            ((xs.view(U) << U(1)) >> U(53)).astype(np.float64) - 1023.0,
+            ((xs.view(U) & U(0x800FFFFFFFFFFFFF)) | U(0x3FF0000000000000)).view(np.float64),
+        ]).T
+        f = compile_func([x], [sp.Function(op)(x) for op in ["pow2i", "getexp", "getmant"]], ty="wasm")
+        for mode, got in self.run_modes(f, [(v,) for v in xs]).items():
+            np.testing.assert_array_equal(got.view(U), ref.view(U), err_msg=f"node, {mode} mode")
+
     def test_parameters(self):
         self.check([x], [sp.sin(p) * x + p], [(1.0,), (2.0,)], params=[0.75], param_syms=[p])
 

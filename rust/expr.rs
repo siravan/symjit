@@ -295,6 +295,24 @@ impl Expr {
         Expr::unary("trunc", self)
     }
 
+    /// 2^self for an integer self in [-1022, 1023], built from the bits of a double: self + 1023
+    /// is rounded to an integer (ties to even) and its low 12 bits become the sign and the
+    /// exponent of the result (+0.0 for -1023, +inf for 1024, +0.0 for infinities)
+    pub fn pow2i(&self) -> Expr {
+        Expr::unary("pow2i", self)
+    }
+
+    /// The exponent of self: floor(log2(|self|)) for normal numbers (-1023 for zeros and
+    /// subnormals, 1024 for infinities and NaNs)
+    pub fn getexp(&self) -> Expr {
+        Expr::unary("getexp", self)
+    }
+
+    /// The mantissa of self in [1, 2), with the sign of self
+    pub fn getmant(&self) -> Expr {
+        Expr::unary("getmant", self)
+    }
+
     pub fn floor(&self) -> Expr {
         Expr::unary("floor", self)
     }

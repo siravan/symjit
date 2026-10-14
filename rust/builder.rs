@@ -383,6 +383,11 @@ impl Builder {
             self.count_stack = Compactor::new(self.config.clone()).compact(mir).ok();
         }
 
+        // after the optimizations: the funclets of the math library use registers only, and
+        // the peephole fusions assume values used once
+        #[cfg(feature = "math")]
+        crate::libm::inline_calls(mir, &mut self.consts)?;
+
         mir.add_consts(&self.consts);
         mir.populate_labels();
 

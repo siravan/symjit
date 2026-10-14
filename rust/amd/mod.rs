@@ -2,7 +2,7 @@ use super::code::Func;
 use super::config::Config;
 use super::generator::{object_complex_error, object_external_error, object_symbol};
 use super::symbol::Loc;
-use super::utils::{align_stack, Reg};
+use super::utils::{align_stack, Reg, POW2I_MAGIC, SIGN_MANTISSA, TWO52, TWO52_1023};
 
 mod asm;
 mod f64x8;
@@ -167,6 +167,22 @@ fn predefined_consts(amd: &mut Amd, num_labels: usize) {
     amd.a.set_label("_all_ones_");
     for _ in 0..num_labels {
         amd.a.append_quad(0xffffffffffffffff);
+    }
+
+    // the constants of the exponent-field operations (`pow2i`, `getexp`, `getmant`), only if used,
+    // so that other kernels do not change
+    for (label, bits) in [
+        ("_pow2i_magic_", POW2I_MAGIC),
+        ("_two52_", TWO52),
+        ("_two52_1023_", TWO52_1023),
+        ("_sign_mantissa_", SIGN_MANTISSA),
+    ] {
+        if amd.a.is_referenced(label) {
+            amd.a.set_label(label);
+            for _ in 0..num_labels {
+                amd.a.append_quad(bits);
+            }
+        }
     }
 }
 

@@ -536,6 +536,24 @@ impl Generator for AmdVectorF64x4Generator {
         self.minus(dst, s1, Reg::Temp);
     }
 
+    // the exponent-field operations (`utils::pow2i`, `getexp`, `getmant`), in place in dst
+    fn pow2i(&mut self, dst: Reg, s1: Reg) {
+        self.amd.vaddpd_label(ϕ(dst), ϕ(s1), "_pow2i_magic_");
+        self.amd.vpsllq_pd(ϕ(dst), ϕ(dst), 52);
+    }
+
+    fn getexp(&mut self, dst: Reg, s1: Reg) {
+        self.amd.vandpd_label(ϕ(dst), ϕ(s1), "_not_minus_zero_");
+        self.amd.vpsrlq_pd(ϕ(dst), ϕ(dst), 52);
+        self.amd.vorpd_label(ϕ(dst), ϕ(dst), "_two52_");
+        self.amd.vsubpd_label(ϕ(dst), ϕ(dst), "_two52_1023_");
+    }
+
+    fn getmant(&mut self, dst: Reg, s1: Reg) {
+        self.amd.vandpd_label(ϕ(dst), ϕ(s1), "_sign_mantissa_");
+        self.amd.vorpd_label(ϕ(dst), ϕ(dst), "_one_");
+    }
+
     fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         binop!(self, vaddpd, dst, s1, s2);
     }
@@ -742,6 +760,10 @@ impl Generator for AmdVectorF64x4Generator {
         }
 
         Ok(())
+    }
+
+    fn inlines_math(&self) -> bool {
+        true
     }
 
     fn call_funclet(&mut self, label: &str) {

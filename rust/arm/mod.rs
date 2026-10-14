@@ -6,7 +6,7 @@ use super::code::Func;
 use super::config::Config;
 use super::generator::{object_complex_error, object_external_error, object_symbol};
 use super::symbol::Loc;
-use super::utils::Reg;
+use super::utils::{Reg, EXPONENT, POW2I_MAGIC, TWO52, TWO52_1023};
 
 const SP: u8 = 31;
 const FP: u8 = 29;
@@ -66,6 +66,76 @@ fn emit(a: &mut Assembler, w: u32) {
     a.append_word(w);
 }
 
+// The exponent-field operations (`utils::pow2i`, `getexp`, `getmant`) on the low lane (`d`
+// registers; the high lane becomes zero, as the complex generator needs) or on both lanes
+// (`vector`). They use x(SCRATCH1) and T2.
+
+/// T2 := `bits` (in every lane if `vector`)
+fn load_bits(a: &mut Assembler, bits: u64, vector: bool) {
+    emit(a, arm! {movz x(SCRATCH1), #(bits & 0xffff) as u32});
+    if (bits >> 16) & 0xffff != 0 {
+        emit(
+            a,
+            arm! {movk_lsl16 x(SCRATCH1), #((bits >> 16) & 0xffff) as u32},
+        );
+    }
+    if (bits >> 32) & 0xffff != 0 {
+        emit(
+            a,
+            arm! {movk_lsl32 x(SCRATCH1), #((bits >> 32) & 0xffff) as u32},
+        );
+    }
+    if (bits >> 48) != 0 {
+        emit(a, arm! {movk_lsl48 x(SCRATCH1), #(bits >> 48) as u32});
+    }
+    emit(a, arm! {fmov d(T2), x(SCRATCH1)});
+    if vector {
+        emit(a, arm! {dup q(T2), q(T2)[0]});
+    }
+}
+
+fn emit_pow2i(a: &mut Assembler, dst: u8, s1: u8, vector: bool) {
+    load_bits(a, POW2I_MAGIC, vector);
+    if vector {
+        emit(a, arm! {fadd q(dst), q(s1), q(T2)});
+        emit(a, arm! {shl q(dst), q(dst), #52});
+    } else {
+        emit(a, arm! {fadd d(dst), d(s1), d(T2)});
+        emit(a, arm! {shl d(dst), d(dst), #52});
+    }
+}
+
+fn emit_getexp(a: &mut Assembler, dst: u8, s1: u8, vector: bool) {
+    if vector {
+        emit(a, arm! {fabs q(dst), q(s1)});
+        emit(a, arm! {ushr q(dst), q(dst), #52});
+        load_bits(a, TWO52, true);
+        emit(a, arm! {orr v(dst).16b, v(dst).16b, v(T2).16b});
+        load_bits(a, TWO52_1023, true);
+        emit(a, arm! {fsub q(dst), q(dst), q(T2)});
+    } else {
+        emit(a, arm! {fabs d(dst), d(s1)});
+        emit(a, arm! {ushr d(dst), d(dst), #52});
+        load_bits(a, TWO52, false);
+        emit(a, arm! {orr v(dst).8b, v(dst).8b, v(T2).8b});
+        load_bits(a, TWO52_1023, false);
+        emit(a, arm! {fsub d(dst), d(dst), d(T2)});
+    }
+}
+
+fn emit_getmant(a: &mut Assembler, dst: u8, s1: u8, vector: bool) {
+    load_bits(a, EXPONENT, vector);
+    if vector {
+        emit(a, arm! {bic v(dst).16b, v(s1).16b, v(T2).16b});
+        emit(a, arm! {fmov q(T2), #1.0});
+        emit(a, arm! {orr v(dst).16b, v(dst).16b, v(T2).16b});
+    } else {
+        emit(a, arm! {bic v(dst).8b, v(s1).8b, v(T2).8b});
+        emit(a, arm! {fmov d(T2), #1.0});
+        emit(a, arm! {orr v(dst).8b, v(dst).8b, v(T2).8b});
+    }
+}
+
 fn save_nonvolatile_regs(a: &mut Assembler) {
     a.set_label("@self");
     emit(a, arm! {sub sp, sp, #64});
@@ -98,7 +168,8 @@ fn allocate_stack(a: &mut Assembler, size: u32, _with_arena: bool) {
 }
 
 fn call_funclet(a: &mut Assembler, label: &str) {
-    if label == "@complex_root" {
+    // these funclets can be called from other funclets: keep their return address
+    if label == "@complex_root" || label.starts_with("@libm_") {
         emit(a, arm! {mov x(LR2), x(LR)});
         a.jump(label, 0, |offset, _| arm! {bl label(offset)});
         emit(a, arm! {mov x(LR), x(LR2)});

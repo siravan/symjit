@@ -42,6 +42,10 @@ pub enum UniOp {
     Abs2,
     TimesI,
     TimesNegI,
+    // the exponent-field operations, see `utils::pow2i`, `getexp` and `getmant`
+    Pow2i,
+    GetExp,
+    GetMant,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Hash)]
@@ -93,6 +97,12 @@ pub enum FuncletOp {
     DivideComplex,
 }
 */
+
+/// The funclets of the math library (`libm::inline_calls`, feature `math`) are `@libm_<name>`,
+/// placed between `Branch(LIBM_END)` and `Label(LIBM_END)`; the generators that do not inline
+/// them (`Generator::inlines_math`) call the C function `<name>` instead.
+pub const LIBM_PREFIX: &str = "@libm_";
+pub const LIBM_END: &str = "@libm_end";
 
 #[derive(Clone)]
 pub enum Instruction {
@@ -754,6 +764,30 @@ impl Mir {
         });
     }
 
+    pub fn pow2i(&mut self, dst: Reg, s1: Reg) {
+        self.push(Instruction::Uni {
+            op: UniOp::Pow2i,
+            dst,
+            s1,
+        });
+    }
+
+    pub fn getexp(&mut self, dst: Reg, s1: Reg) {
+        self.push(Instruction::Uni {
+            op: UniOp::GetExp,
+            dst,
+            s1,
+        });
+    }
+
+    pub fn getmant(&mut self, dst: Reg, s1: Reg) {
+        self.push(Instruction::Uni {
+            op: UniOp::GetMant,
+            dst,
+            s1,
+        });
+    }
+
     pub fn real(&mut self, dst: Reg, s1: Reg) {
         self.push(Instruction::Uni {
             op: UniOp::Real,
@@ -1278,6 +1312,9 @@ impl Mir {
                 ir.neq(dst, s1, Reg::Temp);
             }
             UniOp::Sign => ir.sign(dst, s1),
+            UniOp::Pow2i => ir.pow2i(dst, s1),
+            UniOp::GetExp => ir.getexp(dst, s1),
+            UniOp::GetMant => ir.getmant(dst, s1),
         };
     }
 
@@ -1413,7 +1450,21 @@ impl Mir {
                         ir.save_args(*num_args, *ultra);
                     }
                 }
+                Instruction::Branch { label } if label == LIBM_END && !ir.inlines_math() => {
+                    // the funclets of the math library (`libm::inline_calls`) are not needed
+                    for ins in iter.by_ref() {
+                        if matches!(&ins, Instruction::Label { label } if label == LIBM_END) {
+                            break;
+                        }
+                    }
+                }
                 Instruction::Call { label, num_args } => {
+                    // a generator that does not inline the math library calls the C function
+                    let (label, num_args) = match label.strip_prefix(LIBM_PREFIX) {
+                        Some(name) if *num_args == 0 && !ir.inlines_math() => (name, &1),
+                        _ => (label.as_str(), num_args),
+                    };
+
                     if *num_args == 0 {
                         ir.call_funclet(label);
                     } else {

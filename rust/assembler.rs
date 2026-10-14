@@ -64,6 +64,11 @@ impl Assembler {
         self.labels.contains_key(label)
     }
 
+    /// Whether an instruction refers to `label` (constants emitted only when used).
+    pub fn is_referenced(&self, label: &str) -> bool {
+        self.jumps.iter().any(|j| j.0 == label)
+    }
+
     pub fn jump(&mut self, label: &str, code: u32, f: Jumper) {
         self.jumps
             .push((label.to_string(), self.ip(), code, f, true));

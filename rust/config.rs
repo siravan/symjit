@@ -69,6 +69,8 @@ pub struct Config {
     pub args: u32,
     /// kernels for relocatable object files (not saved; see `is_relocatable`)
     pub reloc: bool,
+    /// inline the functions of `libm.rs` (feature `math`; not saved, see `inline_math`)
+    pub math: bool,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -214,6 +216,7 @@ impl Config {
             stack: DEFAULT_STACK_LIMIT,
             args: COMPRESSED_ARGS_CAP as u32,
             reloc: false,
+            math: false,
         })
     }
 
@@ -578,6 +581,22 @@ impl Config {
     #[cfg(feature = "obj")]
     pub fn set_relocatable(&mut self, reloc: bool) {
         self.reloc = reloc;
+    }
+
+    /// Calls of the functions of symjit's math library (`libm.rs`, e.g. `exp`) are replaced by
+    /// inlined code (real kernels; feature `math`).
+    pub fn inline_math(&self) -> bool {
+        cfg!(feature = "math") && self.math
+    }
+
+    pub fn set_inline_math(&mut self, enabled: bool) -> Result<()> {
+        if enabled && !cfg!(feature = "math") {
+            return Err(anyhow!(
+                "inline_math needs symjit built with the `math` feature"
+            ));
+        }
+        self.math = enabled;
+        Ok(())
     }
 
     pub fn compiler_type(&self) -> CompilerType {
@@ -971,6 +990,9 @@ impl Config {
             "debug_topology" => {
                 self.set_debug_topology(val.parse::<bool>()?);
             }
+            "inline_math" => {
+                self.set_inline_math(val.parse::<bool>()?)?;
+            }
             _ => return Err(anyhow!("option {} is not recognized.", option)),
         }
 
@@ -1076,6 +1098,9 @@ const UNARY: &[&str] = &[
     "isnotzero",
     "times_i",
     "times_neg_i",
+    "pow2i",
+    "getexp",
+    "getmant",
 ];
 
 // the list of intrinsic binary ops, i.e., operations that can be implemented directly in
@@ -1230,6 +1255,7 @@ impl Storage for Config {
             stack,
             args,
             reloc: false,
+            math: false,
         })
     }
 }

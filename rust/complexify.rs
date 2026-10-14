@@ -53,6 +53,9 @@ pub struct Complexifier {
     real_locs: HashSet<Loc>,
     real_regs: [bool; 32],
     root_defined: bool,
+    /// the functions of the math library called (`call_real_or_complex`; feature `math`)
+    libm_used: Vec<String>,
+    count_libm_calls: usize,
 }
 
 impl Complexifier {
@@ -63,6 +66,8 @@ impl Complexifier {
             real_locs: reals.clone(),
             real_regs: [false; 32],
             root_defined: false,
+            libm_used: Vec::new(),
+            count_libm_calls: 0,
         }
     }
 
@@ -70,6 +75,14 @@ impl Complexifier {
         self.mir.consts = mir.consts.clone();
         // self.mir.labels = mir.labels.clone();
         mir.rerun(self)?;
+
+        #[cfg(feature = "math")]
+        if !self.libm_used.is_empty() {
+            // the registers of the real kernel (not the complex ones of `count_scratch`)
+            let names: Vec<&str> = self.libm_used.iter().map(|s| s.as_str()).collect();
+            crate::libm::append_funclets(&mut self.mir, &names, 12)?;
+        }
+
         self.mir.populate_labels();
         Ok(std::mem::take(&mut self.mir))
     }
@@ -128,6 +141,50 @@ impl Complexifier {
         } else {
             Types::CC
         }
+    }
+}
+
+#[cfg(feature = "math")]
+impl Complexifier {
+    /// A call of a complex function `op` of the math library (`libm.rs`): when the argument
+    /// is real at run time (its imaginary part is zero), the real function is called (the
+    /// inlined `@libm_<op>` in SIMD kernels, `Generator::inlines_math`, the C function
+    /// otherwise), and the complex C function when it is not. The test is skipped when the
+    /// argument is known to be real. In a SIMD kernel, a row whose lanes do not agree is
+    /// computed again by the scalar kernel (`branch_if`). A zero imaginary part of the
+    /// argument gives +0 as the imaginary part of the result (its sign is not kept).
+    fn call_real_or_complex(&mut self, op: &str) -> Result<()> {
+        if !self.libm_used.iter().any(|n| n == op) {
+            self.libm_used.push(op.to_string());
+        }
+        let real = crate::libm::funclet_label(op);
+
+        if self.is_real_reg(Reg::Ret) {
+            self.mir.call(&real, 0)?;
+            self.set_reg_real(Reg::Ret);
+            return Ok(());
+        }
+
+        let n = self.count_libm_calls;
+        self.count_libm_calls += 1;
+        let real_arg = format!("@cplx_real_arg_{}", n);
+        let end = format!("@cplx_call_end_{}", n);
+
+        // all lanes real: the real function; none: the complex one (`branch_if` with
+        // is_else = true jumps when the condition is true)
+        let t = Self::T0;
+        self.mir.xor(t, t, t);
+        self.mir.eq(t, im(Reg::Ret), t);
+        self.mir.branch_if(t, &real_arg, true);
+        self.mir.call(op, 1)?;
+        self.mir.branch(&end);
+        self.mir.set_label(&real_arg);
+        self.mir.call(&real, 0)?;
+        self.mir.xor(im(Reg::Ret), im(Reg::Ret), im(Reg::Ret));
+        self.mir.set_label(&end);
+
+        self.set_reg_complex(Reg::Ret);
+        Ok(())
     }
 }
 
@@ -499,6 +556,27 @@ impl Generator for Complexifier {
         self.copy_real(dst, s1);
     }
 
+    // pow2i of the real part; the result is real
+    fn pow2i(&mut self, dst: Reg, s1: Reg) {
+        self.mir.pow2i(re(dst), re(s1));
+        self.mir.xor(im(dst), im(dst), im(dst));
+        self.set_reg_real(dst);
+    }
+
+    // getexp of the real part; the result is real
+    fn getexp(&mut self, dst: Reg, s1: Reg) {
+        self.mir.getexp(re(dst), re(s1));
+        self.mir.xor(im(dst), im(dst), im(dst));
+        self.set_reg_real(dst);
+    }
+
+    // getmant of the real part; the result is real
+    fn getmant(&mut self, dst: Reg, s1: Reg) {
+        self.mir.getmant(re(dst), re(s1));
+        self.mir.xor(im(dst), im(dst), im(dst));
+        self.set_reg_real(dst);
+    }
+
     fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         match self.types(s1, s2) {
             Types::RC => {
@@ -859,6 +937,11 @@ impl Generator for Complexifier {
     }
 
     fn call_complex(&mut self, op: &str, num_args: usize) -> Result<()> {
+        #[cfg(feature = "math")]
+        if num_args == 1 && self.mir.config.inline_math() && crate::libm::has_function(op) {
+            return self.call_real_or_complex(op);
+        }
+
         self.ensure_complex(Reg::Ret);
 
         match num_args {

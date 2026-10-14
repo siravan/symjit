@@ -111,6 +111,8 @@ pub enum Op {
     I64And,
     I64Or,
     I64Xor,
+    I64Shl,
+    I64ShrU,
 
     F64Abs,
     F64Neg,
@@ -128,6 +130,7 @@ pub enum Op {
     F64Copysign,
 
     I64ExtendI32U,
+    F64ConvertI64S,
     I64ReinterpretF64,
     F64ReinterpretI64,
 }
@@ -295,6 +298,8 @@ impl Op {
             Op::I64And => buf.push(0x83),
             Op::I64Or => buf.push(0x84),
             Op::I64Xor => buf.push(0x85),
+            Op::I64Shl => buf.push(0x86),
+            Op::I64ShrU => buf.push(0x88),
 
             Op::F64Abs => buf.push(0x99),
             Op::F64Neg => buf.push(0x9a),
@@ -312,6 +317,7 @@ impl Op {
             Op::F64Copysign => buf.push(0xa6),
 
             Op::I64ExtendI32U => buf.push(0xad),
+            Op::F64ConvertI64S => buf.push(0xb9),
             Op::I64ReinterpretF64 => buf.push(0xbd),
             Op::F64ReinterpretI64 => buf.push(0xbf),
         }

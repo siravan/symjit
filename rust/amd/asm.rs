@@ -474,6 +474,18 @@ impl Amd {
         self.rip_relative(reg, label);
     }
 
+    pub fn vaddsd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        self.vex_sd(reg, vreg, 0, 0);
+        self.append_byte(0x58);
+        self.rip_relative(reg, label);
+    }
+
+    pub fn vsubsd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        self.vex_sd(reg, vreg, 0, 0);
+        self.append_byte(0x5c);
+        self.rip_relative(reg, label);
+    }
+
     pub fn vdivsd(&mut self, reg: u8, vreg: u8, rm: u8) {
         self.vex_sd(reg, vreg, rm, 0);
         self.append_byte(0x5e);
@@ -695,6 +707,34 @@ impl Amd {
         self.vex_pd(reg, vreg, 0, 0);
         self.append_byte(0x56);
         self.rip_relative(reg, label);
+    }
+
+    pub fn vaddpd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        self.vex_pd(reg, vreg, 0, 0);
+        self.append_byte(0x58);
+        self.rip_relative(reg, label);
+    }
+
+    pub fn vsubpd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        self.vex_pd(reg, vreg, 0, 0);
+        self.append_byte(0x5c);
+        self.rip_relative(reg, label);
+    }
+
+    /// vpsllq ymm(reg), ymm(rm), imm (the 64-bit lanes shifted left)
+    pub fn vpsllq_pd(&mut self, reg: u8, rm: u8, imm: u8) {
+        self.vex_pd(6, reg, rm, 0);
+        self.append_byte(0x73);
+        self.modrm_reg(6, rm);
+        self.append_byte(imm);
+    }
+
+    /// vpsrlq ymm(reg), ymm(rm), imm (the 64-bit lanes shifted right, logical)
+    pub fn vpsrlq_pd(&mut self, reg: u8, rm: u8, imm: u8) {
+        self.vex_pd(2, reg, rm, 0);
+        self.append_byte(0x73);
+        self.modrm_reg(2, rm);
+        self.append_byte(imm);
     }
 
     pub fn vxorpd(&mut self, reg: u8, vreg: u8, rm: u8) {
@@ -928,6 +968,34 @@ impl Amd {
         self.vex_dd(reg, vreg, 0, 0);
         self.append_byte(0x56);
         self.rip_relative(reg, label);
+    }
+
+    pub fn vadddd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        self.vex_dd(reg, vreg, 0, 0);
+        self.append_byte(0x58);
+        self.rip_relative(reg, label);
+    }
+
+    pub fn vsubdd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        self.vex_dd(reg, vreg, 0, 0);
+        self.append_byte(0x5c);
+        self.rip_relative(reg, label);
+    }
+
+    /// vpsllq xmm(reg), xmm(rm), imm (the 64-bit lanes shifted left)
+    pub fn vpsllq_dd(&mut self, reg: u8, rm: u8, imm: u8) {
+        self.vex_dd(6, reg, rm, 0);
+        self.append_byte(0x73);
+        self.modrm_reg(6, rm);
+        self.append_byte(imm);
+    }
+
+    /// vpsrlq xmm(reg), xmm(rm), imm (the 64-bit lanes shifted right, logical)
+    pub fn vpsrlq_dd(&mut self, reg: u8, rm: u8, imm: u8) {
+        self.vex_dd(2, reg, rm, 0);
+        self.append_byte(0x73);
+        self.modrm_reg(2, rm);
+        self.append_byte(imm);
     }
 
     pub fn vxordd(&mut self, reg: u8, vreg: u8, rm: u8) {
@@ -1275,6 +1343,34 @@ impl Amd {
         self.sse_pd(reg, 0);
         self.append_byte(0x56);
         self.rip_relative(reg, label);
+    }
+
+    pub fn addsd_label(&mut self, reg: u8, label: &str) {
+        self.sse_sd(reg, 0);
+        self.append_byte(0x58);
+        self.rip_relative(reg, label);
+    }
+
+    pub fn subsd_label(&mut self, reg: u8, label: &str) {
+        self.sse_sd(reg, 0);
+        self.append_byte(0x5c);
+        self.rip_relative(reg, label);
+    }
+
+    /// psllq xmm(reg), imm (the 64-bit lanes shifted left)
+    pub fn psllq(&mut self, reg: u8, imm: u8) {
+        self.sse_pd(6, reg);
+        self.append_byte(0x73);
+        self.modrm_reg(6, reg);
+        self.append_byte(imm);
+    }
+
+    /// psrlq xmm(reg), imm (the 64-bit lanes shifted right, logical)
+    pub fn psrlq(&mut self, reg: u8, imm: u8) {
+        self.sse_pd(2, reg);
+        self.append_byte(0x73);
+        self.modrm_reg(2, reg);
+        self.append_byte(imm);
     }
 
     pub fn xorpd(&mut self, reg: u8, rm: u8) {

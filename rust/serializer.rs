@@ -87,6 +87,9 @@ const UNIOP_SIGN: u8 = UniOp::Sign as u8;
 const UNIOP_ABS2: u8 = UniOp::Abs2 as u8;
 const UNIOP_TIMES_I: u8 = UniOp::TimesI as u8;
 const UNIOP_TIMES_NEG_I: u8 = UniOp::TimesNegI as u8;
+const UNIOP_POW2I: u8 = UniOp::Pow2i as u8;
+const UNIOP_GETEXP: u8 = UniOp::GetExp as u8;
+const UNIOP_GETMANT: u8 = UniOp::GetMant as u8;
 
 const BINOP_PLUS: u8 = BinOp::Plus as u8;
 const BINOP_MINUS: u8 = BinOp::Minus as u8;
@@ -496,6 +499,21 @@ impl MirIterator {
             }),
             UNIOP_TIMES_NEG_I => Ok(Instruction::Uni {
                 op: UniOp::TimesNegI,
+                dst,
+                s1,
+            }),
+            UNIOP_POW2I => Ok(Instruction::Uni {
+                op: UniOp::Pow2i,
+                dst,
+                s1,
+            }),
+            UNIOP_GETEXP => Ok(Instruction::Uni {
+                op: UniOp::GetExp,
+                dst,
+                s1,
+            }),
+            UNIOP_GETMANT => Ok(Instruction::Uni {
+                op: UniOp::GetMant,
                 dst,
                 s1,
             }),

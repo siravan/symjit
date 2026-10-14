@@ -44,7 +44,7 @@ use super::code::Func;
 use super::config::{Config, ABI_AREA};
 use super::generator::{Generator, GeneratorType};
 use super::symbol::Loc;
-use super::utils::{align_stack, Reg};
+use super::utils::{align_stack, Reg, POW2I_MAGIC, SIGN_MANTISSA};
 
 use encoder::{
     BlockType, Export, ExportKind, FuncType, Function, Global, Import, MemArg, Module, Op, ValType,
@@ -859,6 +859,38 @@ impl Generator for WasmGenerator {
         self.op(Op::F64Floor);
         self.op(Op::F64Sub);
         self.set(dst);
+    }
+
+    // the exponent-field operations, as `utils::pow2i`, `getexp` and `getmant` define them
+    fn pow2i(&mut self, dst: Reg, s1: Reg) {
+        self.get(s1);
+        self.op(Op::F64Const(f64::from_bits(POW2I_MAGIC)));
+        self.op(Op::F64Add);
+        self.op(Op::I64ReinterpretF64);
+        self.op(Op::I64Const(52));
+        self.op(Op::I64Shl);
+        self.set_bits(dst);
+    }
+
+    fn getexp(&mut self, dst: Reg, s1: Reg) {
+        self.get_bits(s1);
+        self.op(Op::I64Const(1));
+        self.op(Op::I64Shl);
+        self.op(Op::I64Const(53));
+        self.op(Op::I64ShrU);
+        self.op(Op::F64ConvertI64S);
+        self.op(Op::F64Const(1023.0));
+        self.op(Op::F64Sub);
+        self.set(dst);
+    }
+
+    fn getmant(&mut self, dst: Reg, s1: Reg) {
+        self.get_bits(s1);
+        self.op(Op::I64Const(SIGN_MANTISSA as i64));
+        self.op(Op::I64And);
+        self.op(Op::I64Const(1.0f64.to_bits() as i64));
+        self.op(Op::I64Or);
+        self.set_bits(dst);
     }
 
     fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {

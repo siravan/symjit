@@ -53,6 +53,7 @@ def _compiler_of(f):
 
 def _architecture(ty):
     """Maps the `ty` option of the compiler to an architecture name."""
+    ty = ty.split(";")[0]  # "native;key=value;..." carries options
     if ty in ("native", "debug"):
         machine = platform.machine().lower()
         if machine in ("x86_64", "amd64"):

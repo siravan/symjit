@@ -442,6 +442,18 @@ impl Generator for ArmSimdGenerator {
         self.minus(dst, s1, Reg::Temp);
     }
 
+    fn pow2i(&mut self, dst: Reg, s1: Reg) {
+        emit_pow2i(&mut self.a, ϕ(dst), ϕ(s1), true);
+    }
+
+    fn getexp(&mut self, dst: Reg, s1: Reg) {
+        emit_getexp(&mut self.a, ϕ(dst), ϕ(s1), true);
+    }
+
+    fn getmant(&mut self, dst: Reg, s1: Reg) {
+        emit_getmant(&mut self.a, ϕ(dst), ϕ(s1), true);
+    }
+
     fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.emit(arm! {fadd q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
     }
@@ -768,6 +780,10 @@ impl Generator for ArmSimdGenerator {
 
     fn ret(&mut self) {
         self.emit(arm! {ret});
+    }
+
+    fn inlines_math(&self) -> bool {
+        true
     }
 
     fn call_funclet(&mut self, label: &str) {

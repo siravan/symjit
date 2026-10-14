@@ -116,6 +116,12 @@ pub trait Generator {
     /// Called before the `save_args` of a funclet's plain entry (compression mode): `has_calls`
     /// is true if the funclet body calls a function, which may clobber every volatile register.
     fn begin_funclet(&mut self, _has_calls: bool) {}
+    /// Whether the kernel runs the funclets of the inlined math library (`libm.rs`, feature
+    /// `math`); the others call the C functions (`mir::LIBM_PREFIX`). Only SIMD kernels do: the
+    /// library is faster than the C functions when it evaluates all lanes at once.
+    fn inlines_math(&self) -> bool {
+        false
+    }
 
     fn save_mem_result(&mut self, idx: u32);
     fn save_stack_result(&mut self, idx: u32);
@@ -138,6 +144,12 @@ pub trait Generator {
     fn ceiling(&mut self, dst: Reg, s1: Reg);
     fn trunc(&mut self, dst: Reg, s1: Reg);
     fn frac(&mut self, dst: Reg, s1: Reg);
+
+    // The exponent-field operations: `utils::pow2i`, `getexp` and `getmant` define their
+    // results bit for bit. Complex generators apply them to the real part and return a real.
+    fn pow2i(&mut self, dst: Reg, s1: Reg);
+    fn getexp(&mut self, dst: Reg, s1: Reg);
+    fn getmant(&mut self, dst: Reg, s1: Reg);
 
     fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg);
     fn minus(&mut self, dst: Reg, s1: Reg, s2: Reg);

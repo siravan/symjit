@@ -78,10 +78,10 @@ CASES = [
      ", ".join(f"Op::LocalGet(0), Op::LocalGet(1), Op::{c}, Op::Drop" for c in
                ["I32Add", "I32Sub", "I32Mul", "I32And", "I32Shl"])),
     ("i64_ops", "i64 i64", "", "",
-     " ".join(f"local.get 0 local.get 1 i64.{c} drop" for c in ["sub", "and", "or", "xor"])
+     " ".join(f"local.get 0 local.get 1 i64.{c} drop" for c in ["sub", "and", "or", "xor", "shl", "shr_u"])
      + " local.get 0 i64.eqz drop",
      ", ".join(f"Op::LocalGet(0), Op::LocalGet(1), Op::{c}, Op::Drop" for c in
-               ["I64Sub", "I64And", "I64Or", "I64Xor"])
+               ["I64Sub", "I64And", "I64Or", "I64Xor", "I64Shl", "I64ShrU"])
      + ", Op::LocalGet(0), Op::I64Eqz, Op::Drop"),
     ("f64_compare", "f64 f64", "", "",
      " ".join(f"local.get 0 local.get 1 f64.{c} drop" for c in ["eq", "ne", "lt", "gt", "le", "ge"]),
@@ -97,9 +97,10 @@ CASES = [
      ", ".join(f"Op::LocalGet(0), Op::LocalGet(1), Op::{c}, Op::Drop" for c in
                ["F64Add", "F64Sub", "F64Mul", "F64Div", "F64Min", "F64Max", "F64Copysign"])),
     ("conversions", "i32 f64", "", "",
-     "local.get 0 i64.extend_i32_u drop local.get 1 i64.reinterpret_f64 f64.reinterpret_i64 drop",
+     "local.get 0 i64.extend_i32_u drop local.get 1 i64.reinterpret_f64 f64.reinterpret_i64 drop"
+     " local.get 0 i64.extend_i32_u f64.convert_i64_s drop",
      "Op::LocalGet(0), Op::I64ExtendI32U, Op::Drop, Op::LocalGet(1), Op::I64ReinterpretF64, "
-     "Op::F64ReinterpretI64, Op::Drop"),
+     "Op::F64ReinterpretI64, Op::Drop, Op::LocalGet(0), Op::I64ExtendI32U, Op::F64ConvertI64S, Op::Drop"),
     ("call", "", "", "", "f64.const 1 call 0 drop", "Op::F64Const(1.0), Op::Call(0), Op::Drop"),
 ]
 

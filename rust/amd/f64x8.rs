@@ -366,6 +366,34 @@ impl Amd {
         self.rip_relative(reg, label);
     }
 
+    pub fn vaddqd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        Prefix::new(reg, vreg, 0).evex(self);
+        self.append_byte(0x58);
+        self.rip_relative(reg, label);
+    }
+
+    pub fn vsubqd_label(&mut self, reg: u8, vreg: u8, label: &str) {
+        Prefix::new(reg, vreg, 0).evex(self);
+        self.append_byte(0x5c);
+        self.rip_relative(reg, label);
+    }
+
+    /// vpsllq zmm(reg), zmm(rm), imm (the 64-bit lanes shifted left)
+    pub fn vpsllq_qd(&mut self, reg: u8, rm: u8, imm: u8) {
+        Prefix::new(6, reg, rm).evex(self);
+        self.append_byte(0x73);
+        self.modrm_reg(6, rm);
+        self.append_byte(imm);
+    }
+
+    /// vpsrlq zmm(reg), zmm(rm), imm (the 64-bit lanes shifted right, logical)
+    pub fn vpsrlq_qd(&mut self, reg: u8, rm: u8, imm: u8) {
+        Prefix::new(2, reg, rm).evex(self);
+        self.append_byte(0x73);
+        self.modrm_reg(2, rm);
+        self.append_byte(imm);
+    }
+
     pub fn vxorqd(&mut self, reg: u8, vreg: u8, rm: u8) {
         Prefix::new(reg, vreg, rm).evex(self);
         self.append_byte(0x57);

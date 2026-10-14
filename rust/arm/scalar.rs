@@ -355,6 +355,18 @@ impl Generator for ArmGenerator {
         self.emit(arm! {fsub d(ϕ(dst)), d(ϕ(s1)), d(T2)});
     }
 
+    fn pow2i(&mut self, dst: Reg, s1: Reg) {
+        emit_pow2i(&mut self.a, ϕ(dst), ϕ(s1), false);
+    }
+
+    fn getexp(&mut self, dst: Reg, s1: Reg) {
+        emit_getexp(&mut self.a, ϕ(dst), ϕ(s1), false);
+    }
+
+    fn getmant(&mut self, dst: Reg, s1: Reg) {
+        emit_getmant(&mut self.a, ϕ(dst), ϕ(s1), false);
+    }
+
     fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.emit(arm! {fadd d(ϕ(dst)), d(ϕ(s1)), d(ϕ(s2))});
     }

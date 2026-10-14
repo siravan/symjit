@@ -58,6 +58,9 @@ composer = ["dep:symjit-macros"]
 wasm = []
 # relocatable object files (ELF, Mach-O) for linking kernels into C/C++ programs (rust/linker)
 obj = []
+# symjit's own math library (rust/libm.rs): generic functions inlined in the kernels with
+# `inline_math` (vectorized in the SIMD kernels), also usable on f64 and with the kernel builder
+math = []
 
 [profile.profiling]
   inherits = "release"

@@ -341,6 +341,9 @@ impl Node {
                 "conjugate" => mir.conjugate(reg(dst), reg(r)),
                 "iszero" => mir.iszero(reg(dst), reg(r)),
                 "isnotzero" => mir.isnotzero(reg(dst), reg(r)),
+                "pow2i" => mir.pow2i(reg(dst), reg(r)),
+                "getexp" => mir.getexp(reg(dst), reg(r)),
+                "getmant" => mir.getmant(reg(dst), reg(r)),
                 _ => return Err(anyhow!("unary operator {:?} is not recognized", op)),
             };
 

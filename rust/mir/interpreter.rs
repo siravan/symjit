@@ -5,11 +5,11 @@
 use num_complex::Complex;
 use num_traits::identities::Zero;
 
-use super::{ArithOp, BinOp, FusedOp, Instruction, Mir, UniOp};
+use super::{ArithOp, BinOp, FusedOp, Instruction, Mir, UniOp, LIBM_PREFIX};
 use super::super::code::Func;
 use super::super::config::SPILL_AREA;
 use super::super::symbol::Loc;
-use super::super::utils::{bool_to_f64, Reg};
+use super::super::utils::{bool_to_f64, getexp, getmant, pow2i, Reg};
 
 impl Mir {
     fn get(regs: &[f64], r: Reg) -> f64 {
@@ -65,6 +65,9 @@ impl Mir {
                 }
             }
             UniOp::TimesI | UniOp::TimesNegI => 0.0,
+            UniOp::Pow2i => pow2i(s1),
+            UniOp::GetExp => getexp(s1),
+            UniOp::GetMant => getmant(s1),
         };
 
         Self::set(regs, dst, val);
@@ -262,11 +265,18 @@ impl Mir {
                 Instruction::SaveArgs { .. } => {
                     unimplemented!()
                 }
-                Instruction::Call { label, num_args: 0 } => {
+                Instruction::Call { label, num_args: 0 } if !label.starts_with(LIBM_PREFIX) => {
                     returns.push(ip);
                     ip = *self.labels.get(label).unwrap() - 1;
                 }
                 Instruction::Call { label, num_args } => {
+                    // the inlined math library runs in SIMD kernels only
+                    // (`Generator::inlines_math`): the interpreter, like the scalar kernels,
+                    // calls the C function (in complex kernels, the complex one)
+                    let (label, num_args) = match label.strip_prefix(LIBM_PREFIX) {
+                        Some(name) if *num_args == 0 => (name, &1),
+                        _ => (label.as_str(), num_args),
+                    };
                     let f = self.find_op(label).unwrap();
                     match &f {
                         Func::Unary(p) => Self::set(regs, Reg::Ret, p(Self::get(regs, Reg::Left))),

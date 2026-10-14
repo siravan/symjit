@@ -383,6 +383,20 @@ macro_rules! arm {
         0x2e205800 | rd!($rd) | rn!($rn)
     };
 
+    // 64-bit shifts by an immediate (1..=63), on the low lane (d) or both lanes (q = v.2d)
+    (shl d($rd:expr), d($rn:expr), #$imm:expr) => {
+        0x5f405400 | ((($imm as u32) & 0x3f) << 16) | rd!($rd) | rn!($rn)
+    };
+    (ushr d($rd:expr), d($rn:expr), #$imm:expr) => {
+        0x7f400400 | (((64 - $imm as u32) & 0x3f) << 16) | rd!($rd) | rn!($rn)
+    };
+    (shl q($rd:expr), q($rn:expr), #$imm:expr) => {
+        0x4f405400 | ((($imm as u32) & 0x3f) << 16) | rd!($rd) | rn!($rn)
+    };
+    (ushr q($rd:expr), q($rn:expr), #$imm:expr) => {
+        0x6f400400 | (((64 - $imm as u32) & 0x3f) << 16) | rd!($rd) | rn!($rn)
+    };
+
     // comparison
     (fcmeq d($rd:expr), d($rn:expr), d($rm:expr)) => {
         0x5e60e400 | rd!($rd) | rn!($rn) | rm!($rm)

@@ -226,6 +226,9 @@ impl DirectTranslator {
             "imaginary" => self.mir.imaginary(dst, r),
             "conjugate" => self.mir.conjugate(dst, r),
             "iszero" => self.mir.iszero(dst, r),
+            "pow2i" => self.mir.pow2i(dst, r),
+            "getexp" => self.mir.getexp(dst, r),
+            "getmant" => self.mir.getmant(dst, r),
             _ => return Err(anyhow!("unary operator {:?} is not recognized", op)),
         };
 

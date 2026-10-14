@@ -123,6 +123,10 @@ impl Application {
         if config.is_complex() {
             original = Some(mir.clone());
             let complexified = Complexifier::new(&reals, config.clone()).complexify(&mir)?;
+            // the constants of the math library's funclets (`libm::append_funclets`)
+            if complexified.consts.len() > prog.builder.consts.len() {
+                prog.builder.consts = complexified.consts.clone();
+            }
 
             if config.fast_complex() {
                 /*
@@ -623,9 +627,27 @@ impl Application {
         }
     }
 
-    fn exec_single(t: usize, v: &Matrix, params: &[f64], f: CompiledFunc<f64>) {
+    fn exec_single(t: usize, v: &Matrix, params: &[f64], f: CompiledFunc<f64>) -> i32 {
         let p = v.p.as_ptr();
-        f(std::ptr::null(), p, t, params.as_ptr());
+        f(std::ptr::null(), p, t, params.as_ptr())
+    }
+
+    /// Runs the SIMD kernel `f_simd` on the `l` points from `t`; when it does not finish (its
+    /// lanes take different sides of a branch, `Generator::branch_if`, and it returns
+    /// non-zero), the scalar kernel `f` computes the points one at a time.
+    fn exec_simd_row(
+        t: usize,
+        l: usize,
+        v: &Matrix,
+        params: &[f64],
+        f_simd: CompiledFunc<f64>,
+        f: CompiledFunc<f64>,
+    ) {
+        if Self::exec_single(t, v, params, f_simd) != 0 {
+            for i in t..t + l {
+                Self::exec_single(i, v, params, f);
+            }
+        }
     }
 
     pub fn exec_vectorized_scalar(&mut self, states: &mut Matrix, obs: &mut Matrix, threads: bool) {
@@ -637,13 +659,13 @@ impl Application {
             let v = combine_matrixes(states, obs);
 
             if threads {
-                (0..n)
-                    .into_par_iter()
-                    .for_each(|t| Self::exec_single(t, &v, params, f));
+                (0..n).into_par_iter().for_each(|t| {
+                    Self::exec_single(t, &v, params, f);
+                });
             } else {
-                (0..n)
-                    //.into_iter()
-                    .for_each(|t| Self::exec_single(t, &v, params, f));
+                (0..n).for_each(|t| {
+                    Self::exec_single(t, &v, params, f);
+                });
             }
         }
     }
@@ -662,25 +684,27 @@ impl Application {
             let n0 = l * (n / l);
             let v = combine_matrixes(states, obs);
 
+            let f = compiled.func();
+
             if let Some(g) = &mut self.compiled_simd {
-                let f = g.func();
+                let f_simd = g.func();
                 if threads {
                     (0..n / l)
                         .into_par_iter()
-                        .for_each(|t| Self::exec_single(t * l, &v, params, f));
+                        .for_each(|t| Self::exec_simd_row(t * l, l, &v, params, f_simd, f));
                 } else {
-                    (0..n / l).for_each(|t| Self::exec_single(t * l, &v, params, f));
+                    (0..n / l).for_each(|t| Self::exec_simd_row(t * l, l, &v, params, f_simd, f));
                 }
             }
 
-            let f = compiled.func();
-
             if threads {
-                (n0..n)
-                    .into_par_iter()
-                    .for_each(|t| Self::exec_single(t, &v, params, f));
+                (n0..n).into_par_iter().for_each(|t| {
+                    Self::exec_single(t, &v, params, f);
+                });
             } else {
-                (n0..n).for_each(|t| Self::exec_single(t, &v, params, f));
+                (n0..n).for_each(|t| {
+                    Self::exec_single(t, &v, params, f);
+                });
             }
         }
     }

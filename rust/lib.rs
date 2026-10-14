@@ -56,6 +56,9 @@ mod linker;
 #[cfg(feature = "composer")]
 pub mod kernel;
 
+#[cfg(feature = "math")]
+pub mod libm;
+
 pub use applet::Applet;
 pub use compiler::{Compiler, FastFunc, Translator};
 pub use composer::Composer;

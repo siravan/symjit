@@ -196,6 +196,18 @@ class Composer:
     def frac(self, arg: Slot) -> Slot:
         return self.function("frac", arg)
 
+    def pow2i(self, arg: Slot) -> Slot:
+        """2**arg for an integer arg in [-1022, 1023], built from the bits of a double"""
+        return self.function("pow2i", arg)
+
+    def getexp(self, arg: Slot) -> Slot:
+        """the exponent of arg: floor(log2(abs(arg))) for normal numbers"""
+        return self.function("getexp", arg)
+
+    def getmant(self, arg: Slot) -> Slot:
+        """the mantissa of arg in [1, 2), with the sign of arg"""
+        return self.function("getmant", arg)
+
     def powi(self, x: Slot, power: int) -> Slot:
         t = self.new_temp()
         self.ir.append(("pow", t, x, power, False))

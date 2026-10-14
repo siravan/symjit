@@ -177,9 +177,9 @@ fn i32_arith() {
 
 #[test]
 fn i64_ops() {
-    // local.get 0 local.get 1 i64.sub drop local.get 0 local.get 1 i64.and drop local.get 0 local.get 1 i64.or drop local.get 0 local.get 1 i64.xor drop local.get 0 i64.eqz drop
-    let ops = vec![Op::LocalGet(0), Op::LocalGet(1), Op::I64Sub, Op::Drop, Op::LocalGet(0), Op::LocalGet(1), Op::I64And, Op::Drop, Op::LocalGet(0), Op::LocalGet(1), Op::I64Or, Op::Drop, Op::LocalGet(0), Op::LocalGet(1), Op::I64Xor, Op::Drop, Op::LocalGet(0), Op::I64Eqz, Op::Drop];
-    assert_eq!(encode(&ops), vec![0x20, 0x00, 0x20, 0x01, 0x7d, 0x1a, 0x20, 0x00, 0x20, 0x01, 0x83, 0x1a, 0x20, 0x00, 0x20, 0x01, 0x84, 0x1a, 0x20, 0x00, 0x20, 0x01, 0x85, 0x1a, 0x20, 0x00, 0x50, 0x1a, 0x0b]);
+    // local.get 0 local.get 1 i64.sub drop local.get 0 local.get 1 i64.and drop local.get 0 local.get 1 i64.or drop local.get 0 local.get 1 i64.xor drop local.get 0 local.get 1 i64.shl drop local.get 0 local.get 1 i64.shr_u drop local.get 0 i64.eqz drop
+    let ops = vec![Op::LocalGet(0), Op::LocalGet(1), Op::I64Sub, Op::Drop, Op::LocalGet(0), Op::LocalGet(1), Op::I64And, Op::Drop, Op::LocalGet(0), Op::LocalGet(1), Op::I64Or, Op::Drop, Op::LocalGet(0), Op::LocalGet(1), Op::I64Xor, Op::Drop, Op::LocalGet(0), Op::LocalGet(1), Op::I64Shl, Op::Drop, Op::LocalGet(0), Op::LocalGet(1), Op::I64ShrU, Op::Drop, Op::LocalGet(0), Op::I64Eqz, Op::Drop];
+    assert_eq!(encode(&ops), vec![0x20, 0x00, 0x20, 0x01, 0x7d, 0x1a, 0x20, 0x00, 0x20, 0x01, 0x83, 0x1a, 0x20, 0x00, 0x20, 0x01, 0x84, 0x1a, 0x20, 0x00, 0x20, 0x01, 0x85, 0x1a, 0x20, 0x00, 0x20, 0x01, 0x86, 0x1a, 0x20, 0x00, 0x20, 0x01, 0x88, 0x1a, 0x20, 0x00, 0x50, 0x1a, 0x0b]);
 }
 
 #[test]
@@ -205,9 +205,9 @@ fn f64_binary() {
 
 #[test]
 fn conversions() {
-    // local.get 0 i64.extend_i32_u drop local.get 1 i64.reinterpret_f64 f64.reinterpret_i64 drop
-    let ops = vec![Op::LocalGet(0), Op::I64ExtendI32U, Op::Drop, Op::LocalGet(1), Op::I64ReinterpretF64, Op::F64ReinterpretI64, Op::Drop];
-    assert_eq!(encode(&ops), vec![0x20, 0x00, 0xad, 0x1a, 0x20, 0x01, 0xbd, 0xbf, 0x1a, 0x0b]);
+    // local.get 0 i64.extend_i32_u drop local.get 1 i64.reinterpret_f64 f64.reinterpret_i64 drop local.get 0 i64.extend_i32_u f64.convert_i64_s drop
+    let ops = vec![Op::LocalGet(0), Op::I64ExtendI32U, Op::Drop, Op::LocalGet(1), Op::I64ReinterpretF64, Op::F64ReinterpretI64, Op::Drop, Op::LocalGet(0), Op::I64ExtendI32U, Op::F64ConvertI64S, Op::Drop];
+    assert_eq!(encode(&ops), vec![0x20, 0x00, 0xad, 0x1a, 0x20, 0x01, 0xbd, 0xbf, 0x1a, 0x20, 0x00, 0xad, 0xb9, 0x1a, 0x0b]);
 }
 
 #[test]

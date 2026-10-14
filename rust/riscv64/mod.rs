@@ -9,7 +9,7 @@ use super::code::Func;
 use super::config::{Config, ABI_AREA};
 use super::generator::{Generator, GeneratorType};
 use super::symbol::Loc;
-use super::utils::{align_stack, Reg};
+use super::utils::{align_stack, Reg, POW2I_MAGIC};
 use anyhow::Result;
 
 const REG_SIZE: u32 = 8;
@@ -227,6 +227,24 @@ impl RiscV {
 
     fn emit(&mut self, w: u32) {
         self.a.append_word(w);
+    }
+
+    /// rd := v, in 11-bit chunks (`ori` takes a 12-bit signed immediate)
+    fn load_imm64(&mut self, rd: u8, v: u64) {
+        self.emit(rvv! {addi x(rd), x(Self::zero), (v >> 55) as i32});
+        let mut shift = 0;
+        for k in (0..5).rev() {
+            shift += 11;
+            let chunk = ((v >> (11 * k)) & 0x7ff) as i32;
+            if chunk != 0 {
+                self.emit(rvv! {slli x(rd), x(rd), shift});
+                self.emit(rvv! {ori x(rd), x(rd), chunk});
+                shift = 0;
+            }
+        }
+        if shift != 0 {
+            self.emit(rvv! {slli x(rd), x(rd), shift});
+        }
     }
 
     fn call_external(&mut self, op: &str, num_args: usize) -> Result<()> {
@@ -652,6 +670,38 @@ impl Generator for RiscV {
         self.minus(dst, s1, Reg::Temp);
     }
 
+    // the exponent-field operations (`utils::pow2i`, `getexp`, `getmant`); they use t0, t1 and
+    // ft11 (beyond the registers the allocator uses)
+    fn pow2i(&mut self, dst: Reg, s1: Reg) {
+        self.load_imm64(Self::t0, POW2I_MAGIC);
+        self.emit(rvv! {fmv.d.x f(Self::ft11), x(Self::t0)});
+        self.emit(rvv! {fadd.d f(ϕ(dst)), f(ϕ(s1)), f(Self::ft11)});
+        self.emit(rvv! {fmv.x.d x(Self::t0), f(ϕ(dst))});
+        self.emit(rvv! {slli x(Self::t0), x(Self::t0), 52});
+        self.emit(rvv! {fmv.d.x f(ϕ(dst)), x(Self::t0)});
+    }
+
+    fn getexp(&mut self, dst: Reg, s1: Reg) {
+        self.emit(rvv! {fmv.x.d x(Self::t0), f(ϕ(s1))});
+        self.emit(rvv! {slli x(Self::t0), x(Self::t0), 1});
+        self.emit(rvv! {srli x(Self::t0), x(Self::t0), 53});
+        self.emit(rvv! {addi x(Self::t0), x(Self::t0), -1023});
+        self.emit(rvv! {fcvt.d.l f(ϕ(dst)), x(Self::t0)});
+    }
+
+    fn getmant(&mut self, dst: Reg, s1: Reg) {
+        self.emit(rvv! {fmv.x.d x(Self::t0), f(ϕ(s1))});
+        self.emit(rvv! {slli x(Self::t1), x(Self::t0), 12});
+        self.emit(rvv! {srli x(Self::t1), x(Self::t1), 12}); // the mantissa
+        self.emit(rvv! {srli x(Self::t0), x(Self::t0), 63});
+        self.emit(rvv! {slli x(Self::t0), x(Self::t0), 63}); // the sign
+        self.emit(rvv! {or x(Self::t0), x(Self::t0), x(Self::t1)});
+        self.emit(rvv! {addi x(Self::t1), x(Self::zero), 0x3ff});
+        self.emit(rvv! {slli x(Self::t1), x(Self::t1), 52}); // the exponent of 1.0
+        self.emit(rvv! {or x(Self::t0), x(Self::t0), x(Self::t1)});
+        self.emit(rvv! {fmv.d.x f(ϕ(dst)), x(Self::t0)});
+    }
+
     fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         self.emit(rvv! {fadd.d f(ϕ(dst)), f(ϕ(s1)), f(ϕ(s2))});
     }
@@ -880,7 +930,8 @@ impl Generator for RiscV {
     }
 
     fn call_funclet(&mut self, label: &str) {
-        if label == "@complex_root" {
+        // these funclets can be called from other funclets: keep their return address
+        if label == "@complex_root" || label.starts_with("@libm_") {
             self.emit(rvv! {mv x(Self::t6), x(Self::ra)});
             self.j(label, Self::ra);
             self.emit(rvv! {mv x(Self::ra), x(Self::t6)});
