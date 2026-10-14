@@ -22,16 +22,7 @@ produces the same module.
 
 The backend is behind the `wasm` cargo feature, which is off by default (also for the
 Python package). Without it, `ty="wasm"` fails with "symjit was built without the
-`wasm` feature". To enable it:
-
-```bash
-cargo build --release --features wasm
-cp target/release/libsymjit.so python/symjit/_lib.cpython-312-x86_64-linux-gnu.so
-cargo test --lib --features wasm      # includes the backend's unit tests
-```
-
-or, for `pip install`, list it in `pyproject.toml`
-(`[[tool.setuptools-rust.ext-modules]]`, `features = ["wasm"]`).
+`wasm` feature". 
 
 ## Status
 

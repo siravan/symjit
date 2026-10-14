@@ -80,3 +80,8 @@ required-features = ["composer"]
 name = "pi_hypersphere"
 path = "examples/claude/pi_hypersphere.rs"
 required-features = ["composer"]
+
+[[example]]
+name = "factorial"
+path = "examples/claude/factorial.rs"
+required-features = ["composer"]

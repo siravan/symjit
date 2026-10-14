@@ -33,7 +33,26 @@ const ARGS: [u8; 4] = [Amd::RCX, Amd::RDX, Amd::R8, Amd::R9];
 #[cfg(target_family = "unix")]
 const ARGS: [u8; 4] = [Amd::RDI, Amd::RSI, Amd::RDX, Amd::RCX];
 
-const SUBROUTINE_ARGS: [u8; 4] = [Amd::RCX, Amd::RDX, Amd::R8, Amd::R9];
+// funclet arguments in compression mode: the stack slot numbers of up to four arguments in
+// each register, 16 bits each (`pack_locs`). Only volatile registers can be used, which are
+// fewer on Windows (RSI and RDI are non-volatile there).
+#[cfg(not(target_family = "windows"))]
+const SUBROUTINE_ARGS: [u8; 8] = [
+    Amd::RCX,
+    Amd::RDX,
+    Amd::R8,
+    Amd::R9,
+    Amd::RSI,
+    Amd::RDI,
+    Amd::R10,
+    Amd::R11,
+];
+
+#[cfg(target_family = "windows")]
+const SUBROUTINE_ARGS: [u8; 6] = [Amd::RCX, Amd::RDX, Amd::R8, Amd::R9, Amd::R10, Amd::R11];
+
+/// The number of funclet arguments whose slot numbers fit in SUBROUTINE_ARGS.
+const PACKED_ARGS: usize = 4 * SUBROUTINE_ARGS.len();
 
 const RET: u8 = 0;
 
@@ -316,6 +335,7 @@ fn save_f64x8_to_loc(amd: &mut Amd, r: u8, loc: Loc) {
 }
 
 fn pack_locs(amd: &mut Amd, locs: &[Loc]) {
+    assert!(locs.len() <= PACKED_ARGS);
     for reg in 0..(locs.len() - 1) / 4 + 1 {
         let mut a: u64 = 0;
 
@@ -358,13 +378,17 @@ fn load_args_helper<F1, F2>(
         }
     }
 
-    if ultra {
-        pack_locs(amd, locs.get(0..n).unwrap_or(locs));
-    } else {
-        for (arg, loc) in locs.iter().enumerate() {
-            if arg < n {
-                f2(amd, arg as u8, *loc)
-            }
+    // in the ultra entry, the first `packed` arguments are passed as packed stack slot
+    // numbers, and the rest of the first `n` in registers, as in the plain entry
+    let packed = if ultra { n.min(PACKED_ARGS) } else { 0 };
+
+    if packed > 0 {
+        pack_locs(amd, locs.get(0..packed).unwrap_or(locs));
+    }
+
+    for (arg, loc) in locs.iter().enumerate() {
+        if arg >= packed && arg < n {
+            f2(amd, arg as u8, *loc)
         }
     }
 }
@@ -382,7 +406,8 @@ fn save_args_helper<F1, F2>(
     F2: Fn(&mut Amd, u8, Loc),
 {
     if ultra {
-        for arg in 0..num_args.min(n) {
+        // the arguments from PACKED_ARGS to `n` are already in their registers
+        for arg in 0..num_args.min(n).min(PACKED_ARGS as u8) {
             amd.mov(Amd::RAX, SUBROUTINE_ARGS[arg as usize / 4]);
             let k = arg % 4;
             if k > 0 {

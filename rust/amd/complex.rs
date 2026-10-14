@@ -102,6 +102,16 @@ impl AmdComplexGenerator {
         Ok(())
     }
 
+    /// The number of funclet arguments passed in registers (xmm0-xmm15, or xmm0-xmm31 with
+    /// AVX-512): the funclet bodies (compression mode) copy them to the stack on entry.
+    fn arg_regs(&self) -> u8 {
+        if self.config.use_xmm16_31() {
+            32
+        } else {
+            16
+        }
+    }
+
     fn predefined_consts(&mut self) {
         self.align();
         predefined_consts(&mut self.amd, 2);
@@ -239,12 +249,13 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn load_args(&mut self, locs: Vec<Loc>, ultra: bool) {
+        let n = self.arg_regs() as usize;
         load_args_helper(
             &mut self.amd,
             &self.config,
             &locs[..],
             ultra,
-            16,
+            n,
             |amd, src, dst| {
                 load_f64x2_from_loc(amd, 0, src);
                 save_f64x2_to_loc(amd, 0, dst);
@@ -256,12 +267,13 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn save_args(&mut self, num_args: u8, ultra: bool) {
+        let n = self.arg_regs();
         save_args_helper(
             &mut self.amd,
             &self.config,
             num_args,
             ultra,
-            16,
+            n,
             |amd, arg| {
                 amd.vmovdd_xmm_indexed(arg, STACK, Amd::RAX, 8);
             },

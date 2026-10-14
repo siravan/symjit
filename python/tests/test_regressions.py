@@ -162,6 +162,65 @@ class Regressions(unittest.TestCase):
                 f = compile_composer(cp, dtype="complex128", **options)
                 self.assertEqual(complex(f.evaluate_complex([[1 + 2j, 3 + 4j]])[0, 0]), 3 + 4j)
 
+    def test_compressed_funclets_with_many_arguments(self):
+        # Compression mode passes the first arguments of a funclet in registers, or (opt_level
+        # 3, "ultra" entry) packs their stack slot numbers into general registers, 4 per
+        # register. The real AVX-512 SIMD kernel asked for 32 such arguments, but there were 4
+        # registers (16 arguments): a funclet with more than 16 arguments aborted the process
+        # (index out of bounds), at any opt_level. There are now 8 registers on Unix (6 on
+        # Windows), and the complex scalar kernel uses xmm16-xmm31 with AVX-512 for arguments
+        # 16-31. The results must equal the uncompressed ones.
+        from symjit import compile_evaluator
+
+        def funclets(n_terms, temps):
+            # 4 outputs, each a sum of `n_terms` products of two parameters, or of temps that
+            # copy the parameters (stack slots, the packed entry): one funclet with
+            # 2 * n_terms arguments (real) or n_terms arguments (complex, split by trim)
+            ir, t = [], 0
+            if temps:
+                ir = [("add", ("temp", i), [("param", i), ("const", 0)], 0) for i in range(64)]
+                t = 64
+            leaf = ("temp" if temps else "param", None)
+            sums = []
+            for k in range(4):
+                prods = []
+                for i in range(n_terms):
+                    a, b = (2 * i + k) % 64, (2 * i + 3 * k + 1) % 64
+                    ir.append(("mul", ("temp", t), [(leaf[0], a), (leaf[0], b)], 0))
+                    prods.append(t)
+                    t += 1
+                ir.append(("add", ("temp", t), [("temp", j) for j in prods], 0))
+                sums.append(t)
+                t += 1
+            ir += [("mul", ("out", k), [("const", 0), ("temp", s)], 0) for k, s in enumerate(sums)]
+            return str((ir, t, [1]))
+
+        rng = np.random.default_rng(5)
+        X = rng.uniform(0.5, 1.5, (37, 64))
+        cases = [(n, temps, dt) for n in [8, 12, 16, 20] for temps in [False, True] for dt in ["float64", "complex128"]]
+        cases += [(n, True, "complex128") for n in [24, 30, 40]]
+        for n_terms, temps, dtype in cases:
+            ev = funclets(n_terms, temps)
+            base = dict(dtype=dtype, num_params=64, use_threads=False)
+            if dtype == "complex128":
+                base["fast_complex"] = True
+                args = X + 0.5j * X[::-1]
+            else:
+                args = X
+
+            def run(**kw):
+                f = compile_evaluator(ev, **base, **kw)
+                if dtype == "complex128":
+                    return np.vstack([f.evaluate_complex(args[:1]), f.evaluate_complex(args)])
+                return np.vstack([f.evaluate(args[:1]), f.evaluate(args)])
+
+            want = run(compress=False, use_simd=False)
+            for level in [2, 3]:
+                for simd, simd512 in [(False, False), (True, False), (True, True)]:
+                    with self.subTest(n_terms=n_terms, temps=temps, dtype=dtype, level=level, simd=simd, simd512=simd512):
+                        got = run(compress=True, opt_level=level, use_simd=simd, enable_simd512=simd512)
+                        np.testing.assert_allclose(got, want, rtol=1e-13)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -397,6 +397,13 @@ impl Config {
         return false;
     }
 
+    fn cpu_has_avx512vl() -> bool {
+        #[cfg(target_arch = "x86_64")]
+        return is_x86_feature_detected!("avx512vl");
+        #[cfg(not(target_arch = "x86_64"))]
+        return false;
+    }
+
     pub fn has_avx(&self) -> bool {
         self.is_amd64() && !matches!(self.ty, CompilerType::AmdSSE) && Self::cpu_has_avx()
     }
@@ -439,6 +446,11 @@ impl Config {
 
     pub fn use_simd512(&self) -> bool {
         self.test(ENABLE_SIMD512) && self.test(USE_SIMD) && Self::cpu_has_avx512()
+    }
+
+    /// With AVX-512, xmm16-xmm31 are available to 128-bit code (EVEX encoding, AVX512VL).
+    pub fn use_xmm16_31(&self) -> bool {
+        self.use_simd512() && Self::cpu_has_avx512vl()
     }
 
     pub fn simd_branch(&self) -> bool {

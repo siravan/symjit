@@ -1,6 +1,8 @@
 use crate::assembler::Assembler;
 use crate::utils::DataType;
 
+use super::f64x8::Prefix;
+
 pub enum RoundingMode {
     Round,
     Floor,
@@ -344,6 +346,17 @@ impl Amd {
         self.append_byte(0xc4);
         self.append_byte(r | x | b | encoding);
         self.append_byte(w | vvvv | pp);
+    }
+
+    /// The EVEX prefix of a 128-bit packed operation (vmovupd/vmovups) on xmm0-xmm31.
+    fn evex_dd(&self, reg: u8, rm: u8) -> Prefix {
+        let mut p = Prefix::new(reg, 0, rm);
+        p.set_len(128);
+        match self.dtype {
+            DataType::F32 => p.ps().set_w(0),
+            DataType::F64 => p.pd().set_w(1),
+        };
+        p
     }
 
     pub fn vex_dd(&mut self, reg: u8, vreg: u8, rm: u8, index: u8) {
@@ -764,12 +777,27 @@ impl Amd {
     }
 
     pub fn vmovdd_xmm_mem(&mut self, reg: u8, rm: u8, offset: i32) {
+        if reg >= 16 {
+            // xmm16-xmm31 (AVX512VL): EVEX.128 vmovupd, disp8*16
+            let mut p = self.evex_dd(reg, rm);
+            p.evex(self);
+            self.append_byte(0x10);
+            p.modrm_mem(self, offset);
+            return;
+        }
         self.vex_dd(reg, 0, rm, 0);
         self.append_byte(0x10);
         self.modrm_mem(reg, rm, offset);
     }
 
     pub fn vmovdd_xmm_indexed(&mut self, reg: u8, base: u8, index: u8, scale: u8) {
+        if reg >= 16 {
+            // xmm16-xmm31 (AVX512VL): EVEX.128 vmovupd
+            self.evex_dd(reg, base).set_index(index).evex(self);
+            self.append_byte(0x10);
+            self.modrm_sib(reg, base, index, scale);
+            return;
+        }
         self.vex_dd(reg, 0, base, index);
         self.append_byte(0x10);
         self.modrm_sib(reg, base, index, scale);
@@ -786,6 +814,14 @@ impl Amd {
     }
 
     pub fn vmovdd_mem_xmm(&mut self, rm: u8, offset: i32, reg: u8) {
+        if reg >= 16 {
+            // xmm16-xmm31 (AVX512VL): EVEX.128 vmovupd, disp8*16
+            let mut p = self.evex_dd(reg, rm);
+            p.evex(self);
+            self.append_byte(0x11);
+            p.modrm_mem(self, offset);
+            return;
+        }
         self.vex_dd(reg, 0, rm, 0);
         self.append_byte(0x11);
         self.modrm_mem(reg, rm, offset);
