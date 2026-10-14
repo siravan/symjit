@@ -221,6 +221,46 @@ class Regressions(unittest.TestCase):
                         got = run(compress=True, opt_level=level, use_simd=simd, enable_simd512=simd512)
                         np.testing.assert_allclose(got, want, rtol=1e-13)
 
+    def test_real_kernel_times_imaginary_unit(self):
+        # The builder rewrote `x * i` (and `x * -i`) as `times_i(x)` in real kernels too, where
+        # the native generators emit nothing for it: the result was whatever the register held
+        # (often `x`, or a leftover value), so real Symbolica evaluators with imaginary
+        # constants were wrong, more so in compression mode (GL297: 1e3 to 1e63 relative
+        # error). A real kernel holds the real part of `i * x`, which is 0.
+        from symjit import Composer, compile_composer, compile_evaluator
+
+        rng = np.random.default_rng(9)
+        X = rng.uniform(0.5, 1.5, (37, 8))
+        # constants: 0: 1, 1: i, 2: -i
+        ir = [
+            ("mul", ("temp", 0), [("param", 0), ("const", 1)], 0),  # x0 * i -> 0
+            ("mul", ("temp", 1), [("const", 2), ("param", 1)], 0),  # -i * x1 -> 0
+            ("add", ("temp", 2), [("param", 2), ("temp", 0)], 0),  # x2
+            ("mul", ("temp", 3), [("temp", 2), ("param", 3), ("const", 1)], 0),  # 0
+            ("add", ("out", 0), [("temp", 1), ("param", 4)], 0),  # x4
+            ("add", ("out", 1), [("temp", 2), ("temp", 3), ("const", 0)], 0),  # x2 + 1
+        ]
+        # the same shape 4 times with different parameters: a funclet in compression mode
+        for k in range(4):
+            ir.append(("mul", ("temp", 4 + k), [("param", k), ("param", k + 4), ("param", (k + 1) % 8), ("const", 1)], 0))
+        ir.append(("add", ("out", 2), [("temp", 4 + k) for k in range(4)] + [("param", 5)], 0))  # x5
+        ev = f"({ir}, 8, [1, 1𝑖, -1𝑖])"
+        want = np.stack([X[:, 4], X[:, 2] + 1, X[:, 5]], axis=1)
+        for kw in [dict(compress=False), dict(compress=False, opt_level=0), dict(compress=True, opt_level=2),
+                   dict(compress=True, opt_level=3), dict(use_simd=False), dict(enable_simd512=True)]:
+            with self.subTest(**kw):
+                f = compile_evaluator(ev, dtype="float64", num_params=8, use_threads=False, **kw)
+                np.testing.assert_array_equal(np.vstack([f.evaluate(X[:1]), f.evaluate(X)]), np.vstack([want[:1], want]))
+
+        # the indirect translator of the Composer (`direct=False`) goes through the same builder
+        cp = Composer(2, 2)
+        cp.assign(cp.out(0), cp.fadd(cp.fmul(cp.arg(0), cp.constant(1j)), cp.arg(1)))
+        cp.assign(cp.out(1), cp.fadd(cp.fmul(cp.constant(-1j), cp.arg(0)), cp.arg(1)))
+        for direct in [True, False]:
+            with self.subTest(direct=direct):
+                f = compile_composer(cp, direct=direct, use_threads=False)
+                np.testing.assert_array_equal(f.evaluate(X[:, :2]), np.stack([X[:, 1], X[:, 1]], axis=1))
+
 
 if __name__ == "__main__":
     unittest.main()

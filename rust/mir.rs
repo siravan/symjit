@@ -643,7 +643,15 @@ impl Mir {
         });
     }
 
+    /// `i * s1`. A real kernel holds the real part, which is +0 for a real `s1` (as the
+    /// complexifier gives): only complex kernels get a `TimesI` instruction, and the real
+    /// generators do not implement it.
     pub fn times_i(&mut self, dst: Reg, s1: Reg) {
+        if !self.config.is_complex() {
+            self.xor(dst, s1, s1);
+            return;
+        }
+
         self.push(Instruction::Uni {
             op: UniOp::TimesI,
             dst,
@@ -651,7 +659,13 @@ impl Mir {
         });
     }
 
+    /// `-i * s1`, as `times_i`.
     pub fn times_neg_i(&mut self, dst: Reg, s1: Reg) {
+        if !self.config.is_complex() {
+            self.xor(dst, s1, s1);
+            return;
+        }
+
         self.push(Instruction::Uni {
             op: UniOp::TimesNegI,
             dst,

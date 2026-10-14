@@ -121,6 +121,8 @@ pub trait Generator {
     fn sign(&mut self, dst: Reg, s1: Reg);
     fn abs(&mut self, dst: Reg, s1: Reg);
     fn abs2(&mut self, dst: Reg, s1: Reg);
+    /// `i * s1` and `-i * s1`: complex kernels only. `Mir::times_i` emits `xor` in a real
+    /// kernel, so the real generators leave these empty.
     fn times_i(&mut self, dst: Reg, s1: Reg);
     fn times_neg_i(&mut self, dst: Reg, s1: Reg);
     fn root(&mut self, dst: Reg, s1: Reg);

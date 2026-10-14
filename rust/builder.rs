@@ -273,16 +273,17 @@ impl Builder {
             {
                 self.create_unary(Operation::new("abs2"), right)?
             }
-            Operation::Times if right.is_imaginary_unit() => {
+            // `x * i` and `x * -i` (complex kernels; a real kernel multiplies by the real part, 0)
+            Operation::Times if right.is_imaginary_unit() && self.config.is_complex() => {
                 self.create_unary(Operation::new("times_i"), left)?
             }
-            Operation::Times if left.is_imaginary_unit() => {
+            Operation::Times if left.is_imaginary_unit() && self.config.is_complex() => {
                 self.create_unary(Operation::new("times_i"), right)?
             }
-            Operation::Times if right.is_neg_imaginary_unit() => {
+            Operation::Times if right.is_neg_imaginary_unit() && self.config.is_complex() => {
                 self.create_unary(Operation::new("times_neg_i"), left)?
             }
-            Operation::Times if left.is_neg_imaginary_unit() => {
+            Operation::Times if left.is_neg_imaginary_unit() && self.config.is_complex() => {
                 self.create_unary(Operation::new("times_neg_i"), right)?
             }
             Operation::Divide if right.is_unary("recip") => {
