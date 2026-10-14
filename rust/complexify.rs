@@ -54,7 +54,9 @@ pub struct Complexifier {
     real_regs: [bool; 32],
     root_defined: bool,
     /// the functions of the math library called (`call_real_or_complex`; feature `math`)
+    #[cfg(feature = "math")]
     libm_used: Vec<String>,
+    #[cfg(feature = "math")]
     count_libm_calls: usize,
 }
 
@@ -66,7 +68,9 @@ impl Complexifier {
             real_locs: reals.clone(),
             real_regs: [false; 32],
             root_defined: false,
+            #[cfg(feature = "math")]
             libm_used: Vec::new(),
+            #[cfg(feature = "math")]
             count_libm_calls: 0,
         }
     }
@@ -146,25 +150,97 @@ impl Complexifier {
 
 #[cfg(feature = "math")]
 impl Complexifier {
-    /// A call of a complex function `op` of the math library (`libm.rs`): when the argument
-    /// is real at run time (its imaginary part is zero), the real function is called (the
-    /// inlined `@libm_<op>` in SIMD kernels, `Generator::inlines_math`, the C function
-    /// otherwise), and the complex C function when it is not. The test is skipped when the
-    /// argument is known to be real. In a SIMD kernel, a row whose lanes do not agree is
-    /// computed again by the scalar kernel (`branch_if`). A zero imaginary part of the
-    /// argument gives +0 as the imaginary part of the result (its sign is not kept).
+    fn use_libm(&mut self, name: &str) {
+        if !self.libm_used.iter().any(|n| n == name) {
+            self.libm_used.push(name.to_string());
+        }
+    }
+
+    fn const_index(&mut self, v: f64) -> u32 {
+        match self
+            .mir
+            .consts
+            .iter()
+            .position(|c| c.to_bits() == v.to_bits())
+        {
+            Some(idx) => idx as u32,
+            None => {
+                self.mir.consts.push(v);
+                (self.mir.consts.len() - 1) as u32
+            }
+        }
+    }
+
+    /// A call of a complex function `op` that the library has in complex form (the
+    /// hyperbolic functions): a real argument known at compile time gets the real function;
+    /// otherwise the complex funclet `@libm_cplx_<op>` when |re| and |im| are within
+    /// `libm::complex_domain` (false for NaN and infinities), else the complex C function. In
+    /// a SIMD kernel, a row whose lanes do not agree is computed again by the scalar kernel
+    /// (`branch_if`).
+    fn call_complex_inline(&mut self, op: &str) -> Result<()> {
+        if self.is_real_reg(Reg::Ret) {
+            self.use_libm(op);
+            self.mir.call(&crate::libm::funclet_label(op), 0)?;
+            self.set_reg_real(Reg::Ret);
+            return Ok(());
+        }
+
+        let name = format!("{}{}", crate::mir::LIBM_COMPLEX, op);
+        self.use_libm(&name);
+        self.ensure_complex(Reg::Ret);
+
+        let n = self.count_libm_calls;
+        self.count_libm_calls += 1;
+        let inside = format!("@cplx_inside_{}", n);
+        let end = format!("@cplx_call_end_{}", n);
+
+        // |re| < x_limit and |im| < y_limit; the registers of `Temp` are free in a unary call
+        let (x_limit, y_limit) = crate::libm::complex_domain(op);
+        let (t, u, c) = (Self::T0, Self::T1, im(Reg::Temp));
+        let (ix, iy) = (self.const_index(x_limit), self.const_index(y_limit));
+        self.mir.abs(t, re(Reg::Ret));
+        self.mir.load_const(c, ix);
+        self.mir.lt(t, t, c);
+        self.mir.abs(u, im(Reg::Ret));
+        self.mir.load_const(c, iy);
+        self.mir.lt(u, u, c);
+        self.mir.and(t, t, u);
+        self.mir.branch_if(t, &inside, true);
+        self.mir.call(op, 1)?;
+        self.mir.branch(&end);
+        self.mir.set_label(&inside);
+        self.mir.call(&crate::libm::funclet_label(&name), 0)?;
+        self.mir.set_label(&end);
+
+        self.set_reg_complex(Reg::Ret);
+        Ok(())
+    }
+
+    /// A call of a complex function `op` that the math library (`libm.rs`) has in real form
+    /// only (the logarithms): when the argument is real at run time (its imaginary part is
+    /// zero), the real function is called (the inlined `@libm_<op>` in SIMD kernels,
+    /// `Generator::inlines_math`, the C function otherwise), and the complex C function when
+    /// it is not. In a SIMD kernel, a row whose lanes do not agree is computed again by the
+    /// scalar kernel (`branch_if`). A zero imaginary part of the argument gives +0 as the
+    /// imaginary part of the result (its sign is not kept). For a function with a domain
+    /// (`libm::domain_limit`), the real part must also be below the limit in absolute value;
+    /// for the logarithms (`libm::positive_domain`), it must be positive (and the test is not
+    /// skipped for an argument known to be real).
     fn call_real_or_complex(&mut self, op: &str) -> Result<()> {
         if !self.libm_used.iter().any(|n| n == op) {
             self.libm_used.push(op.to_string());
         }
         let real = crate::libm::funclet_label(op);
+        let limit = crate::libm::domain_limit(op);
+        let positive = crate::libm::positive_domain(op);
 
-        if self.is_real_reg(Reg::Ret) {
+        if self.is_real_reg(Reg::Ret) && limit.is_none() && !positive {
             self.mir.call(&real, 0)?;
             self.set_reg_real(Reg::Ret);
             return Ok(());
         }
 
+        self.ensure_complex(Reg::Ret);
         let n = self.count_libm_calls;
         self.count_libm_calls += 1;
         let real_arg = format!("@cplx_real_arg_{}", n);
@@ -175,6 +251,34 @@ impl Complexifier {
         let t = Self::T0;
         self.mir.xor(t, t, t);
         self.mir.eq(t, im(Reg::Ret), t);
+        if let Some(limit) = limit {
+            // and |re| < limit (false for NaN and infinities); the registers of `Temp` are
+            // free in a unary call
+            let (u, c) = (Self::T1, im(Reg::Temp));
+            let idx = match self
+                .mir
+                .consts
+                .iter()
+                .position(|v| v.to_bits() == limit.to_bits())
+            {
+                Some(idx) => idx,
+                None => {
+                    self.mir.consts.push(limit);
+                    self.mir.consts.len() - 1
+                }
+            };
+            self.mir.abs(u, re(Reg::Ret));
+            self.mir.load_const(c, idx as u32);
+            self.mir.lt(u, u, c);
+            self.mir.and(t, t, u);
+        }
+        if positive {
+            // and re > 0 (false for NaN): a negative real has a complex logarithm
+            let u = Self::T1;
+            self.mir.xor(u, u, u);
+            self.mir.lt(u, u, re(Reg::Ret));
+            self.mir.and(t, t, u);
+        }
         self.mir.branch_if(t, &real_arg, true);
         self.mir.call(op, 1)?;
         self.mir.branch(&end);
@@ -938,8 +1042,13 @@ impl Generator for Complexifier {
 
     fn call_complex(&mut self, op: &str, num_args: usize) -> Result<()> {
         #[cfg(feature = "math")]
-        if num_args == 1 && self.mir.config.inline_math() && crate::libm::has_function(op) {
-            return self.call_real_or_complex(op);
+        if num_args == 1 && self.mir.config.inline_math() {
+            if crate::libm::has_complex_function(op) {
+                return self.call_complex_inline(op);
+            }
+            if crate::libm::real_in_complex(op) {
+                return self.call_real_or_complex(op);
+            }
         }
 
         self.ensure_complex(Reg::Ret);

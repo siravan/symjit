@@ -262,6 +262,32 @@ class Regressions(unittest.TestCase):
                 f = compile_composer(cp, direct=direct, use_threads=False)
                 np.testing.assert_array_equal(f.evaluate(X[:, :2]), np.stack([X[:, 1], X[:, 1]], axis=1))
 
+    def test_complex_tanh_near_poles(self):
+        # The complex tanh (code.rs `tanh_c`, also behind coth, tan and cot) divided sinh 2x by
+        # cosh 2x + cos 2y, which cancels near the poles z = i (k + 1/2) pi: up to 1e8 ulp
+        # there, and hundreds of ulp for |x|, |y| < 3. It now divides by sinh^2 x + cos^2 y.
+        try:
+            import mpmath as mp
+        except ImportError:
+            self.skipTest("needs mpmath")
+
+        x = sp.Symbol("x")
+        rng = np.random.default_rng(4)
+        n = 400
+        z = np.concatenate([rng.uniform(-1e-3, 1e-3, n)
+                            + 1j * (np.pi / 2 * (2 * rng.integers(-10, 10, n) + 1) + rng.uniform(-1e-3, 1e-3, n)),
+                            rng.uniform(-3, 3, n) + 1j * rng.uniform(-3, 3, n)])
+        for name in ["tanh", "coth", "tan", "cot"]:
+            zz = z if name in ("tanh", "coth") else z.imag + 1j * z.real  # tan's poles are real
+            got = np.ravel(compile_func([x], [getattr(sp, name)(x)], dtype="complex128")(zz))
+            worst = 0.0
+            with mp.workprec(200):
+                for a, c in zip(got, zz):
+                    r = getattr(mp, name)(mp.mpc(c.real, c.imag))
+                    e = max(abs(mp.mpf(a.real) - r.real), abs(mp.mpf(a.imag) - r.imag)) / np.spacing(float(abs(r)))
+                    worst = max(worst, float(e))
+            self.assertLess(worst, 8, name)
+
 
 if __name__ == "__main__":
     unittest.main()

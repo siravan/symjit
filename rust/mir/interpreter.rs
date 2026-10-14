@@ -5,7 +5,7 @@
 use num_complex::Complex;
 use num_traits::identities::Zero;
 
-use super::{ArithOp, BinOp, FusedOp, Instruction, Mir, UniOp, LIBM_PREFIX};
+use super::{libm_c_function, ArithOp, BinOp, FusedOp, Instruction, Mir, UniOp, LIBM_PREFIX};
 use super::super::code::Func;
 use super::super::config::SPILL_AREA;
 use super::super::symbol::Loc;
@@ -273,7 +273,7 @@ impl Mir {
                     // the inlined math library runs in SIMD kernels only
                     // (`Generator::inlines_math`): the interpreter, like the scalar kernels,
                     // calls the C function (in complex kernels, the complex one)
-                    let (label, num_args) = match label.strip_prefix(LIBM_PREFIX) {
+                    let (label, num_args) = match libm_c_function(label) {
                         Some(name) if *num_args == 0 => (name, &1),
                         _ => (label.as_str(), num_args),
                     };

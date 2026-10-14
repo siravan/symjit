@@ -103,6 +103,16 @@ pub enum FuncletOp {
 /// them (`Generator::inlines_math`) call the C function `<name>` instead.
 pub const LIBM_PREFIX: &str = "@libm_";
 pub const LIBM_END: &str = "@libm_end";
+/// The prefix (after `LIBM_PREFIX`) of the complex functions of the library: `@libm_cplx_sinh`
+/// is the complex sinh, whose C function is `sinh` in a complex kernel.
+pub const LIBM_COMPLEX: &str = "cplx_";
+
+/// The C function that a call of the library's funclet `label` stands for.
+pub fn libm_c_function(label: &str) -> Option<&str> {
+    label
+        .strip_prefix(LIBM_PREFIX)
+        .map(|name| name.strip_prefix(LIBM_COMPLEX).unwrap_or(name))
+}
 
 #[derive(Clone)]
 pub enum Instruction {
@@ -1460,7 +1470,7 @@ impl Mir {
                 }
                 Instruction::Call { label, num_args } => {
                     // a generator that does not inline the math library calls the C function
-                    let (label, num_args) = match label.strip_prefix(LIBM_PREFIX) {
+                    let (label, num_args) = match libm_c_function(label) {
                         Some(name) if *num_args == 0 && !ir.inlines_math() => (name, &1),
                         _ => (label.as_str(), num_args),
                     };

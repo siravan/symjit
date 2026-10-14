@@ -122,17 +122,27 @@ fn recip(w: Complex<f64>) -> Complex<f64> {
     }
 }
 
-// tanh for the default (non-libm) build: `Complex::tanh` divides sinh(2x) by
-// cosh(2x) + cos(2y), which overflows to NaN for |x| > ~355. For |x| > 22, tanh(z) is
-// +-1 to double precision and its imaginary part 2 sin(2y) / (cosh 2x + cos 2y) is
+// tanh for the default (non-libm) build. `Complex::tanh` divides sinh(2x) by
+// cosh(2x) + cos(2y), which overflows to NaN for |x| > ~355 and cancels near the poles
+// z = i(k + 1/2)pi, where it lost up to 1e8 ulp (and hundreds of ulp for |x|, |y| < 3).
+// Instead, tanh z = sinh z conj(cosh z) / |cosh z|^2:
+//
+//   tanh z = (sinh x cosh x + i sin y cos y) / (sinh^2 x + cos^2 y),
+//
+// whose denominator is a sum of squares (no cancellation; the same formula as `libm::ctanh`).
+// For |x| > 22, tanh(z) is +-1 to double precision and its imaginary part is
 // 4 sin(y) cos(y) exp(-2|x|) (as in C99 ctanh).
 #[allow(dead_code)] // unused with the `libm` feature
 fn tanh_c(z: Complex<f64>) -> Complex<f64> {
-    if z.re.abs() > 22.0 {
-        let e = (-2.0 * z.re.abs()).exp();
-        Complex::new(1.0f64.copysign(z.re), 4.0 * z.im.sin() * z.im.cos() * e)
+    let (x, y) = (z.re, z.im);
+    let (sy, cy) = y.sin_cos();
+    if x.abs() > 22.0 {
+        let e = (-2.0 * x.abs()).exp();
+        Complex::new(1.0f64.copysign(x), 4.0 * sy * cy * e)
     } else {
-        z.tanh()
+        let (s, c) = (x.sinh(), x.cosh());
+        let d = s * s + cy * cy;
+        Complex::new(s * c / d, sy * cy / d)
     }
 }
 

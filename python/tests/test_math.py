@@ -1,9 +1,11 @@
 """symjit's own math library (cargo feature `math`, `rust/libm.rs`).
 
-With `ty="native;inline_math=true"`, the SIMD kernels evaluate the library's functions (`exp`
-and the six hyperbolic functions) inline, on all lanes at once; the scalar kernel (single points,
+With `ty="native;inline_math=true"`, the SIMD kernels evaluate the library's functions (`exp`,
+the six hyperbolic functions, `sin` and `cos`) inline, on all lanes at once; the scalar kernel (single points,
 and the rows after the last full SIMD row) and the bytecode interpreter keep calling the C
-library. Complex kernels call the real function when the imaginary part of the argument is zero
+library (sin and cos also for |x| >= 2^20 pi/2, NaN and infinities: a SIMD row with such an
+argument is computed by the scalar kernel). In complex kernels, the hyperbolic functions have
+complex versions (for |re| < 710 and |im| < 2^20 pi/2); exp, sin and cos call the real function when the imaginary part of the argument is zero
 (a SIMD row with real and complex arguments is computed by the scalar kernel). The Rust tests
 (`libm::tests`) check the SIMD rows bit for bit against the Rust version of the library, also on
 ARM64 and RISC-V under qemu.
@@ -59,7 +61,17 @@ FUNCTIONS = {
     "coth": (sp.coth, lambda z: 1 / np.tanh(z), 6),
     "sech": (sp.sech, lambda z: 1 / np.cosh(z), 6),
     "csch": (sp.csch, lambda z: 1 / np.sinh(z), 6),
+    "sin": (sp.sin, np.sin, 2),
+    "cos": (sp.cos, np.cos, 2),
+    "ln": (sp.log, np.log, 2),
+    "log": (sp.Function("log"), np.log10, 3),  # symjit's log is log10
 }
+
+HYPERBOLIC = ["sinh", "cosh", "tanh", "coth", "sech", "csch"]
+# the functions with complex versions in the library (complex kernels, complex arguments)
+COMPLEX_INLINED = HYPERBOLIC + ["exp", "sin", "cos"]
+# the bounds of |re| and |im| of their arguments (`libm::complex_domain`)
+COMPLEX_DOMAIN = {"exp": (709, 2**20 * np.pi / 2), "sin": (2**20 * np.pi / 2, 710), "cos": (2**20 * np.pi / 2, 710)}
 
 OPTIONS = [dict(), dict(fastmath=False), dict(opt_level=0), dict(opt_level=1), dict(opt_level=3),
            dict(use_simd=False), dict(enable_simd512=True), dict(enable_simd512=True, fastmath=False),
@@ -83,7 +95,8 @@ class InlineMath(unittest.TestCase):
                     self.assertLessEqual(ulps(v[normal], ref[normal]).max(), bound)
                     # nan, infinities and signed zeros (also of the results: coth(-0) = -inf)
                     np.testing.assert_array_equal(v[special], ref[special])
-                    np.testing.assert_array_equal(np.signbit(v[special]), np.signbit(ref[special]))
+                    signed = special & ~np.isnan(ref)  # (the sign of a NaN has no meaning)
+                    np.testing.assert_array_equal(np.signbit(v[signed]), np.signbit(ref[signed]))
 
     def test_scalar_kernel_calls_c(self):
         # single points (scalar kernel) and the interpreter give the C library's bits
@@ -107,6 +120,23 @@ class InlineMath(unittest.TestCase):
                     inline = np.ravel(compile_func([x], [f_sp(x)], ty=INLINE, **options)(xs))
                     c_lib = np.ravel(compile_func([x], [f_sp(x)], **options)(xs))
                     self.assertGreater(np.sum(inline != c_lib), 0)
+
+    def test_trigonometric_domain(self):
+        # |x| >= 2^20 pi/2, NaN and infinities: the C functions; SIMD rows with such arguments
+        # are computed by the scalar kernel, the other rows by the library
+        rng = np.random.default_rng(6)
+        xs = rng.uniform(-10, 10, 4096)
+        xs[::37] = rng.uniform(1.7e6, 1e300, len(xs[::37]))
+        xs[5] = np.inf
+        xs[6] = np.nan
+        for name, f_np in [("sin", np.sin), ("cos", np.cos)]:
+            for options in [dict(), dict(enable_simd512=True)]:
+                with self.subTest(name=name, options=options):
+                    f = compile_func([x], [getattr(sp, name)(x)], ty=INLINE, **options)
+                    got = np.ravel(f(xs))
+                    with np.errstate(invalid="ignore"):
+                        ref = f_np(xs)
+                    np.testing.assert_allclose(got, ref, rtol=1e-15, atol=1e-15)
 
     def test_subnormal_results(self):
         # sech and csch keep subnormal results, where 1 / cosh(x) and 1 / sinh(x) are 0
@@ -137,14 +167,23 @@ class InlineMath(unittest.TestCase):
         self.assertNotIn("vpsllq", scalar)  # the scalar kernel calls the C library
 
     def test_complex_kernels(self):
-        # real arguments (zero imaginary part) get the real function, the others the complex
-        # C function; SIMD rows with both are computed by the scalar kernel
+        # the hyperbolic functions: the library's complex versions; exp, sin and cos: real
+        # arguments (zero imaginary part) get the real function, the others the complex C
+        # function (SIMD rows with both are computed by the scalar kernel)
         rng = np.random.default_rng(2)
         n = 4096
         re_ = rng.uniform(-20, 20, n)
         cases = {"real": re_ + 0j, "complex": re_ + 1j * rng.uniform(-3, 3, n),
                  "mixed": re_ + 1j * np.where(rng.random(n) < 0.5, 0.0, rng.uniform(-3, 3, n))}
         for name, (f_sp, f_np, _) in FUNCTIONS.items():
+            if name == "log":
+                # a complex kernel's log is the natural logarithm (code.rs cplx_log), not the
+                # library's log10: always the C function
+                for z in cases.values():
+                    f = compile_func([x], [f_sp(x)], ty=INLINE, dtype="complex128")
+                    c_lib = compile_func([x], [f_sp(x)], dtype="complex128")
+                    np.testing.assert_array_equal(np.ravel(f(z)), np.ravel(c_lib(z)))
+                continue
             for options in [dict(), dict(fast_complex=False), dict(enable_simd512=True), dict(use_simd=False),
                             dict(ty="bytecode;inline_math=true")]:
                 options = dict(options)
@@ -156,10 +195,49 @@ class InlineMath(unittest.TestCase):
                         got = np.ravel(f(z))
                         np.testing.assert_allclose(got, f_np(z), rtol=1e-13)
                         real = z.imag == 0
-                        self.assertTrue(np.all(got[real].imag == 0))
-                        # complex arguments: the complex C function's bits
+                        if name not in ("ln", "log"):  # complex for negative reals
+                            self.assertTrue(np.all(got[real].imag == 0))
                         want = np.ravel(c_lib(z))
-                        np.testing.assert_array_equal(got[~real], want[~real])
+                        if name in COMPLEX_INLINED:
+                            # the library's: an ulp or so off the C function at some points
+                            if case != "real" and ty == INLINE and options.get("use_simd", True):
+                                self.assertGreater(np.sum(got != want), 0)
+                        else:
+                            # complex arguments: the complex C function's bits
+                            np.testing.assert_array_equal(got[~real], want[~real])
+
+    def test_complex_functions(self):
+        # accuracy (normwise) against mpmath, also near the poles of tanh and coth (z = i pi/2
+        # and i pi), where the C path's tanh cancelled before 0020; and the
+        # domain: |re| >= 710, |im| >= 2^20 pi/2, NaN and infinities get the C function
+        import mpmath as mp
+
+        rng = np.random.default_rng(8)
+        n = 800
+        z = np.concatenate([rng.uniform(-3, 3, n) + 1j * rng.uniform(-3, 3, n),
+                            rng.uniform(-700, 700, n) + 1j * rng.uniform(-50, 50, n),
+                            rng.uniform(-1e-3, 1e-3, n) + 1j * (np.pi / 2 * rng.integers(-9, 9, n)
+                                                               + rng.uniform(-1e-3, 1e-3, n))])
+        for name in COMPLEX_INLINED:
+            f = compile_func([x], [getattr(sp, name)(x)], ty=INLINE, dtype="complex128")
+            got = np.ravel(f(z))
+            with mp.workprec(200):
+                ref = [getattr(mp, name)(mp.mpc(c.real, c.imag)) for c in z]
+            worst = 0.0
+            for a, r in zip(got, ref):  # (r is a 200-bit mpc)
+                m = abs(r)
+                if 1e-300 < m < 1e300:
+                    e = max(abs(mp.mpf(a.real) - r.real), abs(mp.mpf(a.imag) - r.imag)) / np.spacing(float(m))
+                    worst = max(worst, float(e))
+            self.assertLess(worst, 6, name)
+
+        for name in COMPLEX_INLINED:
+            lx, ly = COMPLEX_DOMAIN.get(name, (710, 2**20 * np.pi / 2))
+            outside = np.array([lx * 1.1 + 1j, -lx * 1.5 + 0.5j, 1 + ly * 1.2j, complex(np.nan, 1),
+                                complex(1, np.inf)] * 4)
+            f = compile_func([x], [getattr(sp, name)(x)], ty=INLINE, dtype="complex128")
+            c_lib = compile_func([x], [getattr(sp, name)(x)], dtype="complex128")
+            np.testing.assert_array_equal(np.ravel(f(outside)), np.ravel(c_lib(outside)), err_msg=name)
 
     def test_evaluator(self):
         # a Symbolica evaluator with exp statements and sums of products of their results, also

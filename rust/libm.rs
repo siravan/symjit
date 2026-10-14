@@ -23,7 +23,7 @@ use std::ops::{Add, Div, Mul, Sub};
 
 use anyhow::{anyhow, Result};
 
-use super::mir::{Instruction, Mir, LIBM_END, LIBM_PREFIX};
+use super::mir::{BinOp, Instruction, Mir, UniOp, LIBM_COMPLEX, LIBM_END, LIBM_PREFIX};
 use super::serializer::MirWriter;
 use super::utils::{self, Reg};
 
@@ -250,6 +250,351 @@ pub fn csch<T: MathOps>(x: T) -> T {
     T::select(a.lt(1.0), x.lit(1.0) / sinh_series(x), big)
 }
 
+// sin and cos.
+//
+// x = n pi/2 + r with an integer n and |r| <= pi/4: n = round(2x / pi), and pi/2 is split
+// into four parts (fdlibm's pio2_1, pio2_2, pio2_3 and pio2_3t), the first three with 33
+// significant bits, so that n times each is exact for n < 2^20, and x - n pio2_1 is exact
+// (Sterbenz). Where x is close to a multiple of pi/2 and r is small, the subtractions cancel
+// exactly; elsewhere their rounding errors are small relative to r. This holds for
+// |x| < 2^20 pi/2 (`TRIG_LIMIT`); the kernels call the C functions for larger arguments, NaN and
+// infinities (`domain_limit`), and the generic functions are inaccurate there.
+//
+// The reduced argument is kept in two parts, r + y, and sin(r + y) and cos(r + y) are musl's
+// (fdlibm's) minimax polynomials on [-pi/4, pi/4] with their first-order corrections for y; cos
+// keeps the rounding error of 1 - r^2/2 ((1 - w) - r^2/2, exact). Then, with q = n mod 4,
+// sin(x) = sin r, cos r, -sin r, -cos r and cos(x) = cos r, -sin r, -cos r, sin r.
+
+/// 2^20 pi/2 (rounded down): the reduction of sin and cos is accurate below it.
+pub const TRIG_LIMIT: f64 = 1647099.0;
+
+const INV_PIO2: f64 = std::f64::consts::FRAC_2_PI;
+const PIO2: [f64; 4] = [
+    f64::from_bits(0x3ff9_21fb_5440_0000), // 1.57079632673412561417e+00
+    f64::from_bits(0x3dd0_b461_1a60_0000), // 6.07710050630396597660e-11
+    f64::from_bits(0x3ba3_198a_2e00_0000), // 2.02226624871116645580e-21
+    f64::from_bits(0x397b_839a_2520_49c1), // 8.47842766036889956997e-32
+];
+
+/// (n, r, y) with x = n pi/2 + r + y, |y| <= ulp(r) / 2: the reduced argument in two parts
+fn reduce_pio2<T: MathOps>(x: T) -> (T, T, T) {
+    let n = (x * INV_PIO2 + ROUND) - ROUND;
+    let r0 = x - n * PIO2[0]; // exact
+    let r1 = r0 - n * PIO2[1];
+    let e1 = (r0 - r1) - n * PIO2[1]; // the rounding error of r1, exact
+    let t = e1 - (n * PIO2[2] + n * PIO2[3]);
+    // r1 + t = r + y (two-sum)
+    let r = r1 + t;
+    let b = r - r1;
+    let y = (r1 - (r - b)) + (t - b);
+    (n, r, y)
+}
+
+/// sin(r + y) for |r| <= pi/4, |y| <= ulp(r) / 2 (musl's __sin)
+#[allow(clippy::excessive_precision)] // musl's coefficients, as published
+fn sin_kernel<T: MathOps>(r: T, y: T) -> T {
+    const S1: f64 = -1.66666666666666324348e-01;
+    const S2: f64 = 8.33333333332248946124e-03;
+    const S3: f64 = -1.98412698298579493134e-04;
+    const S4: f64 = 2.75573137070700676789e-06;
+    const S5: f64 = -2.50507602534068634195e-08;
+    const S6: f64 = 1.58969099521155010221e-10;
+
+    let z = r * r;
+    let w = z * z;
+    let p = (z * S4 + S3) * z + S2 + z * w * (z * S6 + S5);
+    let v = z * r;
+    r - ((z * (y * 0.5 - v * p) - y) - v * S1)
+}
+
+/// cos(r + y) for |r| <= pi/4, |y| <= ulp(r) / 2 (musl's __cos)
+#[allow(clippy::excessive_precision)] // musl's coefficients, as published
+fn cos_kernel<T: MathOps>(r: T, y: T) -> T {
+    const C1: f64 = 4.16666666666666019037e-02;
+    const C2: f64 = -1.38888888888741095749e-03;
+    const C3: f64 = 2.48015872894767294178e-05;
+    const C4: f64 = -2.75573143513906633035e-07;
+    const C5: f64 = 2.08757232129817482790e-09;
+    const C6: f64 = -1.13596475577881948265e-11;
+
+    let z = r * r;
+    let w = z * z;
+    let p = z * ((z * C3 + C2) * z + C1) + w * w * ((z * C6 + C5) * z + C4);
+    let hz = z * 0.5;
+    let w = r.lit(1.0) - hz;
+    w + (((r.lit(1.0) - w) - hz) + (z * p - r * y))
+}
+
+/// sin(n pi/2 + r) from s = sin(r) and c = cos(r): with q = n mod 4, s, c, -s or -c
+fn by_quadrant<T: MathOps>(n: T, s: T, c: T) -> T {
+    // floor(n / 4) and floor(q / 2), exact: n / 4 - 0.375 and q / 2 - 0.25 are not ties
+    let m = ((n * 0.25 - 0.375) + ROUND) - ROUND;
+    let q = n - m * 4.0;
+    let h = ((q * 0.5 - 0.25) + ROUND) - ROUND;
+    let odd = q - h * 2.0;
+    let v = T::select(odd.gt(0.5), c, s);
+    T::select(q.gt(1.5), v * -1.0, v)
+}
+
+/// sin(x), accurate for |x| < `TRIG_LIMIT`
+pub fn sin<T: MathOps>(x: T) -> T {
+    let (n, r, y) = reduce_pio2(x);
+    let y = by_quadrant(n, sin_kernel(r, y), cos_kernel(r, y));
+    // sin(x) = x for |x| < 2^-26 (and the sign of a zero is kept)
+    T::select(x.abs().lt(1.4901161193847656e-8), x, y)
+}
+
+/// cos(x) = sin(x + pi/2), accurate for |x| < `TRIG_LIMIT`
+pub fn cos<T: MathOps>(x: T) -> T {
+    let (n, r, y) = reduce_pio2(x);
+    by_quadrant(n + 1.0, sin_kernel(r, y), cos_kernel(r, y))
+}
+
+// The complex hyperbolic functions of z = x + iy, as (real part, imaginary part):
+//
+//   sinh z = sinh x cos y + i cosh x sin y      cosh z = cosh x cos y + i sinh x sin y
+//
+// and the others as conj(numerator) / |denominator|^2, whose denominators are sums of
+// squares (no cancellation):
+//
+//   tanh z = (sinh x cosh x + i sin y cos y) / (sinh^2 x + cos^2 y)
+//   coth z = (sinh x cosh x - i sin y cos y) / (sinh^2 x + sin^2 y)
+//   sech z = (cosh x cos y - i sinh x sin y) / (sinh^2 x + cos^2 y)
+//   csch z = (sinh x cos y - i cosh x sin y) / (sinh^2 x + sin^2 y)
+//
+// For |x| > 22, where sinh^2 x overflows from |x| = 355 on, their limits, to a relative
+// error below e^-2|x|: tanh z = sign(x) + i sin y cos y / cosh^2 x (as `tanh_c` in code.rs),
+// coth likewise with -i, sech z = (cos y - i sign(x) sin y) / cosh x and
+// csch z = (sign(x) cos y - i sin y) / cosh x, which keep their subnormal results. The kernels
+// use them for |x| < 710 and |y| < `TRIG_LIMIT` (`complex_domain`), and the complex C functions
+// otherwise (also for NaN and infinities).
+
+/// (sinh x, cosh x), from one exponential
+fn sinh_cosh<T: MathOps>(x: T) -> (T, T) {
+    let a = x.abs();
+    let h = exp_scaled(a, -1.0);
+    let q = x.lit(0.25) / h;
+    let s = T::select(a.lt(1.0), sinh_series(x), (h - q) * sign(x));
+    (s, h + q)
+}
+
+/// (sin y, cos y), from one reduction (accurate for |y| < `TRIG_LIMIT`)
+fn sin_cos<T: MathOps>(y: T) -> (T, T) {
+    let (n, r, t) = reduce_pio2(y);
+    let (s, c) = (sin_kernel(r, t), cos_kernel(r, t));
+    let sin = by_quadrant(n, s, c);
+    let sin = T::select(y.abs().lt(1.4901161193847656e-8), y, sin);
+    (sin, by_quadrant(n + 1.0, s, c))
+}
+
+/// |x| above which the complex tanh, coth, sech and csch use their limits
+const COMPLEX_LARGE: f64 = 22.0;
+
+/// sinh(x + iy)
+pub fn csinh<T: MathOps>(x: T, y: T) -> (T, T) {
+    let (sy, cy) = sin_cos(y);
+    let (s, c) = sinh_cosh(x);
+    (s * cy, c * sy)
+}
+
+/// cosh(x + iy)
+pub fn ccosh<T: MathOps>(x: T, y: T) -> (T, T) {
+    let (sy, cy) = sin_cos(y);
+    let (s, c) = sinh_cosh(x);
+    (c * cy, s * sy)
+}
+
+/// tanh(x + iy)
+pub fn ctanh<T: MathOps>(x: T, y: T) -> (T, T) {
+    let (sy, cy) = sin_cos(y);
+    let (s, c) = sinh_cosh(x);
+    let large = x.abs().gt(COMPLEX_LARGE);
+    let d = s * s + cy * cy;
+    let re = T::select(large, sign(x), s * c / d);
+    let im = T::select(large, sy * cy / (c * c), sy * cy / d);
+    (re, im)
+}
+
+/// coth(x + iy)
+pub fn ccoth<T: MathOps>(x: T, y: T) -> (T, T) {
+    let (sy, cy) = sin_cos(y);
+    let (s, c) = sinh_cosh(x);
+    let large = x.abs().gt(COMPLEX_LARGE);
+    let d = s * s + sy * sy;
+    let re = T::select(large, sign(x), s * c / d);
+    let im = T::select(large, sy * cy / (c * c), sy * cy / d) * -1.0;
+    (re, im)
+}
+
+/// sech(x + iy)
+pub fn csech<T: MathOps>(x: T, y: T) -> (T, T) {
+    let (sy, cy) = sin_cos(y);
+    let (s, c) = sinh_cosh(x);
+    let large = x.abs().gt(COMPLEX_LARGE);
+    let d = s * s + cy * cy;
+    let re = T::select(large, cy / c, c * cy / d);
+    let im = T::select(large, sign(x) * sy / c, s * sy / d) * -1.0;
+    (re, im)
+}
+
+/// csch(x + iy)
+pub fn ccsch<T: MathOps>(x: T, y: T) -> (T, T) {
+    let (sy, cy) = sin_cos(y);
+    let (s, c) = sinh_cosh(x);
+    let large = x.abs().gt(COMPLEX_LARGE);
+    let d = s * s + sy * sy;
+    let re = T::select(large, sign(x) * cy / c, s * cy / d);
+    let im = T::select(large, sy / c, c * sy / d) * -1.0;
+    (re, im)
+}
+
+/// exp(x + iy) = e^x cos y + i e^x sin y
+pub fn cexp<T: MathOps>(x: T, y: T) -> (T, T) {
+    let (sy, cy) = sin_cos(y);
+    let e = exp(x);
+    (e * cy, e * sy)
+}
+
+/// sin(x + iy) = sin x cosh y + i cos x sinh y
+pub fn csin<T: MathOps>(x: T, y: T) -> (T, T) {
+    let (sx, cx) = sin_cos(x);
+    let (s, c) = sinh_cosh(y);
+    (sx * c, cx * s)
+}
+
+/// cos(x + iy) = cos x cosh y - i sin x sinh y
+pub fn ccos<T: MathOps>(x: T, y: T) -> (T, T) {
+    let (sx, cx) = sin_cos(x);
+    let (s, c) = sinh_cosh(y);
+    (cx * c, sx * s * -1.0)
+}
+
+/// The complex functions of the library, with the real and imaginary parts of the argument
+/// and of the result (`complexify`, `append_funclets`).
+const COMPLEX_LIBRARY: &[(&str, TracedComplex)] = &[
+    ("sinh", |x, y| csinh(x, y)),
+    ("cosh", |x, y| ccosh(x, y)),
+    ("tanh", |x, y| ctanh(x, y)),
+    ("coth", |x, y| ccoth(x, y)),
+    ("sech", |x, y| csech(x, y)),
+    ("csch", |x, y| ccsch(x, y)),
+    ("exp", |x, y| cexp(x, y)),
+    ("sin", |x, y| csin(x, y)),
+    ("cos", |x, y| ccos(x, y)),
+];
+
+/// A complex function of the library on traced values.
+type TracedComplex = for<'t> fn(Val<'t>, Val<'t>) -> (Val<'t>, Val<'t>);
+
+/// Whether the library has the complex function `name`.
+pub(crate) fn has_complex_function(name: &str) -> bool {
+    COMPLEX_LIBRARY.iter().any(|(n, _)| *n == name)
+}
+
+/// The bounds of |x| and |y| below which the library's complex `name` is used.
+pub(crate) fn complex_domain(name: &str) -> (f64, f64) {
+    match name {
+        // e^x finite; sin and cos of y
+        "exp" => (709.0, TRIG_LIMIT),
+        // sin and cos of x; sinh and cosh of y
+        "sin" | "cos" => (TRIG_LIMIT, 710.0),
+        _ => (710.0, TRIG_LIMIT),
+    }
+}
+
+/// Whether a complex kernel may call the real `name` only for a positive real argument (its
+/// value is complex for a negative one): `ln`. (A complex kernel's `log` is the natural
+/// logarithm, `VirtualTable::cplx_log`, but a real kernel's is log10, so complex kernels do not
+/// call the library's `log`: `real_in_complex`.)
+pub(crate) fn positive_domain(name: &str) -> bool {
+    name == "ln"
+}
+
+/// Whether a complex kernel may call the library's real `name` for real arguments.
+pub(crate) fn real_in_complex(name: &str) -> bool {
+    has_function(name) && name != "log"
+}
+
+/// The arguments below which (in absolute value) the library's version of `name` is used;
+/// the kernels call the C function for larger arguments, NaN and infinities.
+pub(crate) fn domain_limit(name: &str) -> Option<f64> {
+    match name {
+        "sin" | "cos" => Some(TRIG_LIMIT),
+        _ => None,
+    }
+}
+
+// ln and log10 (fdlibm's e_log.c and e_log10.c): x = 2^k m with m in [sqrt(2)/2, sqrt(2))
+// (`getexp`, `getmant`; subnormals scaled by 2^54 first), f = m - 1, s = f / (2 + f), and
+// log(m) = f - f^2/2 + s (f^2/2 + R(s^2)) with fdlibm's minimax R. ln(x) = k ln 2 + log(m) with
+// ln 2 in two parts; log10(x) = k log10(2) + log(m) / ln(10). Special values by selects:
+// ln(0) = -inf, ln(x < 0) = NaN, ln(inf) = inf, ln(NaN) = NaN.
+
+/// (k, f) with x = 2^k (1 + f), 1 + f in [sqrt(2)/2, sqrt(2)), for a positive finite x
+fn log_reduce<T: MathOps>(x: T) -> (T, T) {
+    let sub = x.lt(f64::MIN_POSITIVE);
+    let xs = T::select(sub, x * 18014398509481984.0, x); // 2^54
+    let k = xs.getexp() - T::select(sub, x.lit(54.0), x.lit(0.0));
+    let m = xs.getmant();
+    let big = m.gt(std::f64::consts::SQRT_2);
+    let m = T::select(big, m * 0.5, m);
+    let k = T::select(big, k + 1.0, k);
+    (k, m - 1.0)
+}
+
+/// (f^2 / 2, s (f^2/2 + R(s^2))): log(1 + f) = f - f^2/2 + s (f^2/2 + R(s^2))
+#[allow(clippy::excessive_precision)] // fdlibm's coefficients, as published
+fn log_kernel<T: MathOps>(f: T) -> (T, T) {
+    const LG1: f64 = 6.666666666666735130e-01;
+    const LG2: f64 = 3.999999999940941908e-01;
+    const LG3: f64 = 2.857142874366239149e-01;
+    const LG4: f64 = 2.222219843214978396e-01;
+    const LG5: f64 = 1.818357216161805012e-01;
+    const LG6: f64 = 1.531383769920937332e-01;
+    const LG7: f64 = 1.479819860511658591e-01;
+
+    let hfsq = f * f * 0.5;
+    let s = f / (f + 2.0);
+    let z = s * s;
+    let w = z * z;
+    let t1 = w * ((w * LG6 + LG4) * w + LG2);
+    let t2 = z * (((w * LG7 + LG5) * w + LG3) * w + LG1);
+    (hfsq, s * (hfsq + (t2 + t1)))
+}
+
+/// The special values of a logarithm `r` of x: -inf for zeros, NaN for negative numbers
+/// and NaN, inf for inf
+#[allow(clippy::eq_op)] // x - x: NaN for NaN and the infinities, 0 otherwise
+fn log_special<T: MathOps>(x: T, r: T) -> T {
+    let r = r + (x - x); // NaN for NaN (and the infinities, fixed below)
+    let r = T::select(x.gt(f64::MAX), x, r);
+    let nonpositive = T::select(x.lt(0.0), x.lit(f64::NAN), x.lit(f64::NEG_INFINITY));
+    T::select(x.lt(f64::from_bits(1)), nonpositive, r)
+}
+
+/// ln(x), the natural logarithm (symjit's `ln`)
+pub fn ln<T: MathOps>(x: T) -> T {
+    const LN2_HI: f64 = f64::from_bits(0x3fe6_2e42_fee0_0000);
+    const LN2_LO: f64 = f64::from_bits(0x3dea_39ef_3579_3c76);
+    let (k, f) = log_reduce(x);
+    let (hfsq, t) = log_kernel(f);
+    let r = k * LN2_HI - ((hfsq - (t + k * LN2_LO)) - f);
+    log_special(x, r)
+}
+
+/// log10(x) (symjit's `log`)
+#[allow(clippy::excessive_precision)] // fdlibm's constants, as published
+pub fn log10<T: MathOps>(x: T) -> T {
+    const IVLN10: f64 = std::f64::consts::LOG10_E; // 1 / ln(10), fdlibm's ivln10
+    const LOG10_2HI: f64 = 3.01029995663611771306e-01;
+    const LOG10_2LO: f64 = 3.69423907715893078616e-13;
+    let (k, f) = log_reduce(x);
+    let (hfsq, t) = log_kernel(f);
+    let lnm = f - (hfsq - t);
+    let r = k * LOG10_2HI + (k * LOG10_2LO + lnm * IVLN10);
+    log_special(x, r)
+}
+
 /// The unary functions that `inline_calls` inlines: the name of the function in the models,
 /// and the generic function on traced values.
 const LIBRARY: &[(&str, Traced)] = &[
@@ -260,6 +605,10 @@ const LIBRARY: &[(&str, Traced)] = &[
     ("coth", |x| coth(x)),
     ("sech", |x| sech(x)),
     ("csch", |x| csch(x)),
+    ("sin", |x| sin(x)),
+    ("cos", |x| cos(x)),
+    ("ln", |x| ln(x)),
+    ("log", |x| log10(x)),
 ];
 
 /// A function of the library on traced values.
@@ -269,7 +618,8 @@ type Traced = for<'t> fn(Val<'t>) -> Val<'t>;
 
 #[derive(Clone, Copy, Debug)]
 enum Op {
-    Arg,
+    /// argument k: 0 in `Reg::Ret`, 1 in `Reg::Temp` (the imaginary part of a complex one)
+    Arg(u8),
     Const(f64),
     Plus(usize, usize),
     Minus(usize, usize),
@@ -290,7 +640,7 @@ enum Op {
 impl Op {
     fn operands(&self) -> Vec<usize> {
         match *self {
-            Op::Arg | Op::Const(_) => vec![],
+            Op::Arg(_) | Op::Const(_) => vec![],
             Op::Plus(a, b)
             | Op::Minus(a, b)
             | Op::Times(a, b)
@@ -302,6 +652,10 @@ impl Op {
         }
     }
 }
+
+/// The registers of the arguments and of the results of a funclet: a real value in `Ret`, a
+/// complex one in `Ret` (real part) and `Temp` (imaginary part).
+const OUT_REGS: [Reg; 2] = [Reg::Ret, Reg::Temp];
 
 /// The operations of a function, in the order the generic function performs them.
 #[derive(Default)]
@@ -317,19 +671,25 @@ impl Trace {
     }
 
     fn arg(&self) -> Val<'_> {
+        self.arg_k(0)
+    }
+
+    fn arg_k(&self, k: u8) -> Val<'_> {
         Val {
             t: self,
-            id: self.push(Op::Arg),
+            id: self.push(Op::Arg(k)),
         }
     }
 
     /// With fastmath, a product used once by a sum or a difference becomes a fused
     /// multiply-add. (The funclets are appended after the peephole optimizer, whose fusions
     /// assume that every value is used once.)
-    fn fuse(&self, out: usize) {
+    fn fuse(&self, outs: &[usize]) {
         let mut ops = self.ops.borrow_mut();
         let mut uses = vec![0; ops.len()];
-        uses[out] += 1;
+        for out in outs {
+            uses[*out] += 1;
+        }
         for op in ops.iter() {
             for a in op.operands() {
                 uses[a] += 1;
@@ -359,17 +719,32 @@ impl Trace {
     /// result in `Reg::Ret`. Each value gets a register `Gen(0..count_regs)` until its last
     /// use (there are no stack slots: the compactor could give a slot of the caller, live
     /// across the call, to the funclet). Constants are appended to `consts`.
+    #[cfg(test)]
     fn emit(&self, out: usize, mir: &mut Mir, consts: &mut Vec<f64>, count_regs: u8) -> Result<()> {
+        self.emit_many(&[out], mir, consts, count_regs)
+    }
+
+    /// `emit` for functions of (`Reg::Ret`, `Reg::Temp`) (`Op::Arg`) with results in `Reg::Ret`
+    /// and `Reg::Temp`: the real and imaginary parts of a complex function.
+    fn emit_many(
+        &self,
+        outs: &[usize],
+        mir: &mut Mir,
+        consts: &mut Vec<f64>,
+        count_regs: u8,
+    ) -> Result<()> {
         if mir.config.fastmath() {
-            self.fuse(out);
+            self.fuse(outs);
         }
         let ops = self.ops.borrow();
 
-        // the values `out` depends on, and the last use of each
+        // the values `outs` depend on, and the last use of each
         let mut needed = vec![false; ops.len()];
-        needed[out] = true;
         let mut last = vec![0; ops.len()];
-        last[out] = ops.len();
+        for out in outs {
+            needed[*out] = true;
+            last[*out] = ops.len();
+        }
         for i in (0..ops.len()).rev() {
             if needed[i] {
                 for a in ops[i].operands() {
@@ -422,17 +797,8 @@ impl Trace {
             let dst = Reg::Gen(d);
 
             match *op {
-                Op::Arg => mir.fmov(dst, Reg::Ret),
-                Op::Const(v) => {
-                    let idx = match consts.iter().position(|c| c.to_bits() == v.to_bits()) {
-                        Some(idx) => idx,
-                        None => {
-                            consts.push(v);
-                            consts.len() - 1
-                        }
-                    };
-                    mir.load_const(dst, idx as u32);
-                }
+                Op::Arg(k) => mir.fmov(dst, OUT_REGS[k as usize]),
+                Op::Const(v) => mir.load_const(dst, const_index(consts, v)),
                 Op::Plus(..) => mir.plus(dst, src[0], src[1]),
                 Op::Minus(..) => mir.minus(dst, src[0], src[1]),
                 Op::Times(..) => mir.times(dst, src[0], src[1]),
@@ -460,8 +826,21 @@ impl Trace {
             }
         }
 
-        mir.fmov(Reg::Ret, Reg::Gen(regs[out].unwrap()));
+        for (out, r) in outs.iter().zip(OUT_REGS) {
+            mir.fmov(r, Reg::Gen(regs[*out].unwrap()));
+        }
         Ok(())
+    }
+}
+
+/// The index of `v` in `consts`, appended if it is not there.
+fn const_index(consts: &mut Vec<f64>, v: f64) -> u32 {
+    match consts.iter().position(|c| c.to_bits() == v.to_bits()) {
+        Some(idx) => idx as u32,
+        None => {
+            consts.push(v);
+            (consts.len() - 1) as u32
+        }
     }
 }
 
@@ -566,15 +945,24 @@ fn funclets<'a>(
     let mut emitted = Vec::new();
     funclets.branch(LIBM_END);
     for name in names {
-        let Some((_, f)) = LIBRARY.iter().find(|(n, _)| n == name) else {
-            continue;
-        };
+        // `cplx_<name>`: the complex function of (Ret, Temp) into (Ret, Temp)
         let trace = Trace::default();
-        let out = f(trace.arg()).id;
+        let outs = if let Some(base) = name.strip_prefix(LIBM_COMPLEX) {
+            let Some((_, f)) = COMPLEX_LIBRARY.iter().find(|(n, _)| *n == base) else {
+                continue;
+            };
+            let (re, im) = f(trace.arg_k(0), trace.arg_k(1));
+            vec![re.id, im.id]
+        } else {
+            let Some((_, f)) = LIBRARY.iter().find(|(n, _)| n == name) else {
+                continue;
+            };
+            vec![f(trace.arg()).id]
+        };
         let mut body = Mir::new(config.clone());
         let mut body_consts = consts.clone();
         if trace
-            .emit(out, &mut body, &mut body_consts, count_regs)
+            .emit_many(&outs, &mut body, &mut body_consts, count_regs)
             .is_ok()
         {
             *consts = body_consts;
@@ -636,13 +1024,53 @@ pub(crate) fn inline_calls(mir: &mut Mir, consts: &mut Vec<f64>) -> Result<()> {
     let (funclets, inlined) = funclets(&mir.config, &used, consts, count_regs);
 
     let mut code = MirWriter::new();
+    let mut count = 0;
     for ins in mir.code.iter() {
         match &ins {
             Instruction::Call { label, num_args: 1 } if inlined.contains(&label.as_str()) => {
-                code.push(&Instruction::Call {
+                let call = Instruction::Call {
                     label: funclet_label(label),
                     num_args: 0,
-                });
+                };
+                if let Some(limit) = domain_limit(label) {
+                    // |x| < limit (false for NaN and infinities): the library's function,
+                    // else the C function. A SIMD row with both is computed by the scalar
+                    // kernel (`branch_if`). The argument is in `Left`; the other registers
+                    // are free at a call (calls clobber them).
+                    let (inside, end) = (format!("@math_in_{count}"), format!("@math_end_{count}"));
+                    count += 1;
+                    for ins in [
+                        Instruction::Uni {
+                            op: UniOp::Abs,
+                            dst: Reg::Temp,
+                            s1: Reg::Left,
+                        },
+                        Instruction::LoadConst {
+                            dst: Reg::Gen(0),
+                            idx: const_index(consts, limit),
+                        },
+                        Instruction::Bi {
+                            op: BinOp::LittleThan,
+                            dst: Reg::Temp,
+                            s1: Reg::Temp,
+                            s2: Reg::Gen(0),
+                        },
+                        Instruction::BranchIf {
+                            cond: Reg::Temp,
+                            label: inside.clone(),
+                            is_else: true,
+                        },
+                        ins.clone(),
+                        Instruction::Branch { label: end.clone() },
+                        Instruction::Label { label: inside },
+                        call,
+                        Instruction::Label { label: end },
+                    ] {
+                        code.push(&ins);
+                    }
+                } else {
+                    code.push(&call);
+                }
             }
             _ => code.push(&ins),
         }
@@ -714,14 +1142,40 @@ mod tests {
 
     #[test]
     fn library_fits_in_registers() {
-        for (name, f) in LIBRARY {
-            let trace = Trace::default();
-            let out = f(trace.arg()).id;
-            let mut mir = Mir::new(crate::config::Config::default());
-            let mut consts = Vec::new();
-            assert!(trace.emit(out, &mut mir, &mut consts, 8).is_ok(), "{name}");
-            let mut mir = Mir::new(crate::config::Config::default());
-            assert!(trace.emit(out, &mut mir, &mut consts, 2).is_err(), "{name}");
+        // `inline_calls` and `append_funclets` give the funclets 12 registers
+        for fastmath in [false, true] {
+            for (name, f) in LIBRARY {
+                let mut config = crate::config::Config::default();
+                config.set_fastmath(fastmath);
+                let fits = |count_regs: u8| {
+                    let trace = Trace::default();
+                    let out = f(trace.arg()).id;
+                    let mut mir = Mir::new(config.clone());
+                    trace
+                        .emit(out, &mut mir, &mut Vec::new(), count_regs)
+                        .is_ok()
+                };
+                let needed = (1..=16).find(|&n| fits(n)).unwrap();
+                println!("{name} (fastmath={fastmath}): {needed} registers");
+                assert!(needed <= 12, "{name} needs {needed} registers");
+            }
+        }
+        for fastmath in [false, true] {
+            for (name, f) in COMPLEX_LIBRARY {
+                let mut config = crate::config::Config::default();
+                config.set_fastmath(fastmath);
+                let fits = |count_regs: u8| {
+                    let trace = Trace::default();
+                    let (re, im) = f(trace.arg_k(0), trace.arg_k(1));
+                    let mut mir = Mir::new(config.clone());
+                    trace
+                        .emit_many(&[re.id, im.id], &mut mir, &mut Vec::new(), count_regs)
+                        .is_ok()
+                };
+                let needed = (1..=16).find(|&n| fits(n)).unwrap();
+                println!("complex {name} (fastmath={fastmath}): {needed} registers");
+                assert!(needed <= 12, "complex {name} needs {needed} registers");
+            }
         }
     }
 
@@ -773,6 +1227,10 @@ mod tests {
             "coth" => |x| 1.0 / x.tanh(),
             "sech" => |x| 1.0 / x.cosh(),
             "csch" => |x| 1.0 / x.sinh(),
+            "sin" => f64::sin,
+            "cos" => f64::cos,
+            "ln" => f64::ln,
+            "log" => f64::log10,
             _ => unreachable!(),
         }
     }
@@ -786,6 +1244,10 @@ mod tests {
             "coth" => coth,
             "sech" => sech,
             "csch" => csch,
+            "sin" => sin,
+            "cos" => cos,
+            "ln" => ln,
+            "log" => log10,
             _ => unreachable!(),
         }
     }
@@ -845,6 +1307,143 @@ mod tests {
         }
     }
 
+    /// The library's complex version of `name`, if it has one.
+    fn complex_library_function(name: &str) -> Option<fn(f64, f64) -> (f64, f64)> {
+        match name {
+            "sinh" => Some(csinh),
+            "cosh" => Some(ccosh),
+            "tanh" => Some(ctanh),
+            "coth" => Some(ccoth),
+            "sech" => Some(csech),
+            "csch" => Some(ccsch),
+            "exp" => Some(cexp),
+            "sin" => Some(csin),
+            "cos" => Some(ccos),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn complex_f64() {
+        use crate::code::VirtualTable as V;
+        use num_complex::Complex;
+        type CFunc = extern "C" fn(f64, f64, &mut Complex<f64>);
+        let fs: [(&str, CFunc); 9] = [
+            ("exp", V::cplx_exp),
+            ("sin", V::cplx_sin),
+            ("cos", V::cplx_cos),
+            ("sinh", V::cplx_sinh),
+            ("cosh", V::cplx_cosh),
+            ("tanh", V::cplx_tanh),
+            ("coth", V::cplx_coth),
+            ("sech", V::cplx_sech),
+            ("csch", V::cplx_csch),
+        ];
+        // against the complex C functions (the C path's tanh, `tanh_c`, used the same formula
+        // as the library's since 0020)
+        for (name, g) in fs {
+            let f = complex_library_function(name).unwrap();
+            for i in 0..100000 {
+                let t = (i as f64 * 0.6180339887).fract();
+                let u = (i as f64 * 0.7548776662).fract();
+                let (x, y) = match i % 3 {
+                    0 => (t * 60.0 - 30.0, u * 20.0 - 10.0),
+                    1 => (t * 1400.0 - 700.0, u * 2e3 - 1e3),
+                    _ => (t * 4.0 - 2.0, u * 4.0 - 2.0),
+                };
+                let (re, im) = f(x, y);
+                let mut z = Complex::new(0.0, 0.0);
+                g(x, y, &mut z);
+                let n = z.norm();
+                if n.is_finite() && n > 1e-300 {
+                    let e = (re - z.re).abs().max((im - z.im).abs()) / n;
+                    assert!(e < 2e-15, "{name}({x:e}, {y:e}) = ({re:e}, {im:e}), C: {z}");
+                }
+            }
+        }
+        // real arguments: the real functions (and cosh x sin(+0) = +0)
+        for x in [-3.5, -0.25, 0.0, 0.75, 20.0, 600.0] {
+            let (re, im) = csinh(x, 0.0);
+            assert_eq!(
+                (re.to_bits(), im.to_bits()),
+                (sinh(x).to_bits(), 0),
+                "sinh({x})"
+            );
+            let (re, _) = ccosh(x, 0.0);
+            assert_eq!(re.to_bits(), cosh(x).to_bits(), "cosh({x})");
+        }
+    }
+
+    #[test]
+    fn logarithm_f64() {
+        for (name, f, g, ulps) in [
+            ("ln", ln as fn(f64) -> f64, f64::ln as fn(f64) -> f64, 1),
+            ("log10", log10, f64::log10, 2),
+        ] {
+            for i in 0..300000 {
+                let t = (i as f64 * 0.6180339887).fract();
+                for x in [
+                    t * 4.0,
+                    (t * 1400.0 - 700.0).exp(),
+                    1.0 + (t - 0.5) * 1e-6,
+                    f64::from_bits((t * 4.5e15) as u64 + 1), // subnormals
+                ] {
+                    let (a, b) = (f(x), g(x));
+                    let d = a.to_bits().abs_diff(b.to_bits());
+                    assert!(d <= ulps || a == b, "{name}({x:e}) = {a:e}, C: {b:e}");
+                }
+            }
+            for x in [
+                0.0,
+                -0.0,
+                -1.0,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                1.0,
+                5e-324,
+                f64::MAX,
+            ] {
+                let (a, b) = (f(x), g(x));
+                assert!(
+                    a == b || (a.is_nan() && b.is_nan()),
+                    "{name}({x:e}) = {a:e}, C: {b:e}"
+                );
+            }
+            assert!(f(f64::NAN).is_nan());
+        }
+    }
+
+    #[test]
+    fn trigonometric_f64() {
+        use std::f64::consts::FRAC_PI_2;
+        // against the C library's, also close to multiples of pi/2
+        for (name, f, g) in [
+            ("sin", sin as fn(f64) -> f64, f64::sin as fn(f64) -> f64),
+            ("cos", cos, f64::cos),
+        ] {
+            for i in 0..400001 {
+                let t = i as f64 / 400000.0;
+                for x in [
+                    t * 10.0 - 5.0,
+                    (t - 0.5) * 2.0 * TRIG_LIMIT,
+                    (t - 0.5) * 2e3,
+                    FRAC_PI_2 * (i as f64 - 2e5) * 5.0,
+                ] {
+                    let (a, b) = (f(x), g(x));
+                    let d = a.to_bits().abs_diff(b.to_bits());
+                    assert!(
+                        d <= 2 || (a - b).abs() < 1e-300,
+                        "{name}({x:e}) = {a:e}, C: {b:e}"
+                    );
+                }
+            }
+        }
+        assert_eq!(sin(-0.0f64).to_bits(), (-0.0f64).to_bits());
+        assert_eq!(sin(1e-310f64), 1e-310);
+        assert_eq!(cos(-0.0f64), 1.0);
+        assert_eq!(cos(std::f64::consts::PI), -1.0);
+    }
+
     // The SIMD kernels run the library's functions; the scalar kernel (one point at a time,
     // the rows left after the last full SIMD row, and kernels without SIMD) calls the C
     // library's.
@@ -858,6 +1457,8 @@ mod tests {
 
         for (name, _) in LIBRARY {
             let (f, g) = (library_function(name), c_function(name));
+            // outside a function's domain the kernels call the C function
+            let inside = |x: f64| domain_limit(name).is_none_or(|l| x.abs() < l);
             let ours: Vec<[f64; 2]> = xs.iter().map(|&x| [f(x), f(x - 3.0) + x]).collect();
             let c_lib: Vec<[f64; 2]> = xs.iter().map(|&x| [g(x), g(x - 3.0) + x]).collect();
             // the library differs from the C library at some points: equal bits show which
@@ -900,7 +1501,13 @@ mod tests {
                     let simd_rows = if lanes > 1 { n / lanes * lanes } else { 0 };
                     for i in 0..n {
                         let got = [outs[2 * i], outs[2 * i + 1]];
-                        let ok = if i < simd_rows {
+                        // a SIMD row with an argument outside the domain: the scalar kernel
+                        let row =
+                            i / lanes.max(1) * lanes.max(1)..(i / lanes.max(1) + 1) * lanes.max(1);
+                        let in_domain = row
+                            .clone()
+                            .all(|j| j >= n || (inside(xs[j]) && inside(xs[j] - 3.0)));
+                        let ok = if i < simd_rows && in_domain {
                             close(got[0], ours[i][0]) && close(got[1], ours[i][1])
                         } else {
                             same(got[0], c_lib[i][0]) && same(got[1], c_lib[i][1])
@@ -917,11 +1524,12 @@ mod tests {
         }
     }
 
-    // Complex kernels call the real function when the argument is real at run time
-    // (`complexify`): SIMD rows whose lanes are all real get the library's function, the others
-    // (complex, mixed, single points) the complex C function, as without `inline_math`.
+    // Complex kernels (`complexify`): the hyperbolic functions have complex funclets, used by
+    // the SIMD rows whose arguments are all in their domain (real or complex); for exp, sin
+    // and cos, SIMD rows whose arguments are all real get the real function. The other rows
+    // (and single points) get the complex C function, as without `inline_math`.
     #[test]
-    fn complex_kernels_with_real_arguments() {
+    fn complex_kernels() {
         use crate::utils::Compiled;
         use num_complex::Complex;
 
@@ -929,18 +1537,22 @@ mod tests {
         let re: Vec<f64> = (0..n)
             .map(|i| 12.0 * (i as f64 * 0.618034).fract() - 6.0)
             .collect();
-        // groups of 8 points: real, complex, mixed (lanes 0-3 real), ...
+        // groups of 8 points: real, complex, mixed (lanes 0-3 real), complex with half of the
+        // real parts outside the domain of the complex funclets, ...
         let zs: Vec<Complex<f64>> = (0..n)
-            .map(|i| {
-                let im = match (i / 8) % 3 {
-                    0 => 0.0,
-                    1 => 0.5 + (i % 7) as f64 * 0.25,
-                    _ if i % 8 < 4 => 0.0,
-                    _ => -1.25,
-                };
-                Complex::new(re[i], im)
+            .map(|i| match (i / 8) % 4 {
+                0 => Complex::new(re[i], 0.0),
+                1 => Complex::new(re[i], 0.5 + (i % 7) as f64 * 0.25),
+                2 if i % 8 < 4 => Complex::new(re[i], 0.0),
+                2 => Complex::new(re[i], -1.25),
+                _ if i % 8 < 4 => Complex::new(re[i] + 800.0, 0.5),
+                _ => Complex::new(re[i], 0.5),
             })
             .collect();
+        let in_domain = |name: &str, z: &Complex<f64>| {
+            let (lx, ly) = complex_domain(name);
+            z.re.abs() < lx && z.im.abs() < ly
+        };
 
         for (name, _) in LIBRARY {
             let f = library_function(name);
@@ -977,12 +1589,26 @@ mod tests {
                     let same =
                         |a: f64, b: f64| a.to_bits() == b.to_bits() || (a.is_nan() && b.is_nan());
 
+                    let complex_f = complex_library_function(name);
                     for i in 0..n {
-                        let row_real = lanes > 1
-                            && (i / lanes + 1) * lanes <= n
+                        let full_row = lanes > 1 && (i / lanes + 1) * lanes <= n;
+                        // the real function: real arguments (positive for the logarithms)
+                        let row_real = full_row
+                            && (i / lanes * lanes..(i / lanes + 1) * lanes).all(|j| {
+                                zs[j].im == 0.0 && (!positive_domain(name) || zs[j].re > 0.0)
+                            })
+                            && real_in_complex(name);
+                        let row_in_domain = full_row
                             && (i / lanes * lanes..(i / lanes + 1) * lanes)
-                                .all(|j| zs[j].im == 0.0);
-                        let (w, ok) = if row_real {
+                                .all(|j| in_domain(name, &zs[j]));
+                        let (w, ok) = if let (true, Some(cf)) = (row_in_domain, complex_f) {
+                            // the complex funclet, also for real arguments
+                            let (re, im) = cf(zs[i].re, zs[i].im);
+                            (
+                                Complex::new(re, im),
+                                same(got[i].re, re) && same(got[i].im, im),
+                            )
+                        } else if row_real {
                             let w = Complex::new(f(zs[i].re), 0.0);
                             (w, same(got[i].re, w.re) && got[i].im.to_bits() == 0)
                         } else {
