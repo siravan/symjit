@@ -157,8 +157,8 @@ pub struct VirtualTable;
 
 impl VirtualTable {
     /// The C math library (libm) function computing `op`, for object files; None if
-    /// there is none (e.g. `csc`, `sinc`, complex functions). Note that symjit's `log`
-    /// is the decimal logarithm and `ln` the natural one.
+    /// there is none (e.g. `csc`, `sinc`, complex functions). Note that symjit's `log` is
+    /// the natural logarithm, like `ln` (C's `log`), and `log10` the decimal one.
     pub fn c_name(op: &str) -> Option<&'static str> {
         let name = match op {
             "sin" => "sin",
@@ -177,7 +177,8 @@ impl VirtualTable {
             "expm1" => "expm1",
             "exp2" => "exp2",
             "ln" => "log",
-            "log" => "log10",
+            "log" => "log", // an alias of `ln`
+            "log10" => "log10",
             "log1p" => "log1p",
             "log2" => "log2",
             "cbrt" => "cbrt",
@@ -219,6 +220,7 @@ impl VirtualTable {
             "exp" => Func::Unary(Self::exp),
             "ln" => Func::Unary(Self::ln),
             "log" => Func::Unary(Self::log),
+            "log10" => Func::Unary(Self::log10),
             "expm1" => Func::Unary(Self::expm1),
             "log1p" => Func::Unary(Self::log1p),
             "exp2" => Func::Unary(Self::exp2),
@@ -261,6 +263,7 @@ impl VirtualTable {
             "cplx_exp" => Func::UnaryCplx(Self::cplx_exp),
             "cplx_ln" => Func::UnaryCplx(Self::cplx_ln),
             "cplx_log" => Func::UnaryCplx(Self::cplx_log),
+            "cplx_log10" => Func::UnaryCplx(Self::cplx_log10),
             // Complex Binary Functions
             "cplx_power" => Func::BinaryCplx(Self::cplx_power),
             "cplx_random" => Func::UnaryCplx(Self::cplx_random),
@@ -383,7 +386,12 @@ impl VirtualTable {
         x.ln()
     }
 
+    /// `log` is an alias of `ln`, in real and complex kernels (`log10` is the decimal one)
     pub extern "C" fn log(x: f64) -> f64 {
+        x.ln()
+    }
+
+    pub extern "C" fn log10(x: f64) -> f64 {
         x.log10()
     }
 
@@ -658,6 +666,10 @@ impl VirtualTable {
 
     pub extern "C" fn cplx_log(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).ln();
+    }
+
+    pub extern "C" fn cplx_log10(xr: f64, xi: f64, z: &mut Complex<f64>) {
+        *z = Complex::new(xr, xi).ln() / std::f64::consts::LN_10;
     }
 
     pub extern "C" fn cplx_power(xr: f64, xi: f64, z: &mut Complex<f64>) {

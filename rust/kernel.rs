@@ -894,7 +894,7 @@ impl<'k> Real<'k> {
 
     real_unary_domain! {
         ln => "ln",
-        log10 => "log",
+        log10 => "log10",
         log2 => "log2",
         ln_1p => "log1p",
         asin => "arcsin",

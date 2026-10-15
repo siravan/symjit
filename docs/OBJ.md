@@ -96,7 +96,7 @@ library functions the kernels call and which instructions they use.
   states it.
 * The only functions the kernels can call are those of the C math library (link with
   `-lm`): `sin`, `cos`, `tan`, their inverses and hyperbolic versions, `exp`, `expm1`,
-  `exp2`, `log` (symjit's `ln`), `log10` (symjit's `log`), `log1p`, `log2`, `cbrt`,
+  `exp2`, `log` (symjit's `ln` and `log`), `log10`, `log1p`, `log2`, `cbrt`,
   `erf`, `erfc`, `tgamma` (`gamma`), `lgamma` (`loggamma`), `pow` and `atan2`.
   `write_obj` rejects functions that call anything else: `csc`, `sec`, `cot` and their
   hyperbolic versions, `sinc`, complex functions (`sin(z)` with `dtype="complex128"`;

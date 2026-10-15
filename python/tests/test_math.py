@@ -64,7 +64,8 @@ FUNCTIONS = {
     "sin": (sp.sin, np.sin, 2),
     "cos": (sp.cos, np.cos, 2),
     "ln": (sp.log, np.log, 2),
-    "log": (sp.Function("log"), np.log10, 3),  # symjit's log is log10
+    "log": (sp.Function("log"), np.log, 2),  # an alias of ln
+    "log10": (sp.Function("log10"), np.log10, 3),
 }
 
 HYPERBOLIC = ["sinh", "cosh", "tanh", "coth", "sech", "csch"]
@@ -176,14 +177,6 @@ class InlineMath(unittest.TestCase):
         cases = {"real": re_ + 0j, "complex": re_ + 1j * rng.uniform(-3, 3, n),
                  "mixed": re_ + 1j * np.where(rng.random(n) < 0.5, 0.0, rng.uniform(-3, 3, n))}
         for name, (f_sp, f_np, _) in FUNCTIONS.items():
-            if name == "log":
-                # a complex kernel's log is the natural logarithm (code.rs cplx_log), not the
-                # library's log10: always the C function
-                for z in cases.values():
-                    f = compile_func([x], [f_sp(x)], ty=INLINE, dtype="complex128")
-                    c_lib = compile_func([x], [f_sp(x)], dtype="complex128")
-                    np.testing.assert_array_equal(np.ravel(f(z)), np.ravel(c_lib(z)))
-                continue
             for options in [dict(), dict(fast_complex=False), dict(enable_simd512=True), dict(use_simd=False),
                             dict(ty="bytecode;inline_math=true")]:
                 options = dict(options)
@@ -195,7 +188,7 @@ class InlineMath(unittest.TestCase):
                         got = np.ravel(f(z))
                         np.testing.assert_allclose(got, f_np(z), rtol=1e-13)
                         real = z.imag == 0
-                        if name not in ("ln", "log"):  # complex for negative reals
+                        if name not in ("ln", "log", "log10"):  # complex for negative reals
                             self.assertTrue(np.all(got[real].imag == 0))
                         want = np.ravel(c_lib(z))
                         if name in COMPLEX_INLINED:

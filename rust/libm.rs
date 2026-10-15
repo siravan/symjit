@@ -503,16 +503,14 @@ pub(crate) fn complex_domain(name: &str) -> (f64, f64) {
 }
 
 /// Whether a complex kernel may call the real `name` only for a positive real argument (its
-/// value is complex for a negative one): `ln`. (A complex kernel's `log` is the natural
-/// logarithm, `VirtualTable::cplx_log`, but a real kernel's is log10, so complex kernels do not
-/// call the library's `log`: `real_in_complex`.)
+/// value is complex for a negative one): the logarithms.
 pub(crate) fn positive_domain(name: &str) -> bool {
-    name == "ln"
+    matches!(name, "ln" | "log" | "log10")
 }
 
 /// Whether a complex kernel may call the library's real `name` for real arguments.
 pub(crate) fn real_in_complex(name: &str) -> bool {
-    has_function(name) && name != "log"
+    has_function(name)
 }
 
 /// The arguments below which (in absolute value) the library's version of `name` is used;
@@ -572,7 +570,7 @@ fn log_special<T: MathOps>(x: T, r: T) -> T {
     T::select(x.lt(f64::from_bits(1)), nonpositive, r)
 }
 
-/// ln(x), the natural logarithm (symjit's `ln`)
+/// ln(x), the natural logarithm (symjit's `ln`, and `log`, an alias)
 pub fn ln<T: MathOps>(x: T) -> T {
     const LN2_HI: f64 = f64::from_bits(0x3fe6_2e42_fee0_0000);
     const LN2_LO: f64 = f64::from_bits(0x3dea_39ef_3579_3c76);
@@ -582,7 +580,7 @@ pub fn ln<T: MathOps>(x: T) -> T {
     log_special(x, r)
 }
 
-/// log10(x) (symjit's `log`)
+/// log10(x) (symjit's `log10`)
 #[allow(clippy::excessive_precision)] // fdlibm's constants, as published
 pub fn log10<T: MathOps>(x: T) -> T {
     const IVLN10: f64 = std::f64::consts::LOG10_E; // 1 / ln(10), fdlibm's ivln10
@@ -608,7 +606,8 @@ const LIBRARY: &[(&str, Traced)] = &[
     ("sin", |x| sin(x)),
     ("cos", |x| cos(x)),
     ("ln", |x| ln(x)),
-    ("log", |x| log10(x)),
+    ("log", |x| ln(x)),
+    ("log10", |x| log10(x)),
 ];
 
 /// A function of the library on traced values.
@@ -1230,7 +1229,8 @@ mod tests {
             "sin" => f64::sin,
             "cos" => f64::cos,
             "ln" => f64::ln,
-            "log" => f64::log10,
+            "log" => f64::ln,
+            "log10" => f64::log10,
             _ => unreachable!(),
         }
     }
@@ -1247,7 +1247,8 @@ mod tests {
             "sin" => sin,
             "cos" => cos,
             "ln" => ln,
-            "log" => log10,
+            "log" => ln,
+            "log10" => log10,
             _ => unreachable!(),
         }
     }

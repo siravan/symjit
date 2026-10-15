@@ -117,12 +117,9 @@ class Composer:
         return name
 
     def call(self, fun: Callable, *arg: Slot) -> Slot:
-        if self.parent is not None:
-            # functions are registered on the root composer, which is compiled
-            # (a recursive call, `fun=None`, is usually made in a block)
-            name = self.parent.register_function(fun)
-        else:
-            name = self.register_function(fun)
+        # registered on the root composer, which is compiled (`register_function` forwards
+        # there; a recursive call, `fun=None`, is usually made in a block)
+        name = self.register_function(fun)
 
         # callbacks are real functions; a recursive call (`fun=None`) takes the kernel's own
         # arguments, whose imaginary parts `is_real = True` would drop (indirect translator)
@@ -401,7 +398,7 @@ class Composer:
         return self.function("ln", arg)
 
     def log10(self, arg: Slot) -> Slot:
-        return self.function("log", arg)
+        return self.function("log10", arg)
 
     def log2(self, arg: Slot) -> Slot:
         return self.function("log2", arg)

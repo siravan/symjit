@@ -58,17 +58,12 @@ impl Block {
         self.stmts.push(Statement::Label {
             label: label.to_string(),
         });
-
-        // calls.clear() is to fix a bug, where two similar calls in the different
-        // branches of an if-then-else block were merged.
-        self.calls.clear();
     }
 
     pub fn add_branch(&mut self, label: &str) {
         self.stmts.push(Statement::Branch {
             label: label.to_string(),
         });
-        self.calls.clear();
     }
 
     pub fn add_branch_if(&mut self, cond: Node, label: &str, is_else: bool) {
@@ -77,7 +72,6 @@ impl Block {
             label: label.to_string(),
             is_else,
         });
-        self.calls.clear();
     }
 
     pub fn add_assign(&mut self, lhs: Node, rhs: Node) {
@@ -89,8 +83,8 @@ impl Block {
     /*
      * trim_statements breaks up the right-hand sides of the assignments (`trim`: register
      * pressure, and function calls into Call statements). It runs after `eliminate`. The
-     * call cache is cleared at labels and branches, as it is when they are added, so that
-     * calls in different branches are not merged.
+     * call cache (`calls`, filled only here) is cleared at labels and branches, so that two
+     * similar calls in different branches of an if-then-else are not merged.
      */
     pub fn trim_statements(&mut self) {
         let stmts = std::mem::take(&mut self.stmts);

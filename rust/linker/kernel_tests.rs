@@ -215,7 +215,7 @@ fn imports_use_c_library_names() {
     let mut m = real_model(config("native", 0));
     let target = m.app.object_target("").unwrap();
     let obj = m.app.object("model", target).unwrap();
-    // ln -> log, log (decimal) -> log10, power -> pow
+    // ln and log -> log, log10 -> log10, power -> pow
     assert_eq!(
         obj.undefined_symbols(),
         ["atan2", "cos", "exp", "log", "log10", "pow", "sin", "tanh"]

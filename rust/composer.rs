@@ -2,7 +2,6 @@ use anyhow::{anyhow, Result};
 use num_complex::Complex;
 use std::collections::HashSet;
 
-use super::code::VirtualTable;
 use super::config::Config;
 use super::instruction::{BuiltinSymbol, Slot};
 use super::mir::Mir;
@@ -268,12 +267,7 @@ impl DirectTranslator {
         let n = args.len();
         self.mark_real(lhs, is_real);
 
-        // kernel functions (recursive calls, applets) take their arguments in the
-        // `__Arg` slots, not in registers, even when named `composer_*`
-        let by_register = !self.mir.config.is_kernel_func(op)
-            && (VirtualTable::from_str(op).is_ok() || op.starts_with("composer_"));
-
-        if by_register {
+        if self.mir.config.calls_by_register(op) {
             if n == 1 {
                 self.load(reg(0), &args[0])?;
                 self.mir.setup_call_unary(reg(0));

@@ -32,7 +32,7 @@ const MATH = {
     arcsinh: Math.asinh, arccosh: Math.acosh, arctanh: Math.atanh,
     sinc: (x) => (x === 0 ? 1 : Math.sin(x) / x),
     exp: Math.exp, expm1: Math.expm1, exp2: (x) => 2 ** x,
-    ln: Math.log, log: Math.log, log1p: Math.log1p, log2: Math.log2,
+    ln: Math.log, log: Math.log, log10: Math.log10, log1p: Math.log1p, log2: Math.log2,
     // C99 pow: pow(1, y) = 1 and pow(-1, +-inf) = 1 (JavaScript's Math.pow gives NaN)
     power: (x, y) => (x === 1 || (x === -1 && Math.abs(y) === Infinity) ? 1 : Math.pow(x, y)),
     cbrt: Math.cbrt, atan2: Math.atan2,
@@ -84,6 +84,7 @@ const COMPLEX = {
     cplx_arctanh: unary(c.atanh),
     cplx_root: unary(c.sqrt), cplx_cbrt: unary((z) => c.pow(z, [1 / 3, 0])),
     cplx_exp: unary(c.exp), cplx_ln: unary(c.ln), cplx_log: unary(c.ln),
+    cplx_log10: unary((z) => c.ln(z).map((v) => v / Math.LN10)),
     cplx_arg: unary(([a, b]) => [Math.atan2(b, a), 0]),
     cplx_power: (a, b, x, y) => c.pow([a, b], [x, y]),
 };

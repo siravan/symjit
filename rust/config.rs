@@ -689,6 +689,14 @@ impl Config {
         }
     }
 
+    /// Whether a call of `op` takes its arguments in registers (`Left`/`Right`): the built-in
+    /// functions and the `composer_*` callbacks. Kernel functions (recursive calls, applets)
+    /// take theirs in the `__Arg` slots, even when named `composer_*` (both translators).
+    pub fn calls_by_register(&self, op: &str) -> bool {
+        !self.is_kernel_func(op)
+            && (VirtualTable::from_str(op).is_ok() || op.starts_with("composer_"))
+    }
+
     pub fn location(&self, arg: u8) -> Loc {
         let k = if self.is_complex() { 2 } else { 1 };
         Loc::Stack(SPILL_AREA as u32 + k * arg as u32)

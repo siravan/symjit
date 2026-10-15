@@ -288,6 +288,24 @@ class Regressions(unittest.TestCase):
                     worst = max(worst, float(e))
             self.assertLess(worst, 8, name)
 
+    def test_log_is_ln(self):
+        # `log` was log10 in real kernels but the natural logarithm in complex kernels (and in
+        # WebAssembly modules); it is now an alias of `ln` everywhere, and `log10` is the
+        # decimal logarithm.
+        x = sp.Symbol("x")
+        log, log10 = sp.Function("log"), sp.Function("log10")
+        xs = np.array([0.5, 2.0, 10.0, 1e-300, 123.456])
+        for ty in ["native", "bytecode"]:
+            f = compile_func([x], [log(x), log10(x)], ty=ty)
+            got = np.array([np.ravel(f(t)) for t in xs])
+            np.testing.assert_allclose(got[:, 0], np.log(xs), rtol=1e-15)
+            np.testing.assert_allclose(got[:, 1], np.log10(xs), rtol=1e-15)
+            fc = compile_func([x], [log(x), log10(x)], ty=ty, dtype="complex128")
+            zs = xs - 1j
+            gotc = np.array([np.ravel(fc(z)) for z in zs])
+            np.testing.assert_allclose(gotc[:, 0], np.log(zs), rtol=1e-15)
+            np.testing.assert_allclose(gotc[:, 1], np.log10(zs), rtol=1e-15)
+
 
 if __name__ == "__main__":
     unittest.main()

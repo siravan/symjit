@@ -2,7 +2,7 @@
 
 The `math` cargo feature adds `rust/libm.rs`, a math library written in generic Rust whose
 functions the SIMD kernels evaluate inline, on all lanes at once. Without it, a SIMD kernel
-calls the scalar C function once per lane. The library has `exp`, `ln`, `log` (log10), `sin`,
+calls the scalar C function once per lane. The library has `exp`, `ln` (and `log`, an alias), `log10`, `sin`,
 `cos` and the six hyperbolic functions `sinh`, `cosh`, `tanh`, `coth`, `sech` and `csch`, and
 complex versions of `exp`, `sin`, `cos` and the hyperbolic functions.
 
@@ -38,16 +38,17 @@ config.set_inline_math(true)?;          // or config.set_option("inline_math", "
   the scalar kernel. Real arguments take the complex function too (their imaginary part is a
   correctly signed zero), so that rows of real and complex arguments stay in the SIMD kernel;
   an argument known to be real at compile time gets the real function.
-- **Complex kernels**, `ln`: `complexify.rs` tests the argument at run time. When it is a
-  positive real (zero imaginary part), the real `ln` is called (the funclet in SIMD kernels),
-  otherwise the complex C function. A SIMD row whose lanes disagree is computed again by the
-  scalar kernel. The result's imaginary part is then +0.
-- **`log`** is log10 in real kernels but the natural logarithm in complex kernels
-  (`VirtualTable::cplx_log`), so complex kernels keep calling the C function for it.
+- **Complex kernels**, `ln`, `log` and `log10`: `complexify.rs` tests the argument at run time.
+  When it is a positive real (zero imaginary part), the real function is called (the funclet
+  in SIMD kernels), otherwise the complex C function. A SIMD row whose lanes disagree is
+  computed again by the scalar kernel. The result's imaginary part is then +0.
+- **`log`** is an alias of `ln`, the natural logarithm, in real and complex kernels (and in
+  object files and WebAssembly modules); `log10` is the decimal logarithm. (Before patch
+  v228-0021, `log` was log10 in real kernels.)
 - **Domains**: `sin` and `cos` are inlined for |x| < 2^20 π/2 ≈ 1.65e6
   (`libm::TRIG_LIMIT`). The call site tests the argument; larger arguments, NaN and infinities
   go to the C function, and a SIMD row with both kinds of arguments is computed by the scalar
-  kernel. `ln` and `log` handle every argument (0, negative numbers, infinities, NaN,
+  kernel. `ln` and `log10` handle every argument (0, negative numbers, infinities, NaN,
   subnormals) and need no test in real kernels.
 
 Measured on this machine, single-threaded, 10^6 points (ms):
@@ -64,7 +65,7 @@ Measured on this machine, single-threaded, 10^6 points (ms):
 | sin      | 12.57            | 2.09          | 12.25               | 1.20             |
 | cos      | 12.53            | 2.01          | 12.11               | 1.13             |
 | ln       | 3.28             | 1.92          | 2.68                | 1.21             |
-| log      | 5.55             | 1.99          | 5.15                | 1.19             |
+| log10    | 5.55             | 1.99          | 5.15                | 1.19             |
 
 Complex kernels, 10^6 points (ms; complex arguments, |x| < 5, |y| < 3; real arguments take
 the same time):
@@ -98,7 +99,7 @@ Maximum error against mpmath, in ulps (33,000 points for `exp`, 13,000 for the o
 | sin      | 0.50      | 0.72    |
 | cos      | 0.50      | 0.68    |
 | ln       | 0.50      | 0.74    |
-| log      | 1.50      | 1.50    |
+| log10    | 1.50      | 1.50    |
 
 (`sin` and `cos`: 12,000 points in [-10, 10], [-π/4, π/4], [-1.6e6, 1.6e6] and within 1e-9 of
 multiples of π/2.)
@@ -145,7 +146,7 @@ subnormal results). sinh x and cosh x share one exponential and sin y and cos y 
 The complex exp, sin and cos are e^x cos y + i e^x sin y, sin x cosh y + i cos x sinh y and
 cos x cosh y - i sin x sinh y.
 
-`ln` and `log` (their errors above: 12,000 points in (0, 4], up to e^±700, near 1, and
+`ln` and `log10` (their errors above: 12,000 points in (0, 4], up to e^±700, near 1, and
 subnormal): x = 2^k m with m in [√2/2, √2) (`getexp`, `getmant`; subnormals are scaled by 2^54 first), and
 fdlibm's polynomial for log(m); special values by selects (ln(±0) = -inf, ln(x < 0) = NaN,
 ln(inf) = inf).

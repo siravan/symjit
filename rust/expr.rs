@@ -436,7 +436,7 @@ impl Expr {
     }
 
     pub fn log10(&self) -> Expr {
-        Expr::unary("log", self)
+        Expr::unary("log10", self)
     }
 
     pub fn exp_m1(&self) -> Expr {
