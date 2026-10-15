@@ -61,6 +61,9 @@ obj = []
 # symjit's own math library (rust/libm.rs): generic functions inlined in the kernels with
 # `inline_math` (vectorized in the SIMD kernels), also usable on f64 and with the kernel builder
 math = []
+# the C interface used by the Python package (rust/sympy.rs: compile, run, evaluate, ...);
+# without it, the library has only the Rust API
+sympy = []
 
 [profile.profiling]
   inherits = "release"
