@@ -1,0 +1,2 @@
+# keep the 2021 formatting style under edition 2024 (2024 sorts imports differently)
+style_edition = "2021"

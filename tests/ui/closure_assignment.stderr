@@ -1,0 +1,5 @@
+error: a closure in a kernel `if` or `while` cannot assign `sum`, declared outside it; return the new value from the closure instead
+ --> tests/ui/closure_assignment.rs:7:23
+  |
+7 |         let mut add = |v: f64| sum += v;
+  |                       ^^^^^^^^^^^^^^^^^

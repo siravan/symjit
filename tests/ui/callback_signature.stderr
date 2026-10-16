@@ -1,0 +1,5 @@
+error: a callback takes one or two `f64` and returns `f64`
+ --> tests/ui/callback_signature.rs:4:1
+  |
+4 | fn three(x: f64, y: f64, z: f64) -> f64 {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

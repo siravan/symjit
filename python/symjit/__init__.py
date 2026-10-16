@@ -1,0 +1,722 @@
+# from engine import Matrix
+import json
+import warnings
+
+from sympy import Symbol, lambdify, Expr
+
+from . import engine, pyengine, structure
+from .composer import *
+from .disasm import *
+from .func import *
+from .ode import *
+
+TRY_SAVE_LOAD = False
+
+
+def can_use_rust(backend):
+    if backend not in ["python", "rust"]:
+        raise ValueError(f"invalide backend: {backend}")
+    return backend == "rust" and engine.lib.is_valid
+
+
+def can_use_python(backend):
+    if backend not in ["python", "rust"]:
+        raise ValueError(f"invalide backend: {backend}")
+    warnings.warn(
+        "The Python codegen backend is deprecated and will be removed in a future version.",
+        DeprecationWarning,
+    )
+    return pyengine.can_compile()
+
+
+def get_instructions(evaluator, num_params=0):
+    if isinstance(evaluator, str):
+        return evaluator, num_params
+
+    insts = evaluator.get_instructions()
+
+    if hasattr(insts, "input_count"):
+        # Symbolica v3
+        assert len(insts.sub_evaluators) == 0, "sub-evaluators are not supported"
+        return str((insts.instructions, insts.temporary_count, insts.constants)), insts.input_count
+    else:
+        # Symbolica v2
+        return str(insts), num_params
+
+
+def compile_func(
+    states: list[Symbol]|Symbol,
+    eqs: list[Expr]|Expr,
+    params: list[Symbol]|None=None,
+    obs: list[str]|None=None,
+    ty: str="native",
+    use_simd: bool=True,
+    enable_simd512: bool=False,
+    use_threads: bool=True,
+    cse: bool=True,
+    fastmath: bool=True,
+    backend: str="rust",
+    opt_level: int=2,
+    defuns: engine.Defuns|None=None,
+    dtype: str="float64",
+    compact: bool=True,
+    compress: bool=False,
+    coroutines: bool=False,
+    fast_complex: bool=True,
+    huge: bool=False,
+    parallel_mul: bool=True,
+    action: str="compile",
+):
+    """Compile a list of symbolic expression into an executable form.
+    compile_func tries to mimic sympy lambdify, but instead of generating
+    a standard python funciton, it returns a callable (Func object) that
+    is a thin wrapper over compiled machine-c
+
+    Parameters
+    ==========
+
+    states: a single symbol or a list/tuple of symbols.
+    eqs: a single symbolic expression or a list/tuple of symbolic expressions.
+    params (optional): a list/tuple of additional symbols as parameters to the model.
+    ty: target architecture. Options are:
+        * "amd": generates x86-64 instructions (amd-sse or amd-avx) depending on the processor.
+        * "amd-sse": generates x86-64 SSE2 instructions.
+        * "amd-avx": generates x86-64 AVX instrcutions.
+        * "arm": generates arm aarch64 instructions.
+        * "riscv": generates 64-bit RISC-V instructions.
+        * "wasm": generates a WebAssembly module, written with `f.dump(path, "wasm")`
+            (see docs/WASM.md); calls from Python run on the bytecode interpreter.
+        * "bytecode": bytecode interpreter for testing and running on unsupported hardware.
+        * "native" (default): selects the correct mode based on the processor.
+        * "debug": runs "native" and "bytecode" codes and throws an exception if different.
+    obs (default `None`): a list of symbols to name equations. If obs is not None, its length should
+        be the same as eqs. A named prefixed with `__` is considered a hidden observable (temporary
+        variable).
+    backend (default `rust`): the code-generator backend (`rust`: dynamic library coded
+        in rust. `python`: pyengine library coded in plain Python.
+    dtype (default `float64`): the data type. Possibilities are `float64` and `complex128`.
+    use_simd (default `True`): generates SIMD code for vectorized operations. Currently supports
+        AVX on x86-64 and NEON on aarch64 systems.
+    enable_avx512 (default `False`): allows using AVX512 (f64x8) SIMD type when available.
+    use_threads (default `True`): use multi-threading to speed up parallel operations when called
+        on numpy arrays.
+    cse (default `True`): performs common-subexpression elimination.
+    fastmath (default `True`): use fastmath floating point operations, especially fused multiply-addition.
+    fast_complex (default `True`): use f64x2 SIMD instructions for complex operations.
+    parallel_mul (default `True`): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
+    huge (default `False`): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
+    compress (default `False`): compress binary size by converting inline operations to calls.
+    compact (default `True`): compacts the stack frame by reusing temporary variables.
+    opt_level (default 2): optimization level (0, 1, 2, or 3). Broadly the numbers are parallel to -O0, -O1, -O2, and -O3
+        options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
+        Levels 2 and 3 use improved graph-coloring algorithms for better register allocation.
+    defuns (default `None`): a dictionary of Symbol => Definition to pass external Python or Symjit-generated functions.
+
+    ==> returns a `Func` object, is a callable object `f` with signature `f(x_1,...,x_n,p_1,...,p_m)`,
+        where `x`s are the state variables and `p`s are the parameters.
+
+    >>> import numpy as np
+    >>> from symjit import compile_func
+    >>> from sympy import symbols
+
+    >>> x, y = symbols('x y')
+    >>> f = compile_func([x, y], [x+y, x*y])
+    >>> assert(np.all(f(3, 5) == [8., 15.]))
+    >>> assert(np.all(f.apply([3, 5]) == [8., 15.]))
+    """
+    if backend == "sympy":
+        return lambdify(states, eqs)
+
+    if can_use_rust(backend):
+        model = structure.model(states, eqs, params=params, obs=obs)
+        compiler = engine.RustyCompiler(
+            model,
+            ty=ty,
+            use_simd=use_simd,
+            use_threads=use_threads,
+            cse=cse,
+            fastmath=fastmath,
+            opt_level=opt_level,
+            defuns=defuns,
+            enable_simd512=enable_simd512,
+            dtype=dtype,
+            compact=compact,
+            compress=compress,
+            coroutines=coroutines,
+            fast_complex=fast_complex,
+            huge=huge,
+            parallel_mul=parallel_mul,
+            action=action,
+        )
+    elif can_use_python(backend):
+        model = pyengine.tree.model(states, eqs, params, obs)
+        compiler = pyengine.PyCompiler(model, ty=ty)
+    else:
+        raise ValueError("unsupported platform")
+
+    if dtype == "complex128":
+        f = FuncComplex(compiler, eqs)
+    else:
+        f = Func(compiler, eqs)
+
+    if (
+        TRY_SAVE_LOAD
+        and isinstance(compiler, engine.RustyCompiler)
+        and action != "load"
+    ):
+        # print(f.dumps("bytecode"))
+        print("\033[31msave/load\033[0m")
+        f.save("tmp.sjb")
+        g = load_func("tmp.sjb", defuns=defuns)
+        # print(g.dumps("bytecode"))
+        return g
+    else:
+        return f
+
+
+def compile_ode(
+    iv: Symbol,
+    states: list[Symbol]|Symbol,
+    odes: list[Expr]|Expr,
+    params: list[Symbol]|None=None,
+    ty: str="native",
+    use_simd: bool=True,
+    enable_simd512: bool=False,
+    use_threads: bool=True,
+    cse: bool=True,
+    fastmath: bool=True,
+    backend: str="rust",
+    opt_level: int=2,
+    defuns: engine.Defuns|None=None,
+    dtype: str="float64",
+    compact: bool=True,
+    compress: bool=False,
+    coroutines: bool=False,
+    fast_complex: bool=True,
+    huge: bool=False,
+    parallel_mul: bool=True,
+):
+    """Compile a symbolic ODE model into an executable form suitable for
+    passung to scipy.integrate.solve_ivp.
+
+    Parameters
+    ==========
+
+    iv: a single symbol, the independent variable.
+    states: a single symbol or a list/tuple of symbols.
+    odes: a single symbolic expression or a list/tuple of symbolic expressions,
+        representing the derivative of the state with respect to iv.
+    params (optional): a list/tuple of additional symbols as parameters to the model.
+    ty (default `native`): see `compile_func` options for details.
+    backend (default `rust`): the code-generator backend (`rust`: dynamic library coded
+        in rust. `python`: pyengine library coded in plain Python.
+    dtype (default `float64`): the data type. Possibilities are `float64` and `complex128`.
+    use_simd (default `True`): generates SIMD code for vectorized operations. Currently
+        supports AVX on x86-64 and NEON on aarch64 systems.
+    enable_avx512 (default `False`): allows using AVX512 (f64x8) SIMD type when available.
+    use_threads (default `True`): use multi-threading to speed up parallel operations
+        when called on numpy arrays.
+    cse (default `True`): performs common-subexpression elimination.
+    fastmath (default `True`): use fastmath floating point operations, especially fused multiply-addition.
+    fast_complex (default `True`): use f64x2 SIMD instructions for complex operations.
+    parallel_mul (default `True`): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
+    huge (default `False`): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
+    compress (default `False`): compress binary size by converting inline operations to calls.
+    compact (default `True`): compacts the stack frame by reusing temporary variables.
+    opt_level (default 2): optimization level (0, 1, 2, or 3). Broadly the numbers are parallel to -O0, -O1, -O2, and -O3
+        options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
+        Levels 2 and 3 use improved graph-coloring algorithms for better register allocation.
+    defuns (default `None`): a dictionary of Symbol => Definition to pass external Python or
+        Symjit-generated functions.
+
+    Note that compile_ode accepts use_simd and use_threads but in practice ingores them,
+        because compile_ode is usually called on scalars only.
+
+    invariant => len(states) == len(odes)
+
+    ==> returns an `OdeFunc` object, is a callable object `f` with signature `f(t,y,p0,p1,...)`,
+        where `t` is the value of the independent variable, `y` is the state (an array of
+        state variables), and `p`s are the parameters.
+
+    >>> import scipy.integrate
+    >>> import numpy as np
+    >>> from sympy import symbols
+    >>> from symjit import compile_ode
+
+    >>> t, x, y = symbols('t x y')
+    >>> f = compile_ode(t, (x, y), (y, -x))
+    >>> t_eval=np.arange(0, 10, 0.01)
+    >>> sol = scipy.integrate.solve_ivp(f, (0, 10), (0.0, 1.0), t_eval=t_eval)
+
+    >>> np.testing.assert_allclose(sol.y[0,:], np.sin(t_eval), atol=0.005)
+    """
+    if can_use_rust(backend):
+        model = structure.model_ode(iv, states, odes, params)
+        compiler = engine.RustyCompiler(
+            model,
+            ty=ty,
+            use_simd=use_simd,
+            enable_simd512=enable_simd512,
+            use_threads=use_threads,
+            cse=cse,
+            fastmath=fastmath,
+            opt_level=opt_level,
+            defuns=defuns,
+            dtype=dtype,
+            fast_complex=fast_complex,
+            huge=huge,
+            parallel_mul=parallel_mul,
+            compress=compress,
+            coroutines=coroutines,
+            compact=compact,
+        )
+    elif can_use_python(backend):
+        model = pyengine.tree.model_ode(iv, states, odes, params)
+        compiler = pyengine.PyCompiler(model)
+    else:
+        raise ValueError("unsupported platform")
+
+    if dtype == "complex128":
+        return OdeFuncComplex(compiler)
+    else:
+        return OdeFunc(compiler)
+
+
+def compile_jac(
+    iv: Symbol,
+    states: list[Symbol]|Symbol,
+    odes: list[Expr]|Expr,
+    params: list[Symbol]|None=None,
+    ty: str="native",
+    use_simd: bool=True,
+    enable_simd512: bool=False,
+    use_threads: bool=True,
+    cse: bool=True,
+    fastmath: bool=True,
+    backend: str="rust",
+    opt_level: int=2,
+    defuns: engine.Defuns|None=None,
+    dtype: str="float64",
+    fast_complex: bool=True,
+    huge: bool=False,
+    parallel_mul: bool=True,
+    compress: bool=False,
+    coroutines: bool=False,
+    compact: bool=True,
+):
+    """Genenrates and compiles Jacobian for an ODE system.
+        iv: a single symbol, the independent variable.
+        states: a single symbol or a list/tuple of symbols.
+        odes: a single symbolic expression or a list/tuple of symbolic expressions,
+            representing the derivative of the state with respect to iv.
+        params (optional): a list/tuple of additional symbols as parameters to the model
+        ty (default `native`): see compile_func options for details.
+        backend (default `rust`): the code-generator backend (`rust`: dynamic library coded
+            in rust. `python`: pyengine library coded in plain Python.
+        dtype (default `float64`): the data type. Possibilities are `float64` and `complex128`.
+        use_simd (default `True`): generates SIMD code for vectorized operations. Currently
+            supports AVX on x86-64 and NEON on aarch64 systems.
+        enable_avx512 (default `False`): allows using AVX512 (f64x8) SIMD type when available.
+        use_threads (default `True`): use multi-threading to speed up parallel operations when called
+            on numpy arrays.
+        cse (default `True`): performs common-subexpression elimination.
+        fastmath (default `True`): use fastmath floating point operations, especially fused multiply-addition.
+        fast_complex (default `True`): use f64x2 SIMD instructions for complex operations.
+        parallel_mul (default `True`): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
+        huge (default `False`): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
+        compress (default `False`): compress binary size by converting inline operations to calls.
+        compact (default `True`): compacts the stack frame by reusing temporary variables.
+        opt_level (default 2): optimization level (0, 1, 2, or 3). Broadly the numbers are parallel to -O0, -O1, -O2, and -O3
+            options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
+            Levels 2 and 3 use improved graph-coloring algorithms for better register allocation.
+        defuns (default `None`): a dictionary of Symbol => Definition to pass external Python or
+            Symjit-generated functions.
+
+        Note that similar to `compile_ode`, `compile_jac` accepts use_simd and use_threads but in
+            practice ingores them, because compile_ode is usually called on scalars only.
+
+    ===> returns an `OdeFunc` object that has the same signature as the results of `compile_ode`,
+        i.e., `f(t,y,p0,p1,...)`. However, it returns a n-by-n Jacobian matrix, where n is the
+        number of state variables.
+    """
+    if can_use_rust(backend):
+        model = structure.model_jac(iv, states, odes, params)
+        compiler = engine.RustyCompiler(
+            model,
+            ty=ty,
+            use_simd=use_simd,
+            enable_simd512=enable_simd512,
+            use_threads=use_threads,
+            cse=cse,
+            fastmath=fastmath,
+            opt_level=opt_level,
+            defuns=defuns,
+            dtype=dtype,
+            fast_complex=fast_complex,
+            huge=huge,
+            parallel_mul=parallel_mul,
+            compress=compress,
+            coroutines=coroutines,
+            compact=compact,
+        )
+    elif can_use_python(backend):
+        model = pyengine.tree.model_jac(iv, states, odes, params)
+        compiler = pyengine.PyCompiler(model)
+    else:
+        raise ValueError("unsupported platform")
+
+    if dtype == "complex128":
+        return JacFuncComplex(compiler)
+    else:
+        return JacFunc(compiler)
+
+
+def update_json_model(model):
+    """
+    Updates json models to comform to API change in ver 2.11,
+    where the explicit independent-variable was removed and appended
+    to the front of the states.
+    """
+    if not isinstance(model, dict):
+        model = json.loads(model)
+
+    if len(model["odes"]) == 0:
+        return model
+
+    model["states"] = [model["iv"]] + model["states"]
+    model["iv"] = structure.var(Symbol("$_"))
+    return model
+
+
+def compile_json(
+    model,
+    ty: str="native",
+    use_simd: bool=True,
+    enable_simd512: bool=False,
+    use_threads: bool=True,
+    cse: bool=True,
+    fastmath: bool=True,
+    opt_level: int=2,
+    dtype: str="float64",
+    fast_complex: bool=True,
+    huge: bool=False,
+    parallel_mul: bool=True,
+    compress: bool=False,
+    coroutines: bool=False,
+    compact: bool=True,
+    backend: str="rust",
+):
+    """Compiles CellML models
+    CellML json files are extracted using CellMLToolkit.jl
+    model is already in Json format; hence, `convert = False`
+    """
+
+    model = update_json_model(model)
+
+    if can_use_rust("rust"):
+        compiler = engine.RustyCompiler(
+            model,
+            ty=ty,
+            use_simd=use_simd,
+            enable_simd512=enable_simd512,
+            use_threads=use_threads,
+            cse=cse,
+            fastmath=fastmath,
+            opt_level=opt_level,
+            defuns=None,
+            dtype=dtype,
+            fast_complex=fast_complex,
+            huge=huge,
+            parallel_mul=parallel_mul,
+            compress=compress,
+            coroutines=coroutines,
+            compact=compact,
+        )
+
+        if compiler.count_diffs == 0:
+            if dtype == "complex128":
+                return FuncComplex(compiler, [])
+            else:
+                return Func(compiler, [])
+        else:
+            if dtype == "complex128":
+                return OdeFuncComplex(compiler)
+            else:
+                return OdeFunc(compiler)
+    else:
+        raise ValueError("CellML json files only work with the rust backend")
+
+
+def compile_evaluator(
+    evaluator,
+    ty: str="native",
+    use_simd: bool=True,
+    enable_simd512: bool=False,
+    use_threads: bool=True,
+    cse: bool=True,
+    fastmath: bool=True,
+    backend: str="rust",
+    opt_level: int=3,
+    defuns: engine.Defuns|None=None,
+    dtype: str="float64",
+    num_params: int=1,
+    order: str="c",
+    simd_branch: bool=False,
+    fast_complex: bool=True,
+    direct: bool=False,
+    huge: bool=False,
+    parallel_mul: bool=True,
+    compress: bool=False,
+    coroutines: bool=False,
+    compact: bool=True,
+):
+    """Compiles an Evaluator object generated by Symbolica.
+
+    Parameters
+    ==========
+
+    ty: target architecture. Options are:
+        * "amd": generates x86-64 instructions (amd-sse or amd-avx) depending on the processor.
+        * "amd-sse": generates x86-64 SSE2 instructions.
+        * "amd-avx": generates x86-64 AVX instrcutions.
+        * "arm": generates arm aarch64 instructions.
+        * "riscv": generates 64-bit RISC-V instructions.
+        * "native" (default): selects the correct mode based on the processor.
+        * "bytecode": not supported by the Symbolica bridge.
+        * "wasm": not supported by the Symbolica bridge.
+        * "debug": : not supported by the Symbolica bridge.
+    backend (default `rust`): should be `rust`.
+    dtype (default `float64`): the data type. Possibilities are `float64` and `complex128`.
+    use_simd (default `True`): generates SIMD code for vectorized operations. Currently supports
+        AVX on x86-64 and NEON on aarch64 systems.
+    enable_avx512 (default `False`): allows using AVX512 (f64x8) SIMD type when available.
+    use_threads (default `False`): currently not supported for the Symbolica bridge.
+    cse (default `False`): performs common-subexpression elimination.
+    fastmath (default `False`): use fastmath floating point operations, especially fused multiply-addition.
+    fast_complex (default `True`): use f64x2 SIMD instructions for complex operations.
+    parallel_mul (default `True`): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
+    huge (default `False`): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
+    compress (default `False`): compress binary size by converting inline operations to calls.
+    compact (default `True`): compacts the stack frame by reusing temporary variables.
+    opt_level (default 2): optimization level (0, 1, 2, or 3). Broadly the numbers are parallel to -O0, -O1, -O2, and -O3
+        options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
+        Levels 2 and 3 use improved graph-coloring algorithms for better register allocation.
+    defuns (default `None`): currently not supported for the Symbolica bridge.
+
+    ==> returns a `SymbolicaFunc` object. The user can use `evaluate` and `evaluate_complex` functions to
+        call the compiled code.
+
+    >>> import numpy as np
+    >>> from symbolica import *
+    >>> from symjit import compile_evaluator
+    >>>
+    >>> x, y = S("x"), S("y")
+    >>> e = E("x + y^2").evaluator({}, {}, [x, y])
+    >>> f = compile_evaluator(e)
+    >>>
+    >>> X = np.array([[4.0, 10.0]])
+    >>> assert e.evaluate(X) == f.evaluate(X)
+    """
+    if not can_use_rust(backend):
+        raise ValueError("unsupported platform")
+
+    model, num_params = get_instructions(evaluator, num_params)
+
+    if order == "c":
+        return SymbolicaFunc(
+            model,
+            ty=ty,
+            use_simd=use_simd,
+            enable_simd512=enable_simd512,
+            use_threads=use_threads,
+            cse=cse,
+            fastmath=fastmath,
+            opt_level=opt_level,
+            defuns=defuns,
+            dtype=dtype,
+            action="translate",
+            convert=False,
+            num_params=num_params,
+            order=order,
+            simd_branch=simd_branch,
+            fast_complex=fast_complex,
+            direct=direct,
+            huge=huge,
+            parallel_mul=parallel_mul,
+            compress=compress,
+            coroutines=coroutines,
+            compact=compact,
+        )
+    else:  # order == "fortran"
+        compiler = engine.RustyCompiler(
+            model,
+            ty=ty,
+            use_simd=use_simd,
+            enable_simd512=enable_simd512,
+            use_threads=use_threads,
+            cse=cse,
+            fastmath=fastmath,
+            opt_level=opt_level,
+            defuns=defuns,
+            dtype=dtype,
+            action="translate",
+            convert=False,
+            num_params=num_params,
+            order=order,
+            simd_branch=simd_branch,
+            fast_complex=fast_complex,
+            direct=direct,
+            huge=huge,
+            parallel_mul=parallel_mul,
+            compress=compress,
+            coroutines=coroutines,
+            compact=compact,
+        )
+
+        if dtype == "complex128":
+            f = FuncComplex(compiler, [])
+        else:
+            f = Func(compiler, [])
+
+        if (
+            TRY_SAVE_LOAD
+            and isinstance(compiler, engine.RustyCompiler)
+            and action != "load"
+        ):
+            print("\033[31msave/load\033[0m")
+            f.save("tmp.sjb")
+            return load_func("tmp.sjb", defuns=defuns)
+        else:
+            return f
+
+
+def compile_composer(
+    composer: Composer,
+    ty: str="native",
+    dtype: str="float64",
+    use_simd: bool=True,
+    enable_simd512: bool=False,
+    use_threads: bool=True,
+    cse: bool=True,
+    fastmath: bool=True,
+    backend: str="rust",
+    opt_level: int=3,
+    simd_branch: bool=True,
+    fast_complex: bool=True,
+    direct: bool=True,
+    huge: bool=False,
+    parallel_mul: bool=True,
+    compress: bool=False,
+    coroutines: bool=False,
+    compact: bool=True,
+):
+    """Compiles a Composer object.
+
+    Parameters
+    ==========
+
+    ty: target architecture. Options are:
+        * "amd": generates x86-64 instructions (amd-sse or amd-avx) depending on the processor.
+        * "amd-sse": generates x86-64 SSE2 instructions.
+        * "amd-avx": generates x86-64 AVX instrcutions.
+        * "arm": generates arm aarch64 instructions.
+        * "riscv": generates 64-bit RISC-V instructions.
+        * "native" (default): selects the correct mode based on the processor.
+        * "bytecode": not supported by the Symbolica bridge.
+        * "wasm": not supported by the Symbolica bridge.
+        * "debug": : not supported by the Symbolica bridge.
+    backend (default `rust`): should be `rust`.
+    dtype (default `float64`): the data type. Possibilities are `float64` and `complex128`.
+    use_simd (default `True`): generates SIMD code for vectorized operations. Currently supports
+        AVX on x86-64 and NEON on aarch64 systems.
+    enable_avx512 (default `False`): allows using AVX512 (f64x8) SIMD type when available.
+    use_threads (default `True`): currently not supported for the Symbolica bridge.
+    cse (default `True`): performs common-subexpression elimination.
+    fastmath (default `False`): use fastmath floating point operations, especially fused multiply-addition.
+    fast_complex (default `True`): use f64x2 SIMD instructions for complex operations.
+    parallel_mul (default `True`): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
+    huge (default `False`): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
+    compress (default `False`): compress binary size by converting inline operations to calls.
+    compact (default `True`): compacts the stack frame by reusing temporary variables.
+    opt_level (default 2): optimization level (0, 1, 2, or 3). Broadly the numbers are parallel to -O0, -O1, -O2, and -O3
+        options to gcc and clang. Level-0 performs minimum amount of optimization. Level-1 does peephole optimization.
+        Levels 2 and 3 use improved graph-coloring algorithms for better register allocation.
+    defuns (default `None`): currently not supported for the Symbolica bridge.
+
+    ==> returns a `SymbolicaFunc` object. The user can use `evaluate` and `evaluate_complex` functions to
+        call the compiled code.
+
+    >>> import numpy as np
+    >>> from symbolica import *
+    >>> from symjit import compile_evaluator
+    >>>
+    >>> x, y = S("x"), S("y")
+    >>> e = E("x + y^2").evaluator({}, {}, [x, y])
+    >>> f = compile_evaluator(e)
+    >>>
+    >>> X = np.array([[4.0, 10.0]])
+    >>> assert e.evaluate(X) == f.evaluate(X)
+    """
+    if not can_use_rust(backend):
+        raise ValueError("unsupported platform")
+
+    model, num_params = get_instructions(composer, composer.num_params)
+
+    return SymbolicaFunc(
+        model,
+        ty=ty,
+        use_simd=use_simd,
+        enable_simd512=enable_simd512,
+        use_threads=use_threads,
+        cse=cse,
+        fastmath=fastmath,
+        opt_level=opt_level,
+        defuns=composer.defuns,
+        dtype=dtype,
+        action="translate",
+        convert=False,
+        num_params=num_params,
+        order="c",
+        simd_branch=simd_branch,
+        fast_complex=fast_complex,
+        direct=direct,
+        huge=huge,
+        parallel_mul=parallel_mul,
+        compress=compress,
+        coroutines=coroutines,
+        compact=compact,
+    )
+
+
+def load_func(file, eqs=[], defuns=None):
+    if can_use_rust("rust"):
+        """Loads a previously compiled function.
+        The function should have been saving using various `Func` objects' `save` method.
+
+        Parameters
+        ==========
+
+        file: file name
+        eqs: the phantom list of state variables. The actual variables are not needed and are
+            discarded. The import thing is the type of `eqs` which determines the output format
+            of the `Func` function. The valid options are `[]` (a list), `()` (a tuple), or `None`,
+            meaning a fast-function.
+        """
+        compiler = engine.RustyCompiler("", action="load", file=file, defuns=defuns)
+        if compiler.symbolica:
+            f = SymbolicaFunc(None)
+            if compiler.dtype == "complex128":
+                f.complex_compiler = compiler
+            else:
+                f.compiler = compiler
+            return f
+        elif compiler.count_diffs > 0:  # an ODE right-hand side (`compile_ode`)
+            return OdeFuncComplex(compiler) if compiler.dtype == "complex128" else OdeFunc(compiler)
+        elif compiler.dtype == "float64":
+            return Func(compiler, eqs)
+        elif compiler.dtype == "complex128":
+            return FuncComplex(compiler, eqs)
+        else:
+            raise ValueError("invalid dtype")
+    else:
+        raise ValueError("unsupported platform")

@@ -1,0 +1,5 @@
+error: a kernel `if` cannot `break` or `continue` an enclosing loop
+ --> tests/ui/break_in_branch.rs:9:13
+  |
+9 |             break;
+  |             ^^^^^

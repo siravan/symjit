@@ -1,0 +1,5 @@
+examples/claude/obj/out
+examples/claude/wasm-obj/out
+examples/claude/wasm/out
+*.pyc
+__pycache__/

@@ -1,0 +1,5 @@
+error: expected `inline`, `complex` or `callback`
+ --> tests/ui/unknown_option.rs:3:10
+  |
+3 | #[kernel(fast)]
+  |          ^^^^

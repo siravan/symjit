@@ -1,0 +1,812 @@
+use anyhow::{anyhow, Result};
+use std::collections::HashSet;
+use std::io::{Read, Write};
+use wide::{f64x2, f64x4, f64x8};
+
+use super::amd::{
+    AmdComplexGenerator, AmdSSEGenerator, AmdScalarGenerator, AmdVectorF64x4Generator,
+    AmdVectorF64x8Generator,
+};
+use super::applet::Applet;
+use super::arm::{ArmComplexGenerator, ArmGenerator, ArmSimdGenerator};
+use super::bytecode::CompiledMir;
+use super::code::Func;
+use super::compilation::{read_sjb, write_sjb, Compilation, Model};
+use super::config::Config;
+use super::generator::{Generator, GeneratorType};
+use super::machine::Compiled;
+use super::machine::MachineCode;
+use super::matrix::{combine_matrixes, Matrix};
+use super::mir::Mir;
+use super::model::Program;
+use super::riscv64::RiscV;
+use super::symbol::Loc;
+use super::utils::*;
+
+use rayon::prelude::*;
+
+pub use super::config::CompilerType;
+
+#[repr(C)] // to ensure binary compatibility with Applet
+pub struct Application {
+    // Applet compatibility
+    // Important! The order of these fields is critical and should be
+    // the same as the order of Applet fields.
+    pub compiled: Option<MachineCode<f64>>,
+    pub compiled_simd: Option<MachineCode<f64>>,
+    pub use_simd: bool,
+    pub use_threads: bool,
+    pub config: Config,
+    pub params: Vec<f64>,
+    pub first_state: usize,
+    pub first_obs: usize,
+    pub count_states: usize,
+    pub count_obs: usize,
+    pub count_params: usize,
+    // Non-Applet fields
+    pub prog: Program,
+    pub compiled_fast: Option<MachineCode<f64>>,
+    pub bytecode: CompiledMir,
+    pub can_fast: bool,
+    pub reals: HashSet<Loc>,
+    pub original: Option<Mir>,
+    pub first_param: usize,
+    pub first_diff: usize,
+    pub count_diffs: usize,
+}
+
+impl Application {
+    pub fn new(prog: Program, reals: HashSet<Loc>) -> Result<Application> {
+        Self::from_compilation(Compilation::from_program(prog, reals)?)
+    }
+
+    pub fn with_mir(prog: Program, reals: HashSet<Loc>, mir: Mir) -> Result<Application> {
+        Self::from_compilation(Compilation { prog, reals, mir })
+    }
+
+    /// The application of what a front end made (`Translator`, `Composer`, `KernelBuilder`).
+    pub fn from_compilation(c: Compilation) -> Result<Application> {
+        Self::from_model(Model::new(c)?)
+    }
+
+    /// The application of a front end's compilation (`compile` of `CompileExt`,
+    /// `KernelCompile`), with its SIMD kernel; with `salt`, the debug dumps the configuration
+    /// asks for (`Config::debug_*`), named after it.
+    pub fn from_finished(c: Compilation, salt: Option<&str>) -> Result<Application> {
+        let mut app = Self::from_compilation(c)?;
+        app.prepare_simd();
+
+        if let Some(salt) = salt {
+            if app.config.debug_stats() {
+                app.dump(&format!("symjit_{}_stats.txt", salt), "stats");
+            };
+
+            if app.config.debug_bytecode() {
+                app.dump(&format!("symjit_{}_bytecode.txt", salt), "bytecode");
+            };
+
+            if app.config.debug_scalar() {
+                app.dump(&format!("symjit_{}_scalar.bin", salt), "scalar");
+            };
+
+            if app.config.debug_simd() {
+                app.dump(&format!("symjit_{}_simd.bin", salt), "simd");
+            };
+        }
+
+        Ok(app)
+    }
+
+    /// The application of a model: its scalar kernel compiled to machine code (or the
+    /// bytecode interpreter); the SIMD and fast kernels are compiled when first needed.
+    pub fn from_model(model: Model) -> Result<Application> {
+        // the functions of the yield points (`_yield_`) of lockstep evaluation
+        #[cfg(feature = "async")]
+        super::lockstep::register();
+
+        let Model {
+            mut prog,
+            reals,
+            config,
+            mir,
+            original,
+            first_state,
+            first_param,
+            first_obs,
+            first_diff,
+            count_states,
+            count_params,
+            count_obs,
+            count_diffs,
+            use_simd,
+            use_threads,
+            can_fast,
+        } = model;
+
+        let params = vec![0.0; count_params + 1];
+
+        // the fast-complex kernels run the MIR before `complexify`
+        let compiled = match &original {
+            Some(original) if config.fast_complex() => {
+                Self::compile_ty(&config, original, &mut prog)?
+            }
+            _ => Self::compile_ty(&config, &mir, &mut prog)?,
+        };
+
+        // bytecode takes the ownership of mir
+        let bytecode = Self::compile_bytecode(mir, &mut prog)?;
+
+        Ok(Application {
+            prog,
+            compiled,
+            compiled_simd: None,
+            compiled_fast: None,
+            bytecode,
+            params,
+            use_simd,
+            use_threads,
+            can_fast,
+            first_state,
+            first_param,
+            first_obs,
+            first_diff,
+            count_states,
+            count_params,
+            count_obs,
+            count_diffs,
+            config,
+            reals,
+            original,
+        })
+    }
+
+    fn compile_ty(
+        config: &Config,
+        mir: &Mir,
+        prog: &mut Program,
+    ) -> Result<Option<MachineCode<f64>>> {
+        let compiled = match config.compiler_type() {
+            CompilerType::AmdAVX => Some(Self::compile_avx(mir, prog)?),
+            CompilerType::AmdSSE => Some(Self::compile_sse(mir, prog)?),
+            CompilerType::Arm => Some(Self::compile_arm(mir, prog)?),
+            CompilerType::RiscV => Some(Self::compile_riscv(mir, prog)?),
+            // `ty = "wasm"`: a model for sjc's WebAssembly modules (`save`), run on bytecode here
+            CompilerType::ByteCode | CompilerType::Wasm => None,
+            CompilerType::Debug => {
+                println!("`ty = debug` is deprecated");
+                None
+            }
+            _ => return Err(anyhow!("unrecognized `ty`")),
+        };
+
+        Ok(compiled)
+    }
+
+    pub fn seal(self) -> Result<Applet> {
+        Applet::new(self)
+    }
+
+    pub fn as_applet(&self) -> &Applet {
+        unsafe { std::mem::transmute(self) }
+    }
+
+    /********************* compile_* functions *************************/
+
+    fn compile<G: Generator>(
+        mir: &Mir,
+        prog: &mut Program,
+        mut generator: G,
+        size: usize,
+        arch: &str,
+        lanes: usize,
+    ) -> Result<MachineCode<f64>> {
+        let stack_limit = prog.config().stack_limit();
+        if prog.builder.stack_size() >= stack_limit * std::mem::size_of::<f64>() {
+            return Err(anyhow!(
+                "Cannot compile due to reaching the stack limit (= {}). Consider increasing the increasing the limit using `Config.set_stack_limit`.",
+                stack_limit
+            ));
+        }
+
+        let mem: Vec<f64> = vec![0.0; size];
+        prog.builder.compile_from_mir(
+            mir,
+            &mut generator,
+            prog.count_states,
+            prog.count_obs,
+            prog.count_params,
+        )?;
+
+        Ok(MachineCode::new(
+            arch,
+            generator.bytes(),
+            mem,
+            false,
+            lanes,
+            prog.config().huge(),
+        ))
+    }
+
+    fn compile_fast<G: Generator>(
+        mir: &Mir,
+        prog: &mut Program,
+        mut generator: G,
+        idx_ret: u32,
+        arch: &str,
+    ) -> Result<MachineCode<f64>> {
+        let mem: Vec<f64> = Vec::new();
+        prog.builder.compile_fast_from_mir(
+            mir,
+            &mut generator,
+            prog.count_states,
+            prog.count_obs,
+            idx_ret as i32,
+        )?;
+
+        Ok(MachineCode::new(
+            arch,
+            generator.bytes(),
+            mem,
+            true,
+            1,
+            prog.config().huge(),
+        ))
+    }
+
+    fn compile_bytecode(mir: Mir, prog: &mut Program) -> Result<CompiledMir> {
+        let mem: Vec<f64> = vec![0.0; prog.mem_size()];
+        let stack: Vec<f64> = vec![0.0; prog.builder.stack_size()];
+
+        Ok(CompiledMir::new(mir, mem, stack))
+    }
+
+    fn compile_sse(mir: &Mir, prog: &mut Program) -> Result<MachineCode<f64>> {
+        Self::compile::<AmdSSEGenerator>(
+            mir,
+            prog,
+            AmdSSEGenerator::new(prog.config().clone()),
+            prog.mem_size(),
+            "x86_64",
+            1,
+        )
+    }
+
+    fn compile_avx(mir: &Mir, prog: &mut Program) -> Result<MachineCode<f64>> {
+        if prog.config().is_complex() && prog.config().fast_complex() {
+            Self::compile::<AmdComplexGenerator>(
+                mir,
+                prog,
+                AmdComplexGenerator::new(prog.config().clone()),
+                prog.mem_size(),
+                "x86_64",
+                1,
+            )
+        } else {
+            Self::compile::<AmdScalarGenerator>(
+                mir,
+                prog,
+                AmdScalarGenerator::new(prog.config().clone()),
+                prog.mem_size(),
+                "x86_64",
+                1,
+            )
+        }
+    }
+
+    fn compile_avx_simd(mir: &Mir, prog: &mut Program) -> Result<MachineCode<f64>> {
+        let stack_size = prog.builder.stack_size();
+        let stack_limit = prog.config().stack_limit();
+        let is_complex = prog.config().is_complex();
+
+        let p = if stack_size * std::mem::size_of::<f64x8>() <= stack_limit
+            && prog.config().use_simd512()
+        {
+            GeneratorType::AmdVectorF64x8(is_complex)
+        } else if stack_size * std::mem::size_of::<f64x4>() <= stack_limit
+            && prog.config().use_simd()
+        {
+            GeneratorType::AmdVectorF64x4(is_complex)
+        } else {
+            GeneratorType::AmdScalar(is_complex)
+        };
+
+        match p {
+            GeneratorType::AmdVectorF64x8(_) => Self::compile::<AmdVectorF64x8Generator>(
+                mir,
+                prog,
+                AmdVectorF64x8Generator::new(prog.config().clone()),
+                prog.mem_size() * 8,
+                "x86_64",
+                8,
+            ),
+            GeneratorType::AmdVectorF64x4(_) => Self::compile::<AmdVectorF64x4Generator>(
+                mir,
+                prog,
+                AmdVectorF64x4Generator::new(prog.config().clone()),
+                prog.mem_size() * 4,
+                "x86_64",
+                4,
+            ),
+            _ => Err(anyhow!(
+                "Cannot use SIMD (f64x4) due to the stack limit (= {}).",
+                stack_limit
+            )),
+        }
+    }
+
+    fn compile_arm(mir: &Mir, prog: &mut Program) -> Result<MachineCode<f64>> {
+        if prog.config().is_complex() && prog.config().fast_complex() {
+            Self::compile::<ArmComplexGenerator>(
+                mir,
+                prog,
+                ArmComplexGenerator::new(prog.config().clone()),
+                prog.mem_size(),
+                "aarch64",
+                1,
+            )
+        } else {
+            Self::compile::<ArmGenerator>(
+                mir,
+                prog,
+                ArmGenerator::new(prog.config().clone()),
+                prog.mem_size(),
+                "aarch64",
+                1,
+            )
+        }
+    }
+
+    fn compile_arm_simd(mir: &Mir, prog: &mut Program) -> Result<MachineCode<f64>> {
+        let stack_size = prog.builder.stack_size();
+        let stack_limit = prog.config().stack_limit();
+
+        if prog.config().use_simd() {
+            if stack_size * std::mem::size_of::<f64x2>() <= stack_limit {
+                return Self::compile::<ArmSimdGenerator>(
+                    mir,
+                    prog,
+                    ArmSimdGenerator::new(prog.config().clone()),
+                    prog.mem_size() * 2,
+                    "aarch64",
+                    2,
+                );
+            } else {
+                eprintln!(
+                    "SIMD (f64x2) request downgraded to scalar f64 due to the stack limit (= {}).",
+                    stack_limit
+                )
+            }
+        }
+
+        Err(anyhow!(
+            "Cannot use SIMD (f64x2) due to the stack limit (= {}).",
+            stack_limit
+        ))
+    }
+
+    fn compile_riscv(mir: &Mir, prog: &mut Program) -> Result<MachineCode<f64>> {
+        Self::compile::<RiscV>(
+            mir,
+            prog,
+            RiscV::new(prog.config().clone()),
+            prog.mem_size(),
+            "riscv64",
+            1,
+        )
+    }
+
+    fn compile_amd_fast(mir: &Mir, prog: &mut Program, idx_ret: u32) -> Result<MachineCode<f64>> {
+        if prog.config().has_avx() {
+            Self::compile_fast(
+                mir,
+                prog,
+                AmdScalarGenerator::new(prog.config().clone()),
+                idx_ret,
+                "x86_64",
+            )
+        } else {
+            Self::compile_fast(
+                mir,
+                prog,
+                AmdSSEGenerator::new(prog.config().clone()),
+                idx_ret,
+                "x86_64",
+            )
+        }
+    }
+
+    fn compile_arm_fast(mir: &Mir, prog: &mut Program, idx_ret: u32) -> Result<MachineCode<f64>> {
+        Self::compile_fast(
+            mir,
+            prog,
+            ArmGenerator::new(prog.config().clone()),
+            idx_ret,
+            "aarch64",
+        )
+    }
+
+    fn compile_riscv_fast(mir: &Mir, prog: &mut Program, idx_ret: u32) -> Result<MachineCode<f64>> {
+        Self::compile_fast(
+            mir,
+            prog,
+            RiscV::new(prog.config().clone()),
+            idx_ret,
+            "riscv64",
+        )
+    }
+
+    /**********************************************************/
+
+    #[inline]
+    pub fn exec(&mut self) {
+        if let Some(compiled) = &mut self.compiled {
+            compiled.exec(&self.params[..])
+        } else {
+            self.bytecode.exec(&self.params[..]);
+        }
+    }
+
+    pub fn exec_callable(&mut self, xx: &[f64]) -> f64 {
+        if let Some(compiled) = &mut self.compiled {
+            let mem = compiled.mem_mut();
+            mem[self.first_state..self.first_state + self.count_states].copy_from_slice(xx);
+            compiled.exec(&self.params[..]);
+            compiled.mem()[self.first_obs]
+        } else {
+            let mem = self.bytecode.mem_mut();
+            mem[self.first_state..self.first_state + self.count_states].copy_from_slice(xx);
+            self.bytecode.exec(&self.params[..]);
+            self.bytecode.mem()[self.first_obs]
+        }
+    }
+
+    pub fn prepare_simd(&mut self) {
+        // SIMD compilation is lazy!
+        // A SIMD kernel calls the SIMD kernels of the applets it calls (`_simd_<name>_`):
+        // without one (e.g. an applet sealed from `Compiler::compile`, which does not
+        // prepare SIMD), it stays scalar, as when its compilation fails.
+        let applets_have_simd = self.config.df.as_ref().is_none_or(|df| {
+            df.funcs
+                .values()
+                .all(|f| !matches!(f, Func::App(app) if app.simd_kernel().is_none()))
+        });
+        if self.compiled_simd.is_none() && self.use_simd && applets_have_simd {
+            if self.config.has_avx() {
+                self.compiled_simd =
+                    Self::compile_avx_simd(&self.bytecode.mir, &mut self.prog).ok();
+            } else if self.config.is_arm64() {
+                self.compiled_simd =
+                    Self::compile_arm_simd(&self.bytecode.mir, &mut self.prog).ok();
+            }
+        };
+    }
+
+    fn prepare_fast(&mut self) {
+        // fast func compilation is lazy!
+        if self.compiled_fast.is_none() && self.can_fast {
+            if self.config.is_amd64() {
+                self.compiled_fast = Self::compile_amd_fast(
+                    &self.bytecode.mir,
+                    &mut self.prog,
+                    self.first_obs as u32,
+                )
+                .ok();
+            } else if self.config.is_arm64() {
+                self.compiled_fast = Self::compile_arm_fast(
+                    &self.bytecode.mir,
+                    &mut self.prog,
+                    self.first_obs as u32,
+                )
+                .ok();
+            } else if self.config.is_riscv64() {
+                self.compiled_fast = Self::compile_riscv_fast(
+                    &self.bytecode.mir,
+                    &mut self.prog,
+                    self.first_obs as u32,
+                )
+                .ok();
+            }
+        };
+    }
+
+    pub fn get_fast(&mut self) -> Option<CompiledFunc<f64>> {
+        self.prepare_fast();
+        self.compiled_fast.as_ref().map(|c| c.func())
+    }
+
+    pub fn exec_vectorized(&mut self, states: &mut Matrix, obs: &mut Matrix) {
+        if let Some(compiled) = &self.compiled {
+            if !compiled.support_indirect() {
+                self.exec_vectorized_simple(states, obs);
+                return;
+            }
+
+            self.prepare_simd();
+
+            if let Some(simd) = &self.compiled_simd {
+                self.exec_vectorized_simd(states, obs, self.use_threads, simd.count_lanes());
+            } else {
+                self.exec_vectorized_scalar(states, obs, self.use_threads);
+            }
+        } else {
+            // no machine code (`ty = "bytecode"` or `"wasm"`): one column at a time on
+            // the bytecode interpreter
+            self.exec_vectorized_simple(states, obs);
+        }
+    }
+
+    pub fn exec_vectorized_simple(&mut self, states: &Matrix, obs: &mut Matrix) {
+        assert!(states.vecsize == obs.vecsize);
+        let n = states.vecsize;
+        let params = &self.params[..];
+
+        if let Some(compiled) = &mut self.compiled {
+            for t in 0..n {
+                {
+                    let mem = compiled.mem_mut();
+                    for i in 0..self.count_states {
+                        mem[self.first_state + i] = states.get(i, t);
+                    }
+                }
+
+                compiled.exec(params);
+
+                {
+                    let mem = compiled.mem_mut();
+                    for i in 0..self.count_obs {
+                        obs.set(i, t, mem[self.first_obs + i]);
+                    }
+                }
+            }
+        } else {
+            for t in 0..n {
+                {
+                    let mem = self.bytecode.mem_mut();
+                    for i in 0..self.count_states {
+                        mem[self.first_state + i] = states.get(i, t);
+                    }
+                }
+
+                self.bytecode.exec(params);
+
+                {
+                    let mem = self.bytecode.mem_mut();
+                    for i in 0..self.count_obs {
+                        obs.set(i, t, mem[self.first_obs + i]);
+                    }
+                }
+            }
+        }
+    }
+
+    fn exec_single(t: usize, v: &Matrix, params: &[f64], f: CompiledFunc<f64>) -> i32 {
+        let p = v.p.as_ptr();
+        f(std::ptr::null(), p, t, params.as_ptr())
+    }
+
+    /// Runs the SIMD kernel `f_simd` on the `l` points from `t`; when it does not finish (its
+    /// lanes take different sides of a branch, `Generator::branch_if`, and it returns
+    /// non-zero), the scalar kernel `f` computes the points one at a time.
+    fn exec_simd_row(
+        t: usize,
+        l: usize,
+        v: &Matrix,
+        params: &[f64],
+        f_simd: CompiledFunc<f64>,
+        f: CompiledFunc<f64>,
+    ) {
+        if Self::exec_single(t, v, params, f_simd) != 0 {
+            for i in t..t + l {
+                Self::exec_single(i, v, params, f);
+            }
+        }
+    }
+
+    pub fn exec_vectorized_scalar(&mut self, states: &mut Matrix, obs: &mut Matrix, threads: bool) {
+        if let Some(compiled) = &mut self.compiled {
+            assert!(states.vecsize == obs.vecsize);
+            let n = states.vecsize;
+            let f = compiled.func();
+            let params = &self.params[..];
+            let v = combine_matrixes(states, obs);
+
+            if threads {
+                (0..n).into_par_iter().for_each(|t| {
+                    Self::exec_single(t, &v, params, f);
+                });
+            } else {
+                (0..n).for_each(|t| {
+                    Self::exec_single(t, &v, params, f);
+                });
+            }
+        }
+    }
+
+    pub fn exec_vectorized_simd(
+        &mut self,
+        states: &mut Matrix,
+        obs: &mut Matrix,
+        threads: bool,
+        l: usize,
+    ) {
+        if let Some(compiled) = &mut self.compiled {
+            assert!(states.vecsize == obs.vecsize);
+            let n = states.vecsize;
+            let params = &self.params[..];
+            let n0 = l * (n / l);
+            let v = combine_matrixes(states, obs);
+
+            let f = compiled.func();
+
+            if let Some(g) = &mut self.compiled_simd {
+                let f_simd = g.func();
+                if threads {
+                    (0..n / l)
+                        .into_par_iter()
+                        .for_each(|t| Self::exec_simd_row(t * l, l, &v, params, f_simd, f));
+                } else {
+                    (0..n / l).for_each(|t| Self::exec_simd_row(t * l, l, &v, params, f_simd, f));
+                }
+            }
+
+            if threads {
+                (n0..n).into_par_iter().for_each(|t| {
+                    Self::exec_single(t, &v, params, f);
+                });
+            } else {
+                (n0..n).for_each(|t| {
+                    Self::exec_single(t, &v, params, f);
+                });
+            }
+        }
+    }
+
+    pub fn dump(&mut self, name: &str, what: &str) -> bool {
+        match what {
+            "scalar" => {
+                if let Some(f) = &self.compiled {
+                    f.dump(name);
+                    true
+                } else {
+                    false
+                }
+            }
+            "simd" => {
+                self.prepare_simd();
+
+                if let Some(f) = &self.compiled_simd {
+                    f.dump(name);
+                    true
+                } else {
+                    false
+                }
+            }
+            "fast" => {
+                self.prepare_fast();
+
+                if let Some(f) = &self.compiled_fast {
+                    f.dump(name);
+                    true
+                } else {
+                    false
+                }
+            }
+            "bytecode" => {
+                self.bytecode.dump(name);
+                true
+            }
+            "stats" => {
+                let size = if let Some(f) = &self.compiled {
+                    f.as_machine().unwrap().size
+                } else {
+                    0
+                };
+                self.bytecode.mir.print_stats(name, size);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn dumps(&self) -> Vec<u8> {
+        if let Some(f) = &self.compiled {
+            f.dumps()
+        } else {
+            Vec::new()
+        }
+    }
+
+    pub fn measure(&self, what: &str) -> usize {
+        match what {
+            "ker-scalar-size" => {
+                if let Some(f) = &self.compiled {
+                    f.size
+                } else {
+                    0
+                }
+            }
+            "ker-simd-size" => {
+                if let Some(f) = &self.compiled_simd {
+                    f.size
+                } else {
+                    0
+                }
+            }
+            "ker-fast-size" => {
+                if let Some(f) = &self.compiled_fast {
+                    f.size
+                } else {
+                    0
+                }
+            }
+            "mir-size" => self.bytecode.mir.code.ip,
+            "mir-bytes" => self.bytecode.mir.code.buf.len(),
+            // the general registers of the saved (target-dependent) MIR, see `load_for`
+            "registers" => self
+                .original
+                .as_ref()
+                .unwrap_or(&self.bytecode.mir)
+                .max_register()
+                .map_or(0, |r| r as usize + 1),
+            "stack-size" => self.prog.builder.stack_size(),
+            #[cfg(feature = "async")]
+            "async" => 1,
+            #[cfg(not(feature = "async"))]
+            "async" => 0,
+            "version" => {
+                let major: usize = env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap_or(99);
+                let minor: usize = env!("CARGO_PKG_VERSION_MINOR").parse().unwrap_or(99);
+                let patch: usize = env!("CARGO_PKG_VERSION_PATCH").parse().unwrap_or(99);
+                major * 10000 + minor * 100 + patch
+            }
+            _ => 0,
+        }
+    }
+
+    /************************** save/load ******************************/
+
+    pub fn load(stream: &mut impl Read, config: &Config) -> Result<Self> {
+        Self::load_with_version(stream, config, 0)
+    }
+}
+
+impl Storage for Application {
+    fn save(&self, stream: &mut impl Write) -> Result<()> {
+        // the kernels this application has prepared
+        let mut mask: usize = 0;
+
+        if self.compiled.is_some() && self.compiled.as_ref().unwrap().as_machine().is_some() {
+            mask |= 1;
+        };
+
+        if self.compiled_fast.is_some()
+            && self.compiled_fast.as_ref().unwrap().as_machine().is_some()
+        {
+            mask |= 2;
+        }
+
+        if self.compiled_simd.is_some()
+            && self.compiled_simd.as_ref().unwrap().as_machine().is_some()
+        {
+            mask |= 4;
+        }
+
+        let mir = self.original.as_ref().unwrap_or(&self.bytecode.mir);
+        write_sjb(stream, &self.prog, mir, &self.reals, mask)
+    }
+
+    fn load_with_version(stream: &mut impl Read, config: &Config, _version: usize) -> Result<Self> {
+        let (compilation, mask) = read_sjb(stream, config, None, false)?;
+        let mut app = Application::from_compilation(compilation)?;
+
+        if mask & 2 != 0 {
+            app.prepare_fast();
+        }
+
+        if mask & 4 != 0 {
+            app.prepare_simd();
+        }
+
+        Ok(app)
+    }
+}

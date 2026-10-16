@@ -1,0 +1,5 @@
+error: the parameters of a kernel must be `f64` or `Complex<f64>` (or tuples or arrays of them); use `#[kernel(inline)]` for a helper with other parameters
+ --> tests/ui/non_float_param.rs:4:19
+  |
+4 | fn scaled(x: f64, n: i32) -> f64 {
+  |                   ^^^^^^
