@@ -710,6 +710,8 @@ def load_func(file, eqs=[], defuns=None):
             else:
                 f.compiler = compiler
             return f
+        elif compiler.count_diffs > 0:  # an ODE right-hand side (`compile_ode`)
+            return OdeFuncComplex(compiler) if compiler.dtype == "complex128" else OdeFunc(compiler)
         elif compiler.dtype == "float64":
             return Func(compiler, eqs)
         elif compiler.dtype == "complex128":

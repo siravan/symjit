@@ -4,7 +4,7 @@
 // Linux and macOS, x86-64 and AArch64, with a C compiler. `arm_kernels_cross_compiled`
 // checks AArch64 objects (`ty = "arm"`) on any host.
 
-use super::{Format, Target};
+use super::{Format, ObjectBuilder, Target};
 use crate::compiler::Compiler;
 use crate::config::{Config, COMPACT, COMPLEX, CSE, FASTMATH, FAST_COMPLEX};
 use crate::expr::Expr;
@@ -307,28 +307,41 @@ fn complex_model_matches_the_jit() {
     }
 }
 
+/// The relocation symbols of an object, sorted.
+fn called(obj: &ObjectBuilder) -> Vec<String> {
+    let mut s: Vec<String> = obj.relocations.iter().map(|r| r.symbol.clone()).collect();
+    s.sort();
+    s.dedup();
+    s
+}
+
 #[test]
-fn functions_outside_libm_are_rejected() {
+fn functions_outside_libm_are_composed_or_rejected() {
     let x = Expr::var("x");
 
+    // symjit's real functions: composed of C functions (`lower_for_object`)
     let mut app = Compiler::with_config(config("native", 0))
-        .compile(&[x.clone()], &[x.csc()])
+        .compile(&[x.clone()], &[x.csc(), x.sinc()])
         .unwrap();
     let target = app.object_target("").unwrap();
-    let err = app.object("f", target).err().unwrap().to_string();
-    assert!(
-        err.contains("`csc` is not a C math library function"),
-        "{}",
-        err
-    );
+    assert_eq!(called(&app.object("f", target).unwrap()), ["sin"]);
 
-    // complex functions
+    // complex functions: C99's
     let mut app = Compiler::with_config(config("native", COMPLEX | FAST_COMPLEX))
-        .compile(&[x.clone()], &[x.sin()])
+        .compile(&[x.clone()], &[x.sin(), x.csc()])
         .unwrap();
     let target = app.object_target("").unwrap();
-    let err = app.object("f", target).err().unwrap().to_string();
-    assert!(err.contains("complex function"), "{}", err);
+    assert_eq!(called(&app.object("f", target).unwrap()), ["csin"]);
+
+    // `random` is not a function of the C library
+    for flags in [0, COMPLEX | FAST_COMPLEX] {
+        let mut app = Compiler::with_config(config("native", flags))
+            .compile(&[x.clone()], &[Expr::unary("random", &x)])
+            .unwrap();
+        let target = app.object_target("").unwrap();
+        let err = app.object("f", target).err().unwrap().to_string();
+        assert!(err.contains("random"), "{}", err);
+    }
 }
 
 /// With SYMJIT_LINKER_SAMPLES set to a directory, writes the kernels of `real_model` as
@@ -553,18 +566,19 @@ fn arm_kernels_cross_compiled() {
         .unwrap();
     assert!(obj.relocations.is_empty());
 
-    // functions outside the C library
+    // functions outside the C library: composed of C functions, or C99's complex ones
     let mut app = Compiler::with_config(config("arm", 0))
         .compile(&[x.clone()], &[x.csc()])
         .unwrap();
-    let err = app
+    let obj = app
         .object("f", Target::new(Format::MachO, super::Arch::Aarch64))
-        .err()
         .unwrap();
-    assert!(
-        err.to_string()
-            .contains("`csc` is not a C math library function"),
-        "{}",
-        err
-    );
+    assert_eq!(called(&obj), ["sin"]);
+    let mut app = Compiler::with_config(config("arm", COMPLEX | FAST_COMPLEX))
+        .compile(&[x.clone(), y.clone()], &[&x.exp() * &y])
+        .unwrap();
+    let obj = app
+        .object("c", Target::new(Format::MachO, super::Arch::Aarch64))
+        .unwrap();
+    assert_eq!(called(&obj), ["cexp"]);
 }

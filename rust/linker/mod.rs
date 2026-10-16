@@ -16,6 +16,7 @@ mod elf;
 mod header;
 #[cfg(test)]
 mod kernel_tests;
+mod lower;
 mod macho;
 #[cfg(test)]
 mod tests;
@@ -24,6 +25,7 @@ use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 
 pub use header::{header, HeaderInfo};
+pub use lower::lower_for_object;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Format {
@@ -220,6 +222,27 @@ impl ObjectBuilder {
             ..r.clone()
         }));
 
+        Ok(())
+    }
+
+    /// Appends the functions of `other` (built for the same target), with their relocations.
+    pub fn append(&mut self, other: &ObjectBuilder) -> Result<()> {
+        if other.target != self.target {
+            return Err(anyhow!("the objects are built for different targets"));
+        }
+        for f in other.functions.iter() {
+            let end = f.offset + f.size;
+            let relocs: Vec<Relocation> = other
+                .relocations
+                .iter()
+                .filter(|r| r.offset >= f.offset && r.offset < end)
+                .map(|r| Relocation {
+                    offset: r.offset - f.offset,
+                    ..r.clone()
+                })
+                .collect();
+            self.add_function(&f.name, &other.code[f.offset..end], &relocs)?;
+        }
         Ok(())
     }
 

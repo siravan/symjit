@@ -7,6 +7,7 @@ use super::config::Config;
 use super::expr::Expr;
 use super::node::Node;
 use super::operation::Operation;
+use super::runnable::CompilerType;
 use super::utils::Storage;
 
 pub trait Transformer {
@@ -139,6 +140,19 @@ impl Storage for Program {
     }
 
     fn load_with_version(stream: &mut impl Read, config: &Config, version: usize) -> Result<Self> {
+        Self::load_retargeted(stream, config, version, None)
+    }
+}
+
+impl Program {
+    /// `load_with_version`, with the saved compiler type replaced by `ty` (if given) before
+    /// the rest of the program is read (see `Application::load_for`).
+    pub fn load_retargeted(
+        stream: &mut impl Read,
+        config: &Config,
+        version: usize,
+        ty: Option<CompilerType>,
+    ) -> Result<Self> {
         let mut bytes: [u8; 8] = [0; 8];
 
         stream.read_exact(&mut bytes)?;
@@ -147,7 +161,10 @@ impl Storage for Program {
             return Err(anyhow!("invalid magic number (Program)"));
         }
 
-        let config = Config::load_with_version(stream, config, version)?;
+        let mut config = Config::load_with_version(stream, config, version)?;
+        if let Some(ty) = ty {
+            config.ty = ty;
+        }
 
         stream.read_exact(&mut bytes)?;
         let count_states = usize::from_le_bytes(bytes);

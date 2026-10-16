@@ -457,6 +457,19 @@ impl Mir {
         used
     }
 
+    /// The highest general register (`Reg::Gen`) the code uses, if any. It is fixed by the
+    /// register allocation of the target the MIR was compiled for (`Config::count_scratch`).
+    pub fn max_register(&self) -> Option<u8> {
+        self.code
+            .iter()
+            .flat_map(|ins| ins.regs())
+            .filter_map(|r| match r {
+                Reg::Gen(n) => Some(n),
+                _ => None,
+            })
+            .max()
+    }
+
     pub fn populate_labels(&mut self) {
         let mut labels: HashMap<String, usize> = HashMap::new();
 

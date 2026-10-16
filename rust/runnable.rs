@@ -12,9 +12,13 @@ use super::arm::{ArmComplexGenerator, ArmGenerator, ArmSimdGenerator};
 use super::code::Func;
 use super::complexify::Complexifier;
 use super::config::Config;
+#[cfg(feature = "obj")]
+use super::generator::{kernel_symbol, user_symbol};
 use super::generator::{Generator, GeneratorType};
 #[cfg(feature = "obj")]
-use super::linker::{header, Arch, Format, HeaderInfo, ObjectBuilder, Relocation, Target};
+use super::linker::{
+    header, lower_for_object, Arch, Format, HeaderInfo, ObjectBuilder, Relocation, Target,
+};
 use super::machine::MachineCode;
 use super::matrix::{combine_matrixes, Matrix};
 use super::mir::{CompiledMir, Mir};
@@ -792,6 +796,13 @@ impl Application {
             }
             "mir-size" => self.bytecode.mir.code.ip,
             "mir-bytes" => self.bytecode.mir.code.buf.len(),
+            // the general registers of the saved (target-dependent) MIR, see `load_for`
+            "registers" => self
+                .original
+                .as_ref()
+                .unwrap_or(&self.bytecode.mir)
+                .max_register()
+                .map_or(0, |r| r as usize + 1),
             "stack-size" => self.prog.builder.stack_size(),
             #[cfg(feature = "async")]
             "async" => 1,
@@ -813,6 +824,57 @@ impl Application {
 
     pub fn load(stream: &mut impl Read, config: &Config) -> Result<Self> {
         Self::load_with_version(stream, config, 0)
+    }
+
+    /// Loads a saved application to export it (`write_obj`, `object_files`, the wasm module)
+    /// for `target`, or for the type it was saved with if `target` is None (`Native` means
+    /// this machine). The SIMD and fast kernels are not prepared.
+    ///
+    /// The saved MIR is register-allocated for the machine it was compiled for. Models
+    /// compiled with opt level 2 or lower use the same registers everywhere, but opt level 3
+    /// gives ARM64 and RISC-V more registers than x86-64 has; such a model is rejected here
+    /// (it would compute wrong results) instead of being compiled.
+    pub fn load_for(
+        stream: &mut impl Read,
+        config: &Config,
+        target: Option<CompilerType>,
+    ) -> Result<Self> {
+        Self::load_as(stream, config, target, false)
+    }
+
+    /// The MIR uses no more registers than the generators of `config` have (the wasm
+    /// module keeps registers in locals, so any number fits).
+    fn check_registers(mir: &Mir, config: &Config) -> Result<()> {
+        if config.is_wasm() {
+            return Ok(());
+        }
+        let available = config.count_scratch();
+        match mir.max_register() {
+            Some(r) if r >= available => Err(anyhow!(
+                "the model uses {} registers (it was compiled with opt level {} for a machine with \
+                 more registers), but {} has {}; compile it for this target or with opt level 2 \
+                 or lower",
+                r + 1,
+                config.opt_level(),
+                Self::arch_name(config),
+                available
+            )),
+            _ => Ok(()),
+        }
+    }
+
+    fn arch_name(config: &Config) -> &'static str {
+        if config.is_amd64() {
+            "x86-64"
+        } else if config.is_arm64() {
+            "ARM64"
+        } else if config.is_riscv64() {
+            "RISC-V"
+        } else if config.is_wasm() {
+            "WebAssembly"
+        } else {
+            "the bytecode interpreter"
+        }
     }
 }
 
@@ -873,17 +935,118 @@ impl Application {
             .and_then(|s| s.to_str())
             .ok_or_else(|| anyhow!("`{}` does not end in a file name", name))?;
 
-        let obj = self.object(symbol, target)?;
+        let object_file = format!("{}.o", symbol);
+        let header_file = format!("{}.h", symbol);
+        let (bytes, text) =
+            self.object_bytes(symbol, target, &object_file, &header_file, &mut [])?;
+
+        std::fs::write(format!("{}.o", name), bytes)?;
+        std::fs::write(format!("{}.h", name), text)?;
+        Ok(())
+    }
+
+    /// The object file (in `format`, see `object_target`) and its C header, in memory, for
+    /// writing them under other names than `write_obj` does: the kernels are named `symbol`,
+    /// and the header names its files `object_file` and `header_file` (e.g. "model.o",
+    /// "model.h").
+    pub fn object_files(
+        &mut self,
+        symbol: &str,
+        format: &str,
+        object_file: &str,
+        header_file: &str,
+    ) -> Result<(Vec<u8>, String)> {
+        self.object_files_with(symbol, format, object_file, header_file, &mut [])
+    }
+
+    /// `object_files`, with the kernels this one calls (the applets of its configuration's
+    /// `Defuns`) compiled into the object too: `callees` holds their applications, under their
+    /// names in the `Defuns`, compiled for the same architecture. Their functions are named
+    /// `kernel_symbol(name)`, which the calls go to; a kernel called but not given here is left
+    /// to another object.
+    pub fn object_files_with(
+        &mut self,
+        symbol: &str,
+        format: &str,
+        object_file: &str,
+        header_file: &str,
+        callees: &mut [(String, Application)],
+    ) -> Result<(Vec<u8>, String)> {
+        let target = self.object_target(format)?;
+        self.object_bytes(symbol, target, object_file, header_file, callees)
+    }
+
+    fn object_bytes(
+        &mut self,
+        symbol: &str,
+        target: Target,
+        object_file: &str,
+        header_file: &str,
+        callees: &mut [(String, Application)],
+    ) -> Result<(Vec<u8>, String)> {
+        let mut obj = self.object(symbol, target)?;
         let fast = obj.functions.len() > 1;
-        let imports = obj.undefined_symbols();
+
+        // the called kernels' scalar kernels
+        let mut included = Vec::new();
+        for (name, app) in callees.iter_mut() {
+            let callee = kernel_symbol(name);
+            if app.object_target("")?.arch != target.arch {
+                return Err(anyhow!(
+                    "the kernel `{}` is compiled for another architecture than its caller",
+                    name
+                ));
+            }
+            let mut cobj = app.object(&callee, target)?;
+            cobj.functions.truncate(1);
+            obj.append(&cobj)?;
+            included.push(callee);
+        }
+
+        // the undefined symbols: user-defined functions, kernels of other objects and the C
+        // math library
+        let mut user: Vec<(String, usize)> = Vec::new();
+        let mut kernels: HashSet<String> = HashSet::new();
+        let configs = std::iter::once(&self.config).chain(callees.iter().map(|(_, a)| &a.config));
+        for config in configs {
+            if let Some(df) = &config.df {
+                for (name, f) in df.funcs.iter() {
+                    match f {
+                        Func::Unary(_) => user.push((user_symbol(name).to_string(), 1)),
+                        Func::Binary(_) => user.push((user_symbol(name).to_string(), 2)),
+                        Func::App(_) => {
+                            kernels.insert(kernel_symbol(name));
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        let (mut functions, mut external, mut imports) = (Vec::new(), Vec::new(), Vec::new());
+        for s in obj.undefined_symbols() {
+            if let Some((_, arity)) = user.iter().find(|(u, _)| *u == s) {
+                functions.push((s, *arity));
+            } else if kernels.contains(&s) {
+                external.push(s);
+            } else {
+                imports.push(s);
+            }
+        }
         let bytes = obj.build()?;
 
         let cpu = match target.arch {
             Arch::X86_64 if self.config.has_avx() => "AVX and FMA (x86-64-v3)",
             Arch::X86_64 => "SSE2",
             // packed complex products use fcmla where the compiling CPU has FCMA
+            // (not for models compiled through `complexify`, see `object`)
             Arch::Aarch64
-                if self.config.is_complex() && self.config.fast_complex() && host_has_fcma() =>
+                if self.config.is_complex()
+                    && self.config.fast_complex()
+                    && !Self::calls_complex_functions(
+                        self.original.as_ref().unwrap_or(&self.bytecode.mir),
+                        &self.config,
+                    )
+                    && host_has_fcma() =>
             {
                 "ARMv8.3-A (with FCMA)"
             }
@@ -902,12 +1065,15 @@ impl Application {
             symbolica: self.config.symbolica(),
             cpu,
             imports: &imports,
+            functions: &functions,
+            external_kernels: &external,
+            included_kernels: &included,
             version: env!("CARGO_PKG_VERSION"),
+            object_file,
+            header_file,
         });
 
-        std::fs::write(format!("{}.o", name), bytes)?;
-        std::fs::write(format!("{}.h", name), text)?;
-        Ok(())
+        Ok((bytes, text))
     }
 
     /// The target of the model's object file: the format named `format` ("" for the
@@ -954,26 +1120,53 @@ impl Application {
     pub fn object(&mut self, name: &str, target: Target) -> Result<ObjectBuilder> {
         let mut config = self.config.clone();
         config.set_relocatable(true);
-        let complex_fast = config.is_complex() && config.fast_complex();
         let idx_ret = self.can_fast.then_some(self.first_obs as u32);
         let mut obj = ObjectBuilder::new(target);
+
+        // the code of the object, which calls only the C library: a complex model that calls
+        // complex functions is compiled through `complexify` (as with `fast_complex=false`), whose
+        // calls go to C99's complex functions, and the real functions C does not have are
+        // composed of C functions (`lower_for_object`); the program gets their constants and
+        // stack slots
+        let mut prog = self.prog.clone();
+        let original = self.original.as_ref().unwrap_or(&self.bytecode.mir);
+        let complex_calls = config.is_complex() && Self::calls_complex_functions(original, &config);
+        if complex_calls {
+            config.set_fast_complex(false);
+        }
+        let complex_fast = config.is_complex() && config.fast_complex();
+        let mir = if complex_calls {
+            let scratch = prog.builder.stack_size();
+            prog.builder.count_stack = Some(scratch + 2);
+            let mir = Complexifier::for_object(&self.reals, config.clone(), scratch as u32)
+                .complexify(original)?;
+            if mir.consts.len() > prog.builder.consts.len() {
+                prog.builder.consts = mir.consts.clone();
+            }
+            mir
+        } else if config.is_complex() {
+            (*self.bytecode.mir).clone()
+        } else {
+            lower_for_object(&self.bytecode.mir, &mut prog)?
+        };
+        let prog = &mut prog;
 
         // the kernels, compiled as `compile_ty` and `compile_*_fast` do
         let (scalar, fast) = match target.arch {
             Arch::X86_64 if self.config.is_amd64() => {
                 let scalar = if complex_fast {
-                    let mir = self.original.as_ref().unwrap_or(&self.bytecode.mir);
-                    Self::object_code(mir, &mut self.prog, AmdComplexGenerator::new(config.clone()), None)?
+                    let mir = original;
+                    Self::object_code(mir, prog, AmdComplexGenerator::new(config.clone()), None)?
                 } else if config.has_avx() {
-                    Self::object_code(&self.bytecode.mir, &mut self.prog, AmdScalarGenerator::new(config.clone()), None)?
+                    Self::object_code(&mir, prog, AmdScalarGenerator::new(config.clone()), None)?
                 } else {
-                    Self::object_code(&self.bytecode.mir, &mut self.prog, AmdSSEGenerator::new(config.clone()), None)?
+                    Self::object_code(&mir, prog, AmdSSEGenerator::new(config.clone()), None)?
                 };
                 let fast = match idx_ret {
                     Some(_) if config.has_avx() => {
-                        Some(Self::object_code(&self.bytecode.mir, &mut self.prog, AmdScalarGenerator::new(config), idx_ret)?)
+                        Some(Self::object_code(&mir, prog, AmdScalarGenerator::new(config), idx_ret)?)
                     }
-                    Some(_) => Some(Self::object_code(&self.bytecode.mir, &mut self.prog, AmdSSEGenerator::new(config), idx_ret)?),
+                    Some(_) => Some(Self::object_code(&mir, prog, AmdSSEGenerator::new(config), idx_ret)?),
                     None => None,
                 };
                 (scalar, fast)
@@ -990,13 +1183,13 @@ impl Application {
                     ));
                 }
                 let scalar = if complex_fast {
-                    let mir = self.original.as_ref().unwrap_or(&self.bytecode.mir);
-                    Self::object_code(mir, &mut self.prog, ArmComplexGenerator::new(config.clone()), None)?
+                    let mir = original;
+                    Self::object_code(mir, prog, ArmComplexGenerator::new(config.clone()), None)?
                 } else {
-                    Self::object_code(&self.bytecode.mir, &mut self.prog, ArmGenerator::new(config.clone()), None)?
+                    Self::object_code(&mir, prog, ArmGenerator::new(config.clone()), None)?
                 };
                 let fast = match idx_ret {
-                    Some(_) => Some(Self::object_code(&self.bytecode.mir, &mut self.prog, ArmGenerator::new(config), idx_ret)?),
+                    Some(_) => Some(Self::object_code(&mir, prog, ArmGenerator::new(config), idx_ret)?),
                     None => None,
                 };
                 (scalar, fast)
@@ -1015,6 +1208,17 @@ impl Application {
             obj.add_function(&format!("{}_fast", name), &code, &relocs)?;
         }
         Ok(obj)
+    }
+
+    /// Whether the complex model `mir` calls complex functions (not kernels, callbacks or
+    /// other user functions).
+    fn calls_complex_functions(mir: &Mir, config: &Config) -> bool {
+        mir.code.iter().any(|ins| {
+            matches!(&ins, crate::mir::Instruction::Call { label, num_args } if *num_args > 0
+                && !label.starts_with('@')
+                && !config.is_user_func(label)
+                && !config.is_external_func(label))
+        })
     }
 
     // the machine code and relocations of a kernel (a fast kernel if `idx_ret` is given)
@@ -1103,6 +1307,19 @@ impl Storage for Application {
     }
 
     fn load_with_version(stream: &mut impl Read, config: &Config, _version: usize) -> Result<Self> {
+        Self::load_as(stream, config, None, true)
+    }
+}
+
+impl Application {
+    /// `load_with_version` (`target` None, `prepare` true) and `load_for` (`prepare` false,
+    /// with the register check).
+    fn load_as(
+        stream: &mut impl Read,
+        config: &Config,
+        target: Option<CompilerType>,
+        prepare: bool,
+    ) -> Result<Self> {
         let mut bytes: [u8; 8] = [0; 8];
 
         stream.read_exact(&mut bytes)?;
@@ -1119,7 +1336,7 @@ impl Storage for Application {
             return Err(anyhow!("invalid sjb version"));
         }
 
-        let prog = Program::load_with_version(stream, config, version)?;
+        let prog = Program::load_retargeted(stream, config, version, target)?;
 
         stream.read_exact(&mut bytes)?;
         let mask = usize::from_le_bytes(bytes);
@@ -1128,13 +1345,17 @@ impl Storage for Application {
 
         let reals = load_reals(stream)?;
 
+        if !prepare {
+            Self::check_registers(&mir, prog.config())?;
+        }
+
         let mut app = Application::with_mir(prog, reals, mir)?;
 
-        if mask & 2 != 0 {
+        if prepare && mask & 2 != 0 {
             app.prepare_fast();
         }
 
-        if mask & 4 != 0 {
+        if prepare && mask & 4 != 0 {
             app.prepare_simd();
         }
 

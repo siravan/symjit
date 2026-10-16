@@ -71,6 +71,10 @@ impl ArmComplexGenerator {
 
         if op == "@self" {
             self.call_funclet("@self");
+        } else if self.config.is_relocatable() {
+            // object mode: a direct call of the kernel's symbol
+            self.a.relocations.push((self.a.ip(), kernel_symbol(op)));
+            self.emit(arm! {bl label(0i32)});
         } else {
             let label = format!("_func_{}_", op);
             load_long(&mut self.a, 9, &label);
@@ -661,7 +665,7 @@ impl Generator for ArmComplexGenerator {
 
     fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
         if self.config.is_external_func(op) {
-            if self.config.is_relocatable() && op != "@self" {
+            if self.config.is_relocatable() && op != "@self" && !object_applet(&self.config, op) {
                 return Err(object_external_error(op));
             }
             return self.call_external(op, num_args);

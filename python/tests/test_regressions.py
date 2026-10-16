@@ -306,6 +306,30 @@ class Regressions(unittest.TestCase):
             np.testing.assert_allclose(gotc[:, 0], np.log(zs), rtol=1e-15)
             np.testing.assert_allclose(gotc[:, 1], np.log10(zs), rtol=1e-15)
 
+    def test_ode_and_jacobian_save(self):
+        # `compile_ode`/`compile_jac` functions had `write_obj` but no `save`; `load_func`
+        # gives an ODE back as an `OdeFunc`
+        import tempfile
+
+        from symjit import compile_jac, compile_ode, load_func
+
+        t, x, y = symbols("t x y")
+        rhs = [y * cos(t), -sin(x) - 0.1 * y]
+        with tempfile.TemporaryDirectory() as d:
+            for dtype, args in (("float64", (0.25, [1.0, -0.5])), ("complex128", (0.25 + 0.5j, [1.0 - 1j, -0.5 + 2j]))):
+                f = compile_ode(t, [x, y], rhs, dtype=dtype)
+                path = os.path.join(d, f"ode-{dtype}.sjb")
+                f.save(path)
+                g = load_func(path)
+                self.assertEqual(type(g).__name__, type(f).__name__)
+                np.testing.assert_array_equal(g(*args), f(*args))
+
+            j = compile_jac(t, [x, y], rhs)
+            path = os.path.join(d, "jac.sjb")
+            j.save(path)
+            want = np.ravel(j(0.25, [1.0, -0.5]))
+            np.testing.assert_array_equal(np.ravel(load_func(path)(0.25, 1.0, -0.5)), want)
+
 
 if __name__ == "__main__":
     unittest.main()

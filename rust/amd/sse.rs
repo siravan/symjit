@@ -99,6 +99,9 @@ impl AmdSSEGenerator {
 
         if op == "@self" {
             self.call_funclet("@self");
+        } else if self.config.is_relocatable() {
+            // object mode: a direct call of the kernel's symbol
+            self.amd.call_symbol(&kernel_symbol(op));
         } else {
             self.amd.call_indirect(&format!("_func_{}_", op));
         }
@@ -521,7 +524,7 @@ impl Generator for AmdSSEGenerator {
 
     fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
         if self.config.is_external_func(op) {
-            if self.config.is_relocatable() && op != "@self" {
+            if self.config.is_relocatable() && op != "@self" && !object_applet(&self.config, op) {
                 return Err(object_external_error(op));
             }
             return self.call_external(op, num_args);
@@ -539,7 +542,10 @@ impl Generator for AmdSSEGenerator {
 
     fn call_complex(&mut self, op: &str, num_args: usize) -> Result<()> {
         if self.config.is_relocatable() {
-            return Err(object_complex_error(op));
+            // object mode: the C99 function, with its arguments and result in place
+            let symbol = object_complex_symbol(op)?;
+            self.amd.call_symbol(symbol);
+            return Ok(());
         }
 
         let label = format!("_func_{}_", op);

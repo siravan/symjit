@@ -1061,22 +1061,30 @@ impl Default for Config {
         if std::fs::exists(&toml).unwrap() {
             Self::from_toml(&toml, 0).unwrap()
         } else {
-            Config::new(
-                CompilerType::Native,
-                USE_SIMD
-                    | CSE
-                    | SYMBOLICA
-                    | COMPACT
-                    | FASTMATH
-                    | FAST_COMPLEX
-                    // | DIRECT
-                    | PARALLEL_MUL
-                    | (2 << OPT_LEVEL_SHIFT)
-                    | DIRECT_ARENA_IDENTITY_OUTPUT,
-            )
-            .unwrap()
-            // config.to_toml("symjit.toml");
+            Config::builtin(CompilerType::Native)
         }
+    }
+}
+
+impl Config {
+    /// The built-in defaults of `Config::default()` for `ty`, without reading a `symjit.toml`
+    /// (e.g. for tools whose output must not depend on the working directory).
+    pub fn builtin(ty: CompilerType) -> Config {
+        Config::new(
+            ty,
+            USE_SIMD
+                | CSE
+                | SYMBOLICA
+                | COMPACT
+                | FASTMATH
+                | FAST_COMPLEX
+                // | DIRECT
+                | PARALLEL_MUL
+                | (2 << OPT_LEVEL_SHIFT)
+                | DIRECT_ARENA_IDENTITY_OUTPUT,
+        )
+        .unwrap()
+        // config.to_toml("symjit.toml");
     }
 }
 

@@ -1,0 +1,30 @@
+[package]
+name = "sjc"
+version = "2.28.0"
+edition = "2021"
+authors = ["Shahriar Iravanian <siravan@svtsim.com>"]
+license = "MIT"
+description = "the Symjit compiler driver: saved symjit applications (.sjb) to object files and WebAssembly modules"
+repository = "https://github.com/siravan/symjit"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "sjc"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+# `composer`: the kernel builder that Rust source input (`.rs`) is compiled with
+symjit = { path = "..", version = "2.28.0", default-features = false, features = ["composer"] }
+syn = { version = "3", features = ["full", "visit"] }
+# positions (line:column) in the messages about Rust source input
+proc-macro2 = { version = "1", features = ["span-locations"] }
+
+[features]
+default = ["obj", "wasm"]
+# relocatable object files and C headers (`--emit obj`, `--emit header`)
+obj = ["symjit/obj"]
+# WebAssembly modules (`--emit wasm`)
+wasm = ["symjit/wasm"]

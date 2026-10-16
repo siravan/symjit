@@ -109,6 +109,10 @@ impl AmdComplexGenerator {
 
         if op == "@self" {
             self.call_funclet("@self");
+        } else if self.config.is_relocatable() {
+            // object mode: a direct call of the kernel's symbol
+            self.vzeroupper();
+            self.amd.call_symbol(&kernel_symbol(op));
         } else {
             self.vzeroupper();
             self.amd.call_indirect(&format!("_func_{}_", op));
@@ -762,7 +766,7 @@ impl Generator for AmdComplexGenerator {
 
     fn call(&mut self, op: &str, num_args: usize) -> Result<()> {
         if self.config.is_external_func(op) {
-            if self.config.is_relocatable() && op != "@self" {
+            if self.config.is_relocatable() && op != "@self" && !object_applet(&self.config, op) {
                 return Err(object_external_error(op));
             }
             return self.call_external(op, num_args);

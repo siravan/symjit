@@ -4,7 +4,10 @@ mod macros;
 use super::assembler::Assembler;
 use super::code::Func;
 use super::config::Config;
-use super::generator::{object_complex_error, object_external_error, object_symbol};
+use super::generator::{
+    kernel_symbol, object_applet, object_complex_error, object_complex_symbol,
+    object_external_error, object_symbol,
+};
 use super::symbol::Loc;
 use super::utils::{Reg, EXPONENT, POW2I_MAGIC, TWO52, TWO52_1023};
 
@@ -505,7 +508,7 @@ fn add_consts(a: &mut Assembler, consts: &[f64]) {
 // object mode: `bl` to the C library function, with a relocation at the instruction
 fn object_call(a: &mut Assembler, config: &Config, op: &str) -> anyhow::Result<()> {
     let symbol = object_symbol(config, op)?;
-    a.relocations.push((a.ip(), symbol.to_string()));
+    a.relocations.push((a.ip(), symbol));
     a.append_word(arm! {bl label(0i32)});
     Ok(())
 }

@@ -16,7 +16,8 @@ f(0.5, 1.0)                    # still callable from Python (bytecode interprete
 symjit does not execute the module itself: Python calls of a `ty="wasm"` function
 run on the bytecode interpreter, and the module is only generated and exported.
 Saving with `f.save(...)` and `load_func` keeps the type, and the loaded function
-produces the same module.
+produces the same module. The command-line compiler [sjc](SJC.md) makes a module from any
+saved function (`sjc model.sjb -o model.wasm`), whatever type it was compiled for.
 
 ## Enabling the backend
 

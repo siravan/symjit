@@ -30,7 +30,8 @@ cc main.c model.o -lm -o main     # or c++; the header has extern "C"
 
 The kernels are the machine code symjit runs itself, so they give the same results.
 A complete example, which computes pi and checks it, is in
-[examples/obj](../examples/obj).
+[examples/obj](../examples/obj). The command-line compiler [sjc](SJC.md) writes the same
+files from a saved function (`sjc model.sjb`), also for another architecture.
 
 ## Enabling it
 
@@ -94,11 +95,33 @@ library functions the kernels call and which instructions they use.
   (x86-64-v3) on current x86-64 CPUs (`ty="amd-sse"` gives SSE2 code); ARMv8-A on AArch64
   (ARMv8.3-A with FCMA for complex kernels compiled on CPUs that have it). The header
   states it.
-* The only functions the kernels can call are those of the C math library (link with
-  `-lm`): `sin`, `cos`, `tan`, their inverses and hyperbolic versions, `exp`, `expm1`,
-  `exp2`, `log` (symjit's `ln` and `log`), `log10`, `log1p`, `log2`, `cbrt`,
-  `erf`, `erfc`, `tgamma` (`gamma`), `lgamma` (`loggamma`), `pow` and `atan2`.
-  `write_obj` rejects functions that call anything else: `csc`, `sec`, `cot` and their
-  hyperbolic versions, `sinc`, complex functions (`sin(z)` with `dtype="complex128"`;
-  complex arithmetic and `sqrt` are fine), and user-defined functions (`defuns`).
+* The kernels call the math functions of the C math library (link with `-lm`): `sin`,
+  `cos`, `tan`, their inverses and hyperbolic versions, `exp`, `expm1`, `exp2`, `log`
+  (symjit's `ln` and `log`), `log10`, `log1p`, `log2`, `cbrt`, `erf`, `erfc`, `tgamma`
+  (`gamma`), `lgamma` (`loggamma`), `pow` and `atan2`.
+  - symjit's functions that C does not have are composed of C functions as symjit
+    computes them, so that the results are the JIT's bit for bit: `csc`, `sec`, `cot` and
+    their hyperbolic versions are `1.0 / sin(x)`, ..., `sinc(x)` is `sin(x) / x` (1 at 0),
+    and the real `arg` is 0 (`linker/lower.rs`).
+  - Complex functions (`dtype="complex128"`) call the C library's C99 functions: `csin`,
+    `ccos`, `ctan`, `csinh`, `ccosh`, `ctanh`, `casin`, `cacos`, `catan`, `casinh`, `cacosh`,
+    `catanh`, `cexp`, `clog`, `cpow`, `carg` (and `csqrt`); `csc`, ..., `coth` are their
+    reciprocals, `log10` is `clog(z) / ln 10`, `cbrt` is `cpow(z, 1/3)` and `sinc` is
+    `csin(z) / z`. A `double complex` argument and result are in two floating-point registers
+    on x86-64 and AArch64, where symjit keeps them, so the calls need no moves. The results
+    can differ from the JIT's in the last bits (the JIT computes complex functions with the
+    Rust crate `num_complex`, or C99's with the `libm` feature), and at special points
+    (C99's `clog(0)` is -inf + 0i, where the JIT's `log10(0)` has a NaN imaginary part).
+    Such models are compiled as with `fast_complex=False` (complex models without function
+    calls keep the packed-complex code, bit for bit the JIT's).
+  - `random` is rejected.
+* User-defined functions of one or two arguments (`defuns`, Rust `#[kernel(callback)]`
+  functions) become undefined symbols of their names, which the program linking the object
+  defines: `double g(double x0);` (the header declares them). A function named like one of
+  the C math library's (`fmod`, `hypot`, ...) is rejected, since it would link to the C one.
+  Python `Composer` callbacks are named `func0`, `func1`, ...
+* Kernels that call other kernels (applets, `Defuns::add_applet`) call them directly, by
+  the symbol of their name (with `::` and other characters a C identifier cannot have
+  replaced by `_`); `Application::object_files_with` compiles the called kernels into the
+  same object, as `sjc` does for Rust input. Otherwise another object must define them.
 * Only the scalar and fast kernels are written, not the SIMD kernels.

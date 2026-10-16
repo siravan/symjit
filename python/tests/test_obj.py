@@ -84,9 +84,11 @@ class Model:
         self.cp = int(macros["COUNT_PARAMS"])
         self.mem = int(macros["MEM_SIZE"])
         self.fast = f"double {name}_fast(" in header
+        # calls C99's complex functions (whose results can differ from the JIT's in the last bits)
+        self.c99 = re.search(r"\bc(sin|cos|tan|sinh|cosh|tanh|asin|acos|atan|asinh|acosh|atanh|exp|log|pow|arg|sqrt)\b", header) is not None
 
 
-def run_c(directory, models, points, params=()):
+def run_c(directory, models, points, params=(), arm=False):
     """Links one C program with all `models` and evaluates each at every point (states,
     or inputs for Composer/Symbolica models) in direct mode, and with `_fast` if there is
     one. Returns {name: [(status, outputs, fast output or None), ...]}."""
@@ -123,10 +125,12 @@ def run_c(directory, models, points, params=()):
         fd.write("\n".join(lines) + "\n")
     exe = os.path.join(directory, "main")
     objs = [os.path.join(directory, m.name + ".o") for m in models]
-    cc = subprocess.run(["cc", "-Wall", "-Werror", src, *objs, "-lm", "-o", exe], capture_output=True, text=True)
+    # AArch64 objects (ty="arm") are linked statically and run under qemu
+    compiler = ["aarch64-linux-gnu-gcc", "-static"] if arm else ["cc"]
+    cc = subprocess.run([*compiler, "-Wall", "-Werror", src, *objs, "-lm", "-o", exe], capture_output=True, text=True)
     if cc.returncode != 0 or cc.stderr:
         raise AssertionError(f"cc failed:\n{cc.stderr[:3000]}")
-    run = subprocess.run([exe], capture_output=True, text=True, timeout=600)
+    run = subprocess.run((["qemu-aarch64", exe] if arm else [exe]), capture_output=True, text=True, timeout=600)
     if run.returncode != 0:
         raise AssertionError(f"the C program failed: {run.stderr}")
 
@@ -308,9 +312,8 @@ class Obj(unittest.TestCase):
     def test_errors(self):
         path = os.path.join(self.d, "e")
         cases = [
-            (compile_func([x], [sp.csc(x)]), "`csc` is not a C math library function"),
-            (compile_func([x], [sp.sin(x)], dtype="complex128"), "complex function"),
-            (compile_func([x], [sp.Function("g")(x)], defuns={"g": lambda a: 2 * a}), "user-defined function `g`"),
+            # a user-defined function named like a C math function would link to the C one
+            (compile_func([x], [sp.Function("fmod")(x)], defuns={"fmod": lambda a: 2 * a}), "user-defined function `fmod`"),
         ]
         for f, message in cases:
             with self.subTest(message=message):
@@ -322,6 +325,33 @@ class Obj(unittest.TestCase):
         with self.assertRaises(ValueError):
             f.write_obj(os.path.join(self.d, "not-an-identifier"))
 
+    def test_user_defined_functions(self):
+        # user-defined functions become symbols that the program linking the object defines
+        f = compile_func([x, y], [sp.Function("g")(x) * y, sp.Function("h")(x, y)],
+                         defuns={"g": lambda a: 2 * a + 1, "h": lambda a, b: a - 3 * b})
+        Model(f, "user", self.d)
+        with open(os.path.join(self.d, "user.h")) as fd:
+            header = fd.read()
+        self.assertIn("double g(double x0);", header)
+        self.assertIn("double h(double x0, double x1);", header)
+        lines = [
+            '#include <stdio.h>', '#include "user.h"',
+            "double g(double a) { return 2 * a + 1; }",
+            "double h(double a, double b) { return a - 3 * b; }",
+            "int main(void) {",
+            "    double mem[USER_MEM_SIZE] = {0.5, 2.0};",
+            "    int s = user(mem, NULL, 0, NULL);",
+            '    printf("%d %a %a\\n", s, mem[USER_COUNT_STATES], mem[USER_COUNT_STATES + 1]);',
+            "    return 0;", "}",
+        ]
+        with open(os.path.join(self.d, "user.c"), "w") as fd:
+            fd.write("\n".join(lines) + "\n")
+        exe = os.path.join(self.d, "user")
+        subprocess.run(["cc", "-Wall", "-Werror", "user.c", "user.o", "-lm", "-o", exe], check=True, cwd=self.d)
+        words = subprocess.run([exe], capture_output=True, text=True, check=True).stdout.split()
+        self.assertEqual(words[0], "0")
+        self.assertTrue(same([float.fromhex(w) for w in words[1:]], f(0.5, 2.0)))
+
     def test_macho_format(self):
         f = compile_func([x], [sp.sin(x)])
         f.write_obj(os.path.join(self.d, "mac"), format="macho")
@@ -329,6 +359,90 @@ class Obj(unittest.TestCase):
             self.assertEqual(fd.read(4), bytes.fromhex("cffaedfe"))
         with open(os.path.join(self.d, "mac.h")) as fd:
             self.assertIn(f"{HOST_ARCH} Mach-O", fd.read())
+
+
+# the real functions the C library does not have (composed of C functions in the object), and
+# the complex functions (C99's, from the C library)
+REAL_EXTRA = [sp.csc, sp.sec, sp.cot, sp.csch, sp.sech, sp.coth, sp.sinc]
+COMPLEX_FUNCS = [
+    sp.sin, sp.cos, sp.tan, sp.sinh, sp.cosh, sp.tanh, sp.asin, sp.acos, sp.atan, sp.asinh, sp.acosh,
+    sp.atanh, sp.exp, sp.log, sp.sqrt, sp.csc, sp.sec, sp.cot, sp.csch, sp.sech, sp.coth, sp.cbrt, sp.sinc,
+    lambda z: sp.log(z, 10), sp.arg,
+]
+COMPLEX_POINTS = [(0.5, 0.25), (-1.25, 0.75), (-2.0, 0.0), (3.0, -2.0), (0.1, -1.5)]
+HAVE_QEMU = shutil.which("qemu-aarch64") is not None and shutil.which("aarch64-linux-gnu-gcc") is not None
+
+
+def close_complex(got, want, rtol):
+    """Every component within rtol of |want| (both NaN, or the same infinity, also pass)."""
+    for g, w in zip(got, want):
+        for a, b in ((g.real, w.real), (g.imag, w.imag)):
+            if np.isnan(a) or np.isnan(b) or np.isinf(a) or np.isinf(b):
+                if not ((np.isnan(a) and np.isnan(b)) or a == b):
+                    return False
+            elif abs(a - b) > rtol * max(abs(w), 1e-300):
+                return False
+    return True
+
+
+@unittest.skipUnless(HAVE_OBJ and HOST_OK, NEEDS)
+class ObjMathFunctions(unittest.TestCase):
+    """Functions the C math library does not have: symjit's real ones (`csc`, ..., `sinc`) are
+    composed of C functions as symjit computes them (bit for bit), and the complex ones call
+    C99's (`csin`, ...), which can differ from the JIT's (`num_complex`) in the last bits."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.d = self.dir.name
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def real(self, arm=False):
+        ty = "arm" if arm else "native"
+        f = compile_func([x], [g(x) for g in REAL_EXTRA], ty=ty)
+        jit = compile_func([x], [g(x) for g in REAL_EXTRA])
+        m = Model(f, "real", self.d)
+        pts = [[0.5], [-1.3], [0.0], [2.0], [1e-300], [-0.0]]
+        for pt, (status, obs, _) in zip(pts, run_c(self.d, [m], pts, arm=arm)["real"]):
+            self.assertEqual(status, 0)
+            want = np.ravel(jit(*pt))
+            if arm:
+                np.testing.assert_allclose(obs, want, rtol=1e-14, err_msg=f"at {pt}")
+            else:
+                self.assertTrue(same(obs, want), f"at {pt}: object {obs}, JIT {list(want)}")
+
+    def complex(self, arm=False):
+        ty = "arm" if arm else "native"
+        exprs = [g(x) for g in COMPLEX_FUNCS] + [x**y]
+        f = compile_func([x, y], exprs, dtype="complex128", ty=ty)
+        jit = compile_func([x, y], exprs, dtype="complex128")
+        m = Model(f, "cplx", self.d)
+        pts = [[a, b, 0.7, -0.2] for a, b in COMPLEX_POINTS]
+        for pt, (status, obs, _) in zip(pts, run_c(self.d, [m], pts, arm=arm)["cplx"]):
+            self.assertEqual(status, 0)
+            got = np.array(obs[0::2]) + 1j * np.array(obs[1::2])
+            want = np.array(jit(complex(pt[0], pt[1]), complex(pt[2], pt[3])), dtype=complex)
+            self.assertTrue(close_complex(got, want, 1e-13), f"at {pt}: object {list(got)}, JIT {list(want)}")
+
+    def test_real_functions_c_lacks(self):
+        self.real()
+
+    def test_complex_functions(self):
+        self.complex()
+        with open(os.path.join(self.d, "cplx.h")) as fd:
+            self.assertIn("csin", fd.read())
+
+    def test_sinc_at_zero(self):
+        f = compile_func([x], [sp.sinc(x)], dtype="complex128")
+        m = Model(f, "sinc0", self.d)
+        (status, obs, _), = run_c(self.d, [m], [[0.0, 0.0]])["sinc0"]
+        self.assertEqual((status, obs), (0, [1.0, 0.0]))
+
+    @unittest.skipUnless(HAVE_QEMU, "needs qemu-aarch64 and aarch64-linux-gnu-gcc")
+    def test_arm64_objects_run(self):
+        self.real(arm=True)
+        self.complex(arm=True)
 
 
 @unittest.skipUnless(HAVE_OBJ, "needs the `obj` feature (cargo build --features obj)")
@@ -409,6 +523,14 @@ class ObjFuzz(unittest.TestCase):
                         want = np.column_stack([want.real, want.imag])
                     want = np.ravel(want)
                     self.assertEqual(status, 0)
+                    if m.c99:
+                        # C99's complex functions, not the JIT's: within rounding
+                        ok = close_complex(np.array(obs[0::2]) + 1j * np.array(obs[1::2]),
+                                           want[0::2] + 1j * want[1::2], 1e-12)
+                        if not ok:
+                            self.fail(f"{family} seed {seed} {options} at {c}:\nobject {obs}\n"
+                                      f"JIT {list(want)}\nexpressions: {exprs}")
+                        continue
                     if not same(obs, want) or (fast is not None and not same(fast, want[0])):
                         self.fail(f"{family} seed {seed} {options} at {c}:\nobject {obs} fast {fast}\n"
                                   f"JIT {list(want)}\nexpressions: {exprs}")

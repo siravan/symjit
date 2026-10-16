@@ -36,7 +36,9 @@ points (`evaluate`, `evaluate_single`) and matrices of points (`evaluate_matrix`
 and threads).
 
 The macro is built on a typed builder, `symjit::kernel::KernelBuilder`. The builder can also
-be used directly (see [The builder](#the-builder)).
+be used directly (see [The builder](#the-builder)). The command-line compiler
+[sjc](SJC.md#rust-input) compiles the kernels of a Rust file into object files or WebAssembly
+modules without a Rust compiler.
 
 ## Enabling it
 

@@ -29,6 +29,10 @@ class OdeFunc:
         "elf" or "macho". Needs a symjit library built with the `obj` feature."""
         self.compiler.write_obj(name, format)
 
+    def save(self, file: str):
+        """Saves the compiled function (a `.sjb` file) for `load_func` or the `sjc` compiler."""
+        self.compiler.save(file)
+
     def dump(self, name, what="scalar"):
         return self.compiler.dump(name, what=what)
 
@@ -77,6 +81,10 @@ class OdeFuncComplex:
         "elf" or "macho". Needs a symjit library built with the `obj` feature."""
         self.compiler.write_obj(name, format)
 
+    def save(self, file: str):
+        """Saves the compiled function (a `.sjb` file) for `load_func` or the `sjc` compiler."""
+        self.compiler.save(file)
+
     def dump(self, name, what="scalar"):
         return self.compiler.dump(name, what=what)
 
@@ -107,6 +115,10 @@ class JacFunc:
         the compiled function into C/C++ programs (with -lm). `format` is None (the host's),
         "elf" or "macho". Needs a symjit library built with the `obj` feature."""
         self.compiler.write_obj(name, format)
+
+    def save(self, file: str):
+        """Saves the compiled function (a `.sjb` file) for `load_func` or the `sjc` compiler."""
+        self.compiler.save(file)
 
     def dump(self, name, what="scalar"):
         self.compiler.dump(name, what=what)
@@ -151,6 +163,10 @@ class JacFuncComplex:
         the compiled function into C/C++ programs (with -lm). `format` is None (the host's),
         "elf" or "macho". Needs a symjit library built with the `obj` feature."""
         self.compiler.write_obj(name, format)
+
+    def save(self, file: str):
+        """Saves the compiled function (a `.sjb` file) for `load_func` or the `sjc` compiler."""
+        self.compiler.save(file)
 
     def dump(self, name, what="scalar"):
         self.compiler.dump(name, what=what)

@@ -58,6 +58,10 @@ pub struct Complexifier {
     libm_used: Vec<String>,
     #[cfg(feature = "math")]
     count_libm_calls: usize,
+    /// object files: two free stack slots, from this index, to keep a value across a call
+    /// (`call_complex_object`)
+    #[cfg(feature = "obj")]
+    scratch: Option<u32>,
 }
 
 impl Complexifier {
@@ -72,7 +76,19 @@ impl Complexifier {
             libm_used: Vec::new(),
             #[cfg(feature = "math")]
             count_libm_calls: 0,
+            #[cfg(feature = "obj")]
+            scratch: None,
         }
+    }
+
+    /// A complexifier for an object file (`Config::is_relocatable`): the complex functions
+    /// become calls of the C library's C99 functions, and those it does not have are composed
+    /// of them (`call_complex_object`); `scratch` is the index of two free stack slots.
+    #[cfg(feature = "obj")]
+    pub fn for_object(reals: &HashSet<Loc>, config: Config, scratch: u32) -> Complexifier {
+        let mut c = Complexifier::new(reals, config);
+        c.scratch = Some(scratch);
+        c
     }
 
     pub fn complexify(&mut self, mir: &Mir) -> Result<Mir> {
@@ -288,6 +304,121 @@ impl Complexifier {
         self.mir.set_label(&end);
 
         self.set_reg_complex(Reg::Ret);
+        Ok(())
+    }
+}
+
+/// Object files: the complex functions are the C library's C99 functions
+/// (`generator::complex_c_name`), whose arguments and results are in the registers of symjit's
+/// calls; the ones C99 does not have are composed of them as `code.rs` composes them.
+#[cfg(feature = "obj")]
+impl Complexifier {
+    fn object_const(&mut self, v: f64) -> u32 {
+        match self
+            .mir
+            .consts
+            .iter()
+            .position(|c| c.to_bits() == v.to_bits())
+        {
+            Some(idx) => idx as u32,
+            None => {
+                self.mir.consts.push(v);
+                (self.mir.consts.len() - 1) as u32
+            }
+        }
+    }
+
+    fn call_complex_object(&mut self, op: &str, num_args: usize) -> Result<()> {
+        self.ensure_complex(Reg::Ret);
+        match num_args {
+            1 => {}
+            2 => self.ensure_complex(Reg::Temp),
+            _ => return Err(anyhow!("complex functions expect 1 or 2 arguments.")),
+        }
+
+        match op {
+            // 1 / csin(z), ... (`recip` of the function in `code.rs`)
+            "csc" | "sec" | "cot" | "csch" | "sech" | "coth" => {
+                let base = match op {
+                    "csc" => "sin",
+                    "sec" => "cos",
+                    "cot" => "tan",
+                    "csch" => "sinh",
+                    "sech" => "cosh",
+                    _ => "tanh",
+                };
+                self.mir.call(base, 1)?;
+                self.set_reg_complex(Reg::Ret);
+                self.recip(Reg::Ret, Reg::Ret);
+            }
+            // clog(z) / ln 10
+            "log10" => {
+                self.mir.call("ln", 1)?;
+                let c = self.object_const(std::f64::consts::LN_10);
+                self.mir.load_const(Self::T0, c);
+                self.mir.divide(re(Reg::Ret), re(Reg::Ret), Self::T0);
+                self.mir.divide(im(Reg::Ret), im(Reg::Ret), Self::T0);
+                self.set_reg_complex(Reg::Ret);
+            }
+            // the principal cube root: cpow(z, 1/3)
+            "cbrt" => {
+                let c = self.object_const(1.0 / 3.0);
+                self.mir.load_const(re(Reg::Right), c);
+                self.mir.xor(im(Reg::Right), im(Reg::Right), im(Reg::Right));
+                self.mir.call("power", 2)?;
+                self.set_reg_complex(Reg::Ret);
+            }
+            // csin(z) / z, and 1 for z = 0
+            "sinc" => {
+                let s = self
+                    .scratch
+                    .ok_or_else(|| anyhow!("no stack slots for `sinc`"))?;
+                self.mir.save_stack(re(Reg::Ret), s);
+                self.mir.save_stack(im(Reg::Ret), s + 1);
+                self.mir.call("sin", 1)?;
+                // the registers are free after a call
+                let (x, y) = (Reg::Gen(4), Reg::Gen(5));
+                self.mir.load_stack(x, s);
+                self.mir.load_stack(y, s + 1);
+                // (a + ib) / (x + iy), as `generic_complex_divide`
+                let (a, b, t) = (Reg::Ret, Reg::Temp, Reg::Gen(0));
+                self.mir.times(Self::T0, x, x);
+                self.mir.times(Self::T1, y, y);
+                self.mir.plus(t, Self::T0, Self::T1);
+                self.mir.times(Self::T0, a, x);
+                self.mir.times(Self::T1, b, y);
+                self.mir.plus(Self::T0, Self::T0, Self::T1);
+                self.mir.times(Self::T1, a, y);
+                self.mir.times(b, b, x);
+                self.mir.minus(b, b, Self::T1);
+                self.mir.divide(b, b, t);
+                self.mir.divide(a, Self::T0, t);
+                // the mask of z = 0, and the selects r ^ ((r ^ 1) & m) and t ^ (t & m)
+                let (zero, m, u, one) = (Reg::Gen(6), Reg::Gen(7), Reg::Gen(8), Reg::Gen(9));
+                self.mir.xor(zero, zero, zero);
+                self.mir.eq(m, x, zero);
+                self.mir.eq(u, y, zero);
+                self.mir.and(m, m, u);
+                let c = self.object_const(1.0);
+                self.mir.load_const(one, c);
+                self.mir.xor(u, Reg::Ret, one);
+                self.mir.and(u, u, m);
+                self.mir.xor(Reg::Ret, Reg::Ret, u);
+                self.mir.and(u, Reg::Temp, m);
+                self.mir.xor(Reg::Temp, Reg::Temp, u);
+                self.set_reg_complex(Reg::Ret);
+            }
+            // carg returns a double
+            "arg" => {
+                self.mir.call("arg", 1)?;
+                self.set_reg_real(Reg::Ret);
+            }
+            _ => {
+                crate::generator::object_complex_symbol(op)?;
+                self.mir.call(op, num_args)?;
+                self.set_reg_complex(Reg::Ret);
+            }
+        }
         Ok(())
     }
 }
@@ -1041,6 +1172,11 @@ impl Generator for Complexifier {
     }
 
     fn call_complex(&mut self, op: &str, num_args: usize) -> Result<()> {
+        #[cfg(feature = "obj")]
+        if self.mir.config.is_relocatable() {
+            return self.call_complex_object(op, num_args);
+        }
+
         #[cfg(feature = "math")]
         if num_args == 1 && self.mir.config.inline_math() {
             if crate::libm::has_complex_function(op) {
