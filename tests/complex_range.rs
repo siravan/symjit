@@ -62,6 +62,7 @@ fn generated_complex_math_does_not_capture_user_callback_names() -> anyhow::Resu
 }
 
 #[test]
+#[cfg(feature = "stable_math")]
 fn complex_root_preserves_range_and_the_small_companion() -> anyhow::Result<()> {
     let tiny_root = f64::from_bits(1).sqrt() * 0.5f64.sqrt();
     for direct in [false, true] {
@@ -194,6 +195,7 @@ fn complex_range_calls_preserve_surrounding_expression_values() -> anyhow::Resul
 }
 
 #[test]
+#[cfg(feature = "stable_math")]
 fn complex_division_preserves_range_without_reality_hints() -> anyhow::Result<()> {
     let minimum = f64::from_bits(1);
     for direct in [false, true] {
@@ -316,6 +318,7 @@ fn complex_division_preserves_range_without_reality_hints() -> anyhow::Result<()
 }
 
 #[test]
+#[cfg(feature = "stable_math")]
 fn complex_abs_preserves_finite_tiny_and_huge_magnitudes() -> anyhow::Result<()> {
     for direct in [false, true] {
         for fast_complex in [false, true] {

@@ -650,6 +650,12 @@ impl Config {
         self.test(FAST_COMPLEX) && (self.has_avx() || self.is_arm64())
     }
 
+    /// Range-safe division, negative integer powers, and complex `abs`/`root`
+    /// (`stable_math` feature). They lower to function calls and are slower.
+    pub fn stable_math(&self) -> bool {
+        cfg!(feature = "stable_math")
+    }
+
     /// Sets of optimization level. The valid values are 0, 1, 2, which roughly correspond to gcc O0, O1, and O2 levels.
     pub fn set_opt_level(&mut self, opt_level: u8) {
         if !self.debug_lock() {

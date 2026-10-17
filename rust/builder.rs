@@ -98,7 +98,7 @@ impl Builder {
     pub fn add_binary(&mut self, op: Operation, left: Node, right: Node) -> Result<Node> {
         if op.as_str() == "power" {
             if let Some(val) = right.as_int_const() {
-                if val < 0 {
+                if self.config.stable_math() && val < 0 {
                     return self.create_powi(left, val);
                 }
                 if let Some(left) = left.as_const() {
@@ -110,6 +110,15 @@ impl Builder {
                     1 => return Ok(left),
                     2 => return self.create_unary(Operation::new("square"), left),
                     3 => return self.create_unary(Operation::new("cube"), left),
+                    -1 => return self.create_unary(Operation::new("recip"), left),
+                    -2 => {
+                        let arg = self.create_unary(Operation::new("square"), left)?;
+                        return self.create_unary(Operation::new("recip"), arg);
+                    }
+                    -3 => {
+                        let arg = self.create_unary(Operation::new("cube"), left)?;
+                        return self.create_unary(Operation::new("recip"), arg);
+                    }
                     _ => {
                         return self.create_powi(left, val);
                     }
@@ -224,7 +233,7 @@ impl Builder {
     }
 
     pub fn create_unary(&mut self, op: Operation, arg: Node) -> Result<Node> {
-        if self.config.is_complex() {
+        if self.config.stable_math() && self.config.is_complex() {
             match op.as_str() {
                 "abs" => return self.add_unary(Operation::new("__symjit_abs"), arg),
                 "root" => return self.add_unary(Operation::new("__symjit_root"), arg),
@@ -239,7 +248,7 @@ impl Builder {
     }
 
     pub fn create_powi(&mut self, arg: Node, power: i32) -> Result<Node> {
-        if power < 0 {
+        if self.config.stable_math() && power < 0 {
             let positive = power
                 .checked_neg()
                 .ok_or_else(|| anyhow!("integer power magnitude exceeds i32::MAX"))?;
@@ -260,7 +269,7 @@ impl Builder {
     }
 
     pub fn create_binary(&mut self, op: Operation, left: Node, right: Node) -> Result<Node> {
-        if self.config.is_complex() && op.is_divide() {
+        if self.config.stable_math() && self.config.is_complex() && op.is_divide() {
             return self.add_binary(Operation::new("__symjit_divide"), left, right);
         }
         let node = match &op {

@@ -44,6 +44,7 @@ symbolica = []
 libm = []
 async = ["dep:corosensei"]
 sympy = []
+stable_math = []
 
 [profile.profiling]
   inherits = "release"

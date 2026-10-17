@@ -1,9 +1,12 @@
 mod common;
 
 use common::base_config;
-use symjit::{Application, Compiler, Complex, Composer, Slot, Storage, Translator};
+#[cfg(feature = "stable_math")]
+use symjit::{Application, Compiler, Complex, Storage};
+use symjit::{Composer, Slot, Translator};
 
 #[test]
+#[cfg(feature = "stable_math")]
 fn complex_negative_integer_powers_preserve_finite_components_and_reload() -> anyhow::Result<()> {
     // Analytic Cartesian powers, including cases whose positive power would
     // overflow even though the inverse power is a representable subnormal.
@@ -95,6 +98,7 @@ fn integer_power_rejects_exponents_before_narrowing() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg(feature = "stable_math")]
 fn reciprocal_intrinsic_and_real_negative_powers_use_safe_ordering() -> anyhow::Result<()> {
     for direct in [false, true] {
         for fast_complex in [false, true] {

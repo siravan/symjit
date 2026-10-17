@@ -138,6 +138,7 @@ fn select_instruction_accepts_both_wire_formats_without_inactive_nan_leaks() -> 
 }
 
 #[test]
+#[cfg(feature = "stable_math")]
 fn complex_over_real_division_preserves_subnormal_ratios() -> anyhow::Result<()> {
     for direct in [false, true] {
         for (fast_complex, denominator_is_real) in

@@ -275,11 +275,12 @@ impl DirectTranslator {
         args: &[Slot],
         is_real: bool,
     ) -> Result<()> {
-        if self.mir.config.is_complex() && op == "recip" && args.len() == 1 {
+        let stable = self.mir.config.stable_math() && self.mir.config.is_complex();
+        if stable && op == "recip" && args.len() == 1 {
             let one = self.append_constant(Complex::new(1., 0.))?;
             return self.append_div(lhs, &Slot::Const(one), &args[0], true, is_real);
         }
-        let op = match (self.mir.config.is_complex(), op) {
+        let op = match (stable, op) {
             (true, "abs") => "__symjit_abs",
             (true, "root") => "__symjit_root",
             _ => op,
@@ -398,7 +399,7 @@ impl Composer for DirectTranslator {
     ) -> Result<()> {
         self.mark_real(numerator, numerator_is_real);
         self.mark_real(denominator, denominator_is_real);
-        if self.mir.config.is_complex() {
+        if self.mir.config.stable_math() && self.mir.config.is_complex() {
             // Use the ordinary call owner so allocation sees the clobber
             // boundary; complex division needs range-safe component arithmetic.
             return self.append_fun_generic(
@@ -418,7 +419,7 @@ impl Composer for DirectTranslator {
         if p.unsigned_abs() > i32::MAX as u64 {
             return Err(anyhow!("integer power magnitude exceeds i32::MAX"));
         }
-        if p < 0 {
+        if self.mir.config.stable_math() && p < 0 {
             let one = self.append_constant(Complex::new(1., 0.))?;
             self.append_div(lhs, &Slot::Const(one), arg, true, is_real)?;
             return if p == -1 {
@@ -433,6 +434,7 @@ impl Composer for DirectTranslator {
         match p {
             2 => self.mir.square(reg(1), reg(0)),
             3 => self.mir.cube(reg(1), reg(0)),
+            -1 => self.mir.recip(reg(1), reg(0)),
             p => self.mir.powi(reg(1), reg(0), p as i32),
         }
         self.save(reg(1), lhs)?;
