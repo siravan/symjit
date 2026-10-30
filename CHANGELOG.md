@@ -1,3 +1,9 @@
+# Version 2.28.3
+
+* Complex SIMD kernels (AVX, AVX-512, NEON) and the ARM fast-complex kernel (FCMA): a complex product
+  passed straight to a function call (opt level >= 1) could overwrite its first factor and give a
+  wrong result (#30).
+
 # Version 2.28.2
 
 * `ultra` option (`Config::set_ultra`, bit `0x8000_0000`, Python `ultra=True`): subroutine calls pass
