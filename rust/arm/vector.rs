@@ -119,7 +119,7 @@ impl ArmSimdGenerator {
     */
 
     fn find_temp(s1: Reg, s2: Reg) -> Reg {
-        if s1 != Reg::Temp && s2 != Reg::Temp {
+        let t = if s1 != Reg::Temp && s2 != Reg::Temp {
             Reg::Temp
         } else if s1 != Reg::Gen(2) && s2 != Reg::Gen(2) {
             Reg::Gen(2)
@@ -127,7 +127,13 @@ impl ArmSimdGenerator {
             Reg::Gen(3)
         } else {
             panic!("cannot find a temporary register");
-        }
+        };
+        // `Reg::Temp` is v1, as is `Reg::Right`
+        assert!(
+            ϕ(t) != ϕ(s1) && ϕ(t) != ϕ(s2),
+            "the temporary register shares a register with a source"
+        );
+        t
     }
 }
 
@@ -364,11 +370,21 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn sign(&mut self, dst: Reg, s1: Reg) {
+        // distinct logical registers can share a physical one (`Reg::Left`/`Reg::Ret`,
+        // `Reg::Temp`/`Reg::Right`): the constant must not overwrite `s1`
         if dst != s1 {
+            assert!(
+                ϕ(dst) != ϕ(s1),
+                "sign: the destination shares a register with the source"
+            );
             self.emit(arm! {fmov q(ϕ(dst)), #0.0});
             self.emit(arm! {fneg q(ϕ(dst)), q(ϕ(dst))});
             self.and(dst, s1, dst);
         } else if dst != Reg::Temp {
+            assert!(
+                ϕ(s1) != ϕ(Reg::Temp),
+                "sign: the source shares a register with Reg::Temp"
+            );
             self.emit(arm! {fmov q(ϕ(Reg::Temp)), #0.0});
             self.emit(arm! {fneg q(ϕ(Reg::Temp)), q(ϕ(Reg::Temp))});
             self.and(dst, s1, Reg::Temp);
@@ -398,10 +414,20 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
+        // distinct logical registers can share a physical one (`Reg::Left`/`Reg::Ret`,
+        // `Reg::Temp`/`Reg::Right`): the constant must not overwrite `s1`
         if dst != s1 {
+            assert!(
+                ϕ(dst) != ϕ(s1),
+                "recip: the destination shares a register with the source"
+            );
             self.emit(arm! {fmov q(ϕ(dst)), #1.0});
             self.emit(arm! {fdiv q(ϕ(dst)), q(ϕ(dst)), q(ϕ(s1))});
         } else if dst != Reg::Temp {
+            assert!(
+                ϕ(s1) != ϕ(Reg::Temp),
+                "recip: the source shares a register with Reg::Temp"
+            );
             self.emit(arm! {fmov q(TEMP), #1.0});
             self.emit(arm! {fdiv q(ϕ(dst)), q(TEMP), q(ϕ(s1))});
         } else {
@@ -410,10 +436,20 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn half(&mut self, dst: Reg, s1: Reg) {
+        // distinct logical registers can share a physical one (`Reg::Left`/`Reg::Ret`,
+        // `Reg::Temp`/`Reg::Right`): the constant must not overwrite `s1`
         if dst != s1 {
+            assert!(
+                ϕ(dst) != ϕ(s1),
+                "half: the destination shares a register with the source"
+            );
             self.emit(arm! {fmov q(ϕ(dst)), #0.5});
             self.emit(arm! {fmul q(ϕ(dst)), q(ϕ(s1)), q(ϕ(dst))});
         } else if dst != Reg::Temp {
+            assert!(
+                ϕ(s1) != ϕ(Reg::Temp),
+                "half: the source shares a register with Reg::Temp"
+            );
             self.emit(arm! {fmov q(TEMP), #0.5});
             self.emit(arm! {fmul q(ϕ(dst)), q(ϕ(s1)), q(TEMP)});
         } else {
@@ -576,6 +612,11 @@ impl Generator for ArmSimdGenerator {
         if dst == s3 {
             self.emit(arm! {fmla q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
         } else if s1 != dst && s2 != dst {
+            // `fmov` writes `dst` before `s1` and `s2` are read (`Reg::Left`/`Reg::Ret` are v0)
+            assert!(
+                ϕ(dst) == ϕ(s3) || (ϕ(dst) != ϕ(s1) && ϕ(dst) != ϕ(s2)),
+                "fused op: the destination shares a register with a source"
+            );
             self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(s3))});
             self.emit(arm! {fmla q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
         } else {
@@ -590,6 +631,11 @@ impl Generator for ArmSimdGenerator {
     // and vmsub... in amd64
     fn fused_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
         if s1 != dst && s2 != dst {
+            // `fneg` writes `dst` before `s1` and `s2` are read (`Reg::Left`/`Reg::Ret` are v0)
+            assert!(
+                ϕ(dst) != ϕ(s1) && ϕ(dst) != ϕ(s2),
+                "fused op: the destination shares a register with a source"
+            );
             self.emit(arm! {fneg q(ϕ(dst)), q(ϕ(s3))});
             self.emit(arm! {fmla q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
         } else {
@@ -606,6 +652,11 @@ impl Generator for ArmSimdGenerator {
         if dst == s3 {
             self.emit(arm! {fmls q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
         } else if s1 != dst && s2 != dst {
+            // `fmov` writes `dst` before `s1` and `s2` are read (`Reg::Left`/`Reg::Ret` are v0)
+            assert!(
+                ϕ(dst) == ϕ(s3) || (ϕ(dst) != ϕ(s1) && ϕ(dst) != ϕ(s2)),
+                "fused op: the destination shares a register with a source"
+            );
             self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(s3))});
             self.emit(arm! {fmls q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
         } else {
@@ -620,6 +671,11 @@ impl Generator for ArmSimdGenerator {
     // and vnmsub... in amd64
     fn fused_neg_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
         if s1 != dst && s2 != dst {
+            // `fneg` writes `dst` before `s1` and `s2` are read (`Reg::Left`/`Reg::Ret` are v0)
+            assert!(
+                ϕ(dst) != ϕ(s1) && ϕ(dst) != ϕ(s2),
+                "fused op: the destination shares a register with a source"
+            );
             self.emit(arm! {fneg q(ϕ(dst)), q(ϕ(s3))});
             self.emit(arm! {fmls q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
         } else {

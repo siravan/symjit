@@ -3,6 +3,9 @@
 * Complex SIMD kernels (AVX, AVX-512, NEON) and the ARM fast-complex kernel (FCMA): a complex product
   passed straight to a function call (opt level >= 1) could overwrite its first factor and give a
   wrong result (#30).
+* The x86-64 and NEON generators assert that FMA, `recip`, `half` and `sign` get no destination that
+  shares a machine register with a source (`Left`/`Ret`, `Temp`/`Right`), which would compute a
+  wrong value; no program is known to produce one.
 
 # Version 2.28.2
 

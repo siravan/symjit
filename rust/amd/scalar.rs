@@ -39,6 +39,12 @@ macro_rules! fuseop {
         } else if $dst == $c {
             $self.amd.$f231(ϕ($c), ϕ($a), ϕ($b));
         } else {
+            // `fmov` writes `$dst` before `$b` and `$c` are read; distinct logical registers can
+            // share a physical one (`Reg::Left`/`Reg::Ret`, `Reg::Temp`/`Reg::Right`)
+            assert!(
+                ϕ($dst) == ϕ($a) || (ϕ($dst) != ϕ($b) && ϕ($dst) != ϕ($c)),
+                "fused op: the destination shares a register with a source"
+            );
             $self.fmov($dst, $a);
             $self.amd.$f132(ϕ($dst), ϕ($c), ϕ($b));
         }
@@ -355,10 +361,20 @@ impl Generator for AmdScalarGenerator {
     }
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
+        // distinct logical registers can share a physical one (`Reg::Left`/`Reg::Ret`,
+        // `Reg::Temp`/`Reg::Right`): the constant must not overwrite `s1`
         if dst != s1 {
+            assert!(
+                ϕ(dst) != ϕ(s1),
+                "recip: the destination shares a register with the source"
+            );
             self.load_const_by_name(dst, "_one_");
             self.divide(dst, dst, s1);
         } else if dst != Reg::Temp {
+            assert!(
+                ϕ(s1) != ϕ(Reg::Temp),
+                "recip: the source shares a register with Reg::Temp"
+            );
             self.load_const_by_name(Reg::Temp, "_one_");
             self.divide(dst, Reg::Temp, s1);
         } else {
