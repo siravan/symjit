@@ -14,6 +14,9 @@
   SIMD kernels, even when no point needed it (a Symbolica program whose else parts held most of its
   work ran 7-20x slower). The end of a then part now jumps over the else part when no lane has the
   condition zero, in both translators.
+* A jump to a label with only labels between them is dropped, with its condition, in both
+  translators: the jump over an empty else part (most of Symbolica's if/else blocks, whose join
+  takes a value computed before them) costs nothing again.
 * The x86-64 and NEON generators assert that FMA, `recip`, `half` and `sign` get no destination that
   shares a machine register with a source (`Left`/`Ret`, `Temp`/`Right`), which would compute a
   wrong value; no program is known to produce one.

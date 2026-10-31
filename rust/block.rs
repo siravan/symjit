@@ -55,6 +55,23 @@ impl Block {
     // add_* functions create a new Statement
 
     pub fn add_label(&mut self, label: &str) {
+        // A jump to this label with only labels after it jumps to where it would go anyway:
+        // drop it, and with it its condition (e.g. the jump over an empty else part, whose
+        // join takes a value computed before the if/else)
+        if let Some(k) = self
+            .stmts
+            .iter()
+            .rposition(|s| !matches!(s, Statement::Label { .. }))
+        {
+            if let Statement::Branch { label: l } | Statement::BranchIf { label: l, .. } =
+                &self.stmts[k]
+            {
+                if l == label {
+                    self.stmts.remove(k);
+                }
+            }
+        }
+
         self.stmts.push(Statement::Label {
             label: label.to_string(),
         });

@@ -64,6 +64,17 @@ pub struct DirectTranslator {
     pub ft: HashSet<String>,
     pub prog: Program,
     open_ifs: Vec<(usize, Slot)>, // the if/else blocks entered: else label, condition
+    last_jump: Option<Jump>,      // the last jump, while only labels follow it
+}
+
+// A jump written to the MIR, with the MIR's length before it (its condition included) and
+// after it, and the labels written since.
+#[derive(Debug)]
+struct Jump {
+    target: usize,
+    start: (usize, usize), // (bytes, instructions) before the jump
+    end: usize,            // instructions after the jump
+    labels: Vec<String>,
 }
 
 impl DirectTranslator {
@@ -85,7 +96,21 @@ impl DirectTranslator {
             ft: HashSet::new(),
             prog,
             open_ifs: Vec::new(),
+            last_jump: None,
         }
+    }
+
+    fn begin_jump(&self) -> (usize, usize) {
+        (self.mir.code.buf.len(), self.mir.code.ip)
+    }
+
+    fn end_jump(&mut self, target: usize, start: (usize, usize)) {
+        self.last_jump = Some(Jump {
+            target,
+            start,
+            end: self.mir.code.ip,
+            labels: Vec::new(),
+        });
     }
 
     fn find_sym(&mut self, name: &str) -> Option<Loc> {
@@ -435,6 +460,24 @@ impl Composer for DirectTranslator {
 
     fn append_label(&mut self, id: usize) -> Result<()> {
         let label = format!(".S{}", id);
+        // A jump to this label with only labels after it jumps to where it would go anyway:
+        // remove it and its condition from the MIR, and write the labels again (see
+        // `Block::add_label`)
+        if let Some(jump) = self.last_jump.take() {
+            if self.mir.code.ip == jump.end + jump.labels.len() {
+                if jump.target == id {
+                    self.mir.code.buf.truncate(jump.start.0);
+                    self.mir.code.ip = jump.start.1;
+                    for l in &jump.labels {
+                        self.mir.set_label(l);
+                    }
+                } else {
+                    let mut jump = jump;
+                    jump.labels.push(label.clone());
+                    self.last_jump = Some(jump);
+                }
+            }
+        }
         self.mir.set_label(&label);
         // the else part of an open if/else starts here (see `IndirectTranslator::translate_label`)
         if let Some(k) = self.open_ifs.iter().rposition(|(l, _)| *l == id) {
@@ -445,9 +488,11 @@ impl Composer for DirectTranslator {
 
     fn append_if_else(&mut self, cond: &Slot, id: usize) -> Result<()> {
         let label = format!(".S{}", id);
+        let start = self.begin_jump();
         self.load(reg(0), cond)?;
         self.mir.iszero(reg(1), reg(0));
         self.mir.branch_if(reg(1), &label, true);
+        self.end_jump(id, start);
         self.open_ifs.push((id, *cond));
         Ok(())
     }
@@ -457,6 +502,7 @@ impl Composer for DirectTranslator {
     // after the if/else reads it.
     fn append_goto(&mut self, id: usize) -> Result<()> {
         let label = format!(".S{}", id);
+        let start = self.begin_jump();
         if !self.mir.config.simd_branch() || !self.mir.config.symbolica() {
             self.mir.branch(&label);
         } else if let Some((_, cond)) = self.open_ifs.last() {
@@ -464,7 +510,10 @@ impl Composer for DirectTranslator {
             self.load(reg(0), &cond)?;
             self.mir.iszero(reg(1), reg(0));
             self.mir.branch_if(reg(1), &label, false);
+        } else {
+            return Ok(());
         }
+        self.end_jump(id, start);
         Ok(())
     }
 
