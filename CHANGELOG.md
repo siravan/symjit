@@ -8,6 +8,8 @@
   the branch was not taken (#31). With `simd_branch`, nested or consecutive if/else blocks had the
   same defect between exclusive branches: the statements inside branches and loops are now found
   from the jumps and their labels rather than by counting them.
+* With `simd_branch`, the stack-slot compactor took every if/else for the start of a loop and
+  reused no slot after the first one; loops are now found from the jumps back to their labels.
 * The x86-64 and NEON generators assert that FMA, `recip`, `half` and `sign` get no destination that
   shares a machine register with a source (`Left`/`Ret`, `Temp`/`Right`), which would compute a
   wrong value; no program is known to produce one.

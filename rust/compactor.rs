@@ -1,5 +1,5 @@
 use anyhow::Result;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use super::config::Config;
 use super::mir::{Instruction, Mir};
@@ -13,9 +13,8 @@ pub struct Compactor {
     live: HashMap<Loc, usize>, // the map of live Stack slots and their last used position
     stack: HashMap<Loc, Loc>,  // the map of old Stack slots to new Stack slots
     pool: Vec<Loc>,            // the pool of Stack slots available to reuse
-    labels: HashSet<String>,
-    count_stack: u32, // next stack id to use if the pool is empty
-    depth: isize,     // loop depth
+    count_stack: u32,          // next stack id to use if the pool is empty
+    in_loop: Vec<bool>,        // whether each instruction lies in a loop (`find_loops`)
     fixed: u32,
 }
 
@@ -28,14 +27,14 @@ impl Compactor {
             live: HashMap::new(),
             stack: HashMap::new(),
             pool: Vec::new(),
-            labels: HashSet::new(),
             count_stack: fixed,
-            depth: 0,
+            in_loop: Vec::new(),
             fixed,
         }
     }
 
     pub fn compact(&mut self, mir: &mut Mir) -> Result<usize> {
+        self.find_loops(mir);
         self.collect_last(mir); // first pass, collect live info
         self.compact_stack(mir); // second pass, rename stack slots
         mir.code = std::mem::take(&mut self.code);
@@ -44,6 +43,52 @@ impl Compactor {
 
     fn push(&mut self, ins: Instruction) {
         self.code.push(&ins);
+    }
+
+    /*
+     * find_loops marks the instructions in a loop: from a label to a later jump back to it. A
+     * slot freed at its last use inside a loop could be reused before the next iteration
+     * reads it again. Forward jumps make no loop (with them only, an instruction runs after
+     * every instruction before it that runs), whether or not a jump to the end of an if/else
+     * exists (`simd_branch` drops it).
+     */
+    fn find_loops(&mut self, mir: &Mir) {
+        let mut labels: HashMap<String, usize> = HashMap::new();
+        let mut loops: Vec<(usize, usize)> = Vec::new(); // (label, jump back)
+        let mut count = 0;
+
+        for (ip, ins) in mir.code.iter().enumerate() {
+            match ins {
+                Instruction::Label { label } => {
+                    labels.insert(label, ip);
+                }
+                Instruction::Branch { label } | Instruction::BranchIf { label, .. } => {
+                    if let Some(&start) = labels.get(&label) {
+                        loops.push((start, ip));
+                    }
+                }
+                _ => {}
+            }
+            count = ip + 1;
+        }
+
+        // +1 where a loop starts, -1 after it ends
+        let mut edges = vec![0i32; count + 1];
+
+        for (start, end) in loops {
+            edges[start] += 1;
+            edges[end + 1] -= 1;
+        }
+
+        let mut depth = 0;
+
+        self.in_loop = edges[..count]
+            .iter()
+            .map(|e| {
+                depth += e;
+                depth > 0
+            })
+            .collect();
     }
 
     fn collect_last(&mut self, mir: &Mir) {
@@ -122,7 +167,7 @@ impl Compactor {
                 // stack slots are not returned to the pool inside loops.
                 // We can do better by delaying return to the branch at
                 // the end of the loop, but this would add complexity.
-                if *last == ip && self.depth == 0 {
+                if *last == ip && !self.in_loop[ip] {
                     self.pool.push(*l);
                 }
                 *l
@@ -204,25 +249,11 @@ impl Compactor {
                     ultra: *ultra,
                 }),
                 Instruction::Label { label } => {
-                    if !self.labels.contains(label) {
-                        // beginning of a backward loop
-                        self.labels.insert(label.into());
-                        self.depth += 1;
-                    };
-
                     self.push(Instruction::Label {
                         label: label.clone(),
                     });
                 }
                 Instruction::Branch { label } => {
-                    if !self.labels.contains(label) {
-                        // forward jump
-                        self.labels.insert(label.into());
-                    } else {
-                        // end of backward loop
-                        self.depth -= 1;
-                    };
-
                     self.push(Instruction::Branch {
                         label: label.clone(),
                     });
@@ -232,12 +263,6 @@ impl Compactor {
                     label,
                     is_else,
                 } => {
-                    if !self.labels.contains(label) {
-                        self.labels.insert(label.into());
-                    } else {
-                        self.depth -= 1;
-                    };
-
                     self.push(Instruction::BranchIf {
                         cond: *cond,
                         label: label.clone(),
