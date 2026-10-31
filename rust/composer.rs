@@ -63,6 +63,7 @@ pub struct DirectTranslator {
     pub count_outs: usize,
     pub ft: HashSet<String>,
     pub prog: Program,
+    open_ifs: Vec<(usize, Slot)>, // the if/else blocks entered: else label, condition
 }
 
 impl DirectTranslator {
@@ -83,6 +84,7 @@ impl DirectTranslator {
             count_outs: 0,
             ft: HashSet::new(),
             prog,
+            open_ifs: Vec::new(),
         }
     }
 
@@ -434,6 +436,10 @@ impl Composer for DirectTranslator {
     fn append_label(&mut self, id: usize) -> Result<()> {
         let label = format!(".S{}", id);
         self.mir.set_label(&label);
+        // the else part of an open if/else starts here (see `IndirectTranslator::translate_label`)
+        if let Some(k) = self.open_ifs.iter().rposition(|(l, _)| *l == id) {
+            self.open_ifs.truncate(k);
+        }
         Ok(())
     }
 
@@ -442,13 +448,22 @@ impl Composer for DirectTranslator {
         self.load(reg(0), cond)?;
         self.mir.iszero(reg(1), reg(0));
         self.mir.branch_if(reg(1), &label, true);
+        self.open_ifs.push((id, *cond));
         Ok(())
     }
 
+    // With `simd_branch`, the jump over the else part is taken when no lane has the condition
+    // zero (see `IndirectTranslator::translate_goto`). The condition is read again, as the join
+    // after the if/else reads it.
     fn append_goto(&mut self, id: usize) -> Result<()> {
+        let label = format!(".S{}", id);
         if !self.mir.config.simd_branch() || !self.mir.config.symbolica() {
-            let label = format!(".S{}", id);
             self.mir.branch(&label);
+        } else if let Some((_, cond)) = self.open_ifs.last() {
+            let cond = *cond;
+            self.load(reg(0), &cond)?;
+            self.mir.iszero(reg(1), reg(0));
+            self.mir.branch_if(reg(1), &label, false);
         }
         Ok(())
     }

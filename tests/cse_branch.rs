@@ -295,8 +295,9 @@ impl Emitter {
 /// Random programs: each output is a sum of items, an item is one of four expressions of the
 /// shape of `e` or an if/else on a parameter whose two parts are such sums, nested up to three
 /// deep. The expressions repeat, so CSE finds shared subexpressions in and around branches.
-/// Compiled with CSE at every opt level, with and without `simd_branch`, real and complex,
-/// against the same sums in Rust, over rows whose conditions differ.
+/// Compiled with CSE at every opt level, with and without `simd_branch`, real and complex, by the
+/// indirect and the direct translator, against the same sums in Rust, over rows whose conditions
+/// differ.
 #[test]
 fn random_nested_branches() -> Result<()> {
     const ROWS: usize = 19; // SIMD blocks and a remainder
@@ -317,11 +318,14 @@ fn random_nested_branches() -> Result<()> {
             .collect();
         for opt_level in 0..=3 {
             for simd_branch in [false, true] {
-                for complex in [false, true] {
+                for (complex, direct) in
+                    [(false, false), (true, false), (false, true), (true, true)]
+                {
                     let mut config = base_config();
                     config.set_opt_level(opt_level);
                     config.set_simd_branch(simd_branch);
                     config.set_complex(complex);
+                    config.set_direct(direct);
                     let mut e = Emitter {
                         t: Translator::new(config),
                         temps: 0,
@@ -336,7 +340,7 @@ fn random_nested_branches() -> Result<()> {
                     app.prepare_simd();
                     let app = app.seal()?;
                     let what = format!(
-                        "seed {seed}, opt level {opt_level}, simd_branch = {simd_branch}, complex = {complex}: {program:?}"
+                        "seed {seed}, opt level {opt_level}, simd_branch = {simd_branch}, complex = {complex}, direct = {direct}: {program:?}"
                     );
                     let got = evaluate(&app, complex, &x, ROWS, OUTS, &what);
                     for (k, (g, w)) in got.iter().zip(&want).enumerate() {

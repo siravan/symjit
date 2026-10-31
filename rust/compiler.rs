@@ -652,6 +652,7 @@ pub struct IndirectTranslator {
     slot_size: usize,
     arena_mode: bool,
     external_calls: usize, // the number of external calls translated so far (their tags)
+    open_ifs: Vec<(usize, Node)>, // the if/else blocks entered: else label, `iszero` of the condition
 }
 
 impl Composer for IndirectTranslator {
@@ -833,6 +834,7 @@ impl IndirectTranslator {
             slot_size,
             arena_mode,
             external_calls: 0,
+            open_ifs: Vec::new(),
         }
     }
 
@@ -1213,6 +1215,11 @@ impl IndirectTranslator {
     fn translate_label(&mut self, id: usize) -> Result<()> {
         let label = format!("L.{}", id);
         self.builder.block().add_label(&label);
+        // the else part of an open if/else starts here: its then part, where a goto uses its
+        // condition, has ended (and that of any if/else opened in it)
+        if let Some(k) = self.open_ifs.iter().rposition(|(l, _)| *l == id) {
+            self.open_ifs.truncate(k);
+        }
         Ok(())
     }
 
@@ -1220,14 +1227,27 @@ impl IndirectTranslator {
         let label = format!("L.{}", id);
         let cond = self.expr(cond, false);
         let if_clause = self.unary_node("iszero", cond)?;
-        self.builder.block().add_branch_if(if_clause, &label, true);
+        self.builder
+            .block()
+            .add_branch_if(if_clause.clone(), &label, true);
+        self.open_ifs.push((id, if_clause));
         Ok(())
     }
 
+    /*
+     * A goto ends the then part of an if/else (Symbolica's form) and jumps over its else
+     * part. With `simd_branch` a SIMD kernel runs the then part when any lane takes it, so
+     * the else part may still be needed by the other lanes: the jump is taken only when no
+     * lane has the condition zero (`branch_if` with `is_else` false jumps when the mask is
+     * zero in every lane). In the scalar kernel it is always taken, as the goto.
+     */
     fn translate_goto(&mut self, id: usize) -> Result<()> {
+        let label = format!("L.{}", id);
         if !self.config.simd_branch() || !self.config.symbolica() {
-            let label = format!("L.{}", id);
             self.builder.block().add_branch(&label);
+        } else if let Some((_, if_clause)) = self.open_ifs.last() {
+            let if_clause = if_clause.clone();
+            self.builder.block().add_branch_if(if_clause, &label, false);
         }
         Ok(())
     }

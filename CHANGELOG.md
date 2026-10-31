@@ -10,6 +10,10 @@
   from the jumps and their labels rather than by counting them.
 * With `simd_branch`, the stack-slot compactor took every if/else for the start of a loop and
   reused no slot after the first one; loops are now found from the jumps back to their labels.
+* With `simd_branch`, the else part of every if/else ran on every evaluation, in the scalar and the
+  SIMD kernels, even when no point needed it (a Symbolica program whose else parts held most of its
+  work ran 7-20x slower). The end of a then part now jumps over the else part when no lane has the
+  condition zero, in both translators.
 * The x86-64 and NEON generators assert that FMA, `recip`, `half` and `sign` get no destination that
   shares a machine register with a source (`Left`/`Ret`, `Temp`/`Right`), which would compute a
   wrong value; no program is known to produce one.
