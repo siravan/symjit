@@ -113,29 +113,31 @@ impl Block {
 
     /*
      * insert_yields adds a call to `_yield_` (lockstep evaluation, `lockstep.rs`) after the
-     * statements that complete `every` expression nodes, outside labels and branches. The
-     * call is an ordinary function call, so no values stay in registers across it. Returns
-     * the number of yield points.
+     * statements that complete `every` expression nodes, outside branches and loops (see
+     * `nested_statements`). The call is an ordinary function call, so no values stay in
+     * registers across it. Returns the number of yield points.
      */
     #[cfg(feature = "async")]
     pub fn insert_yields(&mut self, every: usize, zero: Node) -> usize {
         let stmts = std::mem::take(&mut self.stmts);
+        let nested = Self::nested_statements(&stmts);
         let mut weight = 0;
-        let mut depth = 0;
         let mut count = 0;
 
-        for s in stmts {
+        for (k, s) in stmts.into_iter().enumerate() {
             match &s {
                 Statement::Assign { rhs, .. } => weight += rhs.weightof() as usize,
                 Statement::Call { arg, .. } => weight += arg.weightof() as usize,
-                Statement::Label { .. } => depth += 1,
-                Statement::Branch { .. } | Statement::BranchIf { .. } => depth -= 1,
-                Statement::LoadArgs { .. } => {}
+                _ => {}
             }
 
             self.stmts.push(s);
 
-            if depth == 0 && weight >= every {
+            // between statements k and k + 1, both outside: a yield there runs on every
+            // evaluation, once
+            let outside = !nested[k] && !nested.get(k + 1).copied().unwrap_or(false);
+
+            if outside && weight >= every {
                 let arg = self.create_unary(Operation::new("_call_"), zero.clone());
                 let lhs = self.create_tmp();
                 self.stmts
@@ -349,6 +351,51 @@ impl Block {
         }
     }
 
+    /*
+     * nested_statements returns, for each statement, whether it lies inside a branch or a
+     * loop: after a jump and before the later label it targets (skipped when the jump is
+     * taken), or after a label and up to a later jump back to it (a loop body and its
+     * condition). The other statements run once, in order, on every evaluation. This holds
+     * whatever the order of the jumps and labels, e.g. an if/else without the jump over its
+     * else part (`simd_branch` drops it, `translate_goto`), where counting labels against
+     * jumps would put later branches at depth 0. A jump to a missing label counts everything
+     * after it as nested.
+     */
+    fn nested_statements(stmts: &[Statement]) -> Vec<bool> {
+        let mut labels: HashMap<&str, usize> = HashMap::new();
+
+        for (i, s) in stmts.iter().enumerate() {
+            if let Statement::Label { label } = s {
+                labels.insert(label.as_str(), i);
+            }
+        }
+
+        // +1 where a nested range starts, -1 after it ends
+        let mut edges = vec![0i32; stmts.len() + 1];
+
+        for (i, s) in stmts.iter().enumerate() {
+            if let Statement::Branch { label } | Statement::BranchIf { label, .. } = s {
+                let (first, end) = match labels.get(label.as_str()) {
+                    Some(&j) if j > i => (i + 1, j),
+                    Some(&j) => (j + 1, i + 1),
+                    None => (i + 1, stmts.len()),
+                };
+                edges[first] += 1;
+                edges[end] -= 1;
+            }
+        }
+
+        let mut depth = 0;
+
+        edges[..stmts.len()]
+            .iter()
+            .map(|e| {
+                depth += e;
+                depth > 0
+            })
+            .collect()
+    }
+
     pub fn elimination_pass(&mut self) -> bool {
         if !self.config.cse() {
             return false;
@@ -360,30 +407,18 @@ impl Block {
         let mut hs: HashSet<u64> = HashSet::new(); // hash-value-set to find collision
         let mut cs: HashMap<u64, (Node, Node)> = HashMap::new(); // collision set as (lhs, rhs)
 
-        let mut depth: i32 = 0;
+        // only the statements outside branches and loops are searched
+        let nested = Self::nested_statements(&stmts);
 
-        for s in stmts.iter_mut() {
+        for (k, s) in stmts.iter_mut().enumerate() {
             match s {
-                Statement::Assign { rhs, .. } => {
-                    if depth == 0 {
-                        self.find_cse(&mut hs, &mut cs, rhs);
-                    }
+                Statement::Assign { rhs, .. } if !nested[k] => {
+                    self.find_cse(&mut hs, &mut cs, rhs);
                 }
-                Statement::Call { arg, .. } => {
-                    if depth == 0 {
-                        self.find_cse(&mut hs, &mut cs, arg);
-                    }
+                Statement::Call { arg, .. } if !nested[k] => {
+                    self.find_cse(&mut hs, &mut cs, arg);
                 }
-                Statement::Label { .. } => {
-                    // The logic here with depth works for Sum/Product
-                    // but needs improvement for general multi-block situations
-                    depth += 1;
-                }
-                Statement::Branch { .. } | Statement::BranchIf { .. } => {
-                    // assert!(depth > 0);
-                    depth -= 1;
-                }
-                Statement::LoadArgs { .. } => {}
+                _ => {}
             }
         }
 
@@ -397,15 +432,13 @@ impl Block {
 
         let mut ls: HashSet<u64> = HashSet::new(); // a set of common subexpression lhs which are added to self.stmts
 
-        // second-pass: only the statements at depth 0, where the first pass looked, are
-        // rewritten. A common subexpression is assigned at its first rewritten occurrence;
-        // inside a branch that assignment would not run when the branch is not taken, and the
-        // later occurrences would read an unset temporary.
-        let mut depth: i32 = 0;
-
-        for s in stmts {
+        // second-pass: only the statements outside branches and loops, where the first pass
+        // looked, are rewritten. A common subexpression is assigned at its first rewritten
+        // occurrence; inside a branch that assignment would not run when the branch is not
+        // taken, and the later occurrences would read an unset temporary.
+        for (k, s) in stmts.into_iter().enumerate() {
             match s {
-                Statement::Assign { lhs, rhs, topo } if depth == 0 => {
+                Statement::Assign { lhs, rhs, topo } if !nested[k] => {
                     let rhs = self.rewrite_cse(&cs, &mut ls, rhs);
                     self.stmts.push(Statement::Assign { lhs, rhs, topo });
                 }
@@ -414,7 +447,7 @@ impl Block {
                     lhs,
                     arg,
                     num_args,
-                } if depth == 0 => {
+                } if !nested[k] => {
                     let arg = self.rewrite_cse(&cs, &mut ls, arg);
                     self.stmts.push(Statement::Call {
                         op,
@@ -424,12 +457,9 @@ impl Block {
                     });
                 }
                 Statement::Label { label } => {
-                    // TODO: Just copying here, may need to change the logic
-                    depth += 1;
                     self.stmts.push(Statement::Label { label });
                 }
                 Statement::Branch { label } => {
-                    depth -= 1;
                     self.stmts.push(Statement::Branch { label });
                 }
                 Statement::BranchIf {
@@ -437,12 +467,11 @@ impl Block {
                     label,
                     is_else,
                 } => {
-                    let cond = if depth == 0 {
+                    let cond = if !nested[k] {
                         self.rewrite_cse(&cs, &mut ls, cond)
                     } else {
                         cond
                     };
-                    depth -= 1;
                     self.stmts.push(Statement::BranchIf {
                         cond,
                         label,

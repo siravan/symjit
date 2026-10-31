@@ -3,6 +3,11 @@
 * Complex SIMD kernels (AVX, AVX-512, NEON) and the ARM fast-complex kernel (FCMA): a complex product
   passed straight to a function call (opt level >= 1) could overwrite its first factor and give a
   wrong result (#30).
+* CSE with conditionals (`IfElse`/`Goto`/`Label`/`Join`): a subexpression shared by a branch and
+  the code after it could be read from a temporary set only in the branch, giving wrong values when
+  the branch was not taken (#31). With `simd_branch`, nested or consecutive if/else blocks had the
+  same defect between exclusive branches: the statements inside branches and loops are now found
+  from the jumps and their labels rather than by counting them.
 * The x86-64 and NEON generators assert that FMA, `recip`, `half` and `sign` get no destination that
   shares a machine register with a source (`Left`/`Ret`, `Temp`/`Right`), which would compute a
   wrong value; no program is known to produce one.
