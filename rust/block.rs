@@ -397,9 +397,15 @@ impl Block {
 
         let mut ls: HashSet<u64> = HashSet::new(); // a set of common subexpression lhs which are added to self.stmts
 
+        // second-pass: only the statements at depth 0, where the first pass looked, are
+        // rewritten. A common subexpression is assigned at its first rewritten occurrence;
+        // inside a branch that assignment would not run when the branch is not taken, and the
+        // later occurrences would read an unset temporary.
+        let mut depth: i32 = 0;
+
         for s in stmts {
             match s {
-                Statement::Assign { lhs, rhs, topo } => {
+                Statement::Assign { lhs, rhs, topo } if depth == 0 => {
                     let rhs = self.rewrite_cse(&cs, &mut ls, rhs);
                     self.stmts.push(Statement::Assign { lhs, rhs, topo });
                 }
@@ -408,7 +414,7 @@ impl Block {
                     lhs,
                     arg,
                     num_args,
-                } => {
+                } if depth == 0 => {
                     let arg = self.rewrite_cse(&cs, &mut ls, arg);
                     self.stmts.push(Statement::Call {
                         op,
@@ -419,9 +425,11 @@ impl Block {
                 }
                 Statement::Label { label } => {
                     // TODO: Just copying here, may need to change the logic
+                    depth += 1;
                     self.stmts.push(Statement::Label { label });
                 }
                 Statement::Branch { label } => {
+                    depth -= 1;
                     self.stmts.push(Statement::Branch { label });
                 }
                 Statement::BranchIf {
@@ -429,13 +437,19 @@ impl Block {
                     label,
                     is_else,
                 } => {
-                    let cond = self.rewrite_cse(&cs, &mut ls, cond);
+                    let cond = if depth == 0 {
+                        self.rewrite_cse(&cs, &mut ls, cond)
+                    } else {
+                        cond
+                    };
+                    depth -= 1;
                     self.stmts.push(Statement::BranchIf {
                         cond,
                         label,
                         is_else,
                     });
                 }
+                s @ (Statement::Assign { .. } | Statement::Call { .. }) => self.stmts.push(s),
                 Statement::LoadArgs { args } => {
                     self.stmts.push(Statement::LoadArgs { args });
                 }
