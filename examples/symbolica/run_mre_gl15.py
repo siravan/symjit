@@ -10,14 +10,27 @@ INSTRUCTIONS = os.path.join(os.path.dirname(__file__), "mre_gl15.txt")
 with open(INSTRUCTIONS, "rt", encoding="utf-8") as fd:
     evaluator = fd.read()
 
-print("Building symjit evaluator...")
-t_start = time.time()
-symjit_f = compile_evaluator(evaluator, dtype="complex128", ty=CONFIG)
-print(f"completed in {time.time() - t_start:.1f} s.")
-
-n = symjit_f.complex_compiler.count_params // 2
-
-N_SAMPLES = 10000
+def compile(simd_branch=False):
+    cfg = {
+        "use_simd": True,
+        "enable_simd512": True,
+        "use_threads": False,
+        "cse": True,
+        "fastmath": True,
+        "simd_branch": simd_branch,
+        "compact": True,
+        "compress": True,
+        "ultra": True,
+        "direct": False,
+        "fast_complex": True,
+        "huge": False,
+        "parallel_mul": True,
+        "opt_level": 3,
+        "coroutines": False,
+        "stable_math": True,
+    }
+    f = compile_evaluator(evaluator, dtype="complex128", **cfg)
+    return f
 
 input = np.array(
     [
@@ -229,24 +242,46 @@ input = np.array(
     ]
 )
 
+symjit_f = compile(False)
+n = symjit_f.complex_compiler.count_params // 2
+N_SAMPLES = 10000
 samples = np.tile(input, (N_SAMPLES, 1))
 
 t_start = time.time()
 for _ in range(N_SAMPLES):
     symjit_f.evaluate_complex(input[None, :])
 print(
-    f"Symjit evaluation: {((time.time() - t_start) * 1000000.0 / N_SAMPLES):.3f} μsec"
+    f"Symjit evaluation (scalar; simd_branch == False): {((time.time() - t_start) * 1000000.0 / N_SAMPLES):.3f} μsec"
 )
 
 t_start = time.time()
 symjit_f.evaluate_complex(samples)
 print(
-    f"Symjit evaluation: {((time.time() - t_start) * 1000000.0 / N_SAMPLES):.3f} μsec"
+    f"Symjit evaluation (simd; simd_branch == False):   {((time.time() - t_start) * 1000000.0 / N_SAMPLES):.3f} μsec"
 )
 
-ret = symjit_f.evaluate_complex(input[None, :]).sum()
+ret_branch_off = symjit_f.evaluate_complex(input[None, :]).sum()
 
-print(f"result:   {ret}")
+symjit_f = compile(True)
+samples = np.tile(input, (N_SAMPLES, 1))
+
+t_start = time.time()
+for _ in range(N_SAMPLES):
+    symjit_f.evaluate_complex(input[None, :])
+print(
+    f"Symjit evaluation (scalar; simd_branch == True):  {((time.time() - t_start) * 1000000.0 / N_SAMPLES):.3f} μsec"
+)
+
+t_start = time.time()
+symjit_f.evaluate_complex(samples)
+print(
+    f"Symjit evaluation (simd; simd_branch == True):    {((time.time() - t_start) * 1000000.0 / N_SAMPLES):.3f} μsec"
+)
+
+ret_branch_on = symjit_f.evaluate_complex(input[None, :]).sum()
+
+print(f"result:   {ret_branch_off}")
+print(f"result:   {ret_branch_on}")
 
 print(
     f"expected: {(-0.00000000000009060257867451013 + 0.000000000000055495597742500226j)}"

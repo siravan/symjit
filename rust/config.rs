@@ -583,7 +583,9 @@ impl Config {
             static SSE_WARNED: AtomicBool = AtomicBool::new(false);
             if !SSE_WARNED.swap(true, Ordering::Relaxed) {
                 println!("warning: fallback to SSE instructions is deprecated and will be removed in a future version.");
-                println!("warning (cont.): the minimum x86-64 profile will be raised to x86-64-v3.");
+                println!(
+                    "warning (cont.): the minimum x86-64 profile will be raised to x86-64-v3."
+                );
             }
             CompilerType::AmdSSE
         } else if self.is_arm64() {

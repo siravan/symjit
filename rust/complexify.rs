@@ -67,6 +67,10 @@ impl Complexifier {
     }
 
     pub fn complexify(&mut self, mir: &Mir) -> Result<Mir> {
+        if mir.code.is_complexified {
+            return Ok(mir.clone());
+        }
+
         self.mir.consts = mir.consts.clone();
         // self.mir.labels = mir.labels.clone();
         mir.rerun(self)?;

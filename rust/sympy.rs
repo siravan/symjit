@@ -954,3 +954,23 @@ pub unsafe extern "C" fn add_self(df: *mut Defuns, name: *const c_char) {
     let name = unsafe { CStr::from_ptr(name).to_str().unwrap() };
     df.add_self(name);
 }
+
+/// Complexify an Application.
+///
+/// It is useful to force complexify an Application already compiled
+/// using `fast_complex = true`. It also sets `fast_complex = false`.
+///
+/// # Safety
+/// It is the responsibility of the calling function to ensure that q points to a
+/// valid CompilerResult.
+///
+#[no_mangle]
+pub unsafe extern "C" fn complexify(q: *mut CompilerResult) -> bool {
+    let q: &mut CompilerResult = unsafe { &mut *q };
+
+    if let Some(app) = &mut q.app {
+        app.complexify().is_ok()
+    } else {
+        false
+    }
+}

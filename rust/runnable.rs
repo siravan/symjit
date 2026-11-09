@@ -196,6 +196,15 @@ impl Application {
         unsafe { std::mem::transmute(self) }
     }
 
+    pub fn complexify(&mut self) -> Result<()> {
+        if self.config.is_complex() && self.config.fast_complex() {
+            self.config.set_fast_complex(false);
+            let mir = (*self.bytecode.mir).clone();
+            self.original = Some(mir);
+        }
+        Ok(())
+    }
+
     /********************* compile_* functions *************************/
 
     fn compile<G: Generator>(
@@ -910,6 +919,12 @@ impl Storage for Application {
 
     fn load_with_version(stream: &mut impl Read, config: &Config, _version: usize) -> Result<Self> {
         let (prog, reals, mir, mask) = Self::read_parts(stream, config)?;
+
+        if mir.code.is_complexified {
+            return Err(anyhow!(
+                "sjb files with complexified IR cannot be read back."
+            ));
+        }
 
         let mut app = Application::with_mir(prog, reals, mir)?;
 

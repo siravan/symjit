@@ -172,6 +172,10 @@ class Engine:
         self.fast_func.argtypes = [ctypes.c_void_p]
         self.fast_func.restype = ctypes.c_void_p
 
+        self.complexify = self.dll.complexify
+        self.complexify.argtypes = [ctypes.c_void_p]
+        self.complexify.restype = ctypes.c_bool
+
         ######################################################
 
         self.create_matrix = self.dll.create_matrix
@@ -510,6 +514,9 @@ class RustyCompiler:
 
     def measure(self, what: str) -> int:
         return lib.measure(self.p, what.encode("utf-8"))
+
+    def complexify(self) -> bool:
+        return lib.complexify(self.p)
 
     def execute(self):
         if not lib.execute(self.p):

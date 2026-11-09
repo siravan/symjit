@@ -11,6 +11,7 @@ symbolica = true
 simd_branch = false
 compact = true
 compress = true
+ultra = true
 direct = false
 fast_complex = true
 huge = false

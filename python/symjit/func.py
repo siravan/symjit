@@ -107,6 +107,9 @@ class Func:
     def measure(self, what: str="ker-scalar-size"):
         return self.compiler.measure(what=what)
 
+    def complexify(self):
+        return self.compiler.complexify()
+
     def fast_func(self):
         return self.f
 
@@ -222,6 +225,9 @@ class FuncComplex:
     def measure(self, what: str="ker-scalar-size") -> int:
         return self.compiler.measure(what)
 
+    def complexify(self):
+        return self.compiler.complexify()
+
     def fast_func(self):
         return None
 
@@ -323,6 +329,11 @@ class SymbolicaFunc:
             return self.complex_compiler.measure(what)
         else:
             return self.compiler.measure(what)
+
+    def complexify(self) -> bool:
+        if self.is_complex:
+            return self.complex_compiler.complexify()
+        return False
 
     def save(self, file, dtype="complex128"):
         if dtype == "complex128":

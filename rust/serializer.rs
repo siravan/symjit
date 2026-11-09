@@ -108,6 +108,7 @@ const BINOP_COMPLEX: u8 = BinOp::Complex as u8;
 pub struct MirWriter {
     pub buf: Vec<u8>,
     pub ip: usize,
+    pub is_complexified: bool,
 }
 
 impl Default for MirWriter {
@@ -121,6 +122,7 @@ impl MirWriter {
         MirWriter {
             buf: Vec::new(),
             ip: 0,
+            is_complexified: false,
         }
     }
 
@@ -177,12 +179,14 @@ impl MirWriter {
                 self.reg(*xd);
                 self.reg(*yd);
                 self.loc(*loc);
+                self.is_complexified = true;
             }
             Instruction::SaveComplex { xs, ys, loc } => {
                 self.append_byte(SAVE_COMPLEX);
                 self.reg(*xs);
                 self.reg(*ys);
                 self.loc(*loc);
+                self.is_complexified = true;
             }
             Instruction::LoadConstMath { op, dst, s1, idx } => {
                 let op = *op as u8;
@@ -293,19 +297,28 @@ impl MirWriter {
                 self.reg(*y1);
                 self.reg(*x2);
                 self.reg(*y2);
+                self.is_complexified = true;
             }
         }
     }
 
     pub fn iter_mut(&mut self) -> MirIterator {
         let buf = std::mem::take(&mut self.buf);
-        MirIterator { buf, pos: 0 }
+        MirIterator {
+            buf,
+            pos: 0,
+            is_complexified: false,
+        }
     }
 
     pub fn iter(&self) -> MirIterator {
         // println!("{} instructions, {} bytes", self.ip, self.buf.len());
         let buf = self.buf.clone();
-        MirIterator { buf, pos: 0 }
+        MirIterator {
+            buf,
+            pos: 0,
+            is_complexified: false,
+        }
     }
 
     fn append_byte(&mut self, b: u8) {
@@ -399,7 +412,11 @@ impl Storage for Mir {
         }
 
         let mut mir = Mir {
-            code: MirWriter { buf, ip },
+            code: MirWriter {
+                buf,
+                ip,
+                is_complexified: iter.is_complexified,
+            },
             consts,
             labels: HashMap::new(),
             config: config.clone(),
@@ -417,6 +434,7 @@ impl Storage for Mir {
 pub struct MirIterator {
     buf: Vec<u8>,
     pos: usize,
+    pub is_complexified: bool,
 }
 
 impl Iterator for MirIterator {
@@ -440,13 +458,18 @@ impl Iterator for MirIterator {
 impl MirIterator {
     pub fn new(writer: &mut MirWriter) -> MirIterator {
         let buf = std::mem::take(&mut writer.buf);
-        MirIterator { buf, pos: 0 }
+        MirIterator {
+            buf,
+            pos: 0,
+            is_complexified: false,
+        }
     }
 
     pub fn from_buf(buf: &[u8]) -> MirIterator {
         MirIterator {
             buf: buf.to_vec(),
             pos: 0,
+            is_complexified: false,
         }
     }
 
@@ -663,12 +686,15 @@ impl MirIterator {
                 s1,
                 s2,
             }),
-            BINOP_COMPLEX => Ok(Instruction::Bi {
-                op: BinOp::Complex,
-                dst,
-                s1,
-                s2,
-            }),
+            BINOP_COMPLEX => {
+                self.is_complexified = true;
+                Ok(Instruction::Bi {
+                    op: BinOp::Complex,
+                    dst,
+                    s1,
+                    s2,
+                })
+            }
             _ => Err(anyhow!("undefined BinaryOp")),
         }
     }
@@ -699,12 +725,14 @@ impl MirIterator {
                 Ok(Instruction::LoadConst { dst, idx })
             }
             LOAD_COMPLEX => {
+                self.is_complexified = true;
                 let xd = self.reg()?;
                 let yd = self.reg()?;
                 let loc = self.loc()?;
                 Ok(Instruction::LoadComplex { xd, yd, loc })
             }
             SAVE_COMPLEX => {
+                self.is_complexified = true;
                 let xs = self.reg()?;
                 let ys = self.reg()?;
                 let loc = self.loc()?;
