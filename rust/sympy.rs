@@ -955,10 +955,10 @@ pub unsafe extern "C" fn add_self(df: *mut Defuns, name: *const c_char) {
     df.add_self(name);
 }
 
-/// Complexify an Application.
+/// Complexify an Application: its saved MIR becomes the complexified MIR.
 ///
-/// It is useful to force complexify an Application already compiled
-/// using `fast_complex = true`. It also sets `fast_complex = false`.
+/// For any complex Application, whether compiled with `fast_complex = true` or not. It also sets
+/// `fast_complex = false`.
 ///
 /// # Safety
 /// It is the responsibility of the calling function to ensure that q points to a
