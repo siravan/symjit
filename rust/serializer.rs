@@ -686,15 +686,13 @@ impl MirIterator {
                 s1,
                 s2,
             }),
-            BINOP_COMPLEX => {
-                self.is_complexified = true;
-                Ok(Instruction::Bi {
-                    op: BinOp::Complex,
-                    dst,
-                    s1,
-                    s2,
-                })
-            }
+            // the complex number re + i im of a complex model: before Complexifier as after
+            BINOP_COMPLEX => Ok(Instruction::Bi {
+                op: BinOp::Complex,
+                dst,
+                s1,
+                s2,
+            }),
             _ => Err(anyhow!("undefined BinaryOp")),
         }
     }
@@ -957,6 +955,7 @@ impl MirIterator {
                 })
             }
             COMPLEX_BI_PLUS => {
+                self.is_complexified = true;
                 let xd = self.reg()?;
                 let yd = self.reg()?;
                 let x1 = self.reg()?;
@@ -974,6 +973,7 @@ impl MirIterator {
                 })
             }
             COMPLEX_BI_MINUS => {
+                self.is_complexified = true;
                 let xd = self.reg()?;
                 let yd = self.reg()?;
                 let x1 = self.reg()?;
@@ -991,6 +991,7 @@ impl MirIterator {
                 })
             }
             COMPLEX_BI_TIMES => {
+                self.is_complexified = true;
                 let xd = self.reg()?;
                 let yd = self.reg()?;
                 let x1 = self.reg()?;
@@ -1008,6 +1009,7 @@ impl MirIterator {
                 })
             }
             COMPLEX_BI_DIVIDE => {
+                self.is_complexified = true;
                 let xd = self.reg()?;
                 let yd = self.reg()?;
                 let x1 = self.reg()?;

@@ -196,8 +196,12 @@ impl Application {
         unsafe { std::mem::transmute(self) }
     }
 
+    /// Keeps the complexified MIR as the one `save` writes (and sets `fast_complex = false`). Every
+    /// complex application's bytecode holds the complexified MIR, whether its machine code was
+    /// compiled from it or (`fast_complex`) from the complex MIR. A saved complexified application
+    /// cannot be loaded back (`load` refuses it); it is for readers of the MIR.
     pub fn complexify(&mut self) -> Result<()> {
-        if self.config.is_complex() && self.config.fast_complex() {
+        if self.config.is_complex() {
             self.config.set_fast_complex(false);
             let mir = (*self.bytecode.mir).clone();
             self.original = Some(mir);
