@@ -8,6 +8,7 @@ exact results and, in the normal range, with the default code bit for bit.
 import cmath
 import math
 import os
+import platform
 import sys
 import unittest
 from fractions import Fraction
@@ -70,7 +71,8 @@ class StableMath(unittest.TestCase):
         yield "native", dict(ty="native")
         yield "native simd512", dict(ty="native", enable_simd512=True)
         yield "bytecode", dict(ty="bytecode")
-        yield "amd-sse", dict(ty="amd-sse")
+        if platform.machine() in ("x86_64", "AMD64"):   # x86 code runs on x86 only
+            yield "amd-sse", dict(ty="amd-sse")
 
     def evaluate(self, options, points, stable, fast_complex, vectorized):
         f = compile_func(

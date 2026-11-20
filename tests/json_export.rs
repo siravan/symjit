@@ -276,8 +276,9 @@ fn json_round_trip_is_the_saved_application() -> Result<()> {
     simd.prepare_simd();
     // the cases cover what they are for: a prepared SIMD kernel, and (stable_math) a builder whose
     // constants are not the saved MIR's (the complexified MIR appends its own)
+    // (RISC-V has only the scalar kernel: prepare_simd prepares nothing there)
     let v: Value = serde_json::from_str(&simd.to_json()?)?;
-    assert_eq!(v["prepared"]["simd"], true);
+    assert_eq!(v["prepared"]["simd"], cfg!(not(target_arch = "riscv64")));
     let v: Value = serde_json::from_str(&compile_stable_math()?.to_json()?)?;
     assert_ne!(v["program"]["builder"]["consts"], v["mir"]["consts"]);
     for (tag, app) in [
