@@ -72,7 +72,7 @@ pub struct Config {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
-struct ConfigToml {
+pub struct ConfigToml {
     ty: String,
     options: Options,
     debug: DebugOptions,
@@ -80,7 +80,7 @@ struct ConfigToml {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
-struct Options {
+pub struct Options {
     use_simd: bool,
     enable_simd512: bool,
     use_threads: bool,
@@ -107,7 +107,7 @@ struct Options {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
-struct DebugOptions {
+pub struct DebugOptions {
     bytecode: bool,
     scalar: bool,
     simd: bool,
@@ -298,7 +298,7 @@ impl Config {
         Ok(config)
     }
 
-    pub fn to_toml(&self, path: &str) {
+    pub fn to_config_toml(&self) -> ConfigToml {
         let ty = match self.ty {
             CompilerType::ByteCode => "bytecode",
             CompilerType::Arm => "arm",
@@ -346,7 +346,11 @@ impl Config {
             lock: self.debug_lock(),
         };
 
-        let c: ConfigToml = ConfigToml { ty, options, debug };
+        ConfigToml { ty, options, debug }
+    }
+
+    pub fn to_toml(&self, path: &str) {
+        let c = self.to_config_toml();
         let toml = toml::to_string(&c).unwrap();
         let _ = std::fs::write(path, toml);
     }

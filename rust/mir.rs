@@ -6,6 +6,7 @@ use std::io::Write;
 use std::rc::Rc;
 
 use anyhow::Result;
+use serde::Serialize;
 
 use super::code::{Func, VirtualTable};
 use super::complexify::Complexifier;
@@ -19,7 +20,9 @@ use super::utils::{Compiled, CompiledFunc, Reg};
 mod interpreter;
 mod peephole;
 
-#[derive(Clone, Copy, Debug, PartialEq, Hash)]
+pub mod json;
+
+#[derive(Clone, Copy, Debug, PartialEq, Hash, Serialize)]
 #[repr(u8)]
 pub enum UniOp {
     Neg,
@@ -44,7 +47,7 @@ pub enum UniOp {
     TimesNegI,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash, Serialize)]
 #[repr(u8)]
 pub enum BinOp {
     Plus,
@@ -64,7 +67,7 @@ pub enum BinOp {
     Complex,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash, Serialize)]
 #[repr(u8)]
 pub enum ArithOp {
     Plus = 0,
@@ -73,7 +76,7 @@ pub enum ArithOp {
     Divide = 3,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash, Serialize)]
 #[repr(u8)]
 pub enum FusedOp {
     MulAdd = 0,    // + a * b + c
@@ -94,7 +97,7 @@ pub enum FuncletOp {
 }
 */
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub enum Instruction {
     Nop,
     End,

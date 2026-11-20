@@ -3,6 +3,8 @@ use std::collections::HashSet;
 use std::io::{Read, Write};
 use wide::{f64x2, f64x4, f64x8};
 
+use crate::mir;
+
 use super::amd::{
     AmdComplexGenerator, AmdSSEGenerator, AmdScalarGenerator, AmdVectorF64x4Generator,
     AmdVectorF64x8Generator,
@@ -730,6 +732,21 @@ impl Application {
                 };
                 self.bytecode.mir.print_stats(name, size);
                 true
+            }
+            "json" => {
+                if let Some(mir) = &self.original {
+                    mir::json::ExportMir::new(mir).save_json(name).is_ok()
+                } else {
+                    false
+                }
+            }
+            "json-complex" => {
+                if self.config.is_complex() {
+                    let mir = &self.bytecode.mir;
+                    mir::json::ExportMir::new(mir).save_json(name).is_ok()
+                } else {
+                    false
+                }
             }
             _ => false,
         }

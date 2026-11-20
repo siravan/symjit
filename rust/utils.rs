@@ -1,4 +1,5 @@
 use anyhow::Result;
+use serde::Serialize;
 use std::fmt;
 use std::io::{Read, Write};
 
@@ -86,7 +87,7 @@ pub enum DataType {
     F64,
 }
 
-#[derive(Copy, Clone, PartialEq, Hash, Eq)]
+#[derive(Copy, Clone, PartialEq, Hash, Eq, Serialize)]
 pub enum Reg {
     Ret,
     Temp,
