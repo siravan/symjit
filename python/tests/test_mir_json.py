@@ -72,5 +72,56 @@ class TestMirJson(unittest.TestCase):
             symjit.mir_json(self.path("f.sjb"), "scalar")
 
 
+
+class TestLoadJson(unittest.TestCase):
+    """symjit.load_json: the JSON of a function ("symjit-application") loaded back, from its text, its
+    bytes or its file, gives the function: the same values and the same saved bytes."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        x, y = symbols("x y")
+        self.funcs = {dtype: compile_func([x, y], [x * sin(y) + exp(x)], dtype=dtype)
+                      for dtype in ("float64", "complex128")}
+        self.points = {"float64": [(0.5, 2.0), (-1.25, 3.5)], "complex128": [(0.5 + 1j, 2.0 - 0.5j), (-1.25, 3.5j)]}
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def path(self, name):
+        return os.path.join(self.dir.name, name)
+
+    def saved(self, f, name):
+        f.save(self.path(name))
+        with open(self.path(name), "rb") as fd:
+            return fd.read()
+
+    def test_load_json_is_the_function(self):
+        for dtype, f in self.funcs.items():
+            f.dump(self.path("f.json"), what="json")
+            with open(self.path("f.json")) as fd:
+                text = fd.read()
+            for src in (text, text.encode("utf-8"), self.path("f.json")):
+                g = symjit.load_json(src)
+                self.assertIsInstance(g, type(f))
+                for p in self.points[dtype]:
+                    self.assertEqual(complex(g(*p)[0]), complex(f(*p)[0]), f"{dtype} {p}")
+                self.assertEqual(self.saved(g, "g.sjb"), self.saved(f, "f.sjb"), dtype)
+
+    def test_mir_json_text_loads(self):
+        f = self.funcs["float64"]
+        f.save(self.path("f.sjb"))
+        g = symjit.load_json(symjit.mir_json(self.path("f.sjb"), "json"))
+        self.assertEqual(g(0.5, 2.0)[0], f(0.5, 2.0)[0])
+
+    def test_refused(self):
+        # a complex function's complexified MIR, a file that is not the format, and a bad text
+        self.funcs["complex128"].dump(self.path("c.json"), what="json-complex")
+        for src in (self.path("c.json"), '{"format": "symjit-mir"}', "{not json"):
+            with self.assertRaises(ValueError):
+                symjit.load_json(src)
+        with self.assertRaises(FileNotFoundError):
+            symjit.load_json(self.path("missing.json"))
+
+
 if __name__ == "__main__":
     unittest.main()

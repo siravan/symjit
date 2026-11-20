@@ -760,18 +760,53 @@ def load_func(file, eqs=[], defuns=None):
             meaning a fast-function.
         """
         compiler = engine.RustyCompiler("", action="load", file=file, defuns=defuns)
-        if compiler.symbolica:
-            f = SymbolicaFunc(None)
-            if compiler.dtype == "complex128":
-                f.complex_compiler = compiler
-            else:
-                f.compiler = compiler
-            return f
-        elif compiler.dtype == "float64":
-            return Func(compiler, eqs)
-        elif compiler.dtype == "complex128":
-            return FuncComplex(compiler, eqs)
-        else:
-            raise ValueError("invalid dtype")
+        return _loaded_func(compiler, eqs)
     else:
         raise ValueError("unsupported platform")
+
+
+def load_json(src, eqs=[], defuns=None):
+    """Loads a function from its JSON (the "symjit-application" format): the file
+    `f.dump(path, what="json")` writes, or the text `mir_json(sjb, what="json")` returns. The
+    function is compiled as `load_func` compiles a saved one.
+
+    Parameters
+    ==========
+
+    src: the JSON file's name (str or os.PathLike), or its text (a str starting with "{", or
+        bytes).
+    eqs: as for `load_func`: `[]` (a list), `()` (a tuple), or `None` (a fast-function).
+    defuns: the defined functions the function calls, as for `load_func`.
+
+    The JSON of a complex function's complexified MIR ("json-complex", the default of
+    `mir_json`) cannot be loaded, as a saved complexified function cannot: write it with
+    what="json".
+    """
+    if not can_use_rust("rust"):
+        raise ValueError("unsupported platform")
+    if isinstance(src, (bytes, bytearray, memoryview)):
+        text = bytes(src).decode("utf-8")
+    elif isinstance(src, str) and src.lstrip().startswith("{"):
+        text = src
+    else:
+        with open(src, encoding="utf-8") as fd:
+            text = fd.read()
+    compiler = engine.RustyCompiler("", action="load_json", text=text, defuns=defuns)
+    return _loaded_func(compiler, eqs)
+
+
+def _loaded_func(compiler, eqs):
+    """the function object of a loaded application (load_func, load_json)"""
+    if compiler.symbolica:
+        f = SymbolicaFunc(None)
+        if compiler.dtype == "complex128":
+            f.complex_compiler = compiler
+        else:
+            f.compiler = compiler
+        return f
+    elif compiler.dtype == "float64":
+        return Func(compiler, eqs)
+    elif compiler.dtype == "complex128":
+        return FuncComplex(compiler, eqs)
+    else:
+        raise ValueError("invalid dtype")

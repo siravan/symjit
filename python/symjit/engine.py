@@ -136,6 +136,10 @@ class Engine:
         self.load.argtypes = [ctypes.c_char_p, ctypes.c_void_p]
         self.load.restype = ctypes.c_void_p
 
+        self.load_json = self.dll.load_json
+        self.load_json.argtypes = [ctypes.c_char_p, ctypes.c_void_p]
+        self.load_json.restype = ctypes.c_void_p
+
         self.get_config = self.dll.get_config
         self.get_config.argtypes = [ctypes.c_void_p]
         self.get_config.restype = ctypes.c_size_t
@@ -377,6 +381,7 @@ class RustyCompiler:
         dtype: str="float64",
         action: str="compile",
         file: str="",
+        text: str="",
         num_params: int=1,
         order: str="fortran",
         simd_branch: bool=False,
@@ -446,6 +451,8 @@ class RustyCompiler:
             self.symbolica: bool = True
         elif action == "load":
             self.load(file)
+        elif action == "load_json":
+            self.load_json(text)
         else:
             raise ValueError(f"action {action} not defined")
 
@@ -466,6 +473,17 @@ class RustyCompiler:
 
     def load(self, file: str):
         self.p = lib.load(file.encode("utf-8"), self.defuns.p)
+        self.loaded()
+
+    def load_json(self, text: str):
+        """the application of a "symjit-application" JSON text (Application::from_json)"""
+        self.p = lib.load_json(text.encode("utf-8"), self.defuns.p)
+        self.loaded()
+
+    def loaded(self):
+        """the type, dtype and kind of a loaded application, from its configuration"""
+        if lib.check_status(self.p) != b"Success":
+            return   # __init__ raises the status
 
         opt = lib.get_config(self.p)
         self.symbolica = opt & 0x40 != 0

@@ -99,3 +99,14 @@ configuration (`config`, every option as set) and the builder's stack size, cons
 table; `prepared` the kernels to prepare on loading; `mir` the instructions (`code`), the constants
 (`consts`) and the labels; `reals` the real locations of a complex function. Every constant is its bit
 pattern, `"0x"` and 16 hex digits. The fields are described at the top of `rust/mir/json.rs`.
+
+`symjit.load_json(src)` loads a function back from its JSON: the file `dump(path, what='json')`
+writes, or the text `mir_json(sjb, what='json')` returns (`src` is a file name, or the text itself). It
+takes `eqs` and `defuns` as `load_func` does and compiles the function the same way. The JSON of a
+complex function's complexified MIR (`'json-complex'`) cannot be loaded, as a saved complexified
+function cannot.
+
+```python
+f.dump('f.json', what='json')
+g = symjit.load_json('f.json')      # g(x, y) == f(x, y)
+```

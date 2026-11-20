@@ -252,6 +252,53 @@ pub unsafe extern "C" fn save(q: *const CompilerResult, file: *const c_char) -> 
     }
 }
 
+/// Loads an application from the JSON text `text` (a "symjit-application" file:
+/// `Application::from_json`), compiled as `load` compiles a saved one; `df` supplies the defined
+/// functions (NULL: none).
+///
+/// # Safety
+/// `text` must be a null-terminated string and `df` NULL or a valid `Defuns`.
+///
+#[no_mangle]
+pub unsafe extern "C" fn load_json(text: *const c_char, df: *mut Defuns) -> *const CompilerResult {
+    let mut res = CompilerResult {
+        app: None,
+        status: CompilerStatus::Incomplete,
+        msg: CString::from_str("Success").unwrap(),
+    };
+
+    let df: Defuns = unsafe {
+        if df.is_null() {
+            Defuns::new()
+        } else {
+            (&*df).clone()
+        }
+    };
+
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(text) => text,
+            Err(err) => {
+                res.msg = error_message("JSON parse error", &err);
+                return Box::into_raw(Box::new(res)) as *const _;
+            }
+        }
+    };
+
+    match Application::from_json(text, &Config::from_defuns(df).unwrap()) {
+        Ok(app) => {
+            res.app = Some(app);
+            res.status = CompilerStatus::Ok;
+        }
+        Err(err) => {
+            res.status = CompilerStatus::ParseError;
+            res.msg = error_message("JSON parse error", &err);
+        }
+    }
+
+    Box::into_raw(Box::new(res)) as *const _
+}
+
 /// Checks the status of a CompilerResult.
 ///
 /// Returns a null-terminated string representing the status message.
