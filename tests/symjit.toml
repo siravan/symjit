@@ -25,6 +25,7 @@ opt_level = 2
 stack_limit = 1048576
 num_args = 64
 coroutines = false
+direct_arena_operation = 0
 
 [debug]
 bytecode = false

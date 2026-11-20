@@ -5,6 +5,7 @@ use std::io::{Read, Write};
 use super::builder::Builder;
 use super::config::Config;
 use super::expr::Expr;
+use super::mir::json::field;
 use super::node::Node;
 use super::operation::Operation;
 use super::utils::Storage;
@@ -173,6 +174,38 @@ impl Storage for Program {
             count_obs,
             count_diffs,
             count_loops,
+        })
+    }
+
+    /// what `save` writes: the configuration, the counts and the builder
+    fn save_json(&self) -> Result<serde_json::Value> {
+        Ok(serde_json::json!({
+            "config": self.config().save_json()?,
+            "count_states": self.count_states,
+            "count_params": self.count_params,
+            "count_obs": self.count_obs,
+            "count_diffs": self.count_diffs,
+            "count_loops": self.count_loops,
+            "builder": self.builder.save_json()?,
+        }))
+    }
+
+    fn load_json(value: &serde_json::Value, config: &Config, version: usize) -> Result<Self> {
+        let config = Config::load_json(field(value, "config")?, config, version)?;
+        let count = |name: &str| -> Result<usize> {
+            field(value, name)?
+                .as_u64()
+                .map(|n| n as usize)
+                .ok_or_else(|| anyhow!("program: {} is not a count", name))
+        };
+
+        Ok(Program {
+            builder: Builder::load_json(field(value, "builder")?, &config, version)?,
+            count_states: count("count_states")?,
+            count_params: count("count_params")?,
+            count_obs: count("count_obs")?,
+            count_diffs: count("count_diffs")?,
+            count_loops: count("count_loops")?,
         })
     }
 }

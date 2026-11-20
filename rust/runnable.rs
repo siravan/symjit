@@ -694,17 +694,15 @@ impl Application {
         }
     }
 
-    /// `mir` as JSON (mir/json.rs) in the file `name`, with this application's counts and reals
-    fn save_mir_json(&self, name: &str, mir: &Mir, complexified: bool) -> bool {
-        let header = mir::json::MirHeader {
-            complexified,
-            count_states: self.count_states,
-            count_params: self.count_params,
-            count_obs: self.count_obs,
-            count_diffs: self.count_diffs,
-            reals: &self.reals,
-        };
-        mir::json::ExportMir::new(mir, &header).save_json(name).is_ok()
+    /// this application as JSON (mir/json.rs) with `mir` as its MIR, in the file `name`
+    fn save_mir_json(&self, name: &str, mir: &Mir) -> bool {
+        let text =
+            mir::json::application_to_json(&self.prog, self.prepared_mask(), mir, &self.reals)
+                .and_then(|value| Ok(serde_json::to_string(&value)?));
+        match text {
+            Ok(text) => std::fs::write(name, text).is_ok(),
+            Err(_) => false,
+        }
     }
 
     pub fn dump(&mut self, name: &str, what: &str) -> bool {
@@ -753,13 +751,12 @@ impl Application {
             "json" => {
                 // the MIR before complexification; a real application has only one
                 let mir = self.original.as_ref().unwrap_or(&self.bytecode.mir);
-                self.save_mir_json(name, mir, false)
+                self.save_mir_json(name, mir)
             }
             "json-complex" => {
                 // the MIR of real operations the native code runs: complexified for a complex
                 // application, the only MIR of a real one
-                let complexified = self.config.is_complex();
-                self.save_mir_json(name, &self.bytecode.mir, complexified)
+                self.save_mir_json(name, &self.bytecode.mir)
             }
             _ => false,
         }
@@ -832,40 +829,91 @@ impl Application {
         Ok((prog, reals, mir))
     }
 
-    /// The MIR of a saved application (`.sjb`) as JSON (mir/json.rs), without compiling it: `what`
-    /// is "json" (the MIR before complexification) or "json-complex" (the MIR of real operations),
-    /// and the text is the file `dump(path, what)` of the loaded application writes. A saved
-    /// complexified MIR (`complexify`, then `save`) has only "json-complex".
+    /// A saved application (`.sjb`) as JSON (mir/json.rs: the "symjit-application" file), without
+    /// compiling it: `what` is "json" (with the MIR before complexification) or "json-complex"
+    /// (with the MIR of real operations), and the text is the file `dump(path, what)` of the loaded
+    /// application writes. A saved complexified MIR (`complexify`, then `save`) has only
+    /// "json-complex".
     pub fn sjb_mir_json(stream: &mut impl Read, config: &Config, what: &str) -> Result<String> {
-        let (prog, reals, mir, _mask) = Self::read_parts(stream, config)?;
+        let (prog, reals, mir, mask) = Self::read_parts(stream, config)?;
         let complex = prog.config().is_complex();
 
-        let (mir, complexified) = match what {
+        let mir = match what {
             "json" if mir.code.is_complexified => {
                 return Err(anyhow!(
                     "a complexified MIR has no MIR before complexification (\"json-complex\" only)"
                 ))
             }
-            "json" => (mir, false),
-            "json-complex" if mir.code.is_complexified => (mir, true),
+            "json" => mir,
+            "json-complex" if mir.code.is_complexified => mir,
             // as `with_mir` complexifies the MIR of a loaded application
-            "json-complex" if complex => (
-                Complexifier::new(&reals, prog.config().clone()).complexify(&mir)?,
-                true,
-            ),
-            "json-complex" => (mir, false),
-            _ => return Err(anyhow!("`what` is \"json\" or \"json-complex\", not {:?}", what)),
+            "json-complex" if complex => {
+                Complexifier::new(&reals, prog.config().clone()).complexify(&mir)?
+            }
+            "json-complex" => mir,
+            _ => {
+                return Err(anyhow!(
+                    "`what` is \"json\" or \"json-complex\", not {:?}",
+                    what
+                ))
+            }
         };
 
-        let header = mir::json::MirHeader {
-            complexified,
-            count_states: prog.count_states,
-            count_params: prog.count_params,
-            count_obs: prog.count_obs,
-            count_diffs: prog.count_diffs,
-            reals: &reals,
-        };
-        mir::json::ExportMir::new(&mir, &header).to_json()
+        let value = mir::json::application_to_json(&prog, mask, &mir, &reals)?;
+        Ok(serde_json::to_string(&value)?)
+    }
+
+    /// The application as JSON (mir/json.rs: the "symjit-application" file), with the MIR `save`
+    /// writes. `from_json` reads it back.
+    pub fn to_json(&self) -> Result<String> {
+        Ok(serde_json::to_string(&self.save_json()?)?)
+    }
+
+    /// The application of a "symjit-application" file (`to_json`, `dump(.., "json")`), compiled as
+    /// `load` compiles a saved application; `config` supplies the defined functions. A file with a
+    /// complexified MIR cannot be read back (as a saved complexified application cannot).
+    pub fn from_json(text: &str, config: &Config) -> Result<Self> {
+        let value: serde_json::Value = serde_json::from_str(text)?;
+        Self::load_json(&value, config, mir::json::FORMAT_VERSION)
+    }
+
+    /// which kernels are prepared as machine code: 1 compiled, 2 fast, 4 simd (as `save` writes it)
+    fn prepared_mask(&self) -> usize {
+        let machine =
+            |c: &Option<MachineCode<f64>>| c.as_ref().is_some_and(|c| c.as_machine().is_some());
+        (machine(&self.compiled) as usize)
+            | ((machine(&self.compiled_fast) as usize) << 1)
+            | ((machine(&self.compiled_simd) as usize) << 2)
+    }
+
+    /// the MIR `save` writes: before complexification, unless `complexify` was called
+    fn saved_mir(&self) -> &Mir {
+        match &self.original {
+            Some(mir) if !self.save_complexified => mir,
+            _ => &self.bytecode.mir,
+        }
+    }
+
+    /// a loaded application from its parts (a saved application's or a JSON file's): compiled, with
+    /// the kernels of `mask` prepared
+    fn from_parts(prog: Program, reals: HashSet<Loc>, mir: Mir, mask: usize) -> Result<Self> {
+        if mir.code.is_complexified {
+            return Err(anyhow!(
+                "sjb files with complexified IR cannot be read back."
+            ));
+        }
+
+        let mut app = Application::with_mir(prog, reals, mir)?;
+
+        if mask & 2 != 0 {
+            app.prepare_fast();
+        }
+
+        if mask & 4 != 0 {
+            app.prepare_simd();
+        }
+
+        Ok(app)
     }
 
     // the parts of a saved application and the mask of its prepared kernels
@@ -956,32 +1004,8 @@ impl Storage for Application {
         stream.write_all(&version.to_le_bytes())?;
 
         self.prog.save(stream)?;
-
-        let mut mask: usize = 0;
-
-        if self.compiled.is_some() && self.compiled.as_ref().unwrap().as_machine().is_some() {
-            mask |= 1;
-        };
-
-        if self.compiled_fast.is_some()
-            && self.compiled_fast.as_ref().unwrap().as_machine().is_some()
-        {
-            mask |= 2;
-        }
-
-        if self.compiled_simd.is_some()
-            && self.compiled_simd.as_ref().unwrap().as_machine().is_some()
-        {
-            mask |= 4;
-        }
-
-        stream.write_all(&mask.to_le_bytes())?;
-
-        match &self.original {
-            Some(mir) if !self.save_complexified => mir.save(stream)?,
-            _ => self.bytecode.mir.save(stream)?,
-        }
-
+        stream.write_all(&self.prepared_mask().to_le_bytes())?;
+        self.saved_mir().save(stream)?;
         save_reals(stream, &self.reals)?;
 
         Ok(())
@@ -989,23 +1013,23 @@ impl Storage for Application {
 
     fn load_with_version(stream: &mut impl Read, config: &Config, _version: usize) -> Result<Self> {
         let (prog, reals, mir, mask) = Self::read_parts(stream, config)?;
+        Self::from_parts(prog, reals, mir, mask)
+    }
 
-        if mir.code.is_complexified {
-            return Err(anyhow!(
-                "sjb files with complexified IR cannot be read back."
-            ));
-        }
+    /// what `save` writes, as JSON (mir/json.rs): the "symjit-application" file
+    fn save_json(&self) -> Result<serde_json::Value> {
+        mir::json::application_to_json(
+            &self.prog,
+            self.prepared_mask(),
+            self.saved_mir(),
+            &self.reals,
+        )
+    }
 
-        let mut app = Application::with_mir(prog, reals, mir)?;
-
-        if mask & 2 != 0 {
-            app.prepare_fast();
-        }
-
-        if mask & 4 != 0 {
-            app.prepare_simd();
-        }
-
-        Ok(app)
+    /// the application of a "symjit-application" file, compiled as `load` compiles a saved one;
+    /// `version` is unused (the file says its own)
+    fn load_json(value: &serde_json::Value, config: &Config, _version: usize) -> Result<Self> {
+        let (prog, reals, mir, mask) = mir::json::application_from_json(value, config)?;
+        Self::from_parts(prog, reals, mir, mask)
     }
 }

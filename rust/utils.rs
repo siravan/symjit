@@ -1,5 +1,5 @@
 use anyhow::Result;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::io::{Read, Write};
 
@@ -58,9 +58,29 @@ pub trait Compiled<T: Sized + Copy + Default> {
     fn as_machine(&self) -> Option<&MachineCode<T>>;
 }
 
+/// Saving and loading: the binary form (`save`, `load_with_version`: the `.sjb` file) and the JSON
+/// form (`save_json`, `load_json`: the "symjit-application" file, mir/json.rs). Each part writes
+/// and reads its own fields and those of its parts, in both forms. `config` supplies what neither
+/// form holds (the defined functions, `Config::df`); `version` is the file's format version.
 pub trait Storage: Sized {
     fn save(&self, stream: &mut impl Write) -> Result<()>;
     fn load_with_version(stream: &mut impl Read, config: &Config, version: usize) -> Result<Self>;
+
+    /// this part as JSON (none by default: machine code has no JSON form)
+    fn save_json(&self) -> Result<serde_json::Value> {
+        Err(anyhow::anyhow!(
+            "{} has no JSON form",
+            std::any::type_name::<Self>()
+        ))
+    }
+
+    /// this part from its JSON (`save_json`'s value)
+    fn load_json(_value: &serde_json::Value, _config: &Config, _version: usize) -> Result<Self> {
+        Err(anyhow::anyhow!(
+            "{} has no JSON form",
+            std::any::type_name::<Self>()
+        ))
+    }
 }
 
 pub fn bool_to_f64(b: bool) -> f64 {
@@ -87,7 +107,7 @@ pub enum DataType {
     F64,
 }
 
-#[derive(Copy, Clone, PartialEq, Hash, Eq, Serialize)]
+#[derive(Copy, Clone, PartialEq, Hash, Eq, Serialize, Deserialize)]
 pub enum Reg {
     Ret,
     Temp,

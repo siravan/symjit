@@ -57,9 +57,10 @@ class TestMirJson(unittest.TestCase):
             f.save(sjb)
             for what in ("json", "json-complex"):
                 d = json.loads(symjit.mir_json(sjb, what))
-                self.assertEqual((d["format"], d["format_version"]), ("symjit-mir", 1))
-                self.assertEqual(d["complexified"], dtype == "complex128" and what == "json-complex")
-                self.assertTrue(all(c.startswith("0x") and len(c) == 18 for c in d["consts"]))
+                self.assertEqual((d["format"], d["format_version"]), ("symjit-application", 1))
+                self.assertEqual(d["mir"]["complexified"], dtype == "complex128" and what == "json-complex")
+                self.assertTrue(all(c.startswith("0x") and len(c) == 18 for c in d["mir"]["consts"]))
+                self.assertEqual(d["program"]["config"]["options"]["complex"], dtype == "complex128")
         self.assertEqual(symjit.mir_json(self.path("float64.sjb")), symjit.mir_json(self.path("float64.sjb"), "json"))
 
     def test_refused(self):

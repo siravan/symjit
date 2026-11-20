@@ -5,13 +5,15 @@
 //! the same model gives the same file. The file names its format and version, holds the
 //! application's counts, and writes each constant as its bit pattern (exact for NaN, ±Inf, -0.0).
 //! `Application::sjb_mir_json` writes the same text from the saved application, without compiling it.
+//! The file is the "symjit-application" format (mir/json.rs): `to_json` and `from_json` give back
+//! the application, the same `.sjb` bytes.
 mod common;
 use common::base_config;
 
 use anyhow::Result;
 use num_complex::Complex;
 use serde_json::Value;
-use symjit::{Application, Composer, Slot, Storage, Translator};
+use symjit::{Application, Composer, Config, Slot, Storage, Translator};
 
 /// out = exp(p0 × a) + p0
 fn compile_complex() -> Result<Application> {
@@ -69,7 +71,7 @@ fn dump(app: &mut Application, what: &str, tag: &str) -> Option<String> {
 
 fn has(json: &str, instruction: &str) -> bool {
     let v: Value = serde_json::from_str(json).unwrap();
-    v["code"]
+    v["mir"]["code"]
         .as_array()
         .unwrap()
         .iter()
@@ -84,7 +86,7 @@ fn json_writes_the_real_mir_of_a_real_application() -> Result<()> {
     // a real application's one MIR, not complexified, in both modes
     assert_eq!(dump(&mut app, "json-complex", "real").unwrap(), json);
     let v: Value = serde_json::from_str(&json)?;
-    assert_eq!(v["complexified"], false);
+    assert_eq!(v["mir"]["complexified"], false);
     Ok(())
 }
 
@@ -113,7 +115,7 @@ fn json_labels_are_sorted() -> Result<()> {
     let first = dump(&mut compile_real()?, "json", "l1").unwrap();
     let v: Value = serde_json::from_str(&first)?;
     assert!(
-        v["labels"].as_object().unwrap().len() >= 2,
+        v["mir"]["labels"].as_object().unwrap().len() >= 2,
         "the model has too few labels: {first}"
     );
     for i in 0..8 {
@@ -134,17 +136,23 @@ fn compile_special() -> Result<Application> {
     t.compile()
 }
 
-/// the header fields every file has: the format, its version, symjit's version, and the counts
+/// the fields every file has: the format, its version, symjit's version, the program's counts
 fn check_header(v: &Value, app: &Application, complexified: bool) {
-    assert_eq!(v["format"], "symjit-mir");
+    assert_eq!(v["format"], "symjit-application");
     assert_eq!(v["format_version"], 1);
     assert_eq!(v["symjit_version"], env!("CARGO_PKG_VERSION"));
-    assert_eq!(v["complexified"], complexified);
-    assert_eq!(v["count_states"], app.count_states);
-    assert_eq!(v["count_params"], app.count_params);
-    assert_eq!(v["count_obs"], app.count_obs);
-    assert_eq!(v["count_diffs"], app.count_diffs);
-    assert!(v["reals"].is_array());
+    assert_eq!(v["mir"]["complexified"], complexified);
+    let prog = &v["program"];
+    assert_eq!(prog["count_states"], app.count_states);
+    assert_eq!(prog["count_params"], app.count_params);
+    assert_eq!(prog["count_obs"], app.count_obs);
+    assert_eq!(prog["count_diffs"], app.count_diffs);
+    assert_eq!(
+        prog["config"]["options"]["complex"],
+        app.config.is_complex()
+    );
+    assert!(prog["builder"]["consts"].is_array() && prog["builder"]["ft"].is_array());
+    assert!(v["prepared"]["compiled"].is_boolean() && v["reals"].is_array());
 }
 
 #[test]
@@ -166,7 +174,7 @@ fn json_has_the_format_and_the_counts() -> Result<()> {
 fn json_constants_are_bit_patterns() -> Result<()> {
     let mut app = compile_special()?;
     let v: Value = serde_json::from_str(&dump(&mut app, "json", "k").unwrap())?;
-    let consts: Vec<String> = v["consts"]
+    let consts: Vec<String> = v["mir"]["consts"]
         .as_array()
         .unwrap()
         .iter()
@@ -241,16 +249,150 @@ fn sjb_mir_json_of_a_complexified_application() -> Result<()> {
     assert!(sjb_json(&bytes, "json").is_err());
     let read: Value = serde_json::from_str(&sjb_json(&bytes, "json-complex")?)?;
     let dumped: Value = serde_json::from_str(&complex)?;
-    assert_eq!(read["complexified"], true);
-    for key in [
-        "code",
-        "consts",
-        "labels",
-        "count_states",
-        "count_obs",
-        "reals",
-    ] {
+    assert_eq!(read["mir"]["complexified"], true);
+    for key in ["program", "mir", "reals"] {
         assert_eq!(read[key], dumped[key], "{key}");
+    }
+    Ok(())
+}
+
+/// out = 1 / (p0 + c) with stable_math: the complexified MIR appends its own constants
+fn compile_stable_math() -> Result<Application> {
+    let mut config = base_config();
+    config.set_complex(true);
+    config.set_stable_math(true);
+    let mut t = Translator::new(config);
+    t.set_num_params(1);
+    let c = t.append_constant(Complex::new(0.5, -1.5))?;
+    t.append_add(&Slot::Temp(0), &[Slot::Param(0), Slot::Const(c)], 0)?;
+    t.append_div(&Slot::Out(0), &Slot::Const(c), &Slot::Temp(0), false, false)?;
+    t.compile()
+}
+
+/// `to_json`, then `from_json`, gives back the application: the same `.sjb` bytes, the same JSON
+#[test]
+fn json_round_trip_is_the_saved_application() -> Result<()> {
+    let mut simd = compile_real()?;
+    simd.prepare_simd();
+    // the cases cover what they are for: a prepared SIMD kernel, and (stable_math) a builder whose
+    // constants are not the saved MIR's (the complexified MIR appends its own)
+    let v: Value = serde_json::from_str(&simd.to_json()?)?;
+    assert_eq!(v["prepared"]["simd"], true);
+    let v: Value = serde_json::from_str(&compile_stable_math()?.to_json()?)?;
+    assert_ne!(v["program"]["builder"]["consts"], v["mir"]["consts"]);
+    for (tag, app) in [
+        ("real", compile_real()?),
+        ("complex", compile_complex()?),
+        ("special", compile_special()?),
+        ("stable_math", compile_stable_math()?),
+        ("simd", simd),
+    ] {
+        let json = app.to_json()?;
+        let loaded = Application::from_json(&json, &base_config())?;
+        assert_eq!(
+            saved(&loaded)?,
+            saved(&app)?,
+            "{tag}: the .sjb bytes differ"
+        );
+        assert_eq!(loaded.to_json()?, json, "{tag}: the JSON differs");
+        // the file `dump(.., "json")` writes is the same (the MIR before complexification)
+        let mut again = Application::from_json(&json, &base_config())?;
+        assert_eq!(
+            dump(&mut again, "json", tag).unwrap(),
+            json,
+            "{tag}: dump(json)"
+        );
+    }
+    Ok(())
+}
+
+/// A loaded application computes what the original computes.
+#[test]
+fn json_round_trip_evaluates_the_same() -> Result<()> {
+    let app = compile_real()?;
+    let loaded = Application::from_json(&app.to_json()?, &base_config())?;
+    for p in [[1.0, 2.0, 3.0, 4.0], [0.0, -1.5, 2.5, 7.0]] {
+        assert_eq!(
+            loaded.as_applet().evaluate_single::<f64>(&p).to_bits(),
+            app.as_applet().evaluate_single::<f64>(&p).to_bits(),
+            "{p:?}"
+        );
+    }
+    Ok(())
+}
+
+/// What `from_json` refuses: a complexified MIR (as `load` does), another format or version, a
+/// constant that is not a bit pattern, and a `complexified` that the code contradicts.
+#[test]
+fn from_json_refusals() -> Result<()> {
+    let mut app = compile_complex()?;
+    app.complexify()?;
+    let complexified = app.to_json()?;
+    assert!(Application::from_json(&complexified, &base_config()).is_err());
+
+    let json = compile_real()?.to_json()?;
+    let edit = |f: &dyn Fn(&mut Value)| -> String {
+        let mut v: Value = serde_json::from_str(&json).unwrap();
+        f(&mut v);
+        v.to_string()
+    };
+    for (what, text) in [
+        ("format", edit(&|v| v["format"] = "symjit-mir".into())),
+        ("version", edit(&|v| v["format_version"] = 2.into())),
+        (
+            "constant",
+            edit(&|v| v["program"]["builder"]["consts"] = vec!["1.5"].into()),
+        ),
+        (
+            "complexified",
+            edit(&|v| v["mir"]["complexified"] = true.into()),
+        ),
+        ("ty", edit(&|v| v["program"]["config"]["ty"] = "vax".into())),
+        (
+            "opt_level",
+            edit(&|v| v["program"]["config"]["options"]["opt_level"] = 16.into()),
+        ),
+    ] {
+        assert!(
+            Application::from_json(&text, &base_config()).is_err(),
+            "{what}"
+        );
+    }
+    assert!(Application::from_json(&json, &base_config()).is_ok());
+    Ok(())
+}
+
+/// The configuration's JSON is exact: every bit of `opt` (not the getters, which depend on the
+/// machine), the compiler type, the stack limit and the argument count come back as they were. A
+/// new option bit without a JSON field fails here.
+#[test]
+fn config_json_is_exact() -> Result<()> {
+    let base = base_config();
+    let mut opts: Vec<u32> = (0..32).map(|bit| 1u32 << bit).collect();
+    opts.extend([0, u32::MAX, base.opt]);
+    let mut x: u32 = 0x9e37_79b9;
+    for _ in 0..64 {
+        x ^= x << 13;
+        x ^= x >> 17;
+        x ^= x << 5;
+        opts.push(x);
+    }
+
+    for ty in [
+        "native", "amd", "amd-avx", "amd-sse", "arm", "riscv", "bytecode", "debug",
+    ] {
+        for &opt in &opts {
+            let mut c = Config::from_name(ty, opt)?;
+            c.opt = opt; // from_name may adjust it; the JSON must keep any value
+            c.stack = 12345;
+            c.args = 7;
+            let v = c.save_json()?;
+            let back = Config::load_json(&v, &base, 1)?;
+            assert_eq!(back.opt, c.opt, "{ty} {opt:#010x}");
+            assert_eq!(back.ty, c.ty, "{ty} {opt:#010x}");
+            assert_eq!((back.stack, back.args), (12345, 7), "{ty} {opt:#010x}");
+            assert_eq!(back.save_json()?, v);
+        }
     }
     Ok(())
 }

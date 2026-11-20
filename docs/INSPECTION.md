@@ -91,8 +91,11 @@ f.dump('f.json', what='json-complex')
 ```
 
 `symjit.mir_json(sjb, what='json-complex')` returns the same text for a saved function (`f.save(...)`;
-its bytes or its file name) without compiling it. The file names its format (`"format": "symjit-mir"`,
-`"format_version": 1`) and the symjit version, holds the function's counts (`count_states`,
-`count_params`, `count_obs`, `count_diffs`), its real locations, the instructions (`code`), the constants
-(`consts`, each as its bit pattern, `"0x"` and 16 hex digits) and the labels, and its configuration. The
-fields are described at the top of `rust/mir/json.rs`.
+its bytes or its file name) without compiling it. The file holds what a saved function holds, so that
+symjit can read it back (in Rust, `Application::from_json`; `Application::to_json` writes it). It names
+its format (`"format": "symjit-application"`, `"format_version": 1`) and the symjit version; `program`
+holds the counts (`count_states`, `count_params`, `count_obs`, `count_diffs`, `count_loops`), the
+configuration (`config`, every option as set) and the builder's stack size, constants and function
+table; `prepared` the kernels to prepare on loading; `mir` the instructions (`code`), the constants
+(`consts`) and the labels; `reals` the real locations of a complex function. Every constant is its bit
+pattern, `"0x"` and 16 hex digits. The fields are described at the top of `rust/mir/json.rs`.

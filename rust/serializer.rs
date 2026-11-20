@@ -427,6 +427,15 @@ impl Storage for Mir {
 
         Ok(mir)
     }
+
+    /// the instructions, the constants (bit patterns) and the labels (mir/json.rs)
+    fn save_json(&self) -> Result<serde_json::Value> {
+        super::mir::json::mir_to_json(self)
+    }
+
+    fn load_json(value: &serde_json::Value, config: &Config, _version: usize) -> Result<Self> {
+        super::mir::json::mir_from_json(value, config)
+    }
 }
 
 /* ********************************************** */

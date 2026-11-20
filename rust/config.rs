@@ -103,6 +103,8 @@ pub struct Options {
     coroutines: bool,
     stable_math: bool,
     ultra: bool,
+    /// the direct arena's destination operation (two bits: 0 to 3)
+    direct_arena_operation: u8,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -286,6 +288,13 @@ impl Config {
         config.set_coroutines(c.options.coroutines);
         config.set_stable_math(c.options.stable_math);
         config.set_ultra(c.options.ultra);
+        if c.options.direct_arena_operation > 1 {
+            return Err(anyhow!(
+                "direct_arena_operation = {}: 0 or 1",
+                c.options.direct_arena_operation
+            ));
+        }
+        config.set_direct_arena_operation(c.options.direct_arena_operation);
 
         config.set_debug_bytecode(c.debug.bytecode);
         config.set_debug_scalar(c.debug.scalar);
@@ -298,8 +307,9 @@ impl Config {
         Ok(config)
     }
 
-    pub fn to_config_toml(&self) -> ConfigToml {
-        let ty = match self.ty {
+    /// the name of a compiler type, as `from_name` and symjit.toml spell it
+    fn ty_name(ty: &CompilerType) -> &'static str {
+        match ty {
             CompilerType::ByteCode => "bytecode",
             CompilerType::Arm => "arm",
             CompilerType::RiscV => "riscv",
@@ -309,7 +319,26 @@ impl Config {
             CompilerType::Native => "native",
             CompilerType::Debug => "debug",
         }
-        .into();
+    }
+
+    fn ty_from_name(name: &str) -> Result<CompilerType> {
+        Ok(match name {
+            "bytecode" => CompilerType::ByteCode,
+            "arm" => CompilerType::Arm,
+            "riscv" => CompilerType::RiscV,
+            "amd" => CompilerType::Amd,
+            "amd-avx" => CompilerType::AmdAVX,
+            "amd-sse" => CompilerType::AmdSSE,
+            "native" => CompilerType::Native,
+            "debug" => CompilerType::Debug,
+            _ => return Err(anyhow!("invalid compiler type {:?}", name)),
+        })
+    }
+
+    /// The configuration as symjit.toml spells it, with the options in effect on this machine (the
+    /// getters: e.g. `use_simd` is false without AVX). `to_exact_toml` has the options as set.
+    pub fn to_config_toml(&self) -> ConfigToml {
+        let ty = Self::ty_name(&self.ty).into();
 
         let options: Options = Options {
             use_simd: self.use_simd(),
@@ -334,6 +363,7 @@ impl Config {
             coroutines: self.coroutines(),
             stable_math: self.stable_math(),
             ultra: self.ultra(),
+            direct_arena_operation: self.direct_arena_operation(),
         };
 
         let debug: DebugOptions = DebugOptions {
@@ -347,6 +377,117 @@ impl Config {
         };
 
         ConfigToml { ty, options, debug }
+    }
+
+    /// The configuration as symjit.toml spells it, every option as set (each bit of `opt`, not the
+    /// getters, which say what is in effect on this machine), `stack_limit` and `num_args`:
+    /// `from_exact_toml` gives back the same configuration. The JSON form (`save_json`) writes it.
+    pub fn to_exact_toml(&self) -> ConfigToml {
+        let options = Options {
+            use_simd: self.test(USE_SIMD),
+            enable_simd512: self.test(ENABLE_SIMD512),
+            use_threads: self.test(USE_THREADS),
+            cse: self.test(CSE),
+            fastmath: self.test(FASTMATH),
+            complex: self.test(COMPLEX),
+            symbolica: self.test(SYMBOLICA),
+            simd_branch: self.test(SIMD_BRANCH),
+            compact: self.test(COMPACT),
+            compress: self.test(COMPRESS),
+            direct: self.test(DIRECT),
+            fast_complex: self.test(FAST_COMPLEX),
+            huge: self.test(HUGE),
+            parallel_mul: self.test(PARALLEL_MUL),
+            direct_arena: self.test(DIRECT_ARENA),
+            direct_arena_identity_output: self.test(DIRECT_ARENA_IDENTITY_OUTPUT),
+            opt_level: ((self.opt & OPT_LEVEL_MASK) >> OPT_LEVEL_SHIFT) as u8,
+            stack_limit: self.stack,
+            num_args: self.args,
+            coroutines: self.test(COROUTINES),
+            stable_math: self.test(STABLE_MATH),
+            ultra: self.test(ULTRA),
+            direct_arena_operation: self.direct_arena_operation(),
+        };
+
+        let debug = DebugOptions {
+            bytecode: self.test(DEBUG_BYTECODE),
+            scalar: self.test(DEBUG_SCALAR),
+            simd: self.test(DEBUG_SIMD),
+            stats: self.test(DEBUG_STATS),
+            topology: self.test(DEBUG_TOPOLOGY),
+            lock: self.test(DEBUG_LOCK),
+            instructions: self.test(DEBUG_INSTRUCTIONS),
+        };
+
+        ConfigToml {
+            ty: Self::ty_name(&self.ty).into(),
+            options,
+            debug,
+        }
+    }
+
+    /// The configuration `to_exact_toml` wrote, bit for bit, with the defined functions of `df`.
+    /// Unlike `from_toml` (a user's symjit.toml), every option is taken as it is, and the stack
+    /// limit and argument count are not clamped.
+    pub fn from_exact_toml(c: &ConfigToml, df: Option<Arc<Defuns>>) -> Result<Config> {
+        let o = &c.options;
+        let d = &c.debug;
+
+        if o.opt_level as u32 > OPT_LEVEL_MASK >> OPT_LEVEL_SHIFT {
+            return Err(anyhow!("opt_level = {}: at most 15", o.opt_level));
+        }
+
+        let operation_max = DIRECT_ARENA_OPERATION_MASK >> DIRECT_ARENA_OPERATION_SHIFT;
+        if o.direct_arena_operation as u32 > operation_max {
+            return Err(anyhow!(
+                "direct_arena_operation = {}: at most {}",
+                o.direct_arena_operation,
+                operation_max
+            ));
+        }
+
+        let flags = [
+            (o.use_simd, USE_SIMD),
+            (o.use_threads, USE_THREADS),
+            (o.cse, CSE),
+            (o.fastmath, FASTMATH),
+            (o.enable_simd512, ENABLE_SIMD512),
+            (o.complex, COMPLEX),
+            (o.symbolica, SYMBOLICA),
+            (o.simd_branch, SIMD_BRANCH),
+            (o.compact, COMPACT),
+            (o.compress, COMPRESS),
+            (o.direct, DIRECT),
+            (o.fast_complex, FAST_COMPLEX),
+            (d.bytecode, DEBUG_BYTECODE),
+            (d.scalar, DEBUG_SCALAR),
+            (d.simd, DEBUG_SIMD),
+            (d.stats, DEBUG_STATS),
+            (o.huge, HUGE),
+            (o.parallel_mul, PARALLEL_MUL),
+            (o.direct_arena, DIRECT_ARENA),
+            (o.direct_arena_identity_output, DIRECT_ARENA_IDENTITY_OUTPUT),
+            (d.lock, DEBUG_LOCK),
+            (o.stable_math, STABLE_MATH),
+            (d.topology, DEBUG_TOPOLOGY),
+            (d.instructions, DEBUG_INSTRUCTIONS),
+            (o.coroutines, COROUTINES),
+            (o.ultra, ULTRA),
+        ];
+
+        let mut opt = flags
+            .iter()
+            .fold(0u32, |opt, (on, bit)| if *on { opt | bit } else { opt });
+        opt |= (o.opt_level as u32) << OPT_LEVEL_SHIFT;
+        opt |= (o.direct_arena_operation as u32) << DIRECT_ARENA_OPERATION_SHIFT;
+
+        Ok(Config {
+            opt,
+            ty: Self::ty_from_name(&c.ty)?,
+            df,
+            stack: o.stack_limit,
+            args: o.num_args,
+        })
     }
 
     pub fn to_toml(&self, path: &str) {
@@ -1258,5 +1399,16 @@ impl Storage for Config {
             stack,
             args,
         })
+    }
+
+    /// the configuration as symjit.toml spells it, every option as set (`to_exact_toml`)
+    fn save_json(&self) -> Result<serde_json::Value> {
+        Ok(serde_json::to_value(self.to_exact_toml())?)
+    }
+
+    /// the configuration `save_json` wrote; the defined functions are `config`'s
+    fn load_json(value: &serde_json::Value, config: &Self, _version: usize) -> Result<Self> {
+        let c: ConfigToml = serde_json::from_value(value.clone())?;
+        Self::from_exact_toml(&c, config.df.clone())
     }
 }

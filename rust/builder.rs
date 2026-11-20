@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::io::{Read, Write};
 
@@ -7,6 +8,7 @@ use super::block::Block;
 use super::compactor::Compactor;
 use super::config::Config;
 use super::generator::Generator;
+use super::mir::json::{const_bits, parse_bits};
 use super::mir::Mir;
 use super::node::Node;
 use super::operation::Operation;
@@ -562,4 +564,41 @@ impl Storage for Builder {
 
         Ok(builder)
     }
+
+    /// what `save` writes: the loop count, the stack size, the constants (bit patterns) and the
+    /// function table (sorted)
+    fn save_json(&self) -> Result<serde_json::Value> {
+        let mut ft: Vec<String> = self.ft.iter().cloned().collect();
+        ft.sort();
+
+        Ok(serde_json::to_value(JsonBuilder {
+            count_loops: self.count_loops,
+            count_stack: self.stack_size(),
+            consts: self.consts.iter().map(|x| const_bits(*x)).collect(),
+            ft,
+        })?)
+    }
+
+    fn load_json(value: &serde_json::Value, config: &Config, _version: usize) -> Result<Self> {
+        let j: JsonBuilder = serde_json::from_value(value.clone())?;
+        let mut builder = Builder::new(config.clone());
+        builder.count_loops = j.count_loops;
+        builder.count_stack = Some(j.count_stack);
+        builder.consts = j
+            .consts
+            .iter()
+            .map(|s| parse_bits(s))
+            .collect::<Result<_>>()?;
+        builder.ft = j.ft.into_iter().collect();
+        Ok(builder)
+    }
+}
+
+/// a builder's JSON form (`Storage::save_json`)
+#[derive(Serialize, Deserialize)]
+struct JsonBuilder {
+    count_loops: usize,
+    count_stack: usize,
+    consts: Vec<String>,
+    ft: Vec<String>,
 }
