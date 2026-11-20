@@ -756,11 +756,10 @@ impl Application {
                 self.save_mir_json(name, mir, false)
             }
             "json-complex" => {
-                if self.config.is_complex() {
-                    self.save_mir_json(name, &self.bytecode.mir, true)
-                } else {
-                    false
-                }
+                // the MIR of real operations the native code runs: complexified for a complex
+                // application, the only MIR of a real one
+                let complexified = self.config.is_complex();
+                self.save_mir_json(name, &self.bytecode.mir, complexified)
             }
             _ => false,
         }

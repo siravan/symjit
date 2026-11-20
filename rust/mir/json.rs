@@ -1,5 +1,7 @@
 //! The MIR of an application as JSON (`Application::dump(path, "json")` and `"json-complex"`), for
-//! readers outside symjit. The file starts with its format (`format`, `format_version`) and the
+//! readers outside symjit. `json` is the MIR before complexification, `json-complex` the MIR of
+//! real operations (the complexified MIR of a complex application); a real application has one
+//! MIR, which both write. The file starts with its format (`format`, `format_version`) and the
 //! symjit version that wrote it, then the application's counts and real locations, the MIR (`code`,
 //! `consts`, `labels`) and its configuration.
 //!
@@ -7,7 +9,8 @@
 //!   format          "symjit-mir"
 //!   format_version  1
 //!   symjit_version  the crate's version, e.g. "2.29.0"
-//!   complexified    whether `code` is the complexified MIR (complex numbers lowered to real pairs)
+//!   complexified    whether `code` is the complexified MIR (complex numbers lowered to real pairs);
+//!                   false for a real application's (its MIR has real operations only)
 //!   count_states, count_params, count_obs, count_diffs
 //!                   the application's counts (a complex model counts two f64 values per number)
 //!   reals           the locations of a complex model that hold real numbers, sorted (Mem, Stack,

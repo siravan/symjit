@@ -1,5 +1,6 @@
 //! `Application::dump(path, "json")` writes the MIR before complexification (for a real application,
-//! its only MIR) and `dump(path, "json-complex")` the complexified MIR of a complex application.
+//! its only MIR) and `dump(path, "json-complex")` the MIR of real operations: the complexified MIR of
+//! a complex application, the same file as `json` for a real one.
 //! `complexify` (which changes the MIR `save` writes) changes neither. Labels are written sorted, so
 //! the same model gives the same file. The file names its format and version, holds the
 //! application's counts, and writes each constant as its bit pattern (exact for NaN, ±Inf, -0.0).
@@ -79,7 +80,10 @@ fn json_writes_the_real_mir_of_a_real_application() -> Result<()> {
     let mut app = compile_real()?;
     let json = dump(&mut app, "json", "real").expect("json refused for a real application");
     assert!(has(&json, "Bi"));
-    assert!(dump(&mut app, "json-complex", "real").is_none());
+    // a real application's one MIR, not complexified, in both modes
+    assert_eq!(dump(&mut app, "json-complex", "real").unwrap(), json);
+    let v: Value = serde_json::from_str(&json)?;
+    assert_eq!(v["complexified"], false);
     Ok(())
 }
 
