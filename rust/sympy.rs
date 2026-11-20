@@ -666,6 +666,46 @@ pub unsafe extern "C" fn dump(
     }
 }
 
+/// The MIR of the saved application (`.sjb`) in `buf[0 .. len]` as JSON, without compiling it
+/// (`Application::sjb_mir_json`): `what` is "json" or "json-complex". Returns a null-terminated
+/// string the caller frees with `free_string`, or NULL when the bytes are not a saved application
+/// or `what` is unknown.
+///
+/// # Safety
+/// `buf` must point to `len` readable bytes and `what` to a null-terminated string.
+///
+#[no_mangle]
+pub unsafe extern "C" fn sjb_mir_json(
+    buf: *const u8,
+    len: usize,
+    what: *const c_char,
+) -> *mut c_char {
+    if buf.is_null() || what.is_null() {
+        return std::ptr::null_mut();
+    }
+    let bytes: &[u8] = unsafe { std::slice::from_raw_parts(buf, len) };
+    let what = match unsafe { CStr::from_ptr(what).to_str() } {
+        Ok(what) => what,
+        Err(_) => return std::ptr::null_mut(),
+    };
+    match Application::sjb_mir_json(&mut &bytes[..], &Config::default(), what) {
+        Ok(json) => CString::new(json).map_or(std::ptr::null_mut(), |s| s.into_raw()),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// Frees a string returned by `sjb_mir_json`.
+///
+/// # Safety
+/// `s` must be NULL or a string `sjb_mir_json` returned, freed only once.
+///
+#[no_mangle]
+pub unsafe extern "C" fn free_string(s: *mut c_char) {
+    if !s.is_null() {
+        let _ = unsafe { CString::from_raw(s) };
+    }
+}
+
 /// Returns diagnostic measurements.
 ///
 /// # Safety

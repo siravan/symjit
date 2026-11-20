@@ -720,6 +720,30 @@ def compile_composer(
     )
 
 
+def mir_json(sjb, what="json-complex"):
+    """The MIR of a saved function (.sjb) as JSON text, without compiling it.
+
+    Parameters
+    ==========
+
+    sjb: the saved function, as bytes (bytes, bytearray, memoryview) or a file name (str or
+        os.PathLike).
+    what: "json-complex" (the default), the MIR of real operations: the complexified MIR of a
+        complex function, the only MIR of a real one; or "json", the MIR before complexification.
+
+    The text is the file `load_func(sjb).dump(path, what=what)` writes; its format ("symjit-mir",
+    version 1) is described in symjit's rust/mir/json.rs.
+    """
+    if not can_use_rust("rust"):
+        raise ValueError("unsupported platform")
+    if isinstance(sjb, (bytes, bytearray, memoryview)):
+        data = bytes(sjb)
+    else:
+        with open(sjb, "rb") as fd:
+            data = fd.read()
+    return engine.lib.mir_json(data, what)
+
+
 def load_func(file, eqs=[], defuns=None):
     if can_use_rust("rust"):
         """Loads a previously compiled function.

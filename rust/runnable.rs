@@ -832,6 +832,42 @@ impl Application {
         Ok((prog, reals, mir))
     }
 
+    /// The MIR of a saved application (`.sjb`) as JSON (mir/json.rs), without compiling it: `what`
+    /// is "json" (the MIR before complexification) or "json-complex" (the MIR of real operations),
+    /// and the text is the file `dump(path, what)` of the loaded application writes. A saved
+    /// complexified MIR (`complexify`, then `save`) has only "json-complex".
+    pub fn sjb_mir_json(stream: &mut impl Read, config: &Config, what: &str) -> Result<String> {
+        let (prog, reals, mir, _mask) = Self::read_parts(stream, config)?;
+        let complex = prog.config().is_complex();
+
+        let (mir, complexified) = match what {
+            "json" if mir.code.is_complexified => {
+                return Err(anyhow!(
+                    "a complexified MIR has no MIR before complexification (\"json-complex\" only)"
+                ))
+            }
+            "json" => (mir, false),
+            "json-complex" if mir.code.is_complexified => (mir, true),
+            // as `with_mir` complexifies the MIR of a loaded application
+            "json-complex" if complex => (
+                Complexifier::new(&reals, prog.config().clone()).complexify(&mir)?,
+                true,
+            ),
+            "json-complex" => (mir, false),
+            _ => return Err(anyhow!("`what` is \"json\" or \"json-complex\", not {:?}", what)),
+        };
+
+        let header = mir::json::MirHeader {
+            complexified,
+            count_states: prog.count_states,
+            count_params: prog.count_params,
+            count_obs: prog.count_obs,
+            count_diffs: prog.count_diffs,
+            reals: &reals,
+        };
+        mir::json::ExportMir::new(&mir, &header).to_json()
+    }
+
     // the parts of a saved application and the mask of its prepared kernels
     fn read_parts(
         stream: &mut impl Read,

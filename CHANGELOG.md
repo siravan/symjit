@@ -8,6 +8,9 @@
   `consts` (each as its bit pattern, `"0x"` and 16 hex digits, so NaN, ±Inf and -0.0 read back
   exactly), `labels` (sorted, so the same model gives the same file) and `config`. `complexify()`
   changes only what `save` writes, not these exports.
+* `symjit.mir_json(sjb, what="json-complex")` (Rust `Application::sjb_mir_json`, C `sjb_mir_json`)
+  returns the same JSON for a saved function (.sjb bytes or a file name) without compiling it; it
+  also reads a saved complexified function (`complexify()`, then `save`), which `load_func` refuses.
 
 # Version 2.28.3
 

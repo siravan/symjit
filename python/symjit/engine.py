@@ -176,6 +176,14 @@ class Engine:
         self.complexify.argtypes = [ctypes.c_void_p]
         self.complexify.restype = ctypes.c_bool
 
+        self.sjb_mir_json = self.dll.sjb_mir_json
+        self.sjb_mir_json.argtypes = [ctypes.c_char_p, ctypes.c_size_t, ctypes.c_char_p]
+        self.sjb_mir_json.restype = ctypes.c_void_p  # freed with free_string
+
+        self.free_string = self.dll.free_string
+        self.free_string.argtypes = [ctypes.c_void_p]
+        self.free_string.restype = None
+
         ######################################################
 
         self.create_matrix = self.dll.create_matrix
@@ -253,6 +261,19 @@ class Engine:
 
     def info(self):
         return self.info()
+
+    def mir_json(self, data: bytes, what: str) -> str:
+        """the MIR of the saved application `data` (.sjb bytes) as JSON text, without compiling it"""
+        p = self.sjb_mir_json(data, len(data), what.encode("utf-8"))
+        if not p:
+            raise ValueError(
+                f"cannot write the {what!r} MIR: not a saved symjit application, or `what` is not "
+                "'json' or 'json-complex' ('json' of a complexified application)"
+            )
+        try:
+            return ctypes.string_at(p).decode("utf-8")
+        finally:
+            self.free_string(p)
 
     def find_dll(self, substr):
         files = os.listdir(os.path.dirname(__file__))

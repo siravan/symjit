@@ -4,13 +4,14 @@
 //! `complexify` (which changes the MIR `save` writes) changes neither. Labels are written sorted, so
 //! the same model gives the same file. The file names its format and version, holds the
 //! application's counts, and writes each constant as its bit pattern (exact for NaN, ±Inf, -0.0).
+//! `Application::sjb_mir_json` writes the same text from the saved application, without compiling it.
 mod common;
 use common::base_config;
 
 use anyhow::Result;
 use num_complex::Complex;
 use serde_json::Value;
-use symjit::{Application, Composer, Slot, Translator};
+use symjit::{Application, Composer, Slot, Storage, Translator};
 
 /// out = exp(p0 × a) + p0
 fn compile_complex() -> Result<Application> {
@@ -191,6 +192,65 @@ fn json_constants_are_bit_patterns() -> Result<()> {
             "{x} ({:#018x}) is not among {consts:?}",
             x.to_bits()
         );
+    }
+    Ok(())
+}
+
+/// the saved application's bytes
+fn saved(app: &Application) -> Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    app.save(&mut bytes)?;
+    Ok(bytes)
+}
+
+fn sjb_json(bytes: &[u8], what: &str) -> Result<String> {
+    Application::sjb_mir_json(&mut &bytes[..], &base_config(), what)
+}
+
+#[test]
+fn sjb_mir_json_is_the_dump_of_the_loaded_application() -> Result<()> {
+    for (tag, app) in [
+        ("sr", compile_real()?),
+        ("sc", compile_complex()?),
+        ("ss", compile_special()?),
+    ] {
+        let bytes = saved(&app)?;
+        let mut loaded = Application::load(&mut &bytes[..], &base_config())?;
+        for what in ["json", "json-complex"] {
+            assert_eq!(
+                sjb_json(&bytes, what)?,
+                dump(&mut loaded, what, tag).unwrap(),
+                "{tag} {what}"
+            );
+        }
+    }
+    assert!(sjb_json(b"not a saved application", "json").is_err());
+    assert!(sjb_json(&saved(&compile_real()?)?, "scalar").is_err());
+    Ok(())
+}
+
+/// A saved complexified application (complexify, then save) cannot be loaded, but its MIR can be
+/// read: "json-complex" is the complexified MIR, and there is no "json".
+#[test]
+fn sjb_mir_json_of_a_complexified_application() -> Result<()> {
+    let mut app = compile_complex()?;
+    let complex = dump(&mut app, "json-complex", "cx").unwrap();
+    app.complexify()?;
+    let bytes = saved(&app)?;
+    assert!(Application::load(&mut &bytes[..], &base_config()).is_err());
+    assert!(sjb_json(&bytes, "json").is_err());
+    let read: Value = serde_json::from_str(&sjb_json(&bytes, "json-complex")?)?;
+    let dumped: Value = serde_json::from_str(&complex)?;
+    assert_eq!(read["complexified"], true);
+    for key in [
+        "code",
+        "consts",
+        "labels",
+        "count_states",
+        "count_obs",
+        "reals",
+    ] {
+        assert_eq!(read[key], dumped[key], "{key}");
     }
     Ok(())
 }

@@ -78,3 +78,21 @@ The output is
 00004	%3 := %0 Times %1
 00005	Mem[3] := %3
 ```
+
+## The MIR as JSON
+
+For tools outside symjit, `what='json'` dumps the MIR before complexification and `what='json-complex'`
+the MIR of real operations (the complexified MIR of a complex function; a real function has one MIR,
+which both write) as JSON:
+
+```python
+f = compile_func([x, y], [x+y, x*y], dtype='complex128')
+f.dump('f.json', what='json-complex')
+```
+
+`symjit.mir_json(sjb, what='json-complex')` returns the same text for a saved function (`f.save(...)`;
+its bytes or its file name) without compiling it. The file names its format (`"format": "symjit-mir"`,
+`"format_version": 1`) and the symjit version, holds the function's counts (`count_states`,
+`count_params`, `count_obs`, `count_diffs`), its real locations, the instructions (`code`), the constants
+(`consts`, each as its bit pattern, `"0x"` and 16 hex digits) and the labels, and its configuration. The
+fields are described at the top of `rust/mir/json.rs`.

@@ -1,7 +1,8 @@
 //! The MIR of an application as JSON (`Application::dump(path, "json")` and `"json-complex"`), for
 //! readers outside symjit. `json` is the MIR before complexification, `json-complex` the MIR of
 //! real operations (the complexified MIR of a complex application); a real application has one
-//! MIR, which both write. The file starts with its format (`format`, `format_version`) and the
+//! MIR, which both write. `Application::sjb_mir_json` writes the same file from a saved application
+//! (`.sjb`) without compiling it. The file starts with its format (`format`, `format_version`) and the
 //! symjit version that wrote it, then the application's counts and real locations, the MIR (`code`,
 //! `consts`, `labels`) and its configuration.
 //!
@@ -96,9 +97,12 @@ impl ExportMir {
         }
     }
 
+    pub fn to_json(&self) -> Result<String> {
+        Ok(serde_json::to_string(self)?)
+    }
+
     pub fn save_json(&self, name: &str) -> Result<()> {
-        let s = serde_json::to_string(self)?;
-        fs::write(name, &s)?;
+        fs::write(name, self.to_json()?)?;
         Ok(())
     }
 }
