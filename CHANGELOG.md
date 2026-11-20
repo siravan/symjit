@@ -2,8 +2,12 @@
 
 * MIR export to JSON: `dump(path, what="json")` writes the MIR before complexification (for a real
   function, its only MIR), and `dump(path, what="json-complex")` the complexified MIR of a complex
-  function. Each file holds `code`, `consts`, `labels` (sorted, so the same model gives the same file)
-  and `config`. `complexify()` changes only what `save` writes, not these exports.
+  function. Each file (format `symjit-mir`, `format_version` 1, documented in `rust/mir/json.rs`)
+  holds the symjit version, whether the MIR is complexified, the application's counts
+  (`count_states`, `count_params`, `count_obs`, `count_diffs`) and real locations, then `code`,
+  `consts` (each as its bit pattern, `"0x"` and 16 hex digits, so NaN, ±Inf and -0.0 read back
+  exactly), `labels` (sorted, so the same model gives the same file) and `config`. `complexify()`
+  changes only what `save` writes, not these exports.
 
 # Version 2.28.3
 

@@ -694,6 +694,19 @@ impl Application {
         }
     }
 
+    /// `mir` as JSON (mir/json.rs) in the file `name`, with this application's counts and reals
+    fn save_mir_json(&self, name: &str, mir: &Mir, complexified: bool) -> bool {
+        let header = mir::json::MirHeader {
+            complexified,
+            count_states: self.count_states,
+            count_params: self.count_params,
+            count_obs: self.count_obs,
+            count_diffs: self.count_diffs,
+            reals: &self.reals,
+        };
+        mir::json::ExportMir::new(mir, &header).save_json(name).is_ok()
+    }
+
     pub fn dump(&mut self, name: &str, what: &str) -> bool {
         match what {
             "scalar" => {
@@ -740,12 +753,11 @@ impl Application {
             "json" => {
                 // the MIR before complexification; a real application has only one
                 let mir = self.original.as_ref().unwrap_or(&self.bytecode.mir);
-                mir::json::ExportMir::new(mir).save_json(name).is_ok()
+                self.save_mir_json(name, mir, false)
             }
             "json-complex" => {
                 if self.config.is_complex() {
-                    let mir = &self.bytecode.mir;
-                    mir::json::ExportMir::new(mir).save_json(name).is_ok()
+                    self.save_mir_json(name, &self.bytecode.mir, true)
                 } else {
                     false
                 }

@@ -1,7 +1,8 @@
 //! `Application::dump(path, "json")` writes the MIR before complexification (for a real application,
 //! its only MIR) and `dump(path, "json-complex")` the complexified MIR of a complex application.
 //! `complexify` (which changes the MIR `save` writes) changes neither. Labels are written sorted, so
-//! the same model gives the same file.
+//! the same model gives the same file. The file names its format and version, holds the
+//! application's counts, and writes each constant as its bit pattern (exact for NaN, ±Inf, -0.0).
 mod common;
 use common::base_config;
 
@@ -113,6 +114,79 @@ fn json_labels_are_sorted() -> Result<()> {
     for i in 0..8 {
         let again = dump(&mut compile_real()?, "json", &format!("l{i}")).unwrap();
         assert_eq!(again, first, "the same model gave another file");
+    }
+    Ok(())
+}
+
+/// out = p0 × c2 + c1, with constants that JSON numbers cannot hold (NaN, ±Inf) or easily lose (-0.0)
+fn compile_special() -> Result<Application> {
+    let mut t = Translator::new(base_config());
+    t.set_num_params(1);
+    let c1 = t.append_constant(Complex::new(f64::NAN, f64::NEG_INFINITY))?;
+    let c2 = t.append_constant(Complex::new(-0.0, f64::INFINITY))?;
+    t.append_mul(&Slot::Temp(0), &[Slot::Param(0), Slot::Const(c2)], 1)?;
+    t.append_add(&Slot::Out(0), &[Slot::Temp(0), Slot::Const(c1)], 1)?;
+    t.compile()
+}
+
+/// the header fields every file has: the format, its version, symjit's version, and the counts
+fn check_header(v: &Value, app: &Application, complexified: bool) {
+    assert_eq!(v["format"], "symjit-mir");
+    assert_eq!(v["format_version"], 1);
+    assert_eq!(v["symjit_version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(v["complexified"], complexified);
+    assert_eq!(v["count_states"], app.count_states);
+    assert_eq!(v["count_params"], app.count_params);
+    assert_eq!(v["count_obs"], app.count_obs);
+    assert_eq!(v["count_diffs"], app.count_diffs);
+    assert!(v["reals"].is_array());
+}
+
+#[test]
+fn json_has_the_format_and_the_counts() -> Result<()> {
+    let mut app = compile_real()?;
+    let v: Value = serde_json::from_str(&dump(&mut app, "json", "h1").unwrap())?;
+    check_header(&v, &app, false);
+    assert_eq!(app.count_params, 4);
+
+    let mut app = compile_complex()?;
+    let v: Value = serde_json::from_str(&dump(&mut app, "json", "h2").unwrap())?;
+    check_header(&v, &app, false);
+    let v: Value = serde_json::from_str(&dump(&mut app, "json-complex", "h2").unwrap())?;
+    check_header(&v, &app, true);
+    Ok(())
+}
+
+#[test]
+fn json_constants_are_bit_patterns() -> Result<()> {
+    let mut app = compile_special()?;
+    let v: Value = serde_json::from_str(&dump(&mut app, "json", "k").unwrap())?;
+    let consts: Vec<String> = v["consts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| {
+            c.as_str()
+                .expect("a constant that is not a string")
+                .to_string()
+        })
+        .collect();
+    for c in &consts {
+        assert!(
+            c.len() == 18 && c.starts_with("0x") && c[2..].chars().all(|h| h.is_ascii_hexdigit()),
+            "constant {c}"
+        );
+    }
+    let bits: Vec<u64> = consts
+        .iter()
+        .map(|c| u64::from_str_radix(&c[2..], 16).unwrap())
+        .collect();
+    for x in [f64::NAN, f64::NEG_INFINITY, f64::INFINITY, -0.0] {
+        assert!(
+            bits.contains(&x.to_bits()),
+            "{x} ({:#018x}) is not among {consts:?}",
+            x.to_bits()
+        );
     }
     Ok(())
 }
