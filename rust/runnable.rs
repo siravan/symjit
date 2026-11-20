@@ -68,10 +68,13 @@ pub struct Application {
     pub bytecode: CompiledMir,
     pub can_fast: bool,
     pub reals: HashSet<Loc>,
+    /// The MIR before complexification (complex applications only).
     pub original: Option<Mir>,
     pub first_param: usize,
     pub first_diff: usize,
     pub count_diffs: usize,
+    /// Set by `complexify`: `save` writes the complexified MIR instead of `original`.
+    pub save_complexified: bool,
 }
 
 impl Application {
@@ -166,6 +169,7 @@ impl Application {
             config,
             reals,
             original,
+            save_complexified: false,
         })
     }
 
@@ -198,15 +202,15 @@ impl Application {
         unsafe { std::mem::transmute(self) }
     }
 
-    /// Keeps the complexified MIR as the one `save` writes (and sets `fast_complex = false`). Every
-    /// complex application's bytecode holds the complexified MIR, whether its machine code was
-    /// compiled from it or (`fast_complex`) from the complex MIR. A saved complexified application
-    /// cannot be loaded back (`load` refuses it); it is for readers of the MIR.
+    /// Makes `save` write the complexified MIR (and sets `fast_complex = false`). Every complex
+    /// application's bytecode holds the complexified MIR, whether its machine code was compiled
+    /// from it or (`fast_complex`) from the complex MIR. A saved complexified application cannot be
+    /// loaded back (`load` refuses it); it is for readers of the MIR. `original` keeps the MIR
+    /// before complexification (`dump(.., "json")`).
     pub fn complexify(&mut self) -> Result<()> {
         if self.config.is_complex() {
             self.config.set_fast_complex(false);
-            let mir = (*self.bytecode.mir).clone();
-            self.original = Some(mir);
+            self.save_complexified = true;
         }
         Ok(())
     }
@@ -734,11 +738,9 @@ impl Application {
                 true
             }
             "json" => {
-                if let Some(mir) = &self.original {
-                    mir::json::ExportMir::new(mir).save_json(name).is_ok()
-                } else {
-                    false
-                }
+                // the MIR before complexification; a real application has only one
+                let mir = self.original.as_ref().unwrap_or(&self.bytecode.mir);
+                mir::json::ExportMir::new(mir).save_json(name).is_ok()
             }
             "json-complex" => {
                 if self.config.is_complex() {
@@ -929,8 +931,8 @@ impl Storage for Application {
         stream.write_all(&mask.to_le_bytes())?;
 
         match &self.original {
-            Some(mir) => mir.save(stream)?,
-            None => self.bytecode.mir.save(stream)?,
+            Some(mir) if !self.save_complexified => mir.save(stream)?,
+            _ => self.bytecode.mir.save(stream)?,
         }
 
         save_reals(stream, &self.reals)?;

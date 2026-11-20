@@ -1,3 +1,10 @@
+# Version 2.29.0
+
+* MIR export to JSON: `dump(path, what="json")` writes the MIR before complexification (for a real
+  function, its only MIR), and `dump(path, what="json-complex")` the complexified MIR of a complex
+  function. Each file holds `code`, `consts`, `labels` (sorted, so the same model gives the same file)
+  and `config`. `complexify()` changes only what `save` writes, not these exports.
+
 # Version 2.28.3
 
 * Complex SIMD kernels (AVX, AVX-512, NEON) and the ARM fast-complex kernel (FCMA): a complex product

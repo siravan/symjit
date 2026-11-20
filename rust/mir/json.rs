@@ -1,6 +1,6 @@
 use anyhow::Result;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fs;
 
 use super::super::config::ConfigToml;
@@ -10,7 +10,7 @@ use super::{Instruction, Mir};
 pub struct ExportMir {
     code: Vec<Instruction>,
     pub consts: Vec<f64>,
-    pub labels: HashMap<String, usize>,
+    pub labels: BTreeMap<String, usize>, // sorted: the same MIR gives the same file
     pub config: ConfigToml,
 }
 
@@ -21,7 +21,7 @@ impl ExportMir {
         ExportMir {
             code,
             consts: mir.consts.clone(),
-            labels: mir.labels.clone(),
+            labels: mir.labels.iter().map(|(k, v)| (k.clone(), *v)).collect(),
             config: mir.config.to_config_toml(),
         }
     }
