@@ -107,7 +107,8 @@ per-host baseline (run by hand, not in the test suite).
    `ifelse`, `Sum`/`Product` loops). `expr()` does not memoize, so shared subexpressions are expanded in the JSON
    and re-shared later by the Rust CSE. `func.py` (`Func`, `FuncComplex`, `SymbolicaFunc`) wrap a compiled
    application; `ode.py`/`composer.py` add ODE right-hand sides and the low-level `Composer` builder;
-   `disasm.py` disassembles dumped kernels. `compile_evaluator` takes Symbolica evaluators or their instruction
+   `disasm.py` disassembles dumped kernels (`disassemble`/`disassembly` with objdump, capstone or
+   `tool="symjit"`, the `*-asm-hex` dump; `assembly` returns the `*-asm` text). `compile_evaluator` takes Symbolica evaluators or their instruction
    text (`([instructions], temp_count, [constants])`, parsed by `parser.rs`/`instruction.rs`).
 2. **FFI and model** (`sympy.rs`, `model.rs`, `parser.rs`, `applet.rs`): `compile`/`translate`/`dump`/`measure`
    are `extern "C"` (feature `sympy`); a Rust panic here aborts the Python process. Two translators turn

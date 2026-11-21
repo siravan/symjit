@@ -6,6 +6,7 @@
 >>> f = compile_func([x, y], [x * y + 1.0])
 >>> disassemble(f)            # the scalar kernel
 >>> disassemble(f, "simd")    # the SIMD kernel used for vectorized calls
+>>> print(assembly(f))        # the scalar kernel as GNU `as` input (the same bytes)
 """
 
 import os
@@ -19,9 +20,10 @@ import tempfile
 
 from .func import Func, FuncComplex, SymbolicaFunc
 
-__all__ = ["disassemble", "disassembly"]
+__all__ = ["disassemble", "disassembly", "assembly"]
 
 KERNELS = ("scalar", "simd", "fast", "bytecode")
+TOOLS = ("auto", "objdump", "capstone", "symjit")
 
 # architecture -> (objdump `-m` name, extra objdump options, tools to try)
 _OBJDUMP = {
@@ -87,6 +89,58 @@ def _machine_code(compiler, kernel):
     finally:
         if os.path.exists(path):
             os.remove(path)
+
+
+def _dump_text(compiler, kernel, what):
+    """The text `dump(path, what)` writes (`what`: "scalar-asm", "simd-asm-hex", ...)."""
+    fd, path = tempfile.mkstemp(prefix="symjit_dump_", suffix=".s")
+    os.close(fd)
+
+    try:
+        try:
+            compiler.dump(path, what=what)
+        except ValueError:
+            raise ValueError(f"the `{kernel}` kernel is not available for this function") from None
+        with open(path, encoding="utf8") as fd:
+            return fd.read()
+    finally:
+        if os.path.exists(path):
+            os.remove(path)
+
+
+_HEX_LINE = re.compile(r"^\s*([0-9a-f]+):  ([0-9a-f]+)\s+(.*)$")
+_CODE_END = re.compile(r"code 0x0\.\.0x([0-9a-f]+)")
+
+
+def _run_symjit(compiler, kernel, code):
+    """Symjit's own listing (`dump(.., "<kernel>-asm-hex")`): (records, labels, code_end).
+
+    `labels` maps an offset to the labels there; `code_end` is where the data area starts. The
+    bytes of each record are taken from `code` (the listing writes RISC-V and AArch64 words as
+    numbers, as objdump does).
+    """
+    text = _dump_text(compiler, kernel, f"{kernel}-asm-hex")
+    lines = text.splitlines()
+    m = _CODE_END.search(lines[0]) if lines else None
+    code_end = int(m.group(1), 16) if m else None
+
+    records, labels, pending = [], {}, []
+    for line in lines[1:]:
+        m = _HEX_LINE.match(line)
+        if m:
+            address = int(m.group(1), 16)
+            if pending:
+                labels.setdefault(address, []).extend(pending)
+                pending = []
+            records.append((address, bytes.fromhex(m.group(2)), " ".join(m.group(3).split())))
+        elif line.endswith(":"):
+            pending.append(line[:-1])
+
+    ends = [a for a, _, _ in records[1:]] + [len(code)]
+    records = [(a, code[a:end], text) for (a, _, text), end in zip(records, ends)]
+    if code_end is None:
+        code_end = len(code)
+    return records, labels, code_end
 
 
 def _find_objdump(arch):
@@ -243,8 +297,8 @@ def disassembly(f, kernel="scalar", tool="auto", show_data=False):
     """
     if kernel not in KERNELS:
         raise ValueError(f"kernel should be one of {KERNELS}, not `{kernel}`")
-    if tool not in ("auto", "objdump", "capstone"):
-        raise ValueError("tool should be `auto`, `objdump`, or `capstone`")
+    if tool not in TOOLS:
+        raise ValueError("tool should be `auto`, `objdump`, `capstone`, or `symjit`")
 
     compiler = _compiler_of(f)
 
@@ -256,36 +310,83 @@ def disassembly(f, kernel="scalar", tool="auto", show_data=False):
 
     records = None
     used = None
+    labels = {}
 
-    if tool in ("auto", "objdump"):
+    if tool == "symjit":
+        records, labels, code_end = _run_symjit(compiler, kernel, code)
+        used = "symjit"
+
+    if records is None and tool in ("auto", "objdump"):
         path = _find_objdump(arch)
         if path is not None:
             records, used = _run_objdump(path, arch, code), os.path.basename(path)
         elif tool == "objdump":
             raise RuntimeError(f"no objdump supporting {arch} was found")
 
-    if records is None:
+    if records is None and tool in ("auto", "capstone"):
         records, used = _run_capstone(arch, code), "capstone"
-        if records is None:
-            raise RuntimeError(
-                f"cannot disassemble {arch} code: install binutils objdump with {arch} support "
-                "or the `capstone` Python package (`pip install capstone`)"
-            )
+        if records is None and tool == "capstone":
+            raise RuntimeError("the `capstone` Python package is not installed (`pip install capstone`)")
 
-    body, data = _split_code_data(records, arch)
-    code_end = body[-1][0] + len(body[-1][1]) if body else 0
+    if records is None:
+        # symjit's own decoder knows every instruction symjit emits
+        records, labels, code_end = _run_symjit(compiler, kernel, code)
+        used = "symjit"
+
+    if used == "symjit":
+        body = [r for r in records if r[0] < code_end]
+        data = [r for r in records if r[0] >= code_end]
+    else:
+        body, data = _split_code_data(records, arch)
+        code_end = body[-1][0] + len(body[-1][1]) if body else 0
 
     width = max((len(r) for _, r, _ in body), default=1) * 3
     out = [f"; symjit `{kernel}` kernel, {arch}, {len(code)} bytes ({code_end} of code), disassembled with {used}"]
-    out += [f"{a:6x}:  {r.hex(' '):<{width}s}  {text}" for a, r, text in body]
+    for a, r, text in body:
+        out += [f"{name}:" for name in labels.get(a, [])]
+        out.append(f"{a:6x}:  {r.hex(' '):<{width}s}  {text}")
 
     if data:
-        if show_data:
+        if show_data and used == "symjit":
+            out.append(f"; constant pool, {len(code) - code_end} bytes at offset {code_end:#x}")
+            for a, r, text in data:
+                out += [f"{name}:" for name in labels.get(a, [])]
+                out.append(f"{a:6x}:  {r.hex(' '):<{width}s}  {text}")
+        elif show_data:
             out += _format_data(data, code_end, len(code))
         else:
             out.append(f"; constant pool, {len(code) - code_end} bytes at offset {code_end:#x} (use show_data=True to list)")
 
     return "\n".join(out)
+
+
+def assembly(f, kernel="scalar"):
+    """Returns a kernel of a compiled Symjit function as assembly text for GNU `as`.
+
+    The text assembles back to the kernel's bytes: the labels are local symbols, the entry is
+    the global function `symjit_<kernel>`, and the constants follow the code as `.quad`s. On
+    x86-64 it is Intel syntax with the pseudo-prefixes (`{load}`, `{disp32}`, ...) that select
+    symjit's encodings, and `.insn` lines where none does. The function table of a kernel that
+    calls math functions holds addresses valid only in the process that compiled it.
+
+    Parameters
+    ==========
+
+    f: a compiled function, i.e., a `Func`, `FuncComplex`, or `SymbolicaFunc` object.
+    kernel (default `scalar`): "scalar", "simd" or "fast" (see `disassemble`).
+
+    >>> from sympy import symbols
+    >>> from symjit import compile_func, assembly
+    >>> x, y = symbols("x y")
+    >>> f = compile_func([x, y], [x * y + 1.0])
+    >>> open("kernel.s", "w").write(assembly(f))
+    """
+    if kernel not in ("scalar", "simd", "fast"):
+        raise ValueError(f"kernel should be one of ('scalar', 'simd', 'fast'), not `{kernel}`")
+
+    compiler = _compiler_of(f)
+    _architecture(compiler.ty)  # machine code only
+    return _dump_text(compiler, kernel, f"{kernel}-asm")
 
 
 def disassemble(f, kernel="scalar", tool="auto", show_data=False, file=None):
@@ -301,13 +402,16 @@ def disassemble(f, kernel="scalar", tool="auto", show_data=False, file=None):
         * "fast": the fast (packed complex) kernel, if the function has one.
         * "bytecode": prints the intermediate bytecode instead of machine code.
     tool (default `auto`): the disassembler. `objdump` uses the GNU binutils objdump,
-        `capstone` uses the Python capstone package, and `auto` prefers objdump when
-        it supports the target architecture and falls back to capstone.
+        `capstone` uses the Python capstone package, `symjit` uses symjit's own decoder
+        (it knows the labels: branch targets and constants are named), and `auto`
+        prefers objdump when it supports the target architecture, then capstone, then
+        symjit.
     show_data (default `False`): also lists the constant pool that follows the code.
     file (default `None`): the stream to print to (`sys.stdout` if `None`).
 
     The machine code is followed by a constant pool (floating-point constants and
-    function pointers), which is not disassembled.
+    function pointers), which is not disassembled. `assembly(f, kernel)` returns the
+    kernel as assembler input instead.
 
     >>> from sympy import symbols
     >>> from symjit import compile_func, disassemble

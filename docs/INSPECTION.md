@@ -59,6 +59,59 @@ The output (assuming a Linux x86-64 machine) is
 
 Note that this is the output from an older version, and the more recent versions have a more complex prologue and epilogue.
 
+### Disassembly and assembly text
+
+Symjit also disassembles its own machine code, with no external tool: `what='scalar-asm'` (or
+`'simd-asm'`, `'fast-asm'`) dumps a kernel as GNU `as` input, and `what='scalar-asm-hex'` (...) as a
+listing with the offset and the bytes of each instruction. The decoders know exactly the instructions
+symjit emits on x86-64, AArch64 and RISC-V, and the labels the code was compiled with, so branch
+targets and constants are named. In Python, `symjit.assembly(f, kernel)` returns the assembly text,
+and `symjit.disassemble(f, kernel, tool='symjit')` prints the listing (`tool='auto'`, the default,
+uses objdump or capstone when installed and symjit's decoder otherwise).
+
+```python
+from symjit import compile_func, assembly, disassemble
+from sympy import symbols
+
+x, y = symbols('x y')
+f = compile_func([x, y], [x+y, x*y+2.5])
+open('kernel.s', 'w').write(assembly(f))     # same as f.dump('kernel.s', what='scalar-asm')
+disassemble(f, tool='symjit')
+```
+
+The assembly text (here on x86-64) starts with
+
+```
+# symjit scalar kernel, x86_64, 352 bytes: code 0x0..0x100, data 0x100..0x160
+	.text
+	.intel_syntax noprefix
+	.p2align 5
+	.globl symjit_scalar
+	.type symjit_scalar, %function
+symjit_scalar:
+.L_self:
+	push rbp
+	.insn 0x81/5, rsp, 48{:s32}    # sub rsp, 48
+	{disp8} mov qword ptr [rsp], r13
+	...
+	vaddsd xmm4, xmm4, qword ptr [rip+.L_const_0_]    # .L_const_0_ = 2.5
+	...
+.L_const_0_:
+	.quad 0x4004000000000000    # 2.5
+```
+
+It assembles back to the kernel's bytes (`as k.s -o k.o; ld -Ttext=0 -e symjit_scalar k.o; objcopy
+-O binary -j .text`): the labels are local symbols (`@self` is `.L_self`, `_const_0_` is
+`.L_const_0_`), the entry is the global function `symjit_<kernel>`, and the constants follow the code
+as `.quad`s. Instructions are spelled so that `as` encodes them as symjit did: on RISC-V,
+`add rd, rs, zero` rather than `mv` (`.option norvc` and `.option norelax` keep the instructions
+4 bytes); on AArch64, `adrp` and `:lo12:` name the constants; on x86-64 (Intel syntax), the
+pseudo-prefixes `{load}`/`{store}`, `{disp8}`/`{disp32}`, `{vex3}`, `{evex}` and `rex.w` select
+symjit's encodings, and the few that no prefix gives (scalar VEX instructions with VEX.L=1, a 32-bit
+immediate that fits a byte) are `.insn` lines (binutils 2.40 or newer) with the instruction in a
+comment. The syntax is GNU's for ELF (Linux). A kernel that calls math functions holds their
+addresses, valid only in the process that compiled it, in its function table (`_func_<name>_`).
+
 To see the intermediate representation in a pseudo-LLVM textual format (useful for debugging), pass `what='bytecode'`. For example:
 
 ```python

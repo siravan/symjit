@@ -340,6 +340,14 @@ pub fn listing(
             .map(|v| v.concat())
             .unwrap_or_else(|| item.raw.clone());
 
+        // for reading, an `.insn` line shows the instruction its comment names
+        let readable = mode == Mode::Hex && text.starts_with(".insn") && item.note.is_some();
+        let text = if readable {
+            item.note.clone().unwrap()
+        } else {
+            text
+        };
+
         let mut comment = Vec::new();
         if let Some(t) = item.refers {
             let name = names.get(&t).cloned();
@@ -356,7 +364,7 @@ pub fn listing(
             }
             comment.push(c);
         }
-        if let Some(note) = &item.note {
+        if let Some(note) = item.note.as_ref().filter(|_| !readable) {
             comment.push(note.clone());
         }
 

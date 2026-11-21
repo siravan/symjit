@@ -5,7 +5,8 @@ Run from the repository root with
     python -m unittest discover -s python/tests -v
 
 Tests that need an optional tool (GNU objdump for x86-64, the `capstone` package,
-Symbolica) are skipped when it is missing.
+Symbolica, binutils to assemble `assembly`'s text) are skipped when it is missing; symjit's
+own decoder (`tool="symjit"`) needs none.
 """
 
 import contextlib
@@ -13,7 +14,9 @@ import io
 import os
 import platform
 import re
+import shutil
 import struct
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -24,7 +27,7 @@ sys.path.insert(0, os.environ.get("SYMJIT_PYTHON_PATH", os.path.join(os.path.dir
 from sympy import cos, sin, symbols
 
 import symjit
-from symjit import compile_func, disassemble, disassembly
+from symjit import assembly, compile_func, disassemble, disassembly
 from symjit import disasm
 
 try:
@@ -47,6 +50,7 @@ HAS_OBJDUMP_X86 = disasm._find_objdump("x86_64") is not None
 x, y = symbols("x y")
 
 LINE = re.compile(r"^\s*([0-9a-f]+):  ((?:[0-9a-f]{2} ?)+)")
+LABEL = re.compile(r"^[@._A-Za-z][^\s]*:$")
 
 
 def compile_sample(**kwargs):
@@ -65,6 +69,8 @@ def parse_listing(text):
     for line in text.splitlines():
         if line.startswith(";"):
             comments.append(line)
+            continue
+        if LABEL.match(line):  # symjit's listing names its labels
             continue
         m = LINE.match(line)
         assert m, f"unparsable line: {line!r}"
@@ -111,6 +117,7 @@ class ArgumentTests(unittest.TestCase):
     def test_exported(self):
         self.assertIs(symjit.disassemble, disassemble)
         self.assertIs(symjit.disassembly, disassembly)
+        self.assertIs(symjit.assembly, assembly)
 
     def test_rejects_other_objects(self):
         for bad in (42, "code", None, [1, 2], lambda z: z):
@@ -323,12 +330,19 @@ class CrossArchitectureTests(ListingChecks, unittest.TestCase):
 
 class MissingToolsTests(unittest.TestCase):
     def test_no_disassembler_available(self):
+        # without objdump and capstone, `auto` uses symjit's own decoder
         f = compile_sample(ty="riscv")
         with mock.patch.object(disasm, "_find_objdump", return_value=None), mock.patch.object(
             disasm, "_run_capstone", return_value=None
         ):
-            with self.assertRaisesRegex(RuntimeError, "install binutils objdump"):
-                disassemble(f)
+            text = disassembly(f)
+        self.assertIn("disassembled with symjit", text.splitlines()[0])
+
+    def test_capstone_missing(self):
+        f = compile_sample(ty="riscv")
+        with mock.patch.object(disasm, "_run_capstone", return_value=None):
+            with self.assertRaisesRegex(RuntimeError, "capstone"):
+                disassemble(f, tool="capstone")
 
 
 class ArchitectureTests(unittest.TestCase):
@@ -457,6 +471,139 @@ class HelperTests(unittest.TestCase):
         self.assertEqual(recs[0], (0, b"\x55", "push rbp"))
         self.assertEqual(recs[1][1], bytes.fromhex("4881ec30000000"))
         self.assertEqual(recs[2], (8, b"\xc3", "ret"))
+
+
+class SymjitToolTests(unittest.TestCase):
+    """`tool="symjit"`: symjit's own decoder, on every architecture, with no external tool."""
+
+    TYPES = (("riscv", "riscv64"), ("arm", "aarch64"), ("amd", "x86_64"))
+
+    def check(self, f, kernel, arch):
+        text = disassembly(f, kernel, tool="symjit")
+        rows, comments = parse_listing(text)
+        code = raw_kernel(f, kernel)
+        head = comments[0]
+        self.assertTrue(head.startswith(f"; symjit `{kernel}` kernel, {arch}"), head)
+        self.assertIn("disassembled with symjit", head)
+
+        # contiguous rows, exactly the kernel's code; the rest is the constant pool
+        expected = 0
+        for address, raw, _ in rows:
+            self.assertEqual(address, expected)
+            expected += len(raw)
+        self.assertEqual(b"".join(r for _, r, _ in rows), code[:expected])
+        self.assertIn("ret", mnemonics(text))
+        pool = [c for c in comments if c.startswith("; constant pool")]
+        self.assertEqual(len(pool), 1)
+        self.assertIn(f"{len(code) - expected} bytes at offset {expected:#x}", pool[0])
+
+        # every instruction decoded, and the labels named
+        for _, _, ins in rows:
+            self.assertFalse(ins.startswith((".byte", ".word", ".inst ")), ins)
+        self.assertIn("@self:", text.splitlines())
+        return text
+
+    def test_kernels(self):
+        for ty, arch in self.TYPES:
+            for dtype in ("float64", "complex128"):
+                f = compile_sample(ty=ty, dtype=dtype, use_threads=False)
+                for kernel in ("scalar", "simd", "fast"):
+                    with self.subTest(ty=ty, dtype=dtype, kernel=kernel):
+                        try:
+                            raw_kernel(f, kernel)
+                        except ValueError:
+                            continue  # e.g. no SIMD kernel on RISC-V
+                        self.check(f, kernel, arch)
+
+    def test_names_targets_and_constants(self):
+        f = compile_func([x, y], [x * y + 3.5], ty="riscv")
+        text = disassembly(f, tool="symjit", show_data=True)
+        self.assertIn("<@main>", text)  # a branch names its label
+        self.assertIn("<_const_0_> = 3.5", text)  # a constant load names the constant
+        self.assertIn("_const_0_:", text.splitlines())
+        self.assertIn(".quad 0x400c000000000000", text)
+
+    def test_hides_data(self):
+        f = compile_func([x, y], [x * y + 3.5], ty="arm")
+        text = disassembly(f, tool="symjit")
+        self.assertNotIn(".quad", text)
+        self.assertIn("use show_data=True", text)
+
+    @unittest.skipUnless(HOST_X86 and HAS_OBJDUMP_X86, "needs an x86-64 host and objdump")
+    def test_agrees_with_objdump(self):
+        # the same instruction boundaries as objdump, up to the last `ret`
+        f = compile_sample(use_threads=False)
+        for kernel in ("scalar", "simd"):
+            ours, _ = parse_listing(disassembly(f, kernel, tool="symjit"))
+            theirs, _ = parse_listing(disassembly(f, kernel, tool="objdump"))
+            self.assertEqual([a for a, _, _ in theirs], [a for a, _, _ in ours][: len(theirs)])
+
+
+def _binutils(arch):
+    """as, ld, objcopy for `arch`, or None."""
+    prefix = {"x86_64": "x86_64-linux-gnu-", "aarch64": "aarch64-linux-gnu-", "riscv64": "riscv64-linux-gnu-"}[arch]
+    native = sys.platform.startswith("linux") and disasm._architecture("native") == arch
+    for p in (prefix, "") if native else (prefix,):
+        tools = [shutil.which(p + t) for t in ("as", "ld", "objcopy")]
+        if all(tools):
+            return tools
+    return None
+
+
+class AssemblyTests(unittest.TestCase):
+    """`assembly`: the kernel as GNU `as` input, which assembles back to the same bytes."""
+
+    def test_form(self):
+        f = compile_sample(ty="riscv")
+        text = assembly(f)
+        lines = text.splitlines()
+        self.assertIn("\t.globl symjit_scalar", lines)
+        self.assertIn("symjit_scalar:", lines)
+        self.assertIn(".L_self:", lines)
+        self.assertIn(".L_const_0_:", lines)
+        # no offsets or bytes
+        self.assertFalse(any(re.match(r"^\s*[0-9a-f]+:", l) for l in lines))
+
+    def test_arguments(self):
+        f = compile_sample()
+        with self.assertRaisesRegex(ValueError, "kernel should be one of"):
+            assembly(f, "bytecode")
+        with self.assertRaisesRegex(ValueError, "does not generate machine code"):
+            assembly(compile_func([x], [x + 1], ty="bytecode"))
+        with self.assertRaisesRegex(ValueError, "`simd` kernel is not available"):
+            assembly(compile_sample(ty="riscv"), "simd")
+
+    def test_assembles_to_the_kernel(self):
+        tested = 0
+        for ty, arch in SymjitToolTests.TYPES:
+            tools = _binutils(arch)
+            if tools is None:
+                continue
+            asm, ld, objcopy = tools
+            for dtype in ("float64", "complex128"):
+                f = compile_sample(ty=ty, dtype=dtype, use_threads=False)
+                for kernel in ("scalar", "simd", "fast"):
+                    try:
+                        code = raw_kernel(f, kernel)
+                    except ValueError:
+                        continue
+                    with self.subTest(ty=ty, dtype=dtype, kernel=kernel), tempfile.TemporaryDirectory() as d:
+                        with open(os.path.join(d, "k.s"), "w") as fd:
+                            fd.write(assembly(f, kernel))
+                        for cmd in (
+                            [asm, "-o", "k.o", "k.s"],
+                            [ld, "-Ttext=0", "-e", f"symjit_{kernel}", "-o", "k.elf", "k.o"],
+                            [objcopy, "-O", "binary", "-j", ".text", "k.elf", "k.bin"],
+                        ):
+                            subprocess.run(cmd, cwd=d, check=True, capture_output=True)
+                        with open(os.path.join(d, "k.bin"), "rb") as fd:
+                            got = fd.read()
+                        # the assembler may pad the section to its alignment
+                        self.assertEqual(got[: len(code)], code)
+                        self.assertLess(len(got) - len(code), 16)
+                        tested += 1
+        if tested == 0:
+            self.skipTest("needs binutils for x86-64, aarch64 or riscv64")
 
 
 if __name__ == "__main__":
