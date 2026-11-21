@@ -3,6 +3,7 @@
 
 use super::riscv::{decode_word, format};
 
+#[rustfmt::skip]
 const CASES: &[(&str, u32, &str)] = &[
     ("add_0", 0x003100b3, "add ra, sp, gp"),
     ("add_1", 0x00c58533, "add a0, a1, a2"),
@@ -44,19 +45,19 @@ const CASES: &[(&str, u32, &str)] = &[
     ("and_2", 0x01df7fb3, "and t6, t5, t4"),
     ("and_3", 0x007372b3, "and t0, t1, t2"),
     ("and_4", 0x00947033, "and zero, s0, s1"),
-    ("mv_0", 0x000100b3, "mv ra, sp"),
+    ("mv_0", 0x000100b3, "add ra, sp, zero"),
     ("neg_0", 0x402000b3, "neg ra, sp"),
     ("not_0", 0xfff14093, "not ra, sp"),
-    ("mv_1", 0x00058533, "mv a0, a1"),
+    ("mv_1", 0x00058533, "add a0, a1, zero"),
     ("neg_1", 0x40b00533, "neg a0, a1"),
     ("not_1", 0xfff5c513, "not a0, a1"),
-    ("mv_2", 0x000f0fb3, "mv t6, t5"),
+    ("mv_2", 0x000f0fb3, "add t6, t5, zero"),
     ("neg_2", 0x41e00fb3, "neg t6, t5"),
     ("not_2", 0xffff4f93, "not t6, t5"),
-    ("mv_3", 0x000302b3, "mv t0, t1"),
+    ("mv_3", 0x000302b3, "add t0, t1, zero"),
     ("neg_3", 0x406002b3, "neg t0, t1"),
     ("not_3", 0xfff34293, "not t0, t1"),
-    ("mv_4", 0x00040033, "mv zero, s0"),
+    ("mv_4", 0x00040033, "add zero, s0, zero"),
     ("neg_4", 0x40800033, "neg zero, s0"),
     ("not_4", 0xfff44013, "not zero, s0"),
     ("addi_0", 0x00010093, "addi ra, sp, 0"),

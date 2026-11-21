@@ -1,9 +1,12 @@
 //! RISC-V (RV64GC, little-endian) decoder for the instructions symjit emits: the `rvv!` macro
 //! (`riscv64/macros.rs`). Anything else decodes as `.word`. The text follows GNU objdump's
-//! (ABI register names, the pseudo-instructions `mv`, `neg`, `not`, `nop`, `j`, `jr`, `ret`,
-//! `fmv.d`, `fneg.d`, `fabs.d`; the rounding mode only when it is not `dyn`).
+//! (ABI register names, the pseudo-instructions `neg`, `not`, `nop`, `j`, `jr`, `ret`, `fmv.d`,
+//! `fneg.d`, `fabs.d`; the rounding mode only when it is not `dyn`), except where the assembler
+//! would encode the spelling differently: symjit's `mv` is `add rd, rs, zero` (`as` assembles
+//! `mv` to `addi`). Pairs of `auipc` and `ld`/`fld`/`jalr` keep their numeric offsets (they are
+//! relative, so the code assembles to the same bytes) and name the label they reach in a comment.
 
-use super::{Decoded, Decoder, Symbols};
+use super::{Decoder, Item, Piece};
 
 const X: [&str; 32] = [
     "zero", "ra", "sp", "gp", "tp", "t0", "t1", "t2", "s0", "s1", "a0", "a1", "a2", "a3", "a4",
@@ -90,7 +93,6 @@ pub fn decode_word(w: u32) -> Option<Ins> {
     match w & 0x7f {
         0x33 => {
             let m = match (f7, f3) {
-                (0x00, 0) if rs2 == 0 => return ins("mv", vec![X(rd), X(rs1)]),
                 (0x20, 0) if rs1 == 0 => return ins("neg", vec![X(rd), X(rs2)]),
                 (0x00, 0) => "add",
                 (0x20, 0) => "sub",
@@ -264,81 +266,111 @@ fn format_with(ins: &Ins, target: &dyn Fn(i64) -> String) -> String {
     }
 }
 
-/// the listing's decoder: absolute branch targets, and the address an `auipc` + `ld`/`fld`/
-/// `jalr`/`addi` pair forms (symjit's label references) or the value of `lui` + `addi` (`li`)
-#[derive(Default)]
-pub struct RiscvDecoder {
-    // the register and value of the previous instruction's `auipc` (absolute) or `lui`
-    upper: Option<(u32, i64, bool)>,
+/// the instruction as pieces of text: branch targets absolute (`pc` + offset)
+fn pieces(ins: &Ins, pc: usize) -> Vec<Piece> {
+    let mut out = vec![Piece::Text(ins.mnemonic.to_string())];
+
+    for (k, op) in ins.ops.iter().enumerate() {
+        let sep = if k == 0 { " " } else { ", " };
+        out.push(Piece::Text(sep.to_string()));
+        out.push(match op {
+            Op::Rel(rel) => Piece::Target((pc as i64 + rel) as usize),
+            _ => Piece::Text(format_with(
+                &Ins {
+                    mnemonic: "",
+                    ops: vec![op.clone()],
+                },
+                &|rel| rel.to_string(),
+            )),
+        });
+    }
+
+    out
 }
 
+/// the listing's decoder: absolute branch targets, and the address an `auipc` + `ld`/`fld`/
+/// `jalr`/`addi` pair forms (symjit's label references) or the value of `lui` + `addi` (`li`)
+pub struct RiscvDecoder;
+
 impl Decoder for RiscvDecoder {
-    fn decode(&mut self, code: &[u8], pc: usize, symbols: &Symbols) -> Decoded {
-        if code.len() < 4 {
-            self.upper = None;
-            return Decoded::bytes(code);
-        }
+    fn comment(&self) -> &'static str {
+        "#"
+    }
 
-        let w = u32::from_le_bytes([code[0], code[1], code[2], code[3]]);
-        let upper = self.upper.take();
+    // no compressed instructions, no linker relaxation: the same bytes as symjit's
+    fn directives(&self) -> Vec<&'static str> {
+        vec![".option norvc", ".option norelax"]
+    }
 
-        let Some(ins) = decode_word(w) else {
-            return Decoded {
-                len: 4,
-                hex: format!("{:08x}", w),
-                text: format!(".word 0x{:08x}", w),
-                target: None,
+    fn decode(&self, code: &[u8]) -> Vec<Item> {
+        let mut items = Vec::new();
+        // the register and value of the previous instruction's `auipc` (absolute) or `lui`
+        let mut upper: Option<(u32, i64, bool)> = None;
+        let mut pc = 0;
+
+        while pc + 4 <= code.len() {
+            let w = u32::from_le_bytes(code[pc..pc + 4].try_into().unwrap());
+            let raw = format!(".word 0x{:08x}", w);
+            let hex = format!("{:08x}", w);
+            let prev = upper.take();
+
+            let Some(ins) = decode_word(w) else {
+                items.push(Item::text(pc, hex, raw.clone(), raw));
+                pc += 4;
+                continue;
+            };
+
+            let mut item = Item {
+                pc,
+                hex,
+                pieces: pieces(&ins, pc),
+                raw,
+                refers: None,
                 note: None,
             };
-        };
 
-        let mut target = None;
-        let mut note = None;
-
-        match (ins.mnemonic, &ins.ops[..]) {
-            ("auipc", [Op::X(rd), Op::Imm(imm)]) => {
-                let hi = (((*imm as u32) << 12) as i32) as i64;
-                self.upper = Some((*rd, pc as i64 + hi, true));
-            }
-            ("lui", [Op::X(rd), Op::Imm(imm)]) => {
-                let hi = (((*imm as u32) << 12) as i32) as i64;
-                self.upper = Some((*rd, hi, false));
-            }
-            (_, ops) => {
-                for op in ops {
-                    if let Op::Rel(rel) = op {
-                        target = Some((pc as i64 + rel) as usize);
-                    }
+            match (ins.mnemonic, &ins.ops[..]) {
+                ("auipc", [Op::X(rd), Op::Imm(imm)]) => {
+                    let hi = (((*imm as u32) << 12) as i32) as i64;
+                    upper = Some((*rd, pc as i64 + hi, true));
                 }
+                ("lui", [Op::X(rd), Op::Imm(imm)]) => {
+                    let hi = (((*imm as u32) << 12) as i32) as i64;
+                    upper = Some((*rd, hi, false));
+                }
+                (_, ops) => {
+                    // the second half of a pair: its base register is the one `upper` set
+                    if let Some((reg, value, pc_relative)) = prev {
+                        let lo = match (ins.mnemonic, ops) {
+                            ("ld" | "fld" | "jalr", [_, Op::Mem(lo, base)]) if *base == reg => {
+                                Some(*lo)
+                            }
+                            ("addi", [_, Op::X(base), Op::Imm(lo)]) if *base == reg => Some(*lo),
+                            ("jr", [Op::X(base)]) if *base == reg => Some(0),
+                            _ => None,
+                        };
 
-                // the second half of a pair: its base register is the one `upper` set
-                if let Some((reg, value, pc_relative)) = upper {
-                    let lo = match (ins.mnemonic, ops) {
-                        ("ld" | "fld" | "jalr", [_, Op::Mem(lo, base)]) if *base == reg => {
-                            Some(*lo)
+                        match lo {
+                            Some(lo) if pc_relative => item.refers = Some((value + lo) as usize),
+                            Some(lo) => item.note = Some(format!("{}", (value + lo) as i32)),
+                            None => {}
                         }
-                        ("addi", [_, Op::X(base), Op::Imm(lo)]) if *base == reg => Some(*lo),
-                        ("jr", [Op::X(base)]) if *base == reg => Some(0),
-                        _ => None,
-                    };
-
-                    match lo {
-                        Some(lo) if pc_relative => target = Some((value + lo) as usize),
-                        Some(lo) => note = Some(format!("{}", ((value + lo) as i32))),
-                        None => {}
                     }
                 }
             }
+
+            items.push(item);
+            pc += 4;
         }
 
-        let text = format_with(&ins, &|rel| symbols.address(pc as i64 + rel));
-
-        Decoded {
-            len: 4,
-            hex: format!("{:08x}", w),
-            text,
-            target,
-            note,
+        if pc < code.len() {
+            let b = &code[pc..];
+            let hex: Vec<String> = b.iter().map(|x| format!("{:02x}", x)).collect();
+            let bytes: Vec<String> = b.iter().map(|x| format!("0x{:02x}", x)).collect();
+            let text = format!(".byte {}", bytes.join(", "));
+            items.push(Item::text(pc, hex.join(""), text.clone(), text));
         }
+
+        items
     }
 }

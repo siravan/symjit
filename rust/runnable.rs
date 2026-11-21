@@ -741,10 +741,13 @@ impl Application {
                     false
                 }
             }
-            "scalar-asm" | "simd-asm" | "fast-asm" => {
-                let code = match what {
-                    "scalar-asm" => self.compiled.as_ref(),
-                    "simd-asm" => {
+            "scalar-asm" | "simd-asm" | "fast-asm" | "scalar-asm-hex" | "simd-asm-hex"
+            | "fast-asm-hex" => {
+                let hex = what.ends_with("-hex");
+                let kind = what.split('-').next().unwrap();
+                let code = match kind {
+                    "scalar" => self.compiled.as_ref(),
+                    "simd" => {
                         self.prepare_simd();
                         self.compiled_simd.as_ref()
                     }
@@ -754,7 +757,7 @@ impl Application {
                     }
                 };
 
-                match code.map(|f| f.disassembly()) {
+                match code.map(|f| f.disassembly(kind, hex)) {
                     Some(Ok(text)) => std::fs::write(name, text).is_ok(),
                     _ => false,
                 }

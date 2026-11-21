@@ -93,9 +93,16 @@ impl<T: Clone + Default> MachineCode<T> {
         &self.arch
     }
 
-    /// the code as assembly text, with its labels and the data area (`dump(.., "scalar-asm")`)
-    pub fn disassembly(&self) -> Result<String> {
-        crate::disasm::listing(&self.arch, self.machine_code(), &self.labels)
+    /// the code as assembly text, with its labels and the data area: assembler input
+    /// (`dump(.., "scalar-asm")`, `hex` false) or a listing with offsets and bytes
+    /// (`"scalar-asm-hex"`); `kind` ("scalar", "simd", "fast") names the entry, `symjit_<kind>`
+    pub fn disassembly(&self, kind: &str, hex: bool) -> Result<String> {
+        let mode = if hex {
+            crate::disasm::Mode::Hex
+        } else {
+            crate::disasm::Mode::Asm
+        };
+        crate::disasm::listing(&self.arch, kind, self.machine_code(), &self.labels, mode)
     }
 
     fn invalid(_a: *const T, _b: *const &mut [T], _c: usize, _d: *const T) -> i32 {
