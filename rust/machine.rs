@@ -19,6 +19,10 @@ pub struct MachineCode<T: Default> {
     lanes: usize,
     pub size: usize,
     pages: *const u8,
+    arch: String,
+    // the assembler's labels (offset, name), sorted by offset, for the disassembler; empty for
+    // code that was not compiled here (`Storage::load_with_version`)
+    labels: Vec<(usize, String)>,
 }
 
 unsafe impl Send for MachineCode<f64> {}
@@ -69,7 +73,29 @@ impl<T: Clone + Default> MachineCode<T> {
             lanes,
             size,
             pages,
+            arch: arch.to_string(),
+            labels: Vec::new(),
         }
+    }
+
+    /// keeps the assembler's labels (`Generator::take_labels`) for `disassembly`
+    pub fn set_labels(&mut self, labels: Vec<(usize, String)>) {
+        self.labels = labels;
+    }
+
+    /// the labels (offset, name), sorted by offset
+    pub fn labels(&self) -> &[(usize, String)] {
+        &self.labels
+    }
+
+    /// the architecture the code is for: "x86_64", "aarch64" or "riscv64"
+    pub fn arch(&self) -> &str {
+        &self.arch
+    }
+
+    /// the code as assembly text, with its labels and the data area (`dump(.., "scalar-asm")`)
+    pub fn disassembly(&self) -> Result<String> {
+        crate::disasm::listing(&self.arch, self.machine_code(), &self.labels)
     }
 
     fn invalid(_a: *const T, _b: *const &mut [T], _c: usize, _d: *const T) -> i32 {

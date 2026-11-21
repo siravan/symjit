@@ -242,14 +242,17 @@ impl Application {
             prog.count_params,
         )?;
 
-        Ok(MachineCode::new(
+        let labels = generator.take_labels();
+        let mut code = MachineCode::new(
             arch,
             generator.bytes(),
             mem,
             false,
             lanes,
             prog.config().huge(),
-        ))
+        );
+        code.set_labels(labels);
+        Ok(code)
     }
 
     fn compile_fast<G: Generator>(
@@ -268,14 +271,17 @@ impl Application {
             idx_ret as i32,
         )?;
 
-        Ok(MachineCode::new(
+        let labels = generator.take_labels();
+        let mut code = MachineCode::new(
             arch,
             generator.bytes(),
             mem,
             true,
             1,
             prog.config().huge(),
-        ))
+        );
+        code.set_labels(labels);
+        Ok(code)
     }
 
     fn compile_bytecode(mir: Mir, prog: &mut Program) -> Result<CompiledMir> {
@@ -733,6 +739,24 @@ impl Application {
                     true
                 } else {
                     false
+                }
+            }
+            "scalar-asm" | "simd-asm" | "fast-asm" => {
+                let code = match what {
+                    "scalar-asm" => self.compiled.as_ref(),
+                    "simd-asm" => {
+                        self.prepare_simd();
+                        self.compiled_simd.as_ref()
+                    }
+                    _ => {
+                        self.prepare_fast();
+                        self.compiled_fast.as_ref()
+                    }
+                };
+
+                match code.map(|f| f.disassembly()) {
+                    Some(Ok(text)) => std::fs::write(name, text).is_ok(),
+                    _ => false,
                 }
             }
             "bytecode" => {

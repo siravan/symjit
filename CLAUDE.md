@@ -130,7 +130,12 @@ per-host baseline (run by hand, not in the test suite).
 5. **Kernels**: each function is compiled up to three times — `scalar` (one point), `simd` (vectorized calls,
    rayon threads over chunks), and `fast` (register arguments, few inputs). `ty="bytecode"` interprets the
    MIR. Machine code is followed by a constant pool (constants and function pointers), so raw dumps do not
-   disassemble cleanly to the end. A SIMD kernel with diverging lanes (`simd_branch=false`) returns non-zero
+   disassemble cleanly to the end. `dump(name, "scalar-asm")` (`"simd-asm"`, `"fast-asm"`) writes a
+   kernel as assembly text (`rust/disasm/`: decoders of only what symjit's encoders emit; RISC-V so far):
+   `MachineCode` keeps the assembler's labels (`Generator::take_labels`), and `Generator::mark_data`
+   sets the label `@data` where the constant pool starts (no bytes; both default to nothing, for
+   generators outside the crate). The decoder tests are generated from the encoding tests
+   (`rust/disasm/gen_tests.py`). A SIMD kernel with diverging lanes (`simd_branch=false`) returns non-zero
    and `evaluate_matrix` recomputes those rows with the scalar kernel.
 6. **Compression mode** (`compress=True`, `topology.rs`, `statement.rs`): repeated expression shapes become
    funclets, called with their arguments in the funclet's spill area; the `_ultra` entry (all arguments

@@ -57,6 +57,17 @@ impl Assembler {
         self.labels.insert(label.to_string(), self.ip());
     }
 
+    /// moves the labels out, sorted by offset (then name), for the disassembler
+    /// (`MachineCode::labels`); `apply_jumps` must have run
+    pub fn take_labels(&mut self) -> Vec<(usize, String)> {
+        let mut labels: Vec<(usize, String)> = std::mem::take(&mut self.labels)
+            .into_iter()
+            .map(|(name, ip)| (ip, name))
+            .collect();
+        labels.sort();
+        labels
+    }
+
     pub fn has_label(&self, label: &str) -> bool {
         self.labels.contains_key(label)
     }

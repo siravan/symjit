@@ -14,6 +14,7 @@ mod complexify;
 mod composer;
 mod config;
 mod defuns;
+mod disasm;
 mod expr;
 mod generator;
 mod instruction;
