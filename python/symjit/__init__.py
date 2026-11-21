@@ -800,6 +800,8 @@ def _loaded_func(compiler, eqs):
     if compiler.symbolica:
         f = SymbolicaFunc(None)
         if compiler.dtype == "complex128":
+            # is_complex selects the compiler (call, measure, complexify, disassemble)
+            f.is_complex = True
             f.complex_compiler = compiler
         else:
             f.compiler = compiler
