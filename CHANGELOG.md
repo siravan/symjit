@@ -1,49 +1,22 @@
 # Version 2.29.0
 
-* MIR export to JSON: `dump(path, what="json")` writes the MIR before complexification (for a real
-  function, its only MIR), and `dump(path, what="json-complex")` the MIR of real operations: the
-  complexified MIR of a complex function, the same MIR as `json` for a real one. Each file (format `symjit-mir`, `format_version` 1, documented in `rust/mir/json.rs`)
-  holds the symjit version, whether the MIR is complexified, the application's counts
-  (`count_states`, `count_params`, `count_obs`, `count_diffs`) and real locations, then `code`,
-  `consts` (each as its bit pattern, `"0x"` and 16 hex digits, so NaN, ±Inf and -0.0 read back
-  exactly), `labels` (sorted, so the same model gives the same file) and `config`. `complexify()`
-  changes only what `save` writes, not these exports.
-* `symjit.mir_json(sjb, what="json-complex")` (Rust `Application::sjb_mir_json`, C `sjb_mir_json`)
-  returns the same JSON for a saved function (.sjb bytes or a file name) without compiling it; it
-  also reads a saved complexified function (`complexify()`, then `save`), which `load_func` refuses.
+* MIR export to and import from JSON: `dump(path, what="json")` and `save_json/load_json`.
+
+# Version 2.28.4
+
+* Adding `Application.complexify`.
 
 # Version 2.28.3
 
-* Complex SIMD kernels (AVX, AVX-512, NEON) and the ARM fast-complex kernel (FCMA): a complex product
-  passed straight to a function call (opt level >= 1) could overwrite its first factor and give a
-  wrong result (#30).
-* CSE with conditionals (`IfElse`/`Goto`/`Label`/`Join`): a subexpression shared by a branch and
-  the code after it could be read from a temporary set only in the branch, giving wrong values when
-  the branch was not taken (#31). With `simd_branch`, nested or consecutive if/else blocks had the
-  same defect between exclusive branches: the statements inside branches and loops are now found
-  from the jumps and their labels rather than by counting them.
-* With `simd_branch`, the stack-slot compactor took every if/else for the start of a loop and
-  reused no slot after the first one; loops are now found from the jumps back to their labels.
-* With `simd_branch`, the else part of every if/else ran on every evaluation, in the scalar and the
-  SIMD kernels, even when no point needed it (a Symbolica program whose else parts held most of its
-  work ran 7-20x slower). The end of a then part now jumps over the else part when no lane has the
-  condition zero, in both translators.
-* A jump to a label with only labels between them is dropped, with its condition, in both
-  translators: the jump over an empty else part (most of Symbolica's if/else blocks, whose join
-  takes a value computed before them) costs nothing again.
-* The x86-64 and NEON generators assert that FMA, `recip`, `half` and `sign` get no destination that
-  shares a machine register with a source (`Left`/`Ret`, `Temp`/`Right`), which would compute a
-  wrong value; no program is known to produce one.
+* Fixing complex SIMD kernels (registre overwrite).
+* Fixing CSE with conditionals in `simd_branch = true`.
 
 # Version 2.28.2
 
-* `ultra` option (`Config::set_ultra`, bit `0x8000_0000`, Python `ultra=True`): subroutine calls pass
-  their first arguments packed. It was implied by `opt_level >= 3` and is now separate (off by default).
-* The warning about the SSE fallback is written once per session.
+* Adding explicit `ultra` option.
 * `sign` is supported (`Expr::sign`): 1, -1, 0 (for +-0) or NaN; `z / |z|` for complex.
-* `And`/`Or`/`Xor` with more than two operands (sympy flattens nested ones) compile.
-* A `Piecewise` whose last condition is not `True` is NaN outside its conditions, as in sympy.
-* `CLAUDE.md` describes the repository only; local notes go in `CLAUDE.local.md` (ignored).
+* `And`/`Or`/`Xor` with more than two operands.
+* Fixing `Piecewise`, when last condition is not `True`.
 
 # Version 2.28.1
 
