@@ -18,7 +18,7 @@
 //! use them, and the entry is the global function `symjit_<kind>` (`symjit_scalar`, ...). The
 //! function table holds addresses in the process that compiled the kernel.
 //!
-//! Decoders: RISC-V (`riscv.rs`), AArch64 (`arm.rs`). x86-64 is to follow.
+//! Decoders: RISC-V (`riscv.rs`), AArch64 (`arm.rs`), x86-64 (`x86.rs`).
 
 use anyhow::{anyhow, Result};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -26,11 +26,14 @@ use std::fmt::Write;
 
 pub mod arm;
 pub mod riscv;
+pub mod x86;
 
 #[cfg(test)]
 mod arm_tests;
 #[cfg(test)]
 mod riscv_tests;
+#[cfg(test)]
+mod x86_tests;
 
 /// what the listing is for
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -54,6 +57,12 @@ pub enum Piece {
     },
     /// the low 12 bits of `target` (`:lo12:` of its label), `value` as encoded
     Lo12 {
+        target: usize,
+        value: i64,
+    },
+    /// a pc-relative reference to `target` (x86 `[rip+label]`): `+label`, or the displacement
+    /// `value` (`+0x10`)
+    Rel {
         target: usize,
         value: i64,
     },
@@ -101,6 +110,7 @@ fn decoder(arch: &str) -> Result<Box<dyn Decoder>> {
     match arch {
         "riscv64" => Ok(Box::new(riscv::RiscvDecoder)),
         "aarch64" => Ok(Box::new(arm::ArmDecoder)),
+        "x86_64" => Ok(Box::new(x86::X86Decoder)),
         _ => Err(anyhow!("no disassembler for {} yet", arch)),
     }
 }
@@ -274,6 +284,9 @@ pub fn listing(
             (Mode::Asm, Piece::Lo12 { target, .. }) if points.contains(target) => {
                 names.get(target).map(|n| format!(":lo12:{}", n))
             }
+            (Mode::Asm, Piece::Rel { target, .. }) if points.contains(target) => {
+                names.get(target).map(|n| format!("+{}", n))
+            }
             (Mode::Asm, _) => None,
             (Mode::Hex, Piece::Target(t)) => Some(match names.get(t) {
                 Some(n) => format!("0x{:x} <{}>", t, n),
@@ -281,6 +294,7 @@ pub fn listing(
             }),
             (Mode::Hex, Piece::Page { page, .. }) => Some(format!("0x{:x}", page)),
             (Mode::Hex, Piece::Lo12 { value, .. }) => Some(value.to_string()),
+            (Mode::Hex, Piece::Rel { value, .. }) => Some(x86::signed_hex(*value)),
         }
     };
 
@@ -304,7 +318,6 @@ pub fn listing(
         for d in dec.directives() {
             let _ = writeln!(out, "\t{}", d);
         }
-        let _ = writeln!(out, "\t.p2align 4");
         let _ = writeln!(out, "\t.globl {}", entry);
         let _ = writeln!(out, "\t.type {}, %function", entry);
         let _ = writeln!(out, "{}:", entry);

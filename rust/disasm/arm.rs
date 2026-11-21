@@ -616,7 +616,7 @@ impl Decoder for ArmDecoder {
 
     // fcmla/fcadd are Armv8.3
     fn directives(&self) -> Vec<&'static str> {
-        vec![".arch armv8.3-a"]
+        vec![".arch armv8.3-a", ".p2align 4"]
     }
 
     fn decode(&self, code: &[u8]) -> Vec<Item> {

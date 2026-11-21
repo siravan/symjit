@@ -1,11 +1,12 @@
 //! `Application::dump(path, "scalar-asm")` (also `"simd-asm"`, `"fast-asm"`) writes a kernel as
 //! assembly text that GNU `as` assembles back to the same bytes; `"scalar-asm-hex"` (...) is an
 //! objdump-like listing with offsets and bytes (rust/disasm). The kernels here are compiled for
-//! RISC-V and AArch64 on any host (the code is never run), so the listings are checked
+//! RISC-V, AArch64 and x86-64 on any host (the code is never run; x86-64 kernels use the CPU's
+//! features: AVX and AVX-512 where the host has them, SSE elsewhere), so the listings are checked
 //! everywhere: every instruction before the data area decodes, and labels and label references
-//! are named. Where the cross binutils are installed (`riscv64-linux-gnu-as`,
-//! `aarch64-linux-gnu-as`, with `ld` and `objcopy`), each listing is assembled and linked at
-//! address 0, and its bytes must equal the kernel's.
+//! are named. Where the binutils are installed (`riscv64-linux-gnu-as`, `aarch64-linux-gnu-as`,
+//! `x86_64-linux-gnu-as`, or the host's own, with `ld` and `objcopy`), each listing is assembled
+//! and linked at address 0, and its bytes must equal the kernel's.
 mod common;
 use common::base_config;
 
@@ -133,6 +134,7 @@ fn binutils(arch: &str) -> Option<[String; 3]> {
     let triple = match arch {
         "riscv64" => "riscv64-linux-gnu",
         "aarch64" => "aarch64-linux-gnu",
+        "x86_64" => "x86_64-linux-gnu",
         _ => return None,
     };
     let native = cfg!(target_os = "linux") && std::env::consts::ARCH == arch;
@@ -284,4 +286,48 @@ fn listing_covers_the_kernel() {
     assert!(first.contains(&format!("{} bytes", size)), "{hex}");
     // the hex form has an offset and the bytes on each line
     assert!(hex.lines().any(|l| l.starts_with("       0:  ")), "{hex}");
+}
+
+#[test]
+fn x86_real_kernels() {
+    let mut app = compile_real(config_for("amd", false)).unwrap();
+    let listing = dump(&mut app, "scalar-asm").unwrap();
+    assert!(listing.contains("\t.intel_syntax noprefix\n"), "{listing}");
+    assert!(listing.contains("[rip+.L_const_0_]"), "{listing}");
+    assert!(listing.contains("# .L_const_0_ = 7.5"), "{listing}");
+    check_kernels(app, "x86_64", &["scalar", "simd", "fast"]);
+}
+
+#[test]
+fn x86_complex_kernels() {
+    let app = compile_complex(config_for("amd", true)).unwrap();
+    check_kernels(app, "x86_64", &["scalar", "simd"]);
+
+    let mut config = config_for("amd", true);
+    config.set_fast_complex(false);
+    let app = compile_complex(config).unwrap();
+    check_kernels(app, "x86_64", &["scalar", "simd"]);
+}
+
+#[test]
+fn x86_sse_kernels() {
+    let app = compile_real(config_for("amd-sse", false)).unwrap();
+    check_kernels(app, "x86_64", &["scalar", "fast"]);
+    let app = compile_complex(config_for("amd-sse", true)).unwrap();
+    check_kernels(app, "x86_64", &["scalar"]);
+}
+
+#[test]
+fn x86_avx512_kernels() {
+    // AVX-512 kernels where the host has AVX-512 (else the AVX or SSE ones)
+    let mut config = config_for("amd", false);
+    config.enable_simd512(true);
+    check_kernels(compile_real(config).unwrap(), "x86_64", &["scalar", "simd"]);
+    let mut config = config_for("amd", true);
+    config.enable_simd512(true);
+    check_kernels(
+        compile_complex(config).unwrap(),
+        "x86_64",
+        &["scalar", "simd"],
+    );
 }

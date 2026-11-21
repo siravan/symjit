@@ -299,7 +299,7 @@ impl Decoder for RiscvDecoder {
 
     // no compressed instructions, no linker relaxation: the same bytes as symjit's
     fn directives(&self) -> Vec<&'static str> {
-        vec![".option norvc", ".option norelax"]
+        vec![".option norvc", ".option norelax", ".p2align 4"]
     }
 
     fn decode(&self, code: &[u8]) -> Vec<Item> {

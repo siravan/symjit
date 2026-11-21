@@ -134,10 +134,14 @@ per-host baseline (run by hand, not in the test suite).
    kernel as GNU `as` input that assembles back to the same bytes (local labels, `symjit_<kind>` entry;
    spellings chosen for the encoding, e.g. RISC-V `add rd, rs, zero` rather than `mv`); `"scalar-asm-hex"`
    (...) is an objdump-like listing with offsets and bytes. `rust/disasm/` decodes only what symjit's
-   encoders emit (RISC-V, AArch64 so far). `MachineCode` keeps the assembler's labels
+   encoders emit (RISC-V, AArch64, x86-64). On x86-64 the text carries the pseudo-prefixes that make
+   `as` pick symjit's encoding (`{load}`/`{store}`, `{disp8}`/`{disp32}`, `{vex3}`, `{evex}`, `rex.w`),
+   and the forms no prefix gives (scalar VEX with L=1: FMA `sd`, `vucomisd`, `vroundsd`; `81` immediates
+   that fit a byte or go to `rax`) are `.insn` lines with the instruction in a comment. `MachineCode` keeps the assembler's labels
    (`Generator::take_labels`), and `Generator::mark_data` sets the label `@data` where the constant pool
    starts (no bytes; both default to nothing, for generators outside the crate). The decoder tests are
-   generated from the encoding tests (`rust/disasm/gen_tests.py riscv|arm`); `tests/disasm_listing.rs`
+   generated from the encoding tests (`rust/disasm/gen_tests.py riscv|arm|x86`; the x86 test's code is
+   `x86_tests.tail.rs`, and it also assembles the 1156 decoded lines with `as` and compares the bytes); `tests/disasm_listing.rs`
    assembles listings with the cross binutils, when installed, and compares the bytes. A SIMD kernel with diverging lanes (`simd_branch=false`) returns non-zero
    and `evaluate_matrix` recomputes those rows with the scalar kernel.
 6. **Compression mode** (`compress=True`, `topology.rs`, `statement.rs`): repeated expression shapes become
