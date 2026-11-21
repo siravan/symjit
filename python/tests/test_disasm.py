@@ -146,6 +146,43 @@ class ArgumentTests(unittest.TestCase):
             disassemble(f, "simd")
 
 
+class LoadedEvaluatorTests(ListingChecks, unittest.TestCase):
+    """A saved Symbolica-bridge function loaded back (load_func): its compiler is the dtype's,
+    for the complex one too (it was `f.compiler`, None: "the function has no compiled code")."""
+
+    # out0 = p0 * p1 + p0, as compile_evaluator's instruction text (no symbolica package needed)
+    EVALUATOR = str(([("mul", ("temp", 0), [("param", 0), ("param", 1)], 0),
+                      ("add", ("out", 0), [("temp", 0), ("param", 0)], 0)], 1, []))
+
+    def loaded(self, dtype):
+        f = symjit.compile_evaluator(self.EVALUATOR, dtype=dtype, num_params=2, use_threads=False)
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "f.sjb")
+            f.save(path, dtype=dtype)
+            return f, symjit.load_func(path)
+
+    def test_compiler_is_the_dtypes(self):
+        for dtype in ("float64", "complex128"):
+            f, g = self.loaded(dtype)
+            self.assertIsInstance(g, symjit.SymbolicaFunc)
+            self.assertEqual(g.is_complex, dtype == "complex128")
+            c = disasm._compiler_of(g)
+            self.assertIs(c, g.complex_compiler if dtype == "complex128" else g.compiler)
+            self.assertEqual(c.measure("ker-scalar-size"), disasm._compiler_of(f).measure("ker-scalar-size"))
+
+    def test_loaded_complex_is_called_as_complex(self):
+        _, g = self.loaded("complex128")
+        a, b = 0.5 + 1j, 2.0 - 0.5j
+        self.assertEqual(complex(g(a, b)[0, 0]), a * b + a)
+
+    @unittest.skipUnless(HOST_X86 and (HAS_OBJDUMP_X86 or HAS_CAPSTONE), "needs an x86-64 host and a disassembler")
+    def test_listing(self):
+        for dtype in ("float64", "complex128"):
+            f, g = self.loaded(dtype)
+            text, _, code = self.check_listing(g, "scalar")
+            self.assertEqual(code, raw_kernel(f, "scalar"))
+
+
 class PrintingTests(unittest.TestCase):
     def setUp(self):
         self.f = compile_sample()
