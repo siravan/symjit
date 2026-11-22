@@ -38,9 +38,10 @@ build = "cp312-*"
 skip = "*-musllinux_*"
 manylinux-x86_64-image = "manylinux_2_28"
 manylinux-aarch64-image = "manylinux_2_28"
-test-requires = ["numpy", "sympy", "scipy", "mpmath"]   # scipy and mpmath: references of the accuracy tests
-# the whole Python suite against the installed wheel (SYMJIT_PYTHON_PATH keeps the tests off ./python)
-test-command = "python -c \"import os, unittest; os.environ['SYMJIT_PYTHON_PATH'] = r'{project}/python/tests'; unittest.main(module=None, argv=['unittest', 'discover', '-s', r'{project}/python/tests'])\""
+# a quick check that the installed wheel loads and runs: the whole suite runs in wheels.yml's
+# python-versions job, on every Python, so that a failing test does not lose the wheel
+test-requires = ["numpy", "sympy"]
+test-command = "python -c \"import symjit, sympy; x = sympy.Symbol('x'); f = symjit.compile_func([x], [sympy.sin(x) * x]); assert symjit.engine.lib.is_valid and abs(f(0.5)[0] - 0.5 * 0.479425538604203) < 1e-15, f(0.5)\""
 
 [tool.cibuildwheel.linux]
 before-all = "curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal"

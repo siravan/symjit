@@ -110,7 +110,10 @@ PyPI (trusted publishing, environment `pypi`). The tests find the installed pack
 (`*.dist-info/WHEEL`) must match the file name (`python -m wheel tags` refuses otherwise), and a Linux
 wheel's tag must come from `auditwheel`, not the build machine's guess (2.29.0's "manylinux_2_34" wheel
 needs glibc 2.35, and its "universal2" macOS wheel is arm64 only). conda-forge builds its own packages
-from the sdist.
+from the sdist. cibuildwheel only checks that each wheel loads and runs; the suite runs in the
+`python-versions` job, where a failure no longer loses the wheel. `test_accuracy.py`'s bounds are
+glibc's: a bound below 4 ulp is raised to 4 (`SYMJIT_ULP_FLOOR`; 0 keeps the table's), because other
+platforms' math libraries are less accurate (Windows' cbrt, macOS' tan, sin/cos of large arguments).
 
 Examples (`examples/*.py`) double as smoke tests and take options through `examples/util.py`;
 `examples/claude/` holds larger studies; `bench/run.py` (`bench/README.md`) times workloads against a

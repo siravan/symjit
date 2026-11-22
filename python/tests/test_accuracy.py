@@ -6,6 +6,12 @@ bit-identical results. A function whose accuracy is below the usual 1--4 ulp of 
 kept in the table with a loose bound and a note (and its actual accuracy is in the report:
 `python examples/claude/accuracy.py`).
 
+The table's bounds are glibc's (Linux): elsewhere the functions that symjit takes from the
+system's math library (sin, cos, tan, cbrt, ...) are less accurate (Windows' cbrt 1.4 ulp, macOS'
+tan 1.6 ulp, macOS x86-64's sin and cos of large arguments 2.0 ulp). So a bound below ULP_FLOOR
+(4 ulp, the usual accuracy of a good libm; SYMJIT_ULP_FLOOR) is raised to it; set
+SYMJIT_ULP_FLOOR=0 for the table's own bounds.
+
 Set SYMJIT_PYTHON_PATH to test another build of the package.
 """
 
@@ -24,6 +30,7 @@ from accuracy_cases import CASES, abs_error, mp, ulp_error, x  # noqa: E402
 from symjit import compile_func  # noqa: E402
 
 NSAMPLES = int(os.environ.get("SYMJIT_ACCURACY_SAMPLES", "300"))
+ULP_FLOOR = float(os.environ.get("SYMJIT_ULP_FLOOR", "4"))
 OPTIONS = [dict(), dict(fastmath=False), dict(use_simd=False, opt_level=0), dict(enable_simd512=True)]
 
 
@@ -37,6 +44,8 @@ class Accuracy(unittest.TestCase):
     def test_accuracy(self):
         warnings.simplefilter("ignore")
         for name, (sym, ref, sampler, bound, metric, note) in CASES.items():
+            if metric == "ulp":
+                bound = max(bound, ULP_FLOOR)
             pts = sampler(NSAMPLES, np.random.default_rng(abs(hash(name)) % 1000 + 1))
             pts = np.array(sorted(set(pts.tolist())))
             exact = [ref(mp.mpf(float(p))) for p in pts]

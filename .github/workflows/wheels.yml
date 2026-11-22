@@ -59,7 +59,7 @@ jobs:
           path: dist/*.tar.gz
 
   # the one wheel per platform, installed from wheelhouse only (no sdist fallback), on every Python
-  # it claims to serve
+  # it claims to serve, with the whole Python suite (cibuildwheel only checks that the wheel runs)
   python-versions:
     needs: wheels
     name: test ${{ matrix.target.name }} python ${{ matrix.python }}
@@ -67,7 +67,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.10", "3.11", "3.13", "3.14"]   # 3.12 is tested by cibuildwheel
+        python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         target:
           - { name: linux-x86_64,  os: ubuntu-24.04 }
           - { name: linux-aarch64, os: ubuntu-24.04-arm }
