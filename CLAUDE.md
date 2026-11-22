@@ -97,6 +97,21 @@ holds the stack limit and argument count); version 3 (2.22–2.26, e.g. pyAmpliC
 2.26.4) has neither, and loads with the defaults since 2.28.1 (`tests/sjb_version3.rs`; before, version-3
 files failed with `invalid magic number (Program)`). `Application::read_sjb` reads one without compiling it.
 
+### PyPI wheels
+
+The library uses no Python API (ctypes, `binding = "NoBinding"`), so one wheel per platform serves every
+Python ≥ 3.10: `setup.py` overrides `bdist_wheel.get_tag` to tag it `py3-none-<platform>` (everything else
+is in `pyproject.toml`). `.github/workflows/wheels.yml` builds them with cibuildwheel (once, with CPython
+3.12; `[tool.cibuildwheel]` in `pyproject.toml`) for Linux x86-64/aarch64 (manylinux_2_28 image, then
+`auditwheel repair` sets the manylinux tag), Windows AMD64 and macOS arm64/x86_64, runs the Python suite
+against the installed wheel on 3.10–3.14, and on a published GitHub release uploads wheels and sdist to
+PyPI (trusted publishing, environment `pypi`). The tests find the installed package when
+`SYMJIT_PYTHON_PATH` points away from `python/`. Don't rename wheels by hand: the tag inside
+(`*.dist-info/WHEEL`) must match the file name (`python -m wheel tags` refuses otherwise), and a Linux
+wheel's tag must come from `auditwheel`, not the build machine's guess (2.29.0's "manylinux_2_34" wheel
+needs glibc 2.35, and its "universal2" macOS wheel is arm64 only). conda-forge builds its own packages
+from the sdist.
+
 Examples (`examples/*.py`) double as smoke tests and take options through `examples/util.py`;
 `examples/claude/` holds larger studies; `bench/run.py` (`bench/README.md`) times workloads against a
 per-host baseline (run by hand, not in the test suite).

@@ -1,15 +1,27 @@
 # pyproject.toml
 [build-system]
-requires = ["setuptools", "setuptools-rust"]
+requires = ["setuptools>=77", "setuptools-rust"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "symjit"
-version = "2.29.0"
+version = "2.29.1"
+description = "A lightweight just-in-time (JIT) compiler that translates SymPy and Symbolica expressions into machine code"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+# The Python sources need 3.10 (annotations such as `list[Symbol] | None` are evaluated at import).
+# The Rust library is loaded with ctypes and uses no Python API, so one wheel per platform serves
+# every Python version (setup.py tags the wheels py3-none-<platform>).
+requires-python = ">=3.10"
+dependencies = ["numpy", "sympy"]
+
+[project.urls]
+Homepage = "https://github.com/siravan/symjit"
 
 [tool.setuptools.packages]
-# Pure Python packages/modules
-find = { where = ["python"] }
+# Pure Python packages/modules; python/tests is not installed
+find = { where = ["python"], include = ["symjit", "symjit.*"] }
 
 [[tool.setuptools-rust.ext-modules]]
 # Private Rust extension module to be nested into the Python package
@@ -19,3 +31,17 @@ path = "Cargo.toml"
 binding = "NoBinding"
 features = []
 debug = false
+
+[tool.cibuildwheel]
+# one build per platform: the wheel is py3-none-<platform> (setup.py) and serves every Python >= 3.10
+build = "cp312-*"
+skip = "*-musllinux_*"
+manylinux-x86_64-image = "manylinux_2_28"
+manylinux-aarch64-image = "manylinux_2_28"
+test-requires = ["numpy", "sympy", "scipy", "mpmath"]   # scipy and mpmath: references of the accuracy tests
+# the whole Python suite against the installed wheel (SYMJIT_PYTHON_PATH keeps the tests off ./python)
+test-command = "python -c \"import os, unittest; os.environ['SYMJIT_PYTHON_PATH'] = r'{project}/python/tests'; unittest.main(module=None, argv=['unittest', 'discover', '-s', r'{project}/python/tests'])\""
+
+[tool.cibuildwheel.linux]
+before-all = "curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal"
+environment = { PATH = "$HOME/.cargo/bin:$PATH" }

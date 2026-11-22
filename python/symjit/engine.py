@@ -37,6 +37,11 @@ class Engine:
         except AttributeError as e:
             print(e)
             self.is_valid = False
+        except OSError as e:
+            # the library is there but cannot be loaded, e.g. a wheel built for a newer C library
+            # (glibc) or another CPU than this machine's
+            warnings.warn(f"symjit: cannot load {dll_name}: {e}", RuntimeWarning)
+            self.is_valid = False
 
     def populate(self):
         self.info = self.dll.info
