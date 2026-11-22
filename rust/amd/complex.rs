@@ -799,6 +799,11 @@ impl Generator for AmdComplexGenerator {
         let label = format!("_func_{}_", op);
         self.vzeroupper();
         self.amd.call_indirect(&label);
+        // A real function returns a double: the ABIs define only xmm0[63:0], and xmm0[127:64],
+        // the imaginary part here, is what the callee left. vmovq zeroes it (rax is free after
+        // the call).
+        self.amd.vmovq_reg_xmm(Amd::RAX, 0);
+        self.amd.vmovq_xmm_reg(0, Amd::RAX);
 
         Ok(())
     }

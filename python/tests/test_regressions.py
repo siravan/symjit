@@ -4,7 +4,10 @@ Each test compiles a minimal expression that used to give wrong results (or abor
 process) and compares it with numpy.
 """
 
+import ctypes
+import mmap
 import os
+import platform
 import sys
 import unittest
 import warnings
@@ -277,6 +280,39 @@ class Regressions(unittest.TestCase):
                     e = max(abs(mp.mpf(a.real) - r.real), abs(mp.mpf(a.imag) - r.imag)) / np.spacing(float(abs(r)))
                     worst = max(worst, float(e))
             self.assertLess(worst, 8, name)
+
+    @unittest.skipUnless(
+        sys.platform == "linux" and platform.machine() in ("x86_64", "aarch64"), "needs Linux on x86-64 or aarch64"
+    )
+    def test_complex_kernel_real_callbacks_dirty_upper_half(self):
+        # A real user function returns a double: the ABIs define only d0/xmm0[63:0], and the fast
+        # complex kernels took the imaginary part from the register's upper half, which is what the
+        # callee left there. ctypes callbacks clear it with most libffi builds, but not on GitHub's
+        # Linux aarch64 runners. The callbacks here are a bare `ret` (they return their first
+        # argument and leave the upper half as the caller passed it), in executable memory.
+        code = bytes.fromhex("c3") if platform.machine() == "x86_64" else bytes.fromhex("c0035fd6")
+        try:
+            buf = mmap.mmap(-1, mmap.PAGESIZE, prot=mmap.PROT_READ | mmap.PROT_WRITE | mmap.PROT_EXEC)
+        except (OSError, ValueError, AttributeError) as e:  # e.g. W^X policies
+            self.skipTest(f"no executable memory: {e}")
+        buf.write(code)
+        addr = ctypes.addressof(ctypes.c_char.from_buffer(buf))
+        keep1 = ctypes.CFUNCTYPE(ctypes.c_double, ctypes.c_double)(addr)
+        keep2 = ctypes.CFUNCTYPE(ctypes.c_double, ctypes.c_double, ctypes.c_double)(addr)
+        f1, f2 = sp.Function("f1"), sp.Function("f2")
+        defuns = {f1: keep1, f2: keep2}
+        zs = [0.5 + 0.25j, -2 + 0.75j, 3 - 1j]
+        ws = [4.0 + 8j, 0.5 - 1j, -1 + 0.5j]
+        for options in (dict(), dict(fast_complex=False), dict(use_simd=False)):
+            with self.subTest(options=options):
+                f = compile_func([x, y], [f1(x) + y, f2(x, y) * x], dtype="complex128", defuns=defuns, **options)
+                for a, b in zip(zs, ws):
+                    got = np.ravel(f(a, b))
+                    np.testing.assert_array_equal(got, [a.real + b, a.real * a])
+                # the matrix interface (the SIMD kernel)
+                got = np.asarray(f(np.array(zs), np.array(ws)))
+                np.testing.assert_array_equal(got, [[a.real + b for a, b in zip(zs, ws)], [a.real * a for a in zs]])
+        del keep1, keep2, f  # before the memory goes
 
     def test_complex_kernel_real_callbacks(self):
         # In complex kernels without fast complex (`complexify`), a user function (a real
