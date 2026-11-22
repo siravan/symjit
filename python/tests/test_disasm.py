@@ -43,6 +43,10 @@ except ImportError:
 
 HOST_X86 = platform.machine().lower() in ("x86_64", "amd64")
 HAS_OBJDUMP_X86 = disasm._find_objdump("x86_64") is not None
+HOST_ARCH = disasm._architecture("native")
+# the default tool ("auto") needs an objdump for the host's architecture or capstone; the CI runners
+# of macOS (no GNU objdump) have neither
+HAS_HOST_DISASSEMBLER = HAS_CAPSTONE or disasm._find_objdump(HOST_ARCH) is not None
 
 x, y = symbols("x y")
 
@@ -183,6 +187,7 @@ class LoadedEvaluatorTests(ListingChecks, unittest.TestCase):
             self.assertEqual(code, raw_kernel(f, "scalar"))
 
 
+@unittest.skipUnless(HAS_HOST_DISASSEMBLER, "needs objdump for the host or capstone")
 class PrintingTests(unittest.TestCase):
     def setUp(self):
         self.f = compile_sample()
@@ -203,7 +208,7 @@ class PrintingTests(unittest.TestCase):
             self.assertIsNone(disassemble(self.f))
 
 
-@unittest.skipUnless(HOST_X86, "needs an x86-64 host")
+@unittest.skipUnless(HOST_X86 and HAS_HOST_DISASSEMBLER, "needs an x86-64 host and a disassembler")
 class X86Tests(ListingChecks, unittest.TestCase):
     def setUp(self):
         self.f = compile_sample()

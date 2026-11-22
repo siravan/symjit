@@ -1,0 +1,113 @@
+# Wheels for PyPI.
+#
+# The Rust library is loaded with ctypes and uses no Python API, so one wheel per platform serves every
+# Python >= 3.10: cibuildwheel builds it once (with CPython 3.12) and setup.py tags it
+# py3-none-<platform>. On Linux, cibuildwheel builds inside the manylinux_2_28 image and runs
+# `auditwheel repair`, which gives the wheel the manylinux tag its glibc symbols allow.
+#
+# Runs on pull requests that change the packaging, by hand (Actions > wheels > Run workflow; GitHub
+# lists it there once the file is on the default branch) and when a GitHub release is published. Only
+# a published release uploads to PyPI, through PyPI's trusted publishing (configure the publisher
+# siravan/symjit, workflow wheels.yml, environment pypi on pypi.org first).
+name: wheels
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/wheels.yml
+      - pyproject.toml
+      - setup.py
+      - Cargo.toml
+      - MANIFEST.in
+      - python/symjit/**
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  wheels:
+    name: wheel ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x86_64,  os: ubuntu-24.04,     archs: x86_64 }
+          - { name: linux-aarch64, os: ubuntu-24.04-arm, archs: aarch64 }
+          - { name: windows-amd64, os: windows-2022,     archs: AMD64 }
+          - { name: macos-arm64,   os: macos-15,         archs: arm64 }
+          - { name: macos-x86_64,  os: macos-15-intel,   archs: x86_64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable   # macOS and Windows; Linux installs Rust in the image
+      - uses: pypa/cibuildwheel@v3.2.1
+        env:
+          CIBW_ARCHS: ${{ matrix.archs }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.name }}
+          path: wheelhouse/*.whl
+
+  sdist:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: pipx run build --sdist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  # the one wheel per platform, installed from wheelhouse only (no sdist fallback), on every Python
+  # it claims to serve, with the whole Python suite (cibuildwheel only checks that the wheel runs)
+  python-versions:
+    needs: wheels
+    name: test ${{ matrix.target.name }} python ${{ matrix.python }}
+    runs-on: ${{ matrix.target.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
+        target:
+          - { name: linux-x86_64,  os: ubuntu-24.04 }
+          - { name: linux-aarch64, os: ubuntu-24.04-arm }
+          - { name: windows-amd64, os: windows-2022 }
+          - { name: macos-arm64,   os: macos-15 }
+          - { name: macos-x86_64,  os: macos-15-intel }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          allow-prereleases: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheel-${{ matrix.target.name }}
+          path: wheelhouse
+      - name: install the wheel
+        shell: bash
+        run: |
+          python -m pip install --only-binary symjit --no-index --find-links wheelhouse --no-deps symjit
+          python -m pip install numpy sympy scipy mpmath   # scipy, mpmath: references of the accuracy tests
+      - name: test
+        shell: bash
+        env:
+          SYMJIT_PYTHON_PATH: ${{ github.workspace }}/python/tests   # the installed package, not ./python
+        run: |
+          cd "$RUNNER_TEMP"
+          python -c "import symjit, sympy; x = sympy.Symbol('x'); f = symjit.compile_func([x], [sympy.sin(x) * x]); print(symjit.__file__, f(0.5)); assert symjit.engine.lib.is_valid"
+          python -m unittest discover -s "$GITHUB_WORKSPACE/python/tests"
+
+  publish:
+    if: github.event_name == 'release'
+    needs: [wheels, sdist, python-versions]
+    runs-on: ubuntu-24.04
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1

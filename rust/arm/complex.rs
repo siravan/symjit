@@ -787,6 +787,10 @@ impl Generator for ArmComplexGenerator {
         let label = format!("_func_{}_", op);
         load_long(&mut self.a, 9, &label);
         self.emit(arm! {blr x(9)});
+        // A real function returns a double: AAPCS64 defines only d0, and v0[127:64], the
+        // imaginary part here, is what the callee left (e.g. its argument's imaginary part).
+        // A scalar write to d0 zeroes v0[127:64].
+        self.emit(arm! {fmov d(0), d(0)});
 
         Ok(())
     }

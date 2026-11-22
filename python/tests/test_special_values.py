@@ -13,6 +13,7 @@ Set SYMJIT_PYTHON_PATH to test another build of the package.
 
 import itertools
 import os
+import platform
 import sys
 import unittest
 import warnings
@@ -29,6 +30,12 @@ from symjit import compile_func  # noqa: E402
 
 x, y = sp.symbols("x y")
 NAN, INF = np.nan, np.inf
+
+# PLATFORM-DEPENDENT: on x86-64, `x > y` and `x >= y` are true when an operand is NaN (a known
+# deviation); the other architectures (aarch64 fcmgt/fcmge, RISC-V fgt.d/fge.d) follow IEEE and give
+# false. Min and Max are selects on `x <= y` and `x >= y` (builder.rs), so Max(NaN, y) follows suit.
+HOST_X86 = platform.machine().lower() in ("x86_64", "amd64")
+expected_failure_on_x86 = unittest.expectedFailure if HOST_X86 else (lambda f: f)
 
 UNARY_POINTS = np.array([
     NAN, INF, -INF, 0.0, -0.0, 1.0, -1.0, 0.5, -0.5, 2.0, -2.0, 3.5, -3.5, 5e-324, -5e-324,
@@ -131,9 +138,10 @@ class SpecialValues(unittest.TestCase):
                                 ("!=", sp.Ne(x, y), lambda a, b: (a != b) * 1.0)):
             self.check_binary(name, sp.Piecewise((1.0, cond), (0.0, True)), ref)
 
-    @unittest.expectedFailure
+    @expected_failure_on_x86
     def test_greater_than_with_nan(self):
-        # KNOWN DEVIATION: `x > y` and `x >= y` are true when an operand is NaN (IEEE: false)
+        # KNOWN DEVIATION on x86-64: `x > y` and `x >= y` are true when an operand is NaN (IEEE:
+        # false, as on aarch64 and RISC-V)
         for name, cond, ref in ((">", x > y, lambda a, b: (a > b) * 1.0), (">=", x >= y, lambda a, b: (a >= b) * 1.0)):
             self.check_binary(name, sp.Piecewise((1.0, cond), (0.0, True)), ref)
 
@@ -150,12 +158,12 @@ class SpecialValues(unittest.TestCase):
         self.check_binary("Max", sp.Max(x, y), np.maximum, finite, signed_zero=False)
 
     def test_min_max_nan_operand(self):
-        # DOCUMENTED BEHAVIOR: when an operand is NaN, Min returns its second operand and Max its
-        # first one, so the result depends on the operand order (sympy also sorts the arguments of
-        # Min/Max). It is neither numpy's `minimum`/`maximum` (NaN propagates) nor `fmin`/`fmax`
-        # (NaN is ignored).
+        # DOCUMENTED BEHAVIOR: when an operand is NaN, Min returns its second operand; Max returns its
+        # first one on x86-64 and its second one elsewhere (see HOST_X86 above). The result depends
+        # on the operand order (sympy also sorts the arguments of Min/Max). It is neither numpy's
+        # `minimum`/`maximum` (NaN propagates) nor `fmin`/`fmax` (NaN is ignored).
         pts = np.array([NAN, 1.0, -2.0, INF])
-        for expr, name, pick in ((sp.Min(x, y), "Min", lambda a, b: b), (sp.Max(x, y), "Max", lambda a, b: a)):
+        for expr, name, pick in ((sp.Min(x, y), "Min", lambda a, b: b), (sp.Max(x, y), "Max", (lambda a, b: a) if HOST_X86 else (lambda a, b: b))):
             f = compile_func([x, y], [expr])
             for a, b in itertools.product(pts, pts):
                 if np.isnan(a) or np.isnan(b):

@@ -1,3 +1,13 @@
+# Version 2.29.1
+
+* PyPI wheels for every Python ≥ 3.10: one `py3-none-<platform>` wheel per platform (Linux x86-64 and
+  aarch64, Windows x86-64, macOS arm64 and x86-64), built and tested by CI. The wheels declare their
+  dependencies (numpy, sympy) and `requires-python`.
+* Fixing real user functions (`defuns`) in complex kernels: the result could keep a stale imaginary
+  part (fast complex mode, x86-64 and aarch64).
+* Fixing the Composer on Python 3.10 and 3.11.
+* A library that cannot be loaded gives a warning instead of failing `import symjit`.
+
 # Version 2.29.0
 
 * MIR export to and import from JSON: `dump(path, what="json")` and `save_json/load_json`.
