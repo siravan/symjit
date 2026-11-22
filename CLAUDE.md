@@ -103,7 +103,7 @@ The library uses no Python API (ctypes, `binding = "NoBinding"`), so one wheel p
 Python ≥ 3.10: `setup.py` overrides `bdist_wheel.get_tag` to tag it `py3-none-<platform>` (everything else
 is in `pyproject.toml`). `.github/workflows/wheels.yml` builds them with cibuildwheel (once, with CPython
 3.12; `[tool.cibuildwheel]` in `pyproject.toml`) for Linux x86-64/aarch64 (manylinux_2_28 image, then
-`auditwheel repair` sets the manylinux tag), Windows AMD64 and macOS arm64/x86_64, runs the Python suite
+`auditwheel repair` sets the manylinux tag), Windows AMD64 and macOS arm64/x86_64 (macos-15, macos-15-intel), runs the Python suite
 against the installed wheel on 3.10–3.14, and on a published GitHub release uploads wheels and sdist to
 PyPI (trusted publishing, environment `pypi`). The tests find the installed package when
 `SYMJIT_PYTHON_PATH` points away from `python/`. Don't rename wheels by hand: the tag inside
