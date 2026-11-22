@@ -21,7 +21,7 @@ class ComposerNumber:
 
     def __repr__(self):
         frac = Fraction(self.val)
-        if frac.is_integer():
+        if frac.denominator == 1:  # Fraction.is_integer() needs Python 3.12
             return f"{frac.numerator}"
         else:
             return f"{frac.numerator}/{frac.denominator}"
