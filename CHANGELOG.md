@@ -1,3 +1,11 @@
+# Version 2.29.2
+
+* The labels of the machine code: `MachineCode::labels()` lists the assembler's labels of a compiled
+  kernel (offset, name), with `@data` where the data area (constants, function table) after the code
+  starts, so that a disassembler outside symjit (symjit-utils' `sjb2asm`) can tell code from data and
+  name branch targets. `MachineCode` is exported in `symjit::backend`, and
+  `Application::prepare_fast` is public (like `prepare_simd`).
+
 # Version 2.29.1
 
 * PyPI wheels for every Python ≥ 3.10: one `py3-none-<platform>` wheel per platform (Linux x86-64 and

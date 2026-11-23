@@ -59,6 +59,15 @@ The output (assuming a Linux x86-64 machine) is
 
 Note that this is the output from an older version, and the more recent versions have a more complex prologue and epilogue.
 
+The machine code is followed by a data area (the constants and the function table), which a disassembler
+decodes as instructions unless it knows where the code ends. From Rust, a compiled kernel
+(`Application::compiled`, `compiled_simd` after `prepare_simd`, `compiled_fast` after `prepare_fast`; the
+type is `symjit::backend::MachineCode`) has its assembler's labels, `labels()`: (offset, name) pairs
+sorted by offset. They hold the code's labels (`@main`, the compress-mode entries `@f_..`, ...), the
+constants (`_const_N_`), the function table entries (`_func_op_`, ...) and `@data`, where the data area
+starts. The offsets index the bytes `dump` writes (`dumps()` in Rust). A kernel can be compiled for
+another architecture (`ty = "arm"`, `"riscv"`, `"amd"`) to inspect its code without running it.
+
 To see the intermediate representation in a pseudo-LLVM textual format (useful for debugging), pass `what='bytecode'`. For example:
 
 ```python

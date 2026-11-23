@@ -449,6 +449,7 @@ impl Builder {
 
         ir.epilogue_indirect(cap, count_states, count_obs, count_params);
         ir.align();
+        ir.mark_data();
         self.append_const_section(ir);
         self.append_vt_section(mir, ir);
         ir.seal();
@@ -474,6 +475,7 @@ impl Builder {
 
         ir.epilogue_fast(cap, count_states, count_obs, idx_ret);
         ir.align();
+        ir.mark_data();
         self.append_const_section(ir);
         self.append_vt_section(mir, ir);
         ir.seal();

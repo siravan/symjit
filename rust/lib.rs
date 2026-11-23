@@ -69,6 +69,7 @@ pub mod backend {
     pub use crate::complexify::Complexifier;
     pub use crate::config::ABI_AREA;
     pub use crate::generator::{Generator, GeneratorType, StackRegions};
+    pub use crate::machine::MachineCode;
     pub use crate::mir::{Instruction as MirInstruction, Mir};
     pub use crate::symbol::Loc;
     pub use crate::utils::{align_stack, Reg};

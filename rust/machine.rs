@@ -19,6 +19,9 @@ pub struct MachineCode<T: Default> {
     lanes: usize,
     pub size: usize,
     pages: *const u8,
+    // the assembler's labels (offset, name), sorted by offset; empty for machine code that was
+    // loaded rather than compiled here (`Storage::load_with_version`)
+    labels: Vec<(usize, String)>,
 }
 
 unsafe impl Send for MachineCode<f64> {}
@@ -69,7 +72,21 @@ impl<T: Clone + Default> MachineCode<T> {
             lanes,
             size,
             pages,
+            labels: Vec::new(),
         }
+    }
+
+    /// keeps the assembler's labels (`Generator::take_labels`)
+    pub fn set_labels(&mut self, labels: Vec<(usize, String)>) {
+        self.labels = labels;
+    }
+
+    /// The labels of the code (offset, name), sorted by offset: the MIR's labels (`@main`, the
+    /// compress-mode entries `@f_..`), the generators' own, the constants (`_const_N_`) and function
+    /// table entries (`_func_op_`, `_simd_op_`, `_env_op_`), and `@data`, where the data area after
+    /// the code starts. The offsets index `Compiled::dumps()` (the `dump(.., "scalar")` bytes).
+    pub fn labels(&self) -> &[(usize, String)] {
+        &self.labels
     }
 
     fn invalid(_a: *const T, _b: *const &mut [T], _c: usize, _d: *const T) -> i32 {
