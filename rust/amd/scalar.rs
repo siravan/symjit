@@ -157,6 +157,14 @@ impl Generator for AmdScalarGenerator {
         self.amd.a.set_label(label);
     }
 
+    fn mark_data(&mut self) {
+        self.amd.a.set_label("@data");
+    }
+
+    fn take_labels(&mut self) -> Vec<(usize, String)> {
+        self.amd.a.take_labels()
+    }
+
     fn branch(&mut self, label: &str) {
         self.amd.jmp(label);
     }

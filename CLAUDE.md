@@ -148,8 +148,10 @@ per-host baseline (run by hand, not in the test suite).
 5. **Kernels**: each function is compiled up to three times — `scalar` (one point), `simd` (vectorized calls,
    rayon threads over chunks), and `fast` (register arguments, few inputs). `ty="bytecode"` interprets the
    MIR. Machine code is followed by a constant pool (constants and function pointers), so raw dumps do not
-   disassemble cleanly to the end. A SIMD kernel with diverging lanes (`simd_branch=false`) returns non-zero
-   and `evaluate_matrix` recomputes those rows with the scalar kernel.
+   disassemble cleanly to the end: `MachineCode::labels()` (the assembler's labels, kept by
+   `Generator::take_labels`) has `@data` where the pool starts (`Builder` calls `Generator::mark_data`, a
+   no-op in `Complexifier`, which writes MIR). A SIMD kernel with diverging lanes (`simd_branch=false`)
+   returns non-zero and `evaluate_matrix` recomputes those rows with the scalar kernel.
 6. **Compression mode** (`compress=True`, `topology.rs`, `statement.rs`): repeated expression shapes become
    funclets, called with their arguments in the funclet's spill area; the `_ultra` entry (all arguments
    stack slots) gets their slot numbers packed into GPRs (`SUBROUTINE_ARGS` in `amd/mod.rs`).

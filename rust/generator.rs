@@ -52,6 +52,17 @@ pub trait Generator {
     fn seal(&mut self);
     fn align(&mut self);
     fn set_label(&mut self, label: &str);
+
+    /// Marks where the data area (constants, function table) starts: the label `@data`, no
+    /// bytes. Generators that do not emit machine code (`Complexifier`) ignore it.
+    fn mark_data(&mut self) {}
+
+    /// Moves the labels out (offset, name), sorted by offset, after `seal`: kept in the
+    /// kernel's `MachineCode::labels`. Generators without labels return none.
+    fn take_labels(&mut self) -> Vec<(usize, String)> {
+        Vec::new()
+    }
+
     fn branch(&mut self, label: &str);
     fn branch_if(&mut self, cond: Reg, label: &str, is_else: bool);
 

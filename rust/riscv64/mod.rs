@@ -459,6 +459,14 @@ impl Generator for RiscV {
         self.a.set_label(label);
     }
 
+    fn mark_data(&mut self) {
+        self.a.set_label("@data");
+    }
+
+    fn take_labels(&mut self) -> Vec<(usize, String)> {
+        self.a.take_labels()
+    }
+
     fn branch(&mut self, label: &str) {
         self.j(label, Self::zero);
     }

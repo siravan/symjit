@@ -242,14 +242,17 @@ impl Application {
             prog.count_params,
         )?;
 
-        Ok(MachineCode::new(
+        let labels = generator.take_labels();
+        let mut code = MachineCode::new(
             arch,
             generator.bytes(),
             mem,
             false,
             lanes,
             prog.config().huge(),
-        ))
+        );
+        code.set_labels(labels);
+        Ok(code)
     }
 
     fn compile_fast<G: Generator>(
@@ -268,14 +271,11 @@ impl Application {
             idx_ret as i32,
         )?;
 
-        Ok(MachineCode::new(
-            arch,
-            generator.bytes(),
-            mem,
-            true,
-            1,
-            prog.config().huge(),
-        ))
+        let labels = generator.take_labels();
+        let mut code =
+            MachineCode::new(arch, generator.bytes(), mem, true, 1, prog.config().huge());
+        code.set_labels(labels);
+        Ok(code)
     }
 
     fn compile_bytecode(mir: Mir, prog: &mut Program) -> Result<CompiledMir> {
@@ -506,7 +506,7 @@ impl Application {
         };
     }
 
-    fn prepare_fast(&mut self) {
+    pub fn prepare_fast(&mut self) {
         // fast func compilation is lazy!
         if self.compiled_fast.is_none() && self.can_fast {
             if self.config.is_amd64() {
