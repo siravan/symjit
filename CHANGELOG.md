@@ -5,6 +5,8 @@
   starts, so that a disassembler outside symjit (symjit-utils' `sjb2asm`) can tell code from data and
   name branch targets. `MachineCode` is exported in `symjit::backend`, and
   `Application::prepare_fast` is public (like `prepare_simd`).
+* The warning about the deprecated SSE fallback (x86-64 kernels on a host without AVX) is written to
+  stderr, not stdout, where it mixed with the output of tools built on symjit.
 
 # Version 2.29.1
 

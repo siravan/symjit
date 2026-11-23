@@ -727,8 +727,9 @@ impl Config {
             // the warning is written once per session
             static SSE_WARNED: AtomicBool = AtomicBool::new(false);
             if !SSE_WARNED.swap(true, Ordering::Relaxed) {
-                println!("warning: fallback to SSE instructions is deprecated and will be removed in a future version.");
-                println!(
+                // on stderr: stdout is the output of tools built on symjit (sjb2asm)
+                eprintln!("warning: fallback to SSE instructions is deprecated and will be removed in a future version.");
+                eprintln!(
                     "warning (cont.): the minimum x86-64 profile will be raised to x86-64-v3."
                 );
             }
