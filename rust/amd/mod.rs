@@ -455,7 +455,8 @@ fn save_f64x8_to_loc(amd: &mut Amd, r: u8, loc: Loc) {
 
 fn pack_locs(amd: &mut Amd, locs: &[Loc]) {
     assert!(locs.len() <= PACKED_ARGS);
-    for reg in 0..(locs.len() - 1) / 4 + 1 {
+    // a call may pass fewer locations than the callee takes (none at all: no register to pack)
+    for reg in 0..locs.len().div_ceil(4) {
         let mut a: u64 = 0;
 
         for i in 0..4 {
