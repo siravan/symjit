@@ -28,6 +28,18 @@ fn config_for(ty: &str, complex: bool) -> Config {
     config
 }
 
+/// does this host run AVX (else symjit's x86 generator falls back to SSE)?
+fn host_has_avx() -> bool {
+    #[cfg(target_arch = "x86_64")]
+    {
+        is_x86_feature_detected!("avx")
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        false
+    }
+}
+
 /// out0 = p0 ? p0 p1 : p1 + 7.5;  out1 = exp(p0) + 1e6 p1
 fn compile_real(config: Config) -> Result<Application> {
     let mut t = Translator::new(config);
@@ -155,8 +167,15 @@ fn check_real(ty: &str) {
 
     if ty != "riscv" {
         app.prepare_simd();
-        let consts = check(app.compiled_simd.as_ref().unwrap(), &format!("{ty} simd"));
-        assert!(consts.contains(&7.5), "{ty} simd: {consts:?}");
+        match app.compiled_simd.as_ref() {
+            Some(simd) => {
+                let consts = check(simd, &format!("{ty} simd"));
+                assert!(consts.contains(&7.5), "{ty} simd: {consts:?}");
+            }
+            // an x86 kernel built on a host without AVX (every non-x86 host) falls back to SSE,
+            // which has no SIMD kernel
+            None => assert!(ty == "amd" && !host_has_avx(), "{ty}: no SIMD kernel"),
+        }
     }
     // one output: the application has a fast kernel too
     let mut app = compile_one(config_for(ty, false)).unwrap();
