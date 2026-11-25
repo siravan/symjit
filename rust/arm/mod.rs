@@ -16,6 +16,7 @@ const STATES: u8 = 21; // second arg = states+obs if indirect mode, otherwise nu
 const IDX: u8 = 22; // third arg = index if indirect mode
 const CALL: u8 = 23; // call pointer
 const STACK: u8 = 24;
+const CONSTS: u8 = 25; // the constant pool (`@consts`), set by the prologues: one load per constant
 
 const SCRATCH1: u8 = 9;
 const SCRATCH2: u8 = 10;
@@ -68,11 +69,13 @@ fn emit(a: &mut Assembler, w: u32) {
 
 fn save_nonvolatile_regs(a: &mut Assembler) {
     a.set_label("@self");
-    emit(a, arm! {sub sp, sp, #64});
+    emit(a, arm! {sub sp, sp, #80});
     emit(a, arm! {stp lr, x(FP), [sp, #0]});
     emit(a, arm! {stp x(MEM), x(STATES), [sp, #16]});
     emit(a, arm! {stp x(IDX), x(PARAMS), [sp, #32]});
     emit(a, arm! {stp x(CALL), x(STACK), [sp, #48]});
+    emit(a, arm! {stp x(CONSTS), x(CONSTS + 1), [sp, #64]});
+    set_const_base(a);
 
     emit(a, arm! {mov x(FP), sp});
 
@@ -89,7 +92,21 @@ fn load_nonvolatile_regs(a: &mut Assembler) {
     emit(a, arm! {ldp x(MEM), x(STATES), [sp, #16]});
     emit(a, arm! {ldp x(IDX), x(PARAMS), [sp, #32]});
     emit(a, arm! {ldp x(CALL), x(STACK), [sp, #48]});
-    emit(a, arm! {add sp, sp, #64});
+    emit(a, arm! {ldp x(CONSTS), x(CONSTS + 1), [sp, #64]});
+    emit(a, arm! {add sp, sp, #80});
+}
+
+/// `x(CONSTS)` := the address of the constant pool (`@consts`, after `@data`): a constant is then one
+/// load (`ldr d` of an 8-byte entry, `ldr q` of a 16-byte one) instead of adrp + add + load.
+fn set_const_base(a: &mut Assembler) {
+    a.jump_abs("@consts", (a.ip() & 0xfffff000) as u32, |offset, pg| {
+        arm! {adrp x(CONSTS), label((offset - pg as i32) as u32)}
+    });
+    a.jump_abs(
+        "@consts",
+        0,
+        |offset, _| arm! {add x(CONSTS), x(CONSTS), #offset & 0x0fff},
+    );
 }
 
 fn allocate_stack(a: &mut Assembler, size: u32, _with_arena: bool) {
@@ -431,11 +448,21 @@ fn load_x_from_label(a: &mut Assembler, dst: u8, label: &str) {
     load_long(a, dst, label);
 }
 
-fn add_consts(a: &mut Assembler, consts: &[f64]) {
+/// The constant pool at `@consts` (x(CONSTS) points to it), each constant `stride` bytes: 8 (the scalar
+/// and complex generators' `ldr d`) or 16 (the SIMD generator's `ldr q`: the double twice, so one load
+/// fills both lanes). `@data` is 8-byte aligned; a 16-byte pool starts on a 16-byte boundary.
+fn add_consts(a: &mut Assembler, consts: &[f64], stride: usize) {
+    if stride == 16 && a.ip() & 15 != 0 {
+        a.append_quad(0);
+    }
+    a.set_label("@consts");
     for (idx, val) in consts.iter().enumerate() {
         let label = format!("_const_{}_", idx);
         a.set_label(label.as_str());
         a.append_quad((*val).to_bits());
+        if stride == 16 {
+            a.append_quad((*val).to_bits());
+        }
     }
 }
 

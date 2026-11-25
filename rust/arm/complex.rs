@@ -34,14 +34,6 @@ impl ArmComplexGenerator {
         self.a.jump(label, code, f)
     }
 
-    pub fn jump_abs(&mut self, label: &str, code: u32, f: Jumper) {
-        self.a.jump_abs(label, code, f);
-    }
-
-    pub fn ip(&self) -> usize {
-        self.a.ip()
-    }
-
     fn apply_jumps(&mut self) {
         self.a.apply_jumps();
     }
@@ -305,17 +297,8 @@ impl Generator for ArmComplexGenerator {
     }
 
     fn load_const(&mut self, dst: Reg, idx: u32) {
-        self.xor(dst, dst, dst);
-        let label = format!("_const_{}_", idx);
-        self.jump_abs(&label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
-            arm! {adrp x(0), label((offset - pg as i32) as u32)}
-        });
-
-        self.jump_abs(
-            &label,
-            ϕ(dst) as u32,
-            |offset, dst| arm! {ldr d(dst), [x(0), #offset & 0x0fff]},
-        );
+        // `ldr d` zeroes the upper lane: (re, 0)
+        load_d_from_mem(&mut self.a, ϕ(dst), CONSTS, idx);
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
@@ -780,7 +763,7 @@ impl Generator for ArmComplexGenerator {
 
     fn add_consts(&mut self, consts: &[f64]) {
         self.align();
-        add_consts(&mut self.a, consts);
+        add_consts(&mut self.a, consts, 8);
     }
 
     fn add_func(&mut self, op: &str, f: Func) {
@@ -842,10 +825,12 @@ impl Generator for ArmComplexGenerator {
     /**************************************************/
 
     fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
-        self.emit(arm! {sub sp, sp, #32});
+        self.emit(arm! {sub sp, sp, #48});
         self.emit(arm! {stp lr, x(FP), [sp, #0]});
         self.emit(arm! {stp x(MEM), x(STACK), [sp, #16]});
+        self.emit(arm! {stp x(CONSTS), x(CONSTS + 1), [sp, #32]});
         self.emit(arm! {mov x(FP), sp});
+        set_const_base(&mut self.a);
 
         let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
         self.sub_stack(frame_size);
@@ -872,7 +857,8 @@ impl Generator for ArmComplexGenerator {
         self.emit(arm! {mov sp, x(FP)});
         self.emit(arm! {ldp lr, x(FP), [sp, #0]});
         self.emit(arm! {ldp x(MEM), x(STACK), [sp, #16]});
-        self.emit(arm! {add sp, sp, #32});
+        self.emit(arm! {ldp x(CONSTS), x(CONSTS + 1), [sp, #32]});
+        self.emit(arm! {add sp, sp, #48});
         self.emit(arm! {eor x(0), x(0), x(0)});
         self.emit(arm! {ret});
     }

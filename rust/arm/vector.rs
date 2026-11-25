@@ -215,18 +215,8 @@ impl Generator for ArmSimdGenerator {
     }
 
     fn load_const(&mut self, dst: Reg, idx: u32) {
-        let label = format!("_const_{}_", idx);
-        self.jump_abs(&label, (self.ip() & 0xfffff000) as u32, |offset, pg| {
-            arm! {adrp x(0), label((offset - pg as i32) as u32)}
-        });
-
-        self.jump_abs(
-            &label,
-            0,
-            |offset, _| arm! {add x(0), x(0), #offset & 0x0fff},
-        );
-
-        self.emit(arm! {ld1r {q(ϕ(dst))}, [x(0)]});
+        // the pool's 16-byte entries hold the double twice: one load fills both lanes
+        load_q_from_mem(&mut self.a, ϕ(dst), CONSTS, idx);
     }
 
     fn load_mem(&mut self, dst: Reg, idx: u32) {
@@ -678,7 +668,7 @@ impl Generator for ArmSimdGenerator {
 
     fn add_consts(&mut self, consts: &[f64]) {
         self.align();
-        add_consts(&mut self.a, consts)
+        add_consts(&mut self.a, consts, 16)
     }
 
     fn add_func(&mut self, op: &str, f: Func) {
