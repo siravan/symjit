@@ -1,5 +1,7 @@
 # Version 2.29.2
 
+* x86-64: a call to a compress-mode subroutine with fewer arguments than the subroutine takes (none
+  at all) no longer panics with "index out of bounds" while packing the arguments' stack slots.
 * The labels of the machine code: `MachineCode::labels()` lists the assembler's labels of a compiled
   kernel (offset, name), with `@data` where the data area (constants, function table) after the code
   starts, so that a disassembler outside symjit (symjit-utils' `sjb2asm`) can tell code from data and
