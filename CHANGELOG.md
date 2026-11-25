@@ -1,5 +1,11 @@
 # Version 2.29.2
 
+* aarch64: a subroutine (compress-mode funclet) that calls another one no longer loops forever: `bl`
+  overwrote the outer call's return address in the link register, which is now saved on the stack
+  around each call.
+* aarch64 SIMD kernels: a fused multiply-add whose destination is also a factor computed in `Temp`,
+  `Gen(2)` or `Gen(3)`, which may hold live values, and overwrote one (wrong results); it now uses the
+  scratch register v29.
 * f32 kernels: `Application::downgrade_f32(F32Kernel::Scalar | F32Kernel::Simd)` and
   `dump(.., "scalar-f32" | "simd-f32")` rewrite a compiled f64 kernel's machine code instruction by
   instruction into the same kernel in f32 (x86-64 AVX/AVX2/AVX-512: `rust/amd/downgrade.rs`, a port
