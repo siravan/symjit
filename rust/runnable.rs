@@ -10,10 +10,11 @@ use super::amd::{
     AmdVectorF64x8Generator,
 };
 use super::applet::Applet;
-use super::arm::{dump_as_f32_kernel, ArmComplexGenerator, ArmGenerator, ArmSimdGenerator};
+use super::arm::{ArmComplexGenerator, ArmGenerator, ArmSimdGenerator};
 use super::code::Func;
 use super::complexify::Complexifier;
 use super::config::Config;
+use super::downgrade::{downgrade_f32, Kernel};
 use super::generator::{Generator, GeneratorType};
 use super::machine::MachineCode;
 use super::matrix::{combine_matrixes, Matrix};
@@ -758,20 +759,55 @@ impl Application {
                 // application, the only MIR of a real one
                 self.save_mir_json(name, &self.bytecode.mir)
             }
-            "scalar-f32" => {
-                if self.config.is_arm64() {
-                    if let Some(m) = &self.compiled {
-                        dump_as_f32_kernel(name, m.machine_code(), &m.labels());
-                        true
-                    } else {
+            "scalar-f32" | "simd-f32" => {
+                let kernel = if what == "simd-f32" {
+                    Kernel::Simd
+                } else {
+                    Kernel::Scalar
+                };
+                match self.downgrade_f32(kernel) {
+                    Ok(code) => std::fs::write(name, code).is_ok(),
+                    Err(e) => {
+                        eprintln!("{what}: {e}");
                         false
                     }
-                } else {
-                    false
                 }
             }
             _ => false,
         }
+    }
+
+    /// The f32 twin of the scalar or the SIMD kernel's machine code (`crate::downgrade`: the
+    /// kernel rewritten instruction by instruction, its constants rounded to f32), for x86-64 and
+    /// aarch64. The scalar kernel computes in the low half of each 8-byte slot; the SIMD kernel has
+    /// twice the lanes and reads packed f32 columns (call it with half the index). Kernels that call
+    /// functions, and SIMD kernels that branch on their lanes, are refused; riscv64 has only the
+    /// scalar kernel.
+    pub fn downgrade_f32(&mut self, kernel: Kernel) -> Result<Vec<u8>> {
+        let arch = if cfg!(target_arch = "x86_64") {
+            "x86_64"
+        } else if cfg!(target_arch = "aarch64") {
+            "aarch64"
+        } else if cfg!(target_arch = "riscv64") {
+            "riscv64"
+        } else {
+            return Err(anyhow!("no f32 kernels on this architecture"));
+        };
+
+        if kernel == Kernel::Simd {
+            if arch == "riscv64" {
+                return Err(anyhow!("riscv64 has only the scalar kernel"));
+            }
+            self.prepare_simd();
+        }
+
+        let m = match kernel {
+            Kernel::Scalar => self.compiled.as_ref(),
+            Kernel::Simd => self.compiled_simd.as_ref(),
+        }
+        .ok_or_else(|| anyhow!("no compiled {kernel:?} kernel"))?;
+
+        downgrade_f32(arch, kernel, m.machine_code(), m.labels())
     }
 
     pub fn dumps(&self) -> Vec<u8> {

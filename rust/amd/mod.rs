@@ -13,6 +13,7 @@ mod tests;
 use asm::Amd;
 
 mod complex;
+pub mod downgrade;
 mod scalar;
 mod sse;
 mod vector;

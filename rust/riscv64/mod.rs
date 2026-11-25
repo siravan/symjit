@@ -1,5 +1,6 @@
 #[macro_use]
 mod macros;
+pub mod downgrade;
 
 #[cfg(test)]
 mod tests;

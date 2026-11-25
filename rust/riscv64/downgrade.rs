@@ -1,0 +1,399 @@
+//! riscv64 f64 kernels rewritten into f32 kernels (see `crate::downgrade`): word by word up to the
+//! data area. RISC-V has only the scalar kernel, which computes in the low half of each 8-byte slot
+//! (a complex number's re and im each in its own slot, as the f64 kernel has them).
+//!
+//! The F extension keeps a single in a 64-bit register NaN-boxed (the upper 32 bits all ones; a
+//! value that is not is read as the canonical NaN), so the loads and stores change width: `fld` /
+//! `fsd` become `flw` (which NaN-boxes the low four bytes of the slot) / `fsw` (which writes them).
+//! The double operations have their single twins in the `fmt` field (bits 26:25, 01 -> 00): the
+//! arithmetic, `fsgnj` (`fmv`, `fneg`, `fabs`), `fmin`/`fmax`, the comparisons, the conversions to
+//! and from integers, `fclass`, the moves between integer and floating-point registers, and the
+//! fused multiply-adds. The moves carry the masks: a comparison's 0 / -1 goes to a floating-point
+//! register with `fmv.w.x` (its low 32 bits, NaN-boxed) and back with `fmv.x.w` (sign-extended), so
+//! the integer `and`/`or`/`not` of the selects see the same 0 / -1.
+//!
+//! Refused: a conversion between the precisions (`fcvt.s.d`, `fcvt.d.s`), any other floating-point
+//! instruction (a single one: a kernel downgraded twice), compressed and vector instructions, and
+//! function calls (`jalr ra` through a register loaded from the function table: `ld` then `jalr`).
+//! The integer code is kept.
+
+use anyhow::{anyhow, Result};
+
+use crate::downgrade::Kernel;
+
+const LOAD_FP: u32 = 0x07;
+const STORE_FP: u32 = 0x27;
+const OP_FP: u32 = 0x53;
+const OP_V: u32 = 0x57;
+const LOAD: u32 = 0x03;
+const JALR: u32 = 0x67;
+const RA: u32 = 1;
+
+/// the OP-FP operations (funct5) with a single twin in `fmt`
+fn has_twin(funct5: u32) -> bool {
+    matches!(
+        funct5,
+        0b00000 // fadd
+            | 0b00001 // fsub
+            | 0b00010 // fmul
+            | 0b00011 // fdiv
+            | 0b01011 // fsqrt
+            | 0b00100 // fsgnj, fsgnjn, fsgnjx
+            | 0b00101 // fmin, fmax
+            | 0b10100 // feq, flt, fle
+            | 0b11000 // fcvt.{w,wu,l,lu}.d
+            | 0b11010 // fcvt.d.{w,wu,l,lu}
+            | 0b11100 // fmv.x.d, fclass.d
+            | 0b11110 // fmv.d.x
+    )
+}
+
+/// The f32 twin of the word `w` at `pc`; `prev` is the word before it.
+fn rewrite(w: u32, prev: Option<u32>, pc: usize) -> Result<u32> {
+    if w & 3 != 3 {
+        return Err(anyhow!("0x{pc:x}: a compressed instruction (0x{w:08x})"));
+    }
+
+    let opcode = w & 0x7f;
+    let funct3 = (w >> 12) & 7;
+    let fmt = (w >> 25) & 3;
+
+    match opcode {
+        LOAD_FP | STORE_FP if funct3 == 3 => Ok(w & !(1 << 12)), // fld / fsd -> flw / fsw
+        LOAD_FP | STORE_FP => Err(anyhow!(
+            "0x{pc:x}: no f32 rule for a floating-point load or store of width {funct3} (0x{w:08x})"
+        )),
+        // fmadd, fmsub, fnmsub, fnmadd
+        0x43 | 0x47 | 0x4b | 0x4f if fmt == 1 => Ok(w ^ (1 << 25)),
+        OP_FP if (w >> 27) == 0b01000 => Err(anyhow!(
+            "0x{pc:x}: a conversion between the precisions (0x{w:08x})"
+        )),
+        OP_FP if fmt == 1 && has_twin(w >> 27) => Ok(w ^ (1 << 25)),
+        0x43 | 0x47 | 0x4b | 0x4f | OP_FP => Err(anyhow!(
+            "0x{pc:x}: no f32 rule for the instruction 0x{w:08x}"
+        )),
+        OP_V => Err(anyhow!("0x{pc:x}: a vector instruction (0x{w:08x})")),
+        JALR => {
+            let rd = (w >> 7) & 31;
+            let rs1 = (w >> 15) & 31;
+            let loaded = matches!(prev, Some(p) if p & 0x7f == LOAD && (p >> 12) & 7 == 3 && (p >> 7) & 31 == rs1);
+            if rd == RA && loaded {
+                Err(anyhow!(
+                    "0x{pc:x}: a function call (math functions take and return doubles)"
+                ))
+            } else {
+                Ok(w)
+            }
+        }
+        _ => Ok(w),
+    }
+}
+
+/// The machine code `code` with its instructions (up to `end`, the data area) rewritten to f32; the
+/// bytes from `end` on as they are.
+pub fn rewrite_code(code: &[u8], end: usize, kernel: Kernel) -> Result<Vec<u8>> {
+    if kernel == Kernel::Simd {
+        return Err(anyhow!("riscv64 has only the scalar kernel"));
+    }
+
+    if end % 4 != 0 {
+        return Err(anyhow!("the code (0x{end:x} bytes) is not in 4-byte words"));
+    }
+
+    let mut out = code.to_vec();
+    let mut prev = None;
+
+    for pc in (0..end).step_by(4) {
+        let w = u32::from_le_bytes(code[pc..pc + 4].try_into().unwrap());
+        out[pc..pc + 4].copy_from_slice(&rewrite(w, prev, pc)?.to_le_bytes());
+        prev = Some(w);
+    }
+
+    Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    //! The f32 twins against GNU as: each pair is an f64 instruction and its f32 twin as the
+    //! assembler encodes them.
+
+    use super::*;
+
+    fn twin(w: u32) -> Result<u32> {
+        rewrite(w, None, 0)
+    }
+
+    // generated by GNU as (riscv64-linux-gnu-as -march=rv64gq, .option norvc; objcopy -O binary): the
+    // (f64 word, f32 word) pairs, the kept words, the refusals, and three call sequences
+    const PAIRS: &[(u32, u32, &str)] = &[
+        (
+            0x03ccfed3,
+            0x01ccfed3,
+            "fadd.d ft9, fs9, ft8 -> fadd.s ft9, fs9, ft8",
+        ),
+        (
+            0x0bccfed3,
+            0x09ccfed3,
+            "fsub.d ft9, fs9, ft8 -> fsub.s ft9, fs9, ft8",
+        ),
+        (
+            0x13ccfed3,
+            0x11ccfed3,
+            "fmul.d ft9, fs9, ft8 -> fmul.s ft9, fs9, ft8",
+        ),
+        (
+            0x1bccfed3,
+            0x19ccfed3,
+            "fdiv.d ft9, fs9, ft8 -> fdiv.s ft9, fs9, ft8",
+        ),
+        (
+            0x03cc8ed3,
+            0x01cc8ed3,
+            "fadd.d ft9, fs9, ft8, rne -> fadd.s ft9, fs9, ft8, rne",
+        ),
+        (
+            0x5a0cfed3,
+            0x580cfed3,
+            "fsqrt.d ft9, fs9 -> fsqrt.s ft9, fs9",
+        ),
+        (
+            0x23cc8ed3,
+            0x21cc8ed3,
+            "fsgnj.d ft9, fs9, ft8 -> fsgnj.s ft9, fs9, ft8",
+        ),
+        (
+            0x23cc9ed3,
+            0x21cc9ed3,
+            "fsgnjn.d ft9, fs9, ft8 -> fsgnjn.s ft9, fs9, ft8",
+        ),
+        (
+            0x23ccaed3,
+            0x21ccaed3,
+            "fsgnjx.d ft9, fs9, ft8 -> fsgnjx.s ft9, fs9, ft8",
+        ),
+        (0x239c8ed3, 0x219c8ed3, "fmv.d ft9, fs9 -> fmv.s ft9, fs9"),
+        (0x239c9ed3, 0x219c9ed3, "fneg.d ft9, fs9 -> fneg.s ft9, fs9"),
+        (0x239caed3, 0x219caed3, "fabs.d ft9, fs9 -> fabs.s ft9, fs9"),
+        (
+            0x2bcc8ed3,
+            0x29cc8ed3,
+            "fmin.d ft9, fs9, ft8 -> fmin.s ft9, fs9, ft8",
+        ),
+        (
+            0x2bcc9ed3,
+            0x29cc9ed3,
+            "fmax.d ft9, fs9, ft8 -> fmax.s ft9, fs9, ft8",
+        ),
+        (
+            0xa3ceacd3,
+            0xa1ceacd3,
+            "feq.d s9, ft9, ft8 -> feq.s s9, ft9, ft8",
+        ),
+        (
+            0xa3ce9cd3,
+            0xa1ce9cd3,
+            "flt.d s9, ft9, ft8 -> flt.s s9, ft9, ft8",
+        ),
+        (
+            0xa3ce8cd3,
+            0xa1ce8cd3,
+            "fle.d s9, ft9, ft8 -> fle.s s9, ft9, ft8",
+        ),
+        (
+            0xa3de1cd3,
+            0xa1de1cd3,
+            "fgt.d s9, ft9, ft8 -> fgt.s s9, ft9, ft8",
+        ),
+        (
+            0xc22e8cd3,
+            0xc02e8cd3,
+            "fcvt.l.d s9, ft9, rne -> fcvt.l.s s9, ft9, rne",
+        ),
+        (
+            0xc22e9cd3,
+            0xc02e9cd3,
+            "fcvt.l.d s9, ft9, rtz -> fcvt.l.s s9, ft9, rtz",
+        ),
+        (
+            0xc22eacd3,
+            0xc02eacd3,
+            "fcvt.l.d s9, ft9, rdn -> fcvt.l.s s9, ft9, rdn",
+        ),
+        (
+            0xc22ebcd3,
+            0xc02ebcd3,
+            "fcvt.l.d s9, ft9, rup -> fcvt.l.s s9, ft9, rup",
+        ),
+        (
+            0xc20e9cd3,
+            0xc00e9cd3,
+            "fcvt.w.d s9, ft9, rtz -> fcvt.w.s s9, ft9, rtz",
+        ),
+        (
+            0xd22cfed3,
+            0xd02cfed3,
+            "fcvt.d.l ft9, s9 -> fcvt.s.l ft9, s9",
+        ),
+        (
+            0xd20c8ed3,
+            0xd00c8ed3,
+            // as encodes the exact fcvt.d.w with rm = rne, fcvt.s.w with dyn: the twin keeps rne
+            "fcvt.d.w ft9, s9 -> fcvt.s.w ft9, s9, rne",
+        ),
+        (0xe20e8cd3, 0xe00e8cd3, "fmv.x.d s9, ft9 -> fmv.x.w s9, ft9"),
+        (0xf20c8ed3, 0xf00c8ed3, "fmv.d.x ft9, s9 -> fmv.w.x ft9, s9"),
+        (
+            0xf2000ed3,
+            0xf0000ed3,
+            "fmv.d.x ft9, zero -> fmv.w.x ft9, zero",
+        ),
+        (
+            0xe20e9cd3,
+            0xe00e9cd3,
+            "fclass.d s9, ft9 -> fclass.s s9, ft9",
+        ),
+        (
+            0xb3ccfec3,
+            0xb1ccfec3,
+            "fmadd.d ft9, fs9, ft8, fs6 -> fmadd.s ft9, fs9, ft8, fs6",
+        ),
+        (
+            0xb3ccfec7,
+            0xb1ccfec7,
+            "fmsub.d ft9, fs9, ft8, fs6 -> fmsub.s ft9, fs9, ft8, fs6",
+        ),
+        (
+            0xb3ccfecf,
+            0xb1ccfecf,
+            "fnmadd.d ft9, fs9, ft8, fs6 -> fnmadd.s ft9, fs9, ft8, fs6",
+        ),
+        (
+            0xb3ccfecb,
+            0xb1ccfecb,
+            "fnmsub.d ft9, fs9, ft8, fs6 -> fnmsub.s ft9, fs9, ft8, fs6",
+        ),
+        (0x010cbe87, 0x010cae87, "fld ft9, 16(s9) -> flw ft9, 16(s9)"),
+        (
+            0x800cbe87,
+            0x800cae87,
+            "fld ft9, -2048(s9) -> flw ft9, -2048(s9)",
+        ),
+        (0xffdcbc27, 0xffdcac27, "fsd ft9, -8(s9) -> fsw ft9, -8(s9)"),
+        (
+            0x7fdcbc27,
+            0x7fdcac27,
+            "fsd ft9, 2040(s9) -> fsw ft9, 2040(s9)",
+        ),
+    ];
+
+    const KEPT: &[(u32, &str)] = &[
+        (0x005c0cb3, "add s9, s8, t0"),
+        (0x00100293, "addi t0, zero, 1"),
+        (0x01013c83, "ld s9, 16(sp)"),
+        (0xff913c23, "sd s9, -8(sp)"),
+        (0x12345297, "auipc t0, 0x12345"),
+        (0x12345cb7, "lui s9, 0x12345"),
+        (0x00028663, "beq t0, zero, .+12"),
+        (0x00029663, "bne t0, zero, .+12"),
+        (0x00008067, "jalr zero, 0(ra)"),
+        (0x008280e7, "jalr ra, 8(t0)"),
+        (0x405002b3, "neg t0, t0"),
+        (0xfff2c293, "not t0, t0"),
+        (0x0062f2b3, "and t0, t0, t1"),
+        (0x0062e2b3, "or t0, t0, t1"),
+        (0x0062c2b3, "xor t0, t0, t1"),
+        (0x00329293, "slli t0, t0, 3"),
+    ];
+
+    // (word, the error says, what)
+    const REFUSED: &[(u32, &str, &str)] = &[
+        (0x401cfed3, "between the precisions", "fcvt.s.d ft9, fs9"),
+        (0x420c8ed3, "between the precisions", "fcvt.d.s ft9, fs9"),
+        (0x01ccfed3, "no f32 rule", "fadd.s ft9, fs9, ft8"),
+        (0xb1ccfec3, "no f32 rule", "fmadd.s ft9, fs9, ft8, fs6"),
+        (0x010cae87, "load or store", "flw ft9, 16(s9)"),
+        (0x01dca827, "load or store", "fsw ft9, 16(s9)"),
+        (0x07ccfed3, "no f32 rule", "fadd.q ft9, fs9, ft8"),
+        (0x04050405, "compressed", "c.addi s0, 1; c.addi s0, 1"),
+        (0x022180d7, "vector", "vadd.vv v1, v2, v3"),
+    ];
+    // auipc t0, 0; ld t0, 16(t0); jalr ra, 0(t0)
+    const CALL: &[u32] = &[0x00000297, 0x0102b283, 0x000280e7];
+    // ld ra, 8(sp); addi sp, sp, 16; jalr zero, 0(ra)
+    const RETURN: &[u32] = &[0x00813083, 0x01010113, 0x00008067];
+    // auipc t0, 0; jalr ra, 24(t0)
+    const LOCAL_CALL: &[u32] = &[0x00000297, 0x018280e7];
+
+    #[test]
+    fn each_double_becomes_its_single_twin() {
+        for &(double, single, what) in PAIRS {
+            assert_eq!(twin(double).unwrap(), single, "{what}: 0x{double:08x}");
+        }
+    }
+
+    #[test]
+    fn integer_instructions_are_kept() {
+        for &(w, what) in KEPT {
+            assert_eq!(twin(w).unwrap(), w, "{what}");
+        }
+    }
+
+    #[test]
+    fn refusals() {
+        for &(w, why, what) in REFUSED {
+            let e = twin(w).unwrap_err().to_string();
+            assert!(e.contains(why), "{what}: {e}");
+        }
+    }
+
+    #[test]
+    fn function_calls() {
+        let call = CALL
+            .iter()
+            .flat_map(|w| w.to_le_bytes())
+            .collect::<Vec<u8>>();
+        let e = rewrite_code(&call, call.len(), Kernel::Scalar)
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("function call"), "{e}");
+        // a return after restoring ra, and an internal call (auipc, jalr ra): kept
+        for seq in [RETURN, LOCAL_CALL] {
+            let code = seq
+                .iter()
+                .flat_map(|w| w.to_le_bytes())
+                .collect::<Vec<u8>>();
+            assert_eq!(
+                rewrite_code(&code, code.len(), Kernel::Scalar).unwrap(),
+                code
+            );
+        }
+        assert!(rewrite_code(&[], 0, Kernel::Simd).is_err());
+    }
+
+    #[test]
+    fn generator_encodings() {
+        // the generator's macro against the assembler (operands with every field set)
+        let cases = [
+            (rvv! {fadd.d f(29), f(25), f(28)}, "fadd.d ft9, fs9, ft8"),
+            (rvv! {fld f(29), x(25), 16}, "fld ft9, 16(s9)"),
+            (rvv! {fsd f(29), x(25), -8}, "fsd ft9, -8(s9)"),
+            (rvv! {fmv.d.x f(29), x(25)}, "fmv.d.x ft9, s9"),
+            (rvv! {fmv.x.d x(25), f(29)}, "fmv.x.d s9, ft9"),
+            (rvv! {fcvt.l.d x(25), f(29), 2}, "fcvt.l.d s9, ft9, rdn"),
+            (rvv! {fcvt.d.l f(29), x(25)}, "fcvt.d.l ft9, s9"),
+            (
+                rvv! {fmadd.d f(29), f(25), f(28), f(22)},
+                "fmadd.d ft9, fs9, ft8, fs6",
+            ),
+            (rvv! {flt.d x(25), f(29), f(28)}, "flt.d s9, ft9, ft8"),
+            (rvv! {fneg.d f(29), f(25)}, "fneg.d ft9, fs9"),
+        ];
+        for (w, what) in cases {
+            let gnu = PAIRS
+                .iter()
+                .find(|p| p.2.split(" -> ").next() == Some(what))
+                .unwrap_or_else(|| panic!("{what}"));
+            assert_eq!(w, gnu.0, "{what}: 0x{w:08x} vs 0x{:08x}", gnu.0);
+        }
+    }
+}
