@@ -1,5 +1,14 @@
 # Version 2.29.2
 
+* f32 kernels: `Application::downgrade_f32(F32Kernel::Scalar | F32Kernel::Simd)` and
+  `dump(.., "scalar-f32" | "simd-f32")` rewrite a compiled f64 kernel's machine code instruction by
+  instruction into the same kernel in f32 (x86-64 AVX/AVX2/AVX-512: `rust/amd/downgrade.rs`, a port
+  of pacrunner's `simd/downgrade.py`; aarch64: `rust/arm/downgrade.rs`), the constant pool rounded
+  to f32 (-0.0 and the NaN masks as exact bit patterns, in both halves). The scalar kernel computes
+  in the low half of each 8-byte slot (a fast complex kernel on aarch64: (re, im) in the low half of
+  its 16-byte slot); the SIMD kernel has twice the lanes on packed f32 columns, called with half the
+  index. Instructions without an f32 twin are refused, as are function calls and SIMD branches on
+  the lanes (`rust/downgrade.rs`, `tests/downgrade_f32.rs`).
 * x86-64: a call to a compress-mode subroutine with fewer arguments than the subroutine takes (none
   at all) no longer panics with "index out of bounds" while packing the arguments' stack slots.
 * The labels of the machine code: `MachineCode::labels()` lists the assembler's labels of a compiled
