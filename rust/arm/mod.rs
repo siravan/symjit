@@ -40,6 +40,7 @@ const T1: u8 = 30;
 const T2: u8 = 31;
 
 mod complex;
+mod downgrade;
 mod scalar;
 mod vector;
 
@@ -49,6 +50,8 @@ mod tests;
 pub use complex::ArmComplexGenerator;
 pub use scalar::ArmGenerator;
 pub use vector::ArmSimdGenerator;
+
+pub use downgrade::dump_as_f32_kernel;
 
 const fn ϕ(r: Reg) -> u8 {
     match r {

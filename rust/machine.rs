@@ -101,7 +101,7 @@ impl<T: Clone + Default> MachineCode<T> {
         }
     }
 
-    fn machine_code(&self) -> &[u8] {
+    pub fn machine_code(&self) -> &[u8] {
         let v: &[u8] = unsafe { std::slice::from_raw_parts(self.pages, self.size) };
         v
     }

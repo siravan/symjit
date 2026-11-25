@@ -10,7 +10,7 @@ use super::amd::{
     AmdVectorF64x8Generator,
 };
 use super::applet::Applet;
-use super::arm::{ArmComplexGenerator, ArmGenerator, ArmSimdGenerator};
+use super::arm::{dump_as_f32_kernel, ArmComplexGenerator, ArmGenerator, ArmSimdGenerator};
 use super::code::Func;
 use super::complexify::Complexifier;
 use super::config::Config;
@@ -757,6 +757,18 @@ impl Application {
                 // the MIR of real operations the native code runs: complexified for a complex
                 // application, the only MIR of a real one
                 self.save_mir_json(name, &self.bytecode.mir)
+            }
+            "scalar-f32" => {
+                if self.config.is_arm64() {
+                    if let Some(m) = &self.compiled {
+                        dump_as_f32_kernel(name, m.machine_code(), &m.labels());
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
             }
             _ => false,
         }
