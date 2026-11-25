@@ -105,7 +105,15 @@ fn call_funclet(a: &mut Assembler, label: &str) {
         return;
     }
 
+    // bl puts the return address in the link register: a subroutine that calls another one (a
+    // model kernel's own funclets inside pacrunner's subroutines) would lose its own and its `ret`
+    // would return into itself, so the link register is saved on the stack around every call
+    // (x86-64's call pushes it). The kernels address their slots through x(STACK), not sp.
+    emit(a, arm! {sub sp, sp, #16});
+    emit(a, arm! {stp lr, x(LR2), [sp, #0]});
     a.jump(label, 0, |offset, _| arm! {bl label(offset)});
+    emit(a, arm! {ldp lr, x(LR2), [sp, #0]});
+    emit(a, arm! {add sp, sp, #16});
 }
 
 fn load_long(a: &mut Assembler, reg: u8, label: &str) {

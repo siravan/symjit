@@ -117,24 +117,6 @@ impl ArmSimdGenerator {
         self.emit(arm! {add sp, sp, #size & 0x0fff});
     }
     */
-
-    fn find_temp(s1: Reg, s2: Reg) -> Reg {
-        let t = if s1 != Reg::Temp && s2 != Reg::Temp {
-            Reg::Temp
-        } else if s1 != Reg::Gen(2) && s2 != Reg::Gen(2) {
-            Reg::Gen(2)
-        } else if s1 != Reg::Gen(3) && s2 != Reg::Gen(3) {
-            Reg::Gen(3)
-        } else {
-            panic!("cannot find a temporary register");
-        };
-        // `Reg::Temp` is v1, as is `Reg::Right`
-        assert!(
-            ϕ(t) != ϕ(s1) && ϕ(t) != ϕ(s2),
-            "the temporary register shares a register with a source"
-        );
-        t
-    }
 }
 
 impl Generator for ArmSimdGenerator {
@@ -628,10 +610,10 @@ impl Generator for ArmSimdGenerator {
             self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(s3))});
             self.emit(arm! {fmla q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
         } else {
-            let t = Self::find_temp(s1, s2);
-            self.emit(arm! {fmov q(ϕ(t)), q(ϕ(s3))});
-            self.emit(arm! {fmla q(ϕ(t)), q(ϕ(s1)), q(ϕ(s2))});
-            self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(t))});
+            // the scratch register T0 (v29): `Reg::Temp` and the `Gen` registers may hold live values
+            self.emit(arm! {fmov q(T0), q(ϕ(s3))});
+            self.emit(arm! {fmla q(T0), q(ϕ(s1)), q(ϕ(s2))});
+            self.emit(arm! {fmov q(ϕ(dst)), q(T0)});
         }
     }
 
@@ -647,10 +629,10 @@ impl Generator for ArmSimdGenerator {
             self.emit(arm! {fneg q(ϕ(dst)), q(ϕ(s3))});
             self.emit(arm! {fmla q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
         } else {
-            let t = Self::find_temp(s1, s2);
-            self.emit(arm! {fneg q(ϕ(t)), q(ϕ(s3))});
-            self.emit(arm! {fmla q(ϕ(t)), q(ϕ(s1)), q(ϕ(s2))});
-            self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(t))});
+            // the scratch register T0 (v29): `Reg::Temp` and the `Gen` registers may hold live values
+            self.emit(arm! {fneg q(T0), q(ϕ(s3))});
+            self.emit(arm! {fmla q(T0), q(ϕ(s1)), q(ϕ(s2))});
+            self.emit(arm! {fmov q(ϕ(dst)), q(T0)});
         }
     }
 
@@ -668,10 +650,10 @@ impl Generator for ArmSimdGenerator {
             self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(s3))});
             self.emit(arm! {fmls q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
         } else {
-            let t = Self::find_temp(s1, s2);
-            self.emit(arm! {fmov q(ϕ(t)), q(ϕ(s3))});
-            self.emit(arm! {fmls q(ϕ(t)), q(ϕ(s1)), q(ϕ(s2))});
-            self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(t))});
+            // the scratch register T0 (v29): `Reg::Temp` and the `Gen` registers may hold live values
+            self.emit(arm! {fmov q(T0), q(ϕ(s3))});
+            self.emit(arm! {fmls q(T0), q(ϕ(s1)), q(ϕ(s2))});
+            self.emit(arm! {fmov q(ϕ(dst)), q(T0)});
         }
     }
 
@@ -687,10 +669,10 @@ impl Generator for ArmSimdGenerator {
             self.emit(arm! {fneg q(ϕ(dst)), q(ϕ(s3))});
             self.emit(arm! {fmls q(ϕ(dst)), q(ϕ(s1)), q(ϕ(s2))});
         } else {
-            let t = Self::find_temp(s1, s2);
-            self.emit(arm! {fneg q(ϕ(t)), q(ϕ(s3))});
-            self.emit(arm! {fmls q(ϕ(t)), q(ϕ(s1)), q(ϕ(s2))});
-            self.emit(arm! {fmov q(ϕ(dst)), q(ϕ(t))});
+            // the scratch register T0 (v29): `Reg::Temp` and the `Gen` registers may hold live values
+            self.emit(arm! {fneg q(T0), q(ϕ(s3))});
+            self.emit(arm! {fmls q(T0), q(ϕ(s1)), q(ϕ(s2))});
+            self.emit(arm! {fmov q(ϕ(dst)), q(T0)});
         }
     }
 
