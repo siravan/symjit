@@ -3,7 +3,8 @@
 * f32 kernels: `Application::downgrade_f32(F32Kernel::Scalar | F32Kernel::Simd)` and
   `dump(.., "scalar-f32" | "simd-f32")` rewrite a compiled f64 kernel's machine code instruction by
   instruction into the same kernel in f32 (x86-64 AVX/AVX2/AVX-512: `rust/amd/downgrade.rs`, a port
-  of pacrunner's `simd/downgrade.py`; aarch64: `rust/arm/downgrade.rs`), the constant pool rounded
+  of pacrunner's `simd/downgrade.py`; aarch64: `rust/arm/downgrade.rs`; riscv64, the scalar kernel:
+  `rust/riscv64/downgrade.rs`, `fld`/`fsd` as `flw`/`fsw` for NaN-boxing), the constant pool rounded
   to f32 (-0.0 and the NaN masks as exact bit patterns, in both halves). The scalar kernel computes
   in the low half of each 8-byte slot (a fast complex kernel on aarch64: (re, im) in the low half of
   its 16-byte slot); the SIMD kernel has twice the lanes on packed f32 columns, called with half the

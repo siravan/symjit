@@ -4,10 +4,15 @@
 //! - the scalar kernel computes in the low half of each 8-byte slot (states, observables and
 //!   parameters are f32 values in the low four bytes);
 //! - the SIMD kernel has twice the lanes and reads packed f32 columns, called with half the index;
-//! - kernels that call functions, and SIMD kernels that branch on their lanes, are refused.
+//! - kernels that call functions, and SIMD kernels that branch on their lanes, are refused;
+//! - riscv64 has only the scalar kernel.
 //!
 //! The inputs are multiples of 1/128 (exact in f32), so the rounding functions agree exactly.
-#![cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+#![cfg(any(
+    target_arch = "x86_64",
+    target_arch = "aarch64",
+    target_arch = "riscv64"
+))]
 mod common;
 use common::base_config;
 
@@ -20,8 +25,10 @@ use symjit::{
 
 const ARCH: &str = if cfg!(target_arch = "x86_64") {
     "x86_64"
-} else {
+} else if cfg!(target_arch = "aarch64") {
     "aarch64"
+} else {
+    "riscv64"
 };
 
 type Kernel = fn(*const f64, *const &mut [f64], usize, *const f64) -> i32;
@@ -161,6 +168,7 @@ fn scalar_kernel_in_the_low_half_of_the_slots() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(target_arch = "riscv64", ignore = "RISC-V has only the scalar kernel")]
 fn simd_kernel_with_twice_the_lanes() -> Result<()> {
     for (config, tag) in configs() {
         let mut app = model(config)?;
@@ -254,8 +262,9 @@ fn scalar_kernel_with_a_branch() -> Result<()> {
     Ok(())
 }
 
-/// a fast complex kernel: (re, im) of each argument and output in the low eight bytes of its
-/// 16-byte slot (aarch64); on x86-64 its shuffles have no f32 rule and it is refused
+/// a complex kernel: on aarch64 (fast complex) (re, im) of each argument and output in the low
+/// eight bytes of its 16-byte slot; on riscv64 re and im each in the low half of its own 8-byte
+/// slot; on x86-64 its shuffles have no f32 rule and it is refused
 #[test]
 fn complex_scalar_kernel() -> Result<()> {
     let mut config = base_config();
@@ -292,11 +301,13 @@ fn complex_scalar_kernel() -> Result<()> {
         let args64 = [a.re, a.im, b.re, b.im];
         let mut out64 = [0.0f64; 2];
         f64k(out64.as_mut_ptr(), std::ptr::null(), 0, args64.as_ptr());
+        let bits = |x: f64| (x as f32).to_bits() as u64;
         let pair = |z: Complex<f64>| {
-            [
-                ((z.im as f32).to_bits() as u64) << 32 | (z.re as f32).to_bits() as u64,
-                0u64,
-            ]
+            if cfg!(target_arch = "riscv64") {
+                [bits(z.re), bits(z.im)]
+            } else {
+                [bits(z.im) << 32 | bits(z.re), 0u64]
+            }
         };
         let args32 = [pair(a), pair(b)].concat();
         let mut out32 = [0u64; 2];
@@ -307,7 +318,11 @@ fn complex_scalar_kernel() -> Result<()> {
             args32.as_ptr() as *const f64,
         );
         let re = f32::from_bits(out32[0] as u32);
-        let im = f32::from_bits((out32[0] >> 32) as u32);
+        let im = if cfg!(target_arch = "riscv64") {
+            f32::from_bits(out32[1] as u32)
+        } else {
+            f32::from_bits((out32[0] >> 32) as u32)
+        };
         close(re, out64[0], 10.0, &format!("re of ({a}, {b})"));
         close(im, out64[1], 10.0, &format!("im of ({a}, {b})"));
     }
@@ -324,7 +339,12 @@ fn refusals() -> Result<()> {
     let mut app = Compiler::with_config(config.clone()).compile(&[x.clone()], &[x.exp()])?;
     for k in [F32Kernel::Scalar, F32Kernel::Simd] {
         let e = app.downgrade_f32(k).unwrap_err().to_string();
-        assert!(e.contains("function call"), "{k:?}: {e}");
+        let why = if cfg!(target_arch = "riscv64") && k == F32Kernel::Simd {
+            "only the scalar kernel"
+        } else {
+            "function call"
+        };
+        assert!(e.contains(why), "{k:?}: {e}");
     }
 
     // dump: false, and no file
@@ -333,7 +353,10 @@ fn refusals() -> Result<()> {
     assert!(!app.dump(path.to_str().unwrap(), "simd-f32"));
     assert!(!path.exists());
     let mut ok = model(config)?;
-    assert!(ok.dump(path.to_str().unwrap(), "simd-f32"));
+    assert_eq!(
+        ok.dump(path.to_str().unwrap(), "simd-f32"),
+        !cfg!(target_arch = "riscv64")
+    );
     assert!(ok.dump(path.to_str().unwrap(), "scalar-f32"));
     let _ = std::fs::remove_file(&path);
     Ok(())

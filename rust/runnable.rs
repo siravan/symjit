@@ -781,17 +781,23 @@ impl Application {
     /// kernel rewritten instruction by instruction, its constants rounded to f32), for x86-64 and
     /// aarch64. The scalar kernel computes in the low half of each 8-byte slot; the SIMD kernel has
     /// twice the lanes and reads packed f32 columns (call it with half the index). Kernels that call
-    /// functions, and SIMD kernels that branch on their lanes, are refused.
+    /// functions, and SIMD kernels that branch on their lanes, are refused; riscv64 has only the
+    /// scalar kernel.
     pub fn downgrade_f32(&mut self, kernel: Kernel) -> Result<Vec<u8>> {
         let arch = if cfg!(target_arch = "x86_64") {
             "x86_64"
         } else if cfg!(target_arch = "aarch64") {
             "aarch64"
+        } else if cfg!(target_arch = "riscv64") {
+            "riscv64"
         } else {
             return Err(anyhow!("no f32 kernels on this architecture"));
         };
 
         if kernel == Kernel::Simd {
+            if arch == "riscv64" {
+                return Err(anyhow!("riscv64 has only the scalar kernel"));
+            }
             self.prepare_simd();
         }
 

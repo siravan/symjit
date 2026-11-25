@@ -152,7 +152,7 @@ per-host baseline (run by hand, not in the test suite).
    `Generator::take_labels`) has `@data` where the pool starts (`Builder` calls `Generator::mark_data`, a
    no-op in `Complexifier`, which writes MIR). A SIMD kernel with diverging lanes (`simd_branch=false`)
    returns non-zero and `evaluate_matrix` recomputes those rows with the scalar kernel.
-   **f32 kernels** (`rust/downgrade.rs`, `amd/downgrade.rs`, `arm/downgrade.rs`): `downgrade_f32` /
+   **f32 kernels** (`rust/downgrade.rs`, `{amd,arm,riscv64}/downgrade.rs`; riscv64: scalar only): `downgrade_f32` /
    `dump(.., "scalar-f32" | "simd-f32")` rewrite a compiled kernel's machine code to f32 (same lengths
    and offsets: the scalar kernel in the low half of each 8-byte slot, the SIMD kernel with twice the
    lanes, called with half the index). An instruction a generator starts to emit needs a rule there

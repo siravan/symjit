@@ -16,8 +16,9 @@
 //! 0x7fff_ffff_ffff_ffff) keeps its high 32 bits in both halves, so -0.0 (0x8000_0000_0000_0000)
 //! becomes the sign mask 0x8000_0000_8000_0000. A double out of the float range is an error.
 //!
-//! The architectures' rules are in `amd/downgrade.rs` (x86-64: AVX, AVX2, AVX-512) and
-//! `arm/downgrade.rs` (aarch64). An instruction with no rule is an error, and so are function
+//! The architectures' rules are in `amd/downgrade.rs` (x86-64: AVX, AVX2, AVX-512),
+//! `arm/downgrade.rs` (aarch64) and `riscv64/downgrade.rs` (riscv64: the scalar kernel; a complex
+//! number's re and im each in the low half of its own slot). An instruction with no rule is an error, and so are function
 //! calls (math functions take and return doubles) and, in a SIMD kernel, branches on the lanes.
 
 use anyhow::{anyhow, Result};
@@ -55,7 +56,8 @@ pub fn float_bits(q: u64) -> Result<u64> {
 
 /// Converts the data area `code[start..]` in place (see the module).
 pub fn convert_data(code: &mut [u8], start: usize) -> Result<()> {
-    if start % 8 != 0 || code.len() % 8 != 0 {
+    // the constants are 8-byte quads from `start` (on riscv64 it may be 4 mod 8)
+    if start > code.len() || (code.len() - start) % 8 != 0 {
         return Err(anyhow!(
             "the data area (0x{:x}..0x{:x}) is not in 8-byte units",
             start,
@@ -71,7 +73,8 @@ pub fn convert_data(code: &mut [u8], start: usize) -> Result<()> {
     Ok(())
 }
 
-/// The f32 twin of the machine code `code` of a `kernel` for `arch` ("x86_64" or "aarch64"), whose
+/// The f32 twin of the machine code `code` of a `kernel` for `arch` ("x86_64", "aarch64" or
+/// "riscv64": the scalar kernel only), whose
 /// assembler labels are `labels` (`MachineCode::labels`).
 pub fn downgrade_f32(
     arch: &str,
@@ -87,6 +90,7 @@ pub fn downgrade_f32(
     let mut out = match arch {
         "x86_64" => crate::amd::downgrade::rewrite_code(code, start, kernel)?,
         "aarch64" => crate::arm::downgrade::rewrite_code(code, start, kernel)?,
+        "riscv64" => crate::riscv64::downgrade::rewrite_code(code, start, kernel)?,
         _ => return Err(anyhow!("no f32 kernels for {arch}")),
     };
 
@@ -134,6 +138,11 @@ mod tests {
         assert_eq!(&code[8..16], &0x4000_0000_4000_0000u64.to_le_bytes());
         assert_eq!(&code[16..24], &0x8000_0000_8000_0000u64.to_le_bytes());
         assert!(convert_data(&mut code, 4).is_err());
+        // a data area at 4 mod 8 (riscv64): its quads from there
+        let mut code4 = vec![0u8; 4];
+        code4.extend(1.0f64.to_le_bytes());
+        convert_data(&mut code4, 4).unwrap();
+        assert_eq!(&code4[4..], &0x3f80_0000_3f80_0000u64.to_le_bytes());
         let labels = vec![(0, "@main".to_string()), (8, "@data".to_string())];
         assert_eq!(data_start(&labels).unwrap(), 8);
         assert!(data_start(&labels[..1]).is_err());
