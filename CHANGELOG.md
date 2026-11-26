@@ -1,5 +1,9 @@
 # Version 2.29.2
 
+* aarch64: constants are loaded through a base register (`x25`, the constant pool's address, set by
+  every prologue) with one `ldr q` (SIMD kernels: the pool's 16-byte entries hold each double twice) or
+  `ldr d` (scalar and complex kernels) instead of `adrp` + `add` + `ld1r` / `ldr`: 4–11% fewer
+  instructions in pacrunner's kernels on the M4, 0.5–2% fewer cycles.
 * aarch64: a subroutine (compress-mode funclet) that calls another one no longer loops forever: `bl`
   overwrote the outer call's return address in the link register, which is now saved on the stack
   around each call.
