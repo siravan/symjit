@@ -897,7 +897,14 @@ impl Generator for RiscV {
             return;
         }
 
+        // jal puts the return address in ra: a subroutine that calls another one would lose its
+        // own and its `ret` would return into itself, so ra is saved on the stack around every
+        // call (as on aarch64). The kernels address their slots through x(STACK), not sp.
+        self.emit(rvv! {addi x(SP), x(SP), -16});
+        self.emit(rvv! {sd x(Self::ra), x(SP), 0});
         self.j(label, Self::ra);
+        self.emit(rvv! {ld x(Self::ra), x(SP), 0});
+        self.emit(rvv! {addi x(SP), x(SP), 16});
     }
 
     fn ret(&mut self) {

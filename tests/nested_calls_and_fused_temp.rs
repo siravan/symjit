@@ -2,7 +2,8 @@
 //!
 //! - a subroutine (compress-mode funclet) that calls another: `bl` puts the return address in the
 //!   link register, so the inner call overwrote the outer one's and the outer `ret` returned into
-//!   itself, forever (arm/mod.rs `call_funclet` now saves the link register around each call);
+//!   itself, forever (arm/mod.rs `call_funclet` now saves the link register around each call; riscv64
+//!   had the same bug with `jal` and `ra`, fixed the same way in riscv64/mod.rs);
 //! - the SIMD kernel's fused multiply-adds with the destination also a factor (`dst == b`) took a
 //!   scratch register among `Temp`, `Gen(2)`, `Gen(3)`, which may hold live values: here `Gen(2)` was
 //!   overwritten (arm/vector.rs now uses the scratch register v29).

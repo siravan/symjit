@@ -4,9 +4,9 @@
   every prologue) with one `ldr q` (SIMD kernels: the pool's 16-byte entries hold each double twice) or
   `ldr d` (scalar and complex kernels) instead of `adrp` + `add` + `ld1r` / `ldr`: 4–11% fewer
   instructions in pacrunner's kernels on the M4, 0.5–2% fewer cycles.
-* aarch64: a subroutine (compress-mode funclet) that calls another one no longer loops forever: `bl`
-  overwrote the outer call's return address in the link register, which is now saved on the stack
-  around each call.
+* aarch64 and riscv64: a subroutine (compress-mode funclet) that calls another one no longer loops
+  forever: `bl` (`jal` on riscv64) overwrote the outer call's return address in the link register
+  (`ra`), which is now saved on the stack around each call.
 * aarch64 SIMD kernels: a fused multiply-add whose destination is also a factor computed in `Temp`,
   `Gen(2)` or `Gen(3)`, which may hold live values, and overwrote one (wrong results); it now uses the
   scratch register v29.
