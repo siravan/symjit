@@ -44,7 +44,9 @@ impl<T: Clone + Default> MachineCode<T> {
 
         let size = machine_code.len();
 
-        let mut code = Memory::new(BranchProtection::None, huge);
+        // Shared by the clones of this `MachineCode` (`Arc<Memory>`): the code
+        // pages are freed when the last of them is dropped, unless `leaky`.
+        let mut code = Memory::new(BranchProtection::None, huge, leaky);
 
         // alignment is set to 4096 to allow for using adrp instruction in arm64
         let pages: *mut u8 = code.allocate(size, 4096).unwrap();
@@ -172,16 +174,6 @@ impl<T: Clone + Default> Storage for MachineCode<T> {
         Ok(())
     }
 }
-
-// impl<T: Default> Drop for MachineCode<T> {
-//     fn drop(&mut self) {
-//         if !self.leaky {
-//             unsafe {
-//                 self.code.free_memory();
-//             }
-//         }
-//     }
-// }
 
 impl<T: Sized + Copy + Default> Compiled<T> for MachineCode<T> {
     #[inline]

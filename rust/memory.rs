@@ -246,9 +246,9 @@ pub(crate) enum BranchProtection {
 }
 
 /// JIT memory manager. This manages pages of suitably aligned and
-/// accessible memory. Memory will be leaked by default to have
-/// function pointers remain valid for the remainder of the
-/// program's life.
+/// accessible memory. Leaky memory is never freed, so that function
+/// pointers handed out remain valid for the remainder of the program's
+/// life; other memory is freed when the `Memory` is dropped.
 pub(crate) struct Memory {
     allocations: Vec<PtrLen>,
     already_protected: usize,
@@ -256,13 +256,14 @@ pub(crate) struct Memory {
     position: usize,
     branch_protection: BranchProtection,
     huge: bool,
+    leaky: bool,
 }
 
 unsafe impl Send for Memory {}
 unsafe impl Sync for Memory {}
 
 impl Memory {
-    pub(crate) fn new(branch_protection: BranchProtection, huge: bool) -> Self {
+    pub(crate) fn new(branch_protection: BranchProtection, huge: bool, leaky: bool) -> Self {
         Self {
             allocations: Vec::new(),
             already_protected: 0,
@@ -270,6 +271,7 @@ impl Memory {
             position: 0,
             branch_protection,
             huge,
+            leaky,
         }
     }
 
@@ -396,9 +398,11 @@ impl Memory {
 
 impl Drop for Memory {
     fn drop(&mut self) {
-        // leak memory to guarantee validity of function pointers
-        mem::replace(&mut self.allocations, Vec::new())
-            .into_iter()
-            .for_each(mem::forget);
+        if self.leaky {
+            // leak memory to guarantee validity of function pointers
+            mem::replace(&mut self.allocations, Vec::new())
+                .into_iter()
+                .for_each(mem::forget);
+        }
     }
 }
