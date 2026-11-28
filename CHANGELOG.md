@@ -1,3 +1,14 @@
+# Version 2.28.5
+
+* aarch64: the instruction cache is flushed for machine code written to reused pages. In 2.28.4 a new
+  kernel could run the instructions of a dropped one (wrong values, SIGILL, SIGSEGV) on Linux and
+  macOS aarch64.
+
+# Version 2.28.4
+
+* Freeing the pages of compiled machine code when their last owner drops (#43).
+* `Application::complexify`: saving the complexified MIR of a complex application (#32).
+
 # Version 2.28.3
 
 * Complex SIMD kernels (AVX, AVX-512, NEON) and the ARM fast-complex kernel (FCMA): a complex product
