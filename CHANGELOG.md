@@ -8,6 +8,8 @@
   `dump(.., "scalar-f32" | "simd-f32")`.
 * x86-64: a call to a compress-mode subroutine with fewer arguments than the subroutine takes (none
   at all) no longer panics.
+* Freeing the pages of compiled machine code when their last owner drops (#43); on aarch64 the
+  instruction cache is flushed for code written to reused pages.
 
 # Version 2.29.1
 
