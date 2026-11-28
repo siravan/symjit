@@ -159,6 +159,10 @@ struct PtrLen {
 
     ptr: *mut u8,
     len: usize,
+
+    /// Acquired from `hugepage_rs` (Linux), and to be released through it.
+    #[cfg(target_os = "linux")]
+    huge: bool,
 }
 
 impl PtrLen {
@@ -167,6 +171,8 @@ impl PtrLen {
         Self {
             #[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
             map: None,
+            #[cfg(target_os = "linux")]
+            huge: false,
 
             ptr: ptr::null_mut(),
             len: 0,
@@ -184,6 +190,8 @@ impl PtrLen {
             Self {
                 ptr: mmap.as_mut_ptr(),
                 map: Some(mmap),
+                #[cfg(target_os = "linux")]
+                huge: false,
                 len: alloc_size,
             }
         })
@@ -220,6 +228,7 @@ impl PtrLen {
             Ok(Self {
                 ptr,
                 len: alloc_size,
+                huge,
             })
         } else {
             if huge {
@@ -285,6 +294,15 @@ impl Drop for PtrLen {
             unsafe {
                 region::protect(self.ptr, self.len, region::Protection::READ_WRITE)
                     .expect("unable to unprotect memory");
+                // Release a huge-page mapping through the allocator and with the
+                // layout it was acquired with (`with_size`).
+                #[cfg(target_os = "linux")]
+                if self.huge {
+                    let layout =
+                        alloc::Layout::from_size_align(self.len, *HUGEPAGE_SIZE as usize).unwrap();
+                    hugepage_rs::dealloc(self.ptr, layout);
+                    return;
+                }
                 alloc::dealloc(self.ptr, layout)
             }
         }
