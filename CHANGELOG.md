@@ -1,44 +1,20 @@
 # Version 2.29.2
 
-* aarch64: constants are loaded through a base register (`x25`, the constant pool's address, set by
-  every prologue) with one `ldr q` (SIMD kernels: the pool's 16-byte entries hold each double twice) or
-  `ldr d` (scalar and complex kernels) instead of `adrp` + `add` + `ld1r` / `ldr`: 4–11% fewer
-  instructions in pacrunner's kernels on the M4, 0.5–2% fewer cycles.
+* aarch64: constants are loaded through a base register (`x25`).
 * aarch64 and riscv64: a subroutine (compress-mode funclet) that calls another one no longer loops
-  forever: `bl` (`jal` on riscv64) overwrote the outer call's return address in the link register
-  (`ra`), which is now saved on the stack around each call.
-* aarch64 SIMD kernels: a fused multiply-add whose destination is also a factor computed in `Temp`,
-  `Gen(2)` or `Gen(3)`, which may hold live values, and overwrote one (wrong results); it now uses the
-  scratch register v29.
-* f32 kernels: `Application::downgrade_f32(F32Kernel::Scalar | F32Kernel::Simd)` and
-  `dump(.., "scalar-f32" | "simd-f32")` rewrite a compiled f64 kernel's machine code instruction by
-  instruction into the same kernel in f32 (x86-64 AVX/AVX2/AVX-512: `rust/amd/downgrade.rs`, a port
-  of pacrunner's `simd/downgrade.py`; aarch64: `rust/arm/downgrade.rs`; riscv64, the scalar kernel:
-  `rust/riscv64/downgrade.rs`, `fld`/`fsd` as `flw`/`fsw` for NaN-boxing), the constant pool rounded
-  to f32 (-0.0 and the NaN masks as exact bit patterns, in both halves). The scalar kernel computes
-  in the low half of each 8-byte slot (a fast complex kernel on aarch64: (re, im) in the low half of
-  its 16-byte slot); the SIMD kernel has twice the lanes on packed f32 columns, called with half the
-  index. Instructions without an f32 twin are refused, as are function calls and SIMD branches on
-  the lanes (`rust/downgrade.rs`, `tests/downgrade_f32.rs`).
+  forever.
+* Fixing `Temp` register clobbering in aarch64 SIMD kernels.
+* Generating f32 kernels: adding `Application::downgrade_f32(F32Kernel::Scalar | F32Kernel::Simd)` and
+  `dump(.., "scalar-f32" | "simd-f32")`.
 * x86-64: a call to a compress-mode subroutine with fewer arguments than the subroutine takes (none
-  at all) no longer panics with "index out of bounds" while packing the arguments' stack slots.
-* The labels of the machine code: `MachineCode::labels()` lists the assembler's labels of a compiled
-  kernel (offset, name), with `@data` where the data area (constants, function table) after the code
-  starts, so that a disassembler outside symjit (symjit-utils' `sjb2asm`) can tell code from data and
-  name branch targets. `MachineCode` is exported in `symjit::backend`, and
-  `Application::prepare_fast` is public (like `prepare_simd`).
-* The warning about the deprecated SSE fallback (x86-64 kernels on a host without AVX) is written to
-  stderr, not stdout, where it mixed with the output of tools built on symjit.
+  at all) no longer panics.
 
 # Version 2.29.1
 
 * PyPI wheels for every Python ≥ 3.10: one `py3-none-<platform>` wheel per platform (Linux x86-64 and
   aarch64, Windows x86-64, macOS arm64 and x86-64), built and tested by CI. The wheels declare their
   dependencies (numpy, sympy) and `requires-python`.
-* Fixing real user functions (`defuns`) in complex kernels: the result could keep a stale imaginary
-  part (fast complex mode, x86-64 and aarch64).
-* Fixing the Composer on Python 3.10 and 3.11.
-* A library that cannot be loaded gives a warning instead of failing `import symjit`.
+* Fixing real user functions (`defuns`) in complex kernels.
 
 # Version 2.29.0
 
