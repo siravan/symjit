@@ -1,3 +1,9 @@
+# Version 2.28.6
+
+* Linux: machine code on huge pages (`huge` option) is released through `hugepage_rs` (`munmap`) instead of
+  the global allocator. In 2.28.4 and 2.28.5 dropping it could abort ("free(): invalid pointer") or
+  corrupt the heap (#45, #46).
+
 # Version 2.28.5
 
 * aarch64: the instruction cache is flushed for machine code written to reused pages. In 2.28.4 a new
