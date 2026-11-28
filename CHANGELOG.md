@@ -1,3 +1,8 @@
+# Version 2.29.3
+
+* Linux: machine code on huge pages (`huge` option) is released through `hugepage_rs` (`munmap`)
+  instead of the global allocator; in 2.29.2 dropping it could crash or corrupt the heap (#45, #46).
+
 # Version 2.29.2
 
 * aarch64: constants are loaded through a base register (`x25`).
