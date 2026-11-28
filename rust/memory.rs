@@ -95,6 +95,63 @@ use wasmtime_jit_icache_coherence as icache_coherence;
 
 use hugepage_rs;
 
+/// Makes the instruction cache coherent with the code just written at `ptr..ptr + len`.
+///
+/// `icache_coherence::clear_cache` does nothing on aarch64 outside Windows: it relies on the
+/// `mprotect` to R+X, which flushes nothing for pages that were mapped before. Since the pages of
+/// dropped machine code are freed, the allocator hands them out again for the next kernel, and the
+/// core could then run the previous kernel's instructions (wrong values, SIGILL). Elsewhere the
+/// caches are coherent (x86-64) or `clear_cache` flushes them (riscv64 Linux, Windows).
+#[cfg(all(target_arch = "aarch64", not(target_os = "windows")))]
+unsafe fn flush_icache(ptr: *const u8, len: usize) {
+    if len == 0 {
+        return;
+    }
+
+    #[cfg(target_vendor = "apple")]
+    {
+        unsafe extern "C" {
+            fn sys_icache_invalidate(start: *mut c_void, len: usize);
+        }
+        unsafe { sys_icache_invalidate(ptr as *mut c_void, len) };
+    }
+
+    #[cfg(not(target_vendor = "apple"))]
+    unsafe {
+        use std::arch::asm;
+        // CTR_EL0: DminLine (bits 16..19) and IminLine (0..3) as log2 of the line size in words;
+        // IDC (28): no data cache clean needed, DIC (29): no instruction cache invalidation needed.
+        let ctr: u64;
+        asm!("mrs {}, ctr_el0", out(reg) ctr, options(nomem, nostack));
+        let start = ptr as usize;
+        let end = start + len;
+
+        if ctr & (1 << 28) == 0 {
+            let line = 4usize << ((ctr >> 16) & 0xf);
+            let mut a = start & !(line - 1);
+            while a < end {
+                asm!("dc cvau, {}", in(reg) a, options(nostack));
+                a += line;
+            }
+        }
+        asm!("dsb ish", options(nostack));
+
+        if ctr & (1 << 29) == 0 {
+            let line = 4usize << (ctr & 0xf);
+            let mut a = start & !(line - 1);
+            while a < end {
+                asm!("ic ivau, {}", in(reg) a, options(nostack));
+                a += line;
+            }
+            asm!("dsb ish", options(nostack));
+        }
+        asm!("isb", options(nostack));
+    }
+}
+
+#[cfg(not(all(target_arch = "aarch64", not(target_os = "windows"))))]
+unsafe fn flush_icache(_ptr: *const u8, _len: usize) {}
+
 /// A simple struct consisting of a pointer and length.
 struct PtrLen {
     #[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
@@ -315,7 +372,8 @@ impl Memory {
         for &PtrLen { ptr, len, .. } in self.non_protected_allocations_iter() {
             unsafe {
                 icache_coherence::clear_cache(ptr as *const c_void, len)
-                    .expect("Failed cache clear")
+                    .expect("Failed cache clear");
+                flush_icache(ptr, len);
             };
         }
 
